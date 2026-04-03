@@ -1,0 +1,165 @@
+// test_camera.cpp.disabled
+// Plik wyłączony z kompilacji (.disabled). Zmień nazwę na .cpp aby uruchomić.
+//
+// Test kamery OV2640 na sprzęcie KalkMate (ESP32-WROVER-E).
+// PWDN i RESET kamery sterowane przez MCP23017 (I2C 0x20).
+//
+// Aby skompilować jako standalone (bez main.cpp), upewnij się że tylko ten plik
+// jest w src/ jako .cpp — main.cpp musi być usunięty lub przemianowany.
+
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_MCP23X17.h>
+#include "esp_camera.h"
+#include "config.h"
+
+// -----------------------------------------------------------------------
+// Globals
+// -----------------------------------------------------------------------
+static Adafruit_MCP23X17 mcp;
+
+// Pomocnicza funkcja wydruku PASS/FAIL
+static void printResult(const char* label, bool ok) {
+    Serial.print("[");
+    Serial.print(ok ? "PASS" : "FAIL");
+    Serial.print("] ");
+    Serial.println(label);
+}
+
+// -----------------------------------------------------------------------
+// setup()
+// -----------------------------------------------------------------------
+void setup() {
+    // --- Krok 1: Serial ---
+    Serial.begin(115200);
+    delay(500);
+    Serial.println("\n=== KalkMate OV2640 Camera Test ===");
+
+    // --- Krok 2: I2C + MCP23017 ---
+    Wire.begin(I2C_SDA, I2C_SCL);
+    bool mcpOk = mcp.begin_I2C(MCP_ADDR, &Wire);
+    printResult("MCP23017 begin_I2C(0x20)", mcpOk);
+
+    if (!mcpOk) {
+        Serial.println("[ABORT] MCP23017 nie odpowiada. Sprawdź okablowanie I2C.");
+        return;
+    }
+
+    // --- Krok 3: Konfiguracja pinów MCP ---
+    // GPA5 = PWDN  (HIGH = power-down, czyli kamera wyłączona)
+    // GPA6 = RESET# (LOW = reset aktywny, HIGH = praca normalna)
+    // GPA7 = Boost MT3608 EN (LOW = wyłączony)
+    mcp.pinMode(MCP_GPA5, OUTPUT);
+    mcp.pinMode(MCP_GPA6, OUTPUT);
+    mcp.pinMode(MCP_GPA7, OUTPUT);
+
+    mcp.digitalWrite(MCP_GPA5, HIGH);  // PWDN = HIGH → kamera w power-down
+    mcp.digitalWrite(MCP_GPA6, HIGH);  // RESET# = HIGH → de-assert (na wszelki wypadek)
+    mcp.digitalWrite(MCP_GPA7, LOW);   // Boost OFF
+
+    printResult("MCP GPA5/GPA6/GPA7 pinMode+init", true);
+
+    // --- Krok 4: Sekwencja power-on ---
+    // 4a. Zdejmij power-down: GPA5 → LOW
+    mcp.digitalWrite(MCP_GPA5, LOW);
+    delay(10);
+
+    // 4b. Impuls reset: GPA6 → LOW (reset aktywny)
+    mcp.digitalWrite(MCP_GPA6, LOW);
+    delay(5);
+
+    // 4c. Zwolnij reset: GPA6 → HIGH
+    mcp.digitalWrite(MCP_GPA6, HIGH);
+    delay(20);
+
+    printResult("Power-on sekwencja (PWDN LOW, RESET pulse)", true);
+
+    // --- Krok 5: Inicjalizacja esp_camera ---
+    camera_config_t config;
+    config.ledc_channel = LEDC_CHANNEL_0;
+    config.ledc_timer   = LEDC_TIMER_0;
+
+    // Piny danych
+    config.pin_d0    = CAM_D0;
+    config.pin_d1    = CAM_D1;
+    config.pin_d2    = CAM_D2;
+    config.pin_d3    = CAM_D3;
+    config.pin_d4    = CAM_D4;
+    config.pin_d5    = CAM_D5;
+    config.pin_d6    = CAM_D6;
+    config.pin_d7    = CAM_D7;
+
+    // Piny sterujące
+    config.pin_xclk  = CAM_XCLK;
+    config.pin_pclk  = CAM_PCLK;
+    config.pin_vsync = CAM_VSYNC;
+    config.pin_href  = CAM_HREF;
+
+    // SCCB (I2C kamery)
+    config.pin_sccb_sda = CAM_SDA;
+    config.pin_sccb_scl = CAM_SCL;
+
+    // PWDN i RESET sterowane przez MCP — esp_camera nie dotyka tych pinów
+    config.pin_pwdn  = CAM_PWDN;   // -1
+    config.pin_reset = CAM_RESET;  // -1
+
+    // Zegar XCLK
+    config.xclk_freq_hz = CAM_XCLK_FREQ;   // 10 MHz
+
+    // Format obrazu
+    config.pixel_format = PIXFORMAT_JPEG;
+    config.frame_size   = FRAMESIZE_SVGA;   // 800x600
+    config.jpeg_quality = CAM_JPEG_QUALITY; // 12 (niższy = lepsza jakość, większy plik)
+    config.fb_count     = 1;
+
+    // Dodatkowe pola wymagane przez nowsze wersje esp32-camera
+    config.grab_mode       = CAMERA_GRAB_WHEN_EMPTY;
+    config.fb_location     = CAMERA_FB_IN_PSRAM;
+
+    esp_err_t err = esp_camera_init(&config);
+    bool camInitOk = (err == ESP_OK);
+
+    if (camInitOk) {
+        printResult("esp_camera_init()", true);
+    } else {
+        Serial.printf("[FAIL] esp_camera_init() => 0x%x (%s)\n",
+                      err, esp_err_to_name(err));
+        return;
+    }
+
+    // --- Krok 6: Przechwycenie klatki ---
+    camera_fb_t* fb = esp_camera_fb_get();
+
+    bool fbNotNull = (fb != nullptr);
+    printResult("esp_camera_fb_get() != nullptr", fbNotNull);
+
+    if (!fbNotNull) {
+        Serial.println("[FAIL] Nie udało się pobrać frame buffer.");
+        return;
+    }
+
+    bool fbHasData = (fb->len > 0);
+    printResult("fb->len > 0", fbHasData);
+
+    if (fbHasData) {
+        Serial.printf("[INFO] Rozmiar JPEG: %u bajtów  (%u x %u px)\n",
+                      fb->len, fb->width, fb->height);
+    }
+
+    esp_camera_fb_return(fb);
+
+    // --- Podsumowanie ---
+    Serial.println("\n=== Test zakończony ===");
+    if (camInitOk && fbNotNull && fbHasData) {
+        Serial.println("Wynik: PASS — kamera OV2640 działa poprawnie.");
+    } else {
+        Serial.println("Wynik: FAIL — sprawdź logi powyżej.");
+    }
+}
+
+// -----------------------------------------------------------------------
+// loop() — celowo pusty
+// -----------------------------------------------------------------------
+void loop() {
+    // nic
+}
