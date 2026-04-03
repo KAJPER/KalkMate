@@ -30,14 +30,14 @@ void showAboutScreen(U8G2 &display) {
     // Wybor jezyka: 0 = Polski, 1 = English
     bool _lang_en = (kalkSettings.language == 1);
 
-    const char* _about_titles[3] = {
+    const char* const _about_titles[3] = {
         _lang_en ? "=== About ===" : "=== O programie ===",
         _lang_en ? "=== Authors ===" : "=== Tworcy ===",
         _lang_en ? "=== Version ===" : "=== Wersja ==="
     };
 
     // 4 linie tresci na strone (puste ciagi == pusta linia)
-    const char* _about_lines[3][4] = {
+    const char* const _about_lines[3][4] = {
         {
             "KalkMate v1.0",
             _lang_en ? "AI calculator for students" : "Kalkulator AI dla maturzystow",

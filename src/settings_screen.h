@@ -11,6 +11,7 @@
 
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include "wifi_persist.h"
 
 // === Piny przyciskow ===
 #ifndef BTN_UP
@@ -56,16 +57,17 @@ static const char* T(const char* pl, const char* en) {
 }
 
 // ---------------------------------------------------------------------------
-// Stale menu — 4 pozycje (bez dzwieku)
+// Stale menu — 5 pozycji
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        4
+#define _SET_ITEMS        5
 #define _SET_BRIGHTNESS   0
 #define _SET_LANGUAGE     1
 #define _SET_SOLVEMODE    2
 #define _SET_AUTOSLEEP    3
+#define _SET_LICENSE      4
 
-// Wspolrzedne Y 4 pozycji menu
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55};
+// Wspolrzedne Y 5 pozycji menu (4 widoczne, scrollowanie)
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -120,7 +122,7 @@ static void _setBrightnessBar(char* buf, int bufSize, uint8_t val) {
 }
 
 // ---------------------------------------------------------------------------
-// Rysowanie glownej listy ustawien
+// Rysowanie glownej listy ustawien (z przewijaniem — 4 widoczne z 5)
 // ---------------------------------------------------------------------------
 static void _drawSettingsList(U8G2 &d, int cursor) {
     d.clearBuffer();
@@ -131,65 +133,89 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
     d.drawStr(2, 10, title);
     d.drawHLine(0, 12, 256);
 
-    char prefix[3];
+    // Scroll: pokazuj 4 pozycje naraz, kursor wyznacza okno
+    const int VISIBLE = 4;
+    int scroll = 0;
+    if (cursor >= VISIBLE) scroll = cursor - VISIBLE + 1;
 
-    // --- Pozycja 0: Jasnosc ---
+    // Przygotuj dane 5 pozycji
+    char lines[_SET_ITEMS][56];
+    char prefix[3] = "  ";
+
+    // 0: Jasnosc
     {
         prefix[0] = (cursor == _SET_BRIGHTNESS) ? '>' : ' ';
-        prefix[1] = ' ';
-        prefix[2] = '\0';
         char bar[20];
         _setBrightnessBar(bar, sizeof(bar), kalkSettings.brightness);
-        char line[56];
-        const char* label = T("Jasnosc:    ", "Brightness: ");
-        snprintf(line, sizeof(line), "%s%s %s", prefix, label, bar);
-        d.drawStr(2, _SET_ITEM_Y[0], line);
+        snprintf(lines[0], sizeof(lines[0]), "%s%s %s", prefix,
+                 T("Jasnosc:  ", "Bright:   "), bar);
     }
-
-    // --- Pozycja 1: Jezyk ---
+    // 1: Jezyk
     {
         prefix[0] = (cursor == _SET_LANGUAGE) ? '>' : ' ';
-        prefix[1] = ' ';
-        prefix[2] = '\0';
         const char* langStr = (kalkSettings.language == 0) ? "Polski" : "English";
-        char line[56];
-        const char* label = T("Jezyk:      ", "Language:   ");
-        snprintf(line, sizeof(line), "%s%s [%-12s]", prefix, label, langStr);
-        d.drawStr(2, _SET_ITEM_Y[1], line);
+        snprintf(lines[1], sizeof(lines[1]), "%s%s [%-10s]", prefix,
+                 T("Jezyk:    ", "Language: "), langStr);
     }
-
-    // --- Pozycja 2: Tryb rozwiazan ---
+    // 2: Tryb
     {
         prefix[0] = (cursor == _SET_SOLVEMODE) ? '>' : ' ';
-        prefix[1] = ' ';
-        prefix[2] = '\0';
         const char* modeStr;
         if (kalkSettings.solveMode == 0)      modeStr = T("Szczegolowy", "Detailed");
-        else if (kalkSettings.solveMode == 1) modeStr = T("Tylko oblicz", "Calc only");
-        else                                   modeStr = T("Tylko wynik", "Result only");
-        char line[56];
-        const char* label = T("Tryb:       ", "Mode:       ");
-        snprintf(line, sizeof(line), "%s%s [%-14s]", prefix, label, modeStr);
-        d.drawStr(2, _SET_ITEM_Y[2], line);
+        else if (kalkSettings.solveMode == 1) modeStr = T("Obliczenia", "Calc only");
+        else                                   modeStr = T("Wynik", "Result");
+        snprintf(lines[2], sizeof(lines[2]), "%s%s [%-12s]", prefix,
+                 T("Tryb:     ", "Mode:     "), modeStr);
     }
-
-    // --- Pozycja 3: Auto-sleep ---
+    // 3: Auto-sleep
     {
         prefix[0] = (cursor == _SET_AUTOSLEEP) ? '>' : ' ';
-        prefix[1] = ' ';
-        prefix[2] = '\0';
         char slpVal[16];
-        if (kalkSettings.autoSleep) {
-            snprintf(slpVal, sizeof(slpVal), "ON  %s",
-                     _SET_SLEEP_LABELS[kalkSettings.sleepMinutes]);
-        } else {
+        if (kalkSettings.autoSleep)
+            snprintf(slpVal, sizeof(slpVal), "ON %s", _SET_SLEEP_LABELS[kalkSettings.sleepMinutes]);
+        else
             snprintf(slpVal, sizeof(slpVal), "OFF");
-        }
-        char line[56];
-        const char* label = T("Auto-sleep: ", "Auto-sleep: ");
-        snprintf(line, sizeof(line), "%s%s [%-12s]", prefix, label, slpVal);
-        d.drawStr(2, _SET_ITEM_Y[3], line);
+        snprintf(lines[3], sizeof(lines[3]), "%sSleep:    [%-10s]", prefix, slpVal);
     }
+    // 4: Licencja
+    {
+        prefix[0] = (cursor == _SET_LICENSE) ? '>' : ' ';
+        char licKey[40];
+        wifiLoadLicense(licKey, sizeof(licKey));
+        char licShort[12] = "";
+        if (licKey[0]) {
+            // Pokaz pierwsze 8 znakow + "..."
+            strncpy(licShort, licKey, 8);
+            licShort[8] = '\0';
+            strncat(licShort, "...", sizeof(licShort) - 9);
+        } else {
+            strncpy(licShort, T("brak", "none"), sizeof(licShort) - 1);
+        }
+        snprintf(lines[4], sizeof(lines[4]), "%s%s [%-10s]", prefix,
+                 T("Licencja: ", "License:  "), licShort);
+    }
+
+    // Rysuj widoczne pozycje
+    for (int i = 0; i < VISIBLE; i++) {
+        int idx = scroll + i;
+        if (idx >= _SET_ITEMS) break;
+        int y = 22 + i * 11;
+        bool sel = (idx == cursor);
+        if (sel) {
+            d.drawBox(0, y - 9, 256, 11);
+            d.setDrawColor(0);
+            d.drawStr(2, y, lines[idx]);
+            d.setDrawColor(1);
+        } else {
+            d.drawStr(2, y, lines[idx]);
+        }
+    }
+
+    // Strzalki przewijania
+    if (scroll > 0)
+        d.drawStr(248, 18, "^");
+    if (scroll + VISIBLE < _SET_ITEMS)
+        d.drawStr(248, 56, "v");
 
     // Separator i pasek dolny
     d.drawHLine(0, 57, 256);
@@ -393,6 +419,168 @@ static void _editAutoSleep(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
+// Edycja: Klucz licencji (klawiatura — 16-znakowy kod)
+// ---------------------------------------------------------------------------
+// Uwaga: klawiatura jest zdefiniowana w wifi_settings.h
+// settings_screen.h jest dolaczany przed wifi_settings.h wiec deklarujemy
+// _runKeyboard jako forward declaration (definicja bedzie pozniej)
+// Zamiast tego robimy wlasna mini-klawiature inline dla 16-znakowego kodu.
+
+static void _editLicense(U8G2 &d) {
+    _setWaitRelease();
+
+    // Wczytaj aktualny klucz
+    static char licBuf[40];
+    wifiLoadLicense(licBuf, sizeof(licBuf));
+    int inputLen = strlen(licBuf);
+
+    // Znaki dozwolone w licencji: a-z, 0-9, -+=% (16 znakow)
+    // Uzyj uproszczonej klawiatury: 3 rzedy
+    static const char* const _LIC_ROWS[3] = {
+        "abcdefghijklmnopqrstuvwxyz",  // 26
+        "0123456789",                   // 10
+        "-+=%",                         // 4
+    };
+    static const int _LIC_COUNTS[3] = {26, 10, 4};
+
+    // Rzad akcji: [BKSP][CAPS][SPC-NIE][OK]
+    // (spacja nie jest dozwolona w kodzie licencji)
+    static const char* _LIC_ACTS[3] = {"BKSP", "CAPS", "SAVE"};
+
+    int curRow = 1; // Zacznij od cyfr
+    int curCol = 0;
+    bool capsMode = false;
+    unsigned long blinkStart = millis();
+
+    while (true) {
+        // Rysuj ekran
+        d.clearBuffer();
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 8, T("Klucz licencji:", "License key:"));
+
+        // Pole tekstowe
+        char dispBuf[20] = "";
+        if (inputLen > 0) {
+            int si = inputLen > 16 ? inputLen - 16 : 0;
+            strncpy(dispBuf, licBuf + si, sizeof(dispBuf) - 1);
+        }
+        bool showCur = ((millis() - blinkStart) % 800) < 400;
+        if (showCur && inputLen < 39)
+            strncat(dispBuf, "_", sizeof(dispBuf) - strlen(dispBuf) - 1);
+        d.drawStr(96, 8, dispBuf);
+        d.drawHLine(0, 10, 256);
+
+        // Rzedy znakow
+        for (int row = 0; row < 3; row++) {
+            int count = _LIC_COUNTS[row];
+            for (int col = 0; col < count; col++) {
+                int x = col * 9;
+                int y = 12 + row * 10;
+                char ch = _LIC_ROWS[row][col];
+                if (capsMode && row == 0 && ch >= 'a' && ch <= 'z')
+                    ch = ch - 'a' + 'A';
+                char s[2] = {ch, '\0'};
+                bool sel = (curRow == row && curCol == col);
+                if (sel) {
+                    d.drawBox(x, y, 8, 9);
+                    d.setDrawColor(0);
+                    d.drawStr(x + 1, y + 7, s);
+                    d.setDrawColor(1);
+                } else {
+                    d.drawStr(x + 1, y + 7, s);
+                }
+            }
+        }
+
+        // Rzad akcji (row=3)
+        const int actXs[3] = {0, 60, 170};
+        const int actWs[3] = {58, 58, 85};
+        for (int col = 0; col < 3; col++) {
+            const char* lbl = _LIC_ACTS[col];
+            if (col == 1) lbl = capsMode ? "abc" : "CAPS";
+            bool sel = (curRow == 3 && curCol == col);
+            int x = actXs[col];
+            int w = actWs[col];
+            int y = 43;
+            int tw = strlen(lbl) * 5;
+            int tx = x + (w - tw) / 2;
+            if (sel) {
+                d.drawBox(x, y, w - 1, 9);
+                d.setDrawColor(0);
+                d.drawStr(tx, y + 7, lbl);
+                d.setDrawColor(1);
+            } else {
+                d.drawFrame(x, y, w - 1, 9);
+                d.drawStr(tx, y + 7, lbl);
+            }
+        }
+
+        d.drawHLine(0, 54, 256);
+        d.drawStr(2, 63, T("< anuluj", "< cancel"));
+        char lenInfo[12];
+        snprintf(lenInfo, sizeof(lenInfo), "%d/16", inputLen > 16 ? 16 : inputLen);
+        d.drawStr(210, 63, lenInfo);
+
+        d.sendBuffer();
+
+        // Przyciski
+        if (_setBtn(BTN_UP)) {
+            if (curRow > 0) {
+                curRow--;
+                int maxC = (curRow < 3) ? _LIC_COUNTS[curRow] - 1 : 2;
+                if (curCol > maxC) curCol = maxC;
+            }
+        } else if (_setBtn(BTN_DOWN)) {
+            if (curRow < 3) {
+                curRow++;
+                int maxC = (curRow < 3) ? _LIC_COUNTS[curRow] - 1 : 2;
+                if (curCol > maxC) curCol = maxC;
+            }
+        } else if (_setBtn(BTN_LEFT)) {
+            if (curCol > 0) {
+                curCol--;
+            } else {
+                _setWaitRelease();
+                return;  // anuluj
+            }
+        } else if (_setBtn(BTN_RIGHT)) {
+            int maxC = (curRow < 3) ? _LIC_COUNTS[curRow] - 1 : 2;
+            if (curCol < maxC) curCol++;
+        } else if (_setBtn(BTN_OK)) {
+            if (curRow < 3) {
+                // Dodaj znak
+                if (inputLen < 39) {
+                    char ch = _LIC_ROWS[curRow][curCol];
+                    if (capsMode && curRow == 0 && ch >= 'a' && ch <= 'z')
+                        ch = ch - 'a' + 'A';
+                    licBuf[inputLen++] = ch;
+                    licBuf[inputLen] = '\0';
+                    blinkStart = millis();
+                }
+            } else {
+                switch (curCol) {
+                    case 0:  // BKSP
+                        if (inputLen > 0) licBuf[--inputLen] = '\0';
+                        break;
+                    case 1:  // CAPS toggle
+                        capsMode = !capsMode;
+                        break;
+                    case 2:  // SAVE
+                        // Normalizuj: lowercase + trim
+                        for (int i = 0; licBuf[i]; i++)
+                            licBuf[i] = tolower((unsigned char)licBuf[i]);
+                        wifiSaveLicense(licBuf);
+                        _setWaitRelease();
+                        return;
+                }
+            }
+        }
+
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Publiczna funkcja — glowny punkt wejscia
 // ---------------------------------------------------------------------------
 void showSettings(U8G2 &display) {
@@ -424,6 +612,7 @@ void showSettings(U8G2 &display) {
                 case _SET_LANGUAGE:   _editLanguage(display);   break;
                 case _SET_SOLVEMODE:  _editSolveMode(display);  break;
                 case _SET_AUTOSLEEP:  _editAutoSleep(display);  break;
+                case _SET_LICENSE:    _editLicense(display);    break;
             }
         }
 

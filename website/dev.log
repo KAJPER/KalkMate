@@ -1,0 +1,46 @@
+
+> website@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.182:3000
+- Environments: .env.local
+
+✓ Starting...
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 1122ms
+ GET / 200 in 1031ms (compile: 726ms, render: 305ms)
+ POST /api/admin/visits 200 in 1062ms (compile: 142ms, proxy.ts: 96ms, render: 825ms)
+ GET /auth/signin?callbackUrl=%2Fpanel 200 in 612ms (compile: 533ms, render: 80ms)
+⨯ ./node_modules/next-auth/providers/email.js:7:19
+Module not found: Can't resolve 'nodemailer'
+[0m [90m  5 |[39m })[33m;[39m
+ [90m  6 |[39m exports[33m.[39m[36mdefault[39m [33m=[39m [33mEmail[39m[33m;[39m
+[31m[1m>[22m[39m[90m  7 |[39m [36mvar[39m _nodemailer [33m=[39m require([32m"nodemailer"[39m)[33m;[39m
+ [90m    |[39m                   [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m  8 |[39m [36mfunction[39m [33mEmail[39m(options) {
+ [90m  9 |[39m   [36mreturn[39m {
+ [90m 10 |[39m     id[33m:[39m [32m"email"[39m[33m,[39m[0m
+
+
+
+Import trace:
+  App Route:
+    ./node_modules/next-auth/providers/email.js
+    ./src/lib/auth.ts
+    ./src/app/api/subscription/status/route.ts
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ GET /api/subscription/status 500 in 742ms (compile: 591ms, render: 151ms)
+ GET / 200 in 88ms (compile: 5ms, render: 83ms)
+ GET / 200 in 88ms (compile: 5ms, render: 83ms)
+ POST /api/admin/visits 500 in 42ms (compile: 21ms, proxy.ts: 5ms, render: 15ms)
+ GET / 200 in 108ms (compile: 4ms, render: 104ms)
+ POST /api/admin/visits 500 in 26ms (compile: 9ms, proxy.ts: 7ms, render: 10ms)
+ GET / 200 in 101ms (compile: 4ms, render: 97ms)
+ POST /api/admin/visits 500 in 22ms (compile: 8ms, proxy.ts: 4ms, render: 10ms)
+ GET / 200 in 101ms (compile: 3ms, render: 97ms)
+ POST /api/admin/visits 500 in 26ms (compile: 9ms, proxy.ts: 6ms, render: 11ms)

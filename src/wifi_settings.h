@@ -10,6 +10,14 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <WiFi.h>
+#include "settings_screen.h"
+#include "wifi_persist.h"
+
+// Pomocnik tlumaczen — zwraca polski lub angielski napis
+// w zaleznosci od kalkSettings.language (0=Polski, 1=English)
+static const char* _wifiT(const char* pl, const char* en) {
+    return kalkSettings.language == 0 ? pl : en;
+}
 
 // === Piny przyciskow ===
 #ifndef BTN_UP
@@ -117,13 +125,13 @@ static void _drawWifiStatus(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
 
-    d.drawStr(2, 10, "=== Ustawienia WiFi ===");
+    d.drawStr(2, 10, _wifiT("=== Ustawienia WiFi ===", "=== WiFi Settings ==="));
     d.drawHLine(0, 12, 256);
 
     bool connected = (WiFi.status() == WL_CONNECTED);
 
     if (connected) {
-        d.drawStr(2, 23, "Stan: Polaczono");
+        d.drawStr(2, 23, _wifiT("Stan: Polaczono", "Status: Connected"));
 
         char line[52];
         snprintf(line, sizeof(line), "SSID: %s", WiFi.SSID().c_str());
@@ -135,15 +143,15 @@ static void _drawWifiStatus(U8G2 &d) {
         snprintf(line, sizeof(line), "RSSI: %d dBm", WiFi.RSSI());
         d.drawStr(2, 53, line);
     } else {
-        d.drawStr(2, 25, "Stan: Rozlaczone");
-        d.drawStr(2, 40, "Brak polaczenia z siecia.");
+        d.drawStr(2, 25, _wifiT("Stan: Rozlaczone", "Status: Disconnected"));
+        d.drawStr(2, 40, _wifiT("Brak polaczenia z siecia.", "No network connection."));
     }
 
     // Dwa przyciski na dole: [< WSTECZ]  [OK: Zmien siec >]
     d.drawHLine(0, 54, 256);
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2,  63, "< WSTECZ");
-    d.drawStr(connected ? 140 : 130, 63, "OK: Zmien siec >");
+    d.drawStr(2,  63, _wifiT("< WSTECZ", "< BACK"));
+    d.drawStr(connected ? 140 : 130, 63, _wifiT("OK: Zmien siec >", "OK: Change network >"));
 
     d.sendBuffer();
 }
@@ -154,7 +162,7 @@ static void _drawWifiStatus(U8G2 &d) {
 static void _drawScanning(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, "Skanowanie...");
+    d.drawStr(2, 20, _wifiT("Skanowanie...", "Scanning..."));
     d.sendBuffer();
 }
 
@@ -166,12 +174,12 @@ static void _drawNetworkList(U8G2 &d, int networks, int scroll, int selected) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
 
-    d.drawStr(2, 10, "Wybierz siec WiFi:");
+    d.drawStr(2, 10, _wifiT("Wybierz siec WiFi:", "Select WiFi network:"));
     d.drawHLine(0, 12, 256);
 
     if (networks == 0) {
-        d.drawStr(2, 36, "Brak sieci.");
-        d.drawStr(2, 50, "OK = skanuj ponownie");
+        d.drawStr(2, 36, _wifiT("Brak sieci.", "No networks found."));
+        d.drawStr(2, 50, _wifiT("OK = skanuj ponownie", "OK = scan again"));
         d.sendBuffer();
         return;
     }
@@ -298,7 +306,7 @@ static void _drawKeyboard(U8G2 &d,
     d.setFont(u8g2_font_6x10_tf);
 
     // --- Linia 0: label + wpisany tekst ---
-    d.drawStr(2, 8, "Haslo:");
+    d.drawStr(2, 8, _wifiT("Haslo:", "Password:"));
     char disp[40];
     int si = (inputLen > 33) ? inputLen - 33 : 0;
     int vl = inputLen - si;
@@ -450,7 +458,7 @@ static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize) {
 static void _drawConnecting(U8G2 &d, const char* ssid, int dots) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, "Laczenie z:");
+    d.drawStr(2, 20, _wifiT("Laczenie z:", "Connecting to:"));
     d.drawStr(2, 34, ssid);
     char dotStr[8] = "";
     for (int i = 0; i < dots; i++) strncat(dotStr, ".", sizeof(dotStr) - 1);
@@ -461,20 +469,20 @@ static void _drawConnecting(U8G2 &d, const char* ssid, int dots) {
 static void _drawConnectError(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 18, "Blad polaczenia!");
-    d.drawStr(2, 32, "Sprawdz SSID i haslo.");
-    d.drawStr(2, 48, "OK = powrot");
+    d.drawStr(2, 18, _wifiT("Blad polaczenia!", "Connection failed!"));
+    d.drawStr(2, 32, _wifiT("Sprawdz SSID i haslo.", "Check SSID and password."));
+    d.drawStr(2, 48, _wifiT("OK = powrot", "OK = back"));
     d.sendBuffer();
 }
 
 static void _drawConnectOk(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, "Polaczono!");
+    d.drawStr(2, 20, _wifiT("Polaczono!", "Connected!"));
     char ipLine[48];
     snprintf(ipLine, sizeof(ipLine), "IP: %s", WiFi.localIP().toString().c_str());
     d.drawStr(2, 36, ipLine);
-    d.drawStr(2, 52, "Powrot za chwile...");
+    d.drawStr(2, 52, _wifiT("Powrot za chwile...", "Returning shortly..."));
     d.sendBuffer();
     delay(2000);
 }
@@ -552,6 +560,8 @@ void showWifiSettings(U8G2 &display) {
         bool ok = _doConnect(display, ssid, password);
 
         if (ok) {
+            // Zapisz dane WiFi do NVS zeby auto-reconnect dzialal
+            wifiSaveCreds(ssid, password);
             _drawConnectOk(display);
             // Petla wróci do ekranu statusu, który pokaze IP
         } else {
