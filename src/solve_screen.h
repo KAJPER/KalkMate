@@ -31,9 +31,9 @@
 #endif
 
 #define _SOL_SOLVE_ENDPOINT  KALK_SERVER_URL "/api/device/solve"
-#define _SOL_TEXT_MAX        512   // max znakow zadania
-#define _SOL_SOLUTION_MAX    900   // max znakow odpowiedzi
-#define _SOL_HTTP_TIMEOUT_MS 30000 // 30s timeout HTTP
+#define _SOL_TEXT_MAX        512    // max znakow zadania
+#define _SOL_SOLUTION_MAX    2000   // max znakow odpowiedzi
+#define _SOL_HTTP_TIMEOUT_MS 45000  // 45s timeout HTTP
 
 // ---------------------------------------------------------------------------
 // Piny przyciskow
@@ -120,82 +120,310 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
 }
 
 // ---------------------------------------------------------------------------
+// Konwerter notacji matematycznej na czytelny tekst ASCII dla OLED
+// Zamienia: x^2 -> x^2(=x kwadrat), sqrt(x) -> v(x), itp.
+// ---------------------------------------------------------------------------
+static void _solFormatMath(const char* src, char* dst, int dstSize) {
+    int si = 0, di = 0;
+    int slen = strlen(src);
+
+    while (si < slen && di < dstSize - 1) {
+        char c = src[si];
+
+        // --- sqrt( ... ) -> zostawiam bez zmian, ladnie wyglada ---
+        // (brak konwersji sqrt)
+
+        // --- \sqrt{ -> sqrt( ---
+        if (si + 5 < slen && src[si]=='\\' &&
+            src[si+1]=='s' && src[si+2]=='q' && src[si+3]=='r' && src[si+4]=='t' && src[si+5]=='{') {
+            const char* rep = "sqrt(";
+            for (int k = 0; rep[k] && di < dstSize-1; k++) dst[di++] = rep[k];
+            si += 6;
+            // Zamien zamykajacy } na )
+            // (zostanie skopiowany jako } normalnie, pozniej go zastapmy)
+            continue;
+        }
+
+        // --- x^{n} lub x^n -> potega ---
+        if (c == '^' && si + 1 < slen) {
+            si++; // pominij ^
+            char next = src[si];
+            // Zbierz wykladnik
+            char exp[16] = "";
+            int ei = 0;
+            bool brace = (next == '{');
+            if (brace) si++; // pominij {
+            while (si < slen && ei < 14) {
+                char ec = src[si];
+                if (brace && ec == '}') { si++; break; }
+                if (!brace && (ec == ' ' || ec == '+' || ec == '-' || ec == '*' || ec == '/' || ec == ')' || ec == '\n')) break;
+                exp[ei++] = ec;
+                si++;
+            }
+            exp[ei] = '\0';
+
+            // Zamien cyfre na superscript Unicode (jesli jeden znak)
+            if (ei == 1) {
+                char sup = exp[0];
+                const char* supMap = "0123456789";
+                const char* supUni[] = {"0","1","2","3","4","5","6","7","8","9"};
+                // Uzyj ASCII: ^2 -> ^2 ale dodaj nawiasy dla dlugich
+                if (sup == '2' && di < dstSize - 2) { dst[di++] = '^'; dst[di++] = '2'; }
+                else if (sup == '3' && di < dstSize - 2) { dst[di++] = '^'; dst[di++] = '3'; }
+                else {
+                    if (di < dstSize - 1) dst[di++] = '^';
+                    for (int k = 0; k < ei && di < dstSize - 1; k++) dst[di++] = exp[k];
+                }
+            } else if (ei > 1) {
+                if (di < dstSize - 1) dst[di++] = '^';
+                dst[di++] = '(';
+                for (int k = 0; k < ei && di < dstSize - 1; k++) dst[di++] = exp[k];
+                if (di < dstSize - 1) dst[di++] = ')';
+            }
+            continue;
+        }
+
+        // --- x_{n} lub x_n -> indeks dolny ---
+        if (c == '_' && si + 1 < slen) {
+            si++;
+            char next = src[si];
+            char sub[16] = "";
+            int ei = 0;
+            bool brace = (next == '{');
+            if (brace) si++;
+            while (si < slen && ei < 14) {
+                char ec = src[si];
+                if (brace && ec == '}') { si++; break; }
+                if (!brace && (ec == ' ' || ec == '+' || ec == '-' || ec == ')' || ec == '\n')) break;
+                sub[ei++] = ec;
+                si++;
+            }
+            sub[ei] = '\0';
+            if (di < dstSize - 1) dst[di++] = '_';
+            for (int k = 0; k < ei && di < dstSize - 1; k++) dst[di++] = sub[k];
+            continue;
+        }
+
+        // --- \frac{a}{b} -> a/b ---
+        if (c == '\\' && si + 4 < slen &&
+            src[si+1]=='f' && src[si+2]=='r' && src[si+3]=='a' && src[si+4]=='c') {
+            si += 5;
+            // Zbierz licznik {a}
+            char num[32] = "", den[32] = "";
+            if (si < slen && src[si] == '{') {
+                si++;
+                int k = 0;
+                while (si < slen && src[si] != '}' && k < 30) num[k++] = src[si++];
+                num[k] = '\0';
+                if (si < slen) si++; // pominij }
+            }
+            if (si < slen && src[si] == '{') {
+                si++;
+                int k = 0;
+                while (si < slen && src[si] != '}' && k < 30) den[k++] = src[si++];
+                den[k] = '\0';
+                if (si < slen) si++; // pominij }
+            }
+            // Wypisz jako (num/den)
+            dst[di++] = '(';
+            for (int k = 0; num[k] && di < dstSize-1; k++) dst[di++] = num[k];
+            dst[di++] = '/';
+            for (int k = 0; den[k] && di < dstSize-1; k++) dst[di++] = den[k];
+            dst[di++] = ')';
+            continue;
+        }
+
+        // --- Pomijaj znaki LaTeX: $, \[ \], \( \) ---
+        if (c == '$') { si++; continue; }
+        if (c == '\\' && si + 1 < slen) {
+            char n = src[si+1];
+            if (n == '[' || n == ']' || n == '(' || n == ')') { si += 2; continue; }
+            if (n == ' ') { dst[di++] = ' '; si += 2; continue; }
+            // \cdot -> *
+            if (si+4<slen && src[si+1]=='c' && src[si+2]=='d' && src[si+3]=='o' && src[si+4]=='t') {
+                dst[di++] = '*'; si += 5; continue;
+            }
+            // \times -> x
+            if (si+5<slen && src[si+1]=='t' && src[si+2]=='i' && src[si+3]=='m' && src[si+4]=='e' && src[si+5]=='s') {
+                dst[di++] = 'x'; si += 6; continue;
+            }
+            // \pi -> pi
+            if (si+2<slen && src[si+1]=='p' && src[si+2]=='i') {
+                if(di<dstSize-2){dst[di++]='p';dst[di++]='i';} si+=3; continue;
+            }
+            // \alpha -> alpha, \beta -> beta, itp.
+            // Pominij backslash, skopiuj slowo
+            si++;
+            while (si < slen && src[si] >= 'a' && src[si] <= 'z' && di < dstSize-1)
+                dst[di++] = src[si++];
+            continue;
+        }
+
+        // Zwykly znak
+        dst[di++] = c;
+        si++;
+    }
+    dst[di] = '\0';
+}
+
+// ---------------------------------------------------------------------------
 // Wyswietlanie rozwiazania (przewijane UP/DOWN, wyjscie LEFT)
 // Tekst jest zawijany reczne co ~40 znakow na linie ekranu 6x10
 // ---------------------------------------------------------------------------
 #define _SOL_LINES_MAX    64
 #define _SOL_LINE_LEN     44
 
+// Rysuje tekst z obsluga poteg: "e^3" -> "e" normalnie + "3" malym fontem wyzej
+// Zwraca szerokosc narysowanego tekstu w px
+static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
+    int xi = x;
+    int len = strlen(text);
+    for (int i = 0; i < len; ) {
+        if (text[i] == '^' && i + 1 < len) {
+            i++; // pominij ^
+            char exp[16] = "";
+            int elen = 0;
+            if (text[i] == '(') {
+                // Wykladnik wieloznakowy w nawiasach: ^(abc) -> wszystko do ')'
+                i++; // pominij '('
+                while (i < len && text[i] != ')' && elen < 14)
+                    exp[elen++] = text[i++];
+                if (i < len && text[i] == ')') i++; // pominij ')'
+            } else {
+                // Wykladnik bez nawiasow: tylko cyfry i litery
+                // zatrzymaj sie na wszystkich operatorach: + - * / = spacja itp.
+                while (i < len && elen < 14 &&
+                       isalnum((unsigned char)text[i])) {
+                    exp[elen++] = text[i++];
+                }
+            }
+            exp[elen] = '\0';
+            if (elen > 0) {
+                d.setFont(u8g2_font_5x7_tf);
+                d.drawStr(xi, y - 4, exp);
+                xi += elen * 5 + 1;
+                d.setFont(u8g2_font_6x10_tf);
+            }
+        } else {
+            char ch[2] = {text[i], '\0'};
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(xi, y, ch);
+            xi += 6;
+            i++;
+        }
+    }
+    return xi - x;
+}
+
 static void _solDisplaySolution(U8G2 &d, const char* solution) {
-    // Podziel tekst na linie ~40 znakow
+    // Font 6x10, ekran 256x64
+    // Uklad: naglowek y=8 (linia 0-9), separtor y=10
+    // Linie tekstu: y=21, 33, 45 (3 widoczne, odstep 12px)
+    // Pasek dolny: y=57-63
+    const int VISIBLE  = 3;   // 3 linie tekstu na raz
+    const int LINE_H   = 12;  // wysokosc linii px
+    const int LINE_Y0  = 21;  // y bazowe pierwszej linii
+    // Maks znakow na linie przy foncie 6px: (256-4)/6 = 42
+    const int LINE_CHARS = 41;
+
+    // Przetworz tekst przez konwerter matematyki
+    static char _solConverted[_SOL_SOLUTION_MAX + 1];
+    _solFormatMath(solution, _solConverted, sizeof(_solConverted));
+
+    // Podziel na linie
     static char _lines[_SOL_LINES_MAX][_SOL_LINE_LEN + 1];
     int lineCount = 0;
-
-    int slen = strlen(solution);
+    int slen = strlen(_solConverted);
     int pos  = 0;
+
     while (pos < slen && lineCount < _SOL_LINES_MAX) {
-        // Znajdz koniec linii: newline lub dlugosc _SOL_LINE_LEN
         int end = pos;
         int lastSpace = -1;
-        while (end < slen && end - pos < _SOL_LINE_LEN) {
-            if (solution[end] == '\n') break;
-            if (solution[end] == ' ') lastSpace = end;
+        while (end < slen && (end - pos) < LINE_CHARS) {
+            if (_solConverted[end] == '\n') break;
+            if (_solConverted[end] == ' ')  lastSpace = end;
             end++;
         }
-        if (end < slen && solution[end] != '\n' && lastSpace > pos) {
-            // Zawroc do ostatniej spacji zeby nie przerwac w srodku slowa
+        // Zawroc do ostatniej spacji jesli nie koniec
+        if (end < slen && _solConverted[end] != '\n' && lastSpace > pos)
             end = lastSpace;
-        }
         int len = end - pos;
-        strncpy(_lines[lineCount], solution + pos, len);
+        if (len > _SOL_LINE_LEN) len = _SOL_LINE_LEN;
+        strncpy(_lines[lineCount], _solConverted + pos, len);
         _lines[lineCount][len] = '\0';
         lineCount++;
         pos = end;
-        if (pos < slen && (solution[pos] == '\n' || solution[pos] == ' '))
+        if (pos < slen && (_solConverted[pos] == '\n' || _solConverted[pos] == ' '))
             pos++;
     }
 
-    // Wyswietlacz 256x64, font 6x10 → 4 linie widoczne (y=13,24,35,46)
-    const int VISIBLE = 4;
+    Serial.printf("[SOL] lineCount=%d\n", lineCount);
+
+    // Czekaj na puszczenie przyciskow
+    while (digitalRead(BTN_UP)    == LOW || digitalRead(BTN_DOWN)  == LOW ||
+           digitalRead(BTN_LEFT)  == LOW || digitalRead(BTN_RIGHT) == LOW ||
+           digitalRead(BTN_OK)    == LOW) {
+        delay(10);
+    }
+    delay(200);
+    _solLastPress = millis();
+
+    bool needRedraw = true;
     int scroll = 0;
-    _solWaitRelease();
 
     while (true) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_5x7_tf);
-        // Naglowek
-        char hdr[32];
-        snprintf(hdr, sizeof(hdr), _solT("Rozwiazanie (%d/%d):", "Solution (%d/%d):"),
-                 scroll + 1, lineCount);
-        d.drawStr(2, 8, hdr);
-        d.drawHLine(0, 10, 256);
+        if (needRedraw) {
+            d.clearBuffer();
 
-        d.setFont(u8g2_font_6x10_tf);
-        for (int i = 0; i < VISIBLE; i++) {
-            int li = scroll + i;
-            if (li >= lineCount) break;
-            d.drawStr(2, 20 + i * 12, _lines[li]);
+            // Naglowek
+            d.setFont(u8g2_font_5x7_tf);
+            char hdr[32];
+            snprintf(hdr, sizeof(hdr), "AI %d-%d/%d",
+                     scroll + 1,
+                     min(scroll + VISIBLE, lineCount),
+                     lineCount);
+            d.drawStr(2, 8, hdr);
+            // Strzalki w naglowku
+            if (scroll > 0)                        d.drawStr(240, 8, "^");
+            if (scroll + VISIBLE < lineCount)       d.drawStr(248, 8, "v");
+            d.drawHLine(0, 10, 256);
+
+            // Linie tekstu z obsluga poteg
+            for (int i = 0; i < VISIBLE; i++) {
+                int li = scroll + i;
+                if (li >= lineCount) break;
+                _solDrawMathLine(d, 2, LINE_Y0 + i * LINE_H, _lines[li]);
+            }
+
+            // Stopka
+            d.drawHLine(0, 55, 256);
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 63, _solT("< wyjdz  UP/DN scroll", "< exit  UP/DN scroll"));
+
+            d.sendBuffer();
+            needRedraw = false;
         }
 
-        // Strzalki przewijania
-        d.setFont(u8g2_font_5x7_tf);
-        if (scroll > 0)
-            d.drawStr(248, 16, "^");
-        if (scroll + VISIBLE < lineCount)
-            d.drawStr(248, 60, "v");
-        d.drawStr(2, 63, _solT("< wyjdz   ^/v przewijaj", "< exit   ^/v scroll"));
-
-        d.sendBuffer();
-
-        if (_solBtn(BTN_UP)) {
-            if (scroll > 0) scroll--;
-        } else if (_solBtn(BTN_DOWN)) {
-            if (scroll + VISIBLE < lineCount) scroll++;
-        } else if (_solBtn(BTN_LEFT) || _solBtn(BTN_OK)) {
-            _solWaitRelease();
-            return;
+        unsigned long now = millis();
+        if (now - _solLastPress > 180UL) {
+            if (digitalRead(BTN_UP) == LOW) {
+                _solLastPress = now;
+                Serial.println("[SOL] UP");
+                if (scroll > 0) { scroll--; needRedraw = true; }
+            } else if (digitalRead(BTN_DOWN) == LOW) {
+                _solLastPress = now;
+                Serial.println("[SOL] DOWN");
+                if (scroll + VISIBLE < lineCount) { scroll++; needRedraw = true; }
+                else Serial.printf("[SOL] at bottom scroll=%d VISIBLE=%d lineCount=%d\n", scroll, VISIBLE, lineCount);
+            } else if (digitalRead(BTN_LEFT) == LOW || digitalRead(BTN_OK) == LOW) {
+                _solLastPress = now;
+                Serial.println("[SOL] EXIT");
+                while (digitalRead(BTN_LEFT) == LOW || digitalRead(BTN_OK) == LOW) delay(10);
+                delay(100);
+                return;
+            }
         }
-        delay(20);
+        delay(10);
     }
 }
 
@@ -257,7 +485,8 @@ static void _solRunTextMode(U8G2 &d) {
     // _runKeyboard rysuje "Haslo:" — tutaj nadpiszemy przez wlasny wrapper
     // Zamiast kopiowac cala klawiature, skorzystamy z tej samej funkcji
     // i po prostu akceptujemy naglowek "Haslo:" (jezyk-agnostycznie OK)
-    bool saved = _runKeyboard(d, taskText, sizeof(taskText));
+    bool saved = _runKeyboard(d, taskText, sizeof(taskText),
+                              _solT("Zadanie: ", "Problem: "));
     if (!saved || taskText[0] == '\0') return;
 
     // Upewnij sie ze jest WiFi
@@ -292,21 +521,33 @@ static void _solRunTextMode(U8G2 &d) {
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
-    // Animacja podczas wysylania
-    _solDrawLoading(d, _solT("Wysylam zadanie...", "Sending task..."), frame++);
+    // Animowany ekran wysylania
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 16, _solT("Wysylam zadanie...", "Sending task..."));
+    d.setFont(u8g2_font_5x7_tf);
+    d.drawStr(2, 32, _solT("Laczenie z AI...", "Connecting to AI..."));
+    d.sendBuffer();
 
+    // POST (blokujacy) — pokaz spinner klatka przed
     int httpCode = http.POST(jsonBody);
 
-    if (httpCode <= 0) {
-        http.end();
-        _solDrawError(d,
-            _solT("Blad polaczenia", "Connection error"),
-            http.errorToString(httpCode).c_str());
-        return;
+    // Ekran oczekiwania na odpowiedz AI
+    if (httpCode > 0) {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
+        d.sendBuffer();
+        delay(200); // krotka pauza zeby ekran byl widoczny
     }
 
     String resp = http.getString();
     http.end();
+
+    Serial.printf("[SOL] HTTP %d, response len=%d\n", httpCode, resp.length());
+    Serial.printf("[SOL] Response: %s\n", resp.c_str());
 
     if (httpCode != 200) {
         // Sprobuj wyciagnac error z JSON
@@ -328,6 +569,7 @@ static void _solRunTextMode(U8G2 &d) {
 
     // Wyciagnij solution z JSON {"ok":true,"solution":"..."}
     int solIdx = resp.indexOf("\"solution\":\"");
+    Serial.printf("[SOL] solIdx=%d respLen=%d\n", solIdx, resp.length());
     if (solIdx < 0) {
         _solDrawError(d, _solT("Brak odpowiedzi", "No answer"), "");
         return;
@@ -351,6 +593,8 @@ static void _solRunTextMode(U8G2 &d) {
         }
     }
     solution[spos] = '\0';
+
+    Serial.printf("[SOL] Parsed solution len=%d:\n%s\n---END---\n", spos, solution);
 
     _solDisplaySolution(d, solution);
 }

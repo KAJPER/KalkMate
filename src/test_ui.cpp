@@ -3,10 +3,11 @@
 #include <SPI.h>
 #include <WiFi.h>
 #include <esp_sleep.h>
+#include <nvs_flash.h>
 
 // Konfiguracja serwera AI — ustaw przed kompilacja
-#define KALK_SERVER_URL "https://twojserwer.pl"
-#define KALK_API_KEY    "wpisz-tutaj-CALCULATOR_API_KEY"
+#define KALK_SERVER_URL "https://kalkmate.pl"
+#define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 #include "settings_screen.h"   // MUSI BYC PIERWSZE (definiuje kalkSettings)
 #include "wifi_persist.h"       // NVS: WiFi + licencja
@@ -15,6 +16,7 @@
 #include "info_screen.h"
 #include "screen_test.h"
 #include "solve_screen.h"       // Rozwiazywanie zadan AI
+#include "splash_screen.h"      // Ekran powitalny z animacja
 
 // OLED
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(U8G2_R0, /*cs=*/5, /*dc=*/17, /*reset=*/16);
@@ -168,6 +170,13 @@ void showButtonTest() {
 void setup() {
     Serial.begin(115200);
 
+    // Inicjalizacja NVS (wymagana przez Preferences)
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
+
     // Przyciski z wewnetrznym pullupem
     pinMode(BTN_UP,    INPUT_PULLUP);
     pinMode(BTN_DOWN,  INPUT_PULLUP);
@@ -176,6 +185,7 @@ void setup() {
     pinMode(BTN_OK,    INPUT_PULLUP);
 
     u8g2.begin();
+    showSplashScreen(u8g2);
     Serial.println("UI start");
 
     // Auto-reconnect do ostatnio uzytej sieci WiFi

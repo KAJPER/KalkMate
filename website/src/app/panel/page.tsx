@@ -634,7 +634,7 @@ export default function PanelPage() {
               </div>
 
               {/* Main chat area */}
-              <div className="flex-1 flex flex-col"
+              <div className="flex-1 flex flex-col min-h-0"
             >
               {/* Chat header */}
               <div className="p-6 border-b border-gray-100 dark:border-[#3F4147] bg-gradient-to-r from-[#2563EB]/5 to-[#3B82F6]/5 dark:from-[#2563EB]/10 dark:to-[#3B82F6]/10">

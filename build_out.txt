@@ -1,0 +1,20 @@
+├ ƒ /api/subscription/purchase
+├ ƒ /api/subscription/redeem
+├ ƒ /api/subscription/status
+├ ƒ /api/sync/messages
+├ ƒ /api/sync/subscription
+├ ƒ /api/user/orders
+├ ƒ /api/webhooks/stripe
+├ ○ /auth/error
+├ ○ /auth/signin
+├ ○ /auth/verify
+├ ○ /panel
+├ ○ /polityka-prywatnosci
+└ ○ /regulamin
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

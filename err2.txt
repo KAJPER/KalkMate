@@ -1,0 +1,30 @@
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Error: Failed to find Server Action "x". This request might be from an older or newer deployment.
+Read more: https://nextjs.org/docs/messages/failed-to-find-server-action
+    at ignore-listed frames
+Device solve error: Error [ApiError]: {"error":{"code":404,"message":"models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.","status":"NOT_FOUND"}}
+    at nu (.next/server/chunks/[root-of-the-server]__c8ff06ce._.js:14:121391)
+    at async (.next/server/chunks/[root-of-the-server]__c8ff06ce._.js:14:116686)
+    at async nb.generateContent (.next/server/chunks/[root-of-the-server]__c8ff06ce._.js:14:147509)
+    at async b (.next/server/chunks/[root-of-the-server]__9e678d09._.js:22:1596)
+    at async u (.next/server/chunks/[root-of-the-server]__9e678d09._.js:22:5233)
+    at async l (.next/server/chunks/[root-of-the-server]__9e678d09._.js:22:6274) {
+  status: 404
+}

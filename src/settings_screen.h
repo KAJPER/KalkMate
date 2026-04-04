@@ -186,8 +186,10 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         if (licKey[0]) {
             // Pokaz pierwsze 8 znakow + "..."
             strncpy(licShort, licKey, 8);
-            licShort[8] = '\0';
-            strncat(licShort, "...", sizeof(licShort) - 9);
+            licShort[8] = '.';
+            licShort[9] = '.';
+            licShort[10] = '.';
+            licShort[11] = '\0';
         } else {
             strncpy(licShort, T("brak", "none"), sizeof(licShort) - 1);
         }

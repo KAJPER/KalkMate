@@ -301,21 +301,29 @@ static void _drawKeyboard(U8G2 &d,
                            int curRow,
                            int curCol,
                            int mode,
-                           unsigned long blinkTimer) {
+                           unsigned long blinkTimer,
+                           const char* label = nullptr) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
 
     // --- Linia 0: label + wpisany tekst ---
-    d.drawStr(2, 8, _wifiT("Haslo:", "Password:"));
+    const char* lbl = label ? label : _wifiT("Haslo:", "Password:");
+    d.drawStr(2, 8, lbl);
+    // Szerokosc etykiety: strlen * 6px (font 6x10) + 4px margines
+    int lblW = (int)strlen(lbl) * 6 + 6;
     char disp[40];
-    int si = (inputLen > 33) ? inputLen - 33 : 0;
+    // Ile znakow zmiesci sie po etykiecie (256 - lblW - 2px margines) / 6px
+    int maxVis = (256 - lblW - 2) / 6;
+    if (maxVis < 1) maxVis = 1;
+    int si = (inputLen > maxVis) ? inputLen - maxVis : 0;
     int vl = inputLen - si;
+    if (vl > (int)sizeof(disp) - 2) vl = (int)sizeof(disp) - 2;
     strncpy(disp, inputText + si, vl);
     disp[vl] = '\0';
     bool showCursor = ((millis() - blinkTimer) % 800) < 400;
     if (showCursor && inputLen < WIFI_INPUT_MAX_LEN)
         strncat(disp, "_", sizeof(disp) - strlen(disp) - 1);
-    d.drawStr(44, 8, disp);
+    d.drawStr(lblW, 8, disp);
     d.drawHLine(0, 10, 256);
 
     // --- Rzedy znakow (4 rzedy) ---
@@ -375,7 +383,7 @@ static void _drawKeyboard(U8G2 &d,
 // ---------------------------------------------------------------------------
 // Glowna petla klawiatury
 // ---------------------------------------------------------------------------
-static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize) {
+static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label = nullptr) {
     outBuf[0] = '\0';
     int inputLen = 0;
     int curRow   = 0;
@@ -386,7 +394,7 @@ static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize) {
     _wifiWaitRelease();
 
     while (true) {
-        _drawKeyboard(d, outBuf, inputLen, curRow, curCol, mode, blinkStart);
+        _drawKeyboard(d, outBuf, inputLen, curRow, curCol, mode, blinkStart, label);
 
         const int* counts = _kbGetCounts(mode);
 
