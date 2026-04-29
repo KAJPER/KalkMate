@@ -530,6 +530,12 @@ static void _solRunTextMode(U8G2 &d) {
     d.drawStr(2, 32, _solT("Laczenie z AI...", "Connecting to AI..."));
     d.sendBuffer();
 
+    // Log wysylanego requestu — diagnostyka HTTP 400/401 itd.
+    Serial.printf("[SOL] POST %s\n", _SOL_SOLVE_ENDPOINT);
+    Serial.printf("[SOL] x-api-key=%s\n", KALK_API_KEY);
+    Serial.printf("[SOL] x-license-key=%s\n", licKey[0] ? licKey : "(none)");
+    Serial.printf("[SOL] Body (%d B): %s\n", jsonBody.length(), jsonBody.c_str());
+
     // POST (blokujacy) — pokaz spinner klatka przed
     int httpCode = http.POST(jsonBody);
 
