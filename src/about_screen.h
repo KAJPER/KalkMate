@@ -1,5 +1,6 @@
 #pragma once
 #include <U8g2lib.h>
+#include "input.h"
 #include "settings_screen.h"
 
 // === Przyciski (INPUT_PULLUP, LOW = wcisniety) ===
@@ -86,11 +87,11 @@ void showAboutScreen(U8G2 &display) {
     _about_last_press = 0;
 
     // Upewnij sie ze piny sa skonfigurowane
-    pinMode(BTN_UP,    INPUT_PULLUP);
-    pinMode(BTN_DOWN,  INPUT_PULLUP);
-    pinMode(BTN_LEFT,  INPUT_PULLUP);
-    pinMode(BTN_RIGHT, INPUT_PULLUP);
-    pinMode(BTN_OK,    INPUT_PULLUP);
+    // pinMode(BTN_UP,    INPUT_PULLUP);
+    // pinMode(BTN_DOWN,  INPUT_PULLUP);
+    // pinMode(BTN_LEFT,  INPUT_PULLUP);
+    // pinMode(BTN_RIGHT, INPUT_PULLUP);
+    // pinMode(BTN_OK,    INPUT_PULLUP);
 
     // --- lambdy pomocnicze ----------------------------------------------------
     // Rysuj aktualna strone
@@ -145,7 +146,7 @@ void showAboutScreen(U8G2 &display) {
 
     // Debounce helper: zwraca true jesli przycisk jest wcisniety i minelo 200ms
     auto btnPressed = [&](int pin) -> bool {
-        if (digitalRead(pin) == LOW) {
+        if (inputBtn(pin) == LOW) {
             unsigned long now = millis();
             if (now - _about_last_press >= 200UL) {
                 _about_last_press = now;

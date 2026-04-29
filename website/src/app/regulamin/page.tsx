@@ -94,8 +94,8 @@ export default function TermsOfService() {
               <ol className="list-decimal list-inside space-y-2 text-[#1a1a1a]/80 dark:text-[#E0E0E0]/80">
                 <li>Dostawa realizowana jest wyłącznie na terytorium Polski.</li>
                 <li>Sprzedawca wysyła produkty za pośrednictwem InPost Paczkomaty.</li>
-                <li>Czas realizacji zamówienia wynosi do 3 dni roboczych od momentu zaksięgowania płatności.</li>
-                <li>Czas dostawy do Paczkomatu to zazwyczaj 1-2 dni robocze.</li>
+                <li>Czas realizacji zamówienia wynosi do 25 kwietnia 2026 r. od momentu zaksięgowania płatności.</li>
+                <li>Wysyłka zamówień realizowana jest do dnia 25 kwietnia 2026 r.</li>
                 <li><strong>Sprzedawca gwarantuje, że zamówienia złożone i opłacone najpóźniej do dnia 25 kwietnia 2026 r. zostaną dostarczone do Klienta (odebrane z Paczkomatu) najpóźniej do dnia 3 maja 2026 r.</strong></li>
                 <li>Klient zostanie powiadomiony emailem oraz SMS o nadaniu paczki i możliwości odbioru.</li>
                 <li>Produkt należy odebrać w ciągu 48 godzin od otrzymania powiadomienia. Po tym czasie paczka zostanie zwrócona do Sprzedawcy.</li>

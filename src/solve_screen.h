@@ -16,6 +16,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include "input.h"
 #include "settings_screen.h"
 #include "wifi_persist.h"
 #include "wifi_settings.h"  // klawiatura (_runKeyboard, itp.)
@@ -61,7 +62,7 @@ static unsigned long _solLastPress = 0;
 #define _SOL_DEBOUNCE_MS 200
 
 static bool _solBtn(int pin) {
-    if (digitalRead(pin) == LOW) {
+    if (inputBtn(pin) == LOW) {
         unsigned long now = millis();
         if (now - _solLastPress > _SOL_DEBOUNCE_MS) {
             _solLastPress = now;
@@ -72,11 +73,11 @@ static bool _solBtn(int pin) {
 }
 
 static void _solWaitRelease() {
-    while (digitalRead(BTN_UP)    == LOW ||
-           digitalRead(BTN_DOWN)  == LOW ||
-           digitalRead(BTN_LEFT)  == LOW ||
-           digitalRead(BTN_RIGHT) == LOW ||
-           digitalRead(BTN_OK)    == LOW) {
+    while (inputBtn(BTN_UP)    == LOW ||
+           inputBtn(BTN_DOWN)  == LOW ||
+           inputBtn(BTN_LEFT)  == LOW ||
+           inputBtn(BTN_RIGHT) == LOW ||
+           inputBtn(BTN_OK)    == LOW) {
         delay(10);
     }
     _solLastPress = millis();
@@ -360,9 +361,9 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
     Serial.printf("[SOL] lineCount=%d\n", lineCount);
 
     // Czekaj na puszczenie przyciskow
-    while (digitalRead(BTN_UP)    == LOW || digitalRead(BTN_DOWN)  == LOW ||
-           digitalRead(BTN_LEFT)  == LOW || digitalRead(BTN_RIGHT) == LOW ||
-           digitalRead(BTN_OK)    == LOW) {
+    while (inputBtn(BTN_UP)    == LOW || inputBtn(BTN_DOWN)  == LOW ||
+           inputBtn(BTN_LEFT)  == LOW || inputBtn(BTN_RIGHT) == LOW ||
+           inputBtn(BTN_OK)    == LOW) {
         delay(10);
     }
     delay(200);
@@ -406,19 +407,19 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
 
         unsigned long now = millis();
         if (now - _solLastPress > 180UL) {
-            if (digitalRead(BTN_UP) == LOW) {
+            if (inputBtn(BTN_UP) == LOW) {
                 _solLastPress = now;
                 Serial.println("[SOL] UP");
                 if (scroll > 0) { scroll--; needRedraw = true; }
-            } else if (digitalRead(BTN_DOWN) == LOW) {
+            } else if (inputBtn(BTN_DOWN) == LOW) {
                 _solLastPress = now;
                 Serial.println("[SOL] DOWN");
                 if (scroll + VISIBLE < lineCount) { scroll++; needRedraw = true; }
                 else Serial.printf("[SOL] at bottom scroll=%d VISIBLE=%d lineCount=%d\n", scroll, VISIBLE, lineCount);
-            } else if (digitalRead(BTN_LEFT) == LOW || digitalRead(BTN_OK) == LOW) {
+            } else if (inputBtn(BTN_LEFT) == LOW || inputBtn(BTN_OK) == LOW) {
                 _solLastPress = now;
                 Serial.println("[SOL] EXIT");
-                while (digitalRead(BTN_LEFT) == LOW || digitalRead(BTN_OK) == LOW) delay(10);
+                while (inputBtn(BTN_LEFT) == LOW || inputBtn(BTN_OK) == LOW) delay(10);
                 delay(100);
                 return;
             }
@@ -814,11 +815,11 @@ static void _solModeSelect(U8G2 &d, int &mode) {
 // Publiczna funkcja — glowny punkt wejscia
 // ---------------------------------------------------------------------------
 void showSolveScreen(U8G2 &display) {
-    pinMode(BTN_UP,    INPUT_PULLUP);
-    pinMode(BTN_DOWN,  INPUT_PULLUP);
-    pinMode(BTN_LEFT,  INPUT_PULLUP);
-    pinMode(BTN_RIGHT, INPUT_PULLUP);
-    pinMode(BTN_OK,    INPUT_PULLUP);
+    // pinMode(BTN_UP,    INPUT_PULLUP);
+    // pinMode(BTN_DOWN,  INPUT_PULLUP);
+    // pinMode(BTN_LEFT,  INPUT_PULLUP);
+    // pinMode(BTN_RIGHT, INPUT_PULLUP);
+    // pinMode(BTN_OK,    INPUT_PULLUP);
 
     int mode = 1;  // domyslnie tekst (kamera moze byc niedostepna)
 

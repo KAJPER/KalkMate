@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include "input.h"
 #include "settings_screen.h"
 
 #ifndef BTN_OK
@@ -25,7 +26,7 @@
 static unsigned long _stLastPress = 0;
 
 static bool _stBtn(int pin) {
-    if (digitalRead(pin) == LOW) {
+    if (inputBtn(pin) == LOW) {
         unsigned long now = millis();
         if (now - _stLastPress > 200) {
             _stLastPress = now;
@@ -226,7 +227,7 @@ static void _stShadowText(U8G2 &d) {
 static void _stAnimation(U8G2 &d) {
     // Faza 1: tekst przesuwa sie od lewej do prawej (scroll)
     for (int x = -100; x < 260; x += 4) {
-        if (digitalRead(BTN_OK) == LOW || digitalRead(BTN_LEFT) == LOW) return;
+        if (inputBtn(BTN_OK) == LOW || inputBtn(BTN_LEFT) == LOW) return;
         d.clearBuffer();
         d.setFont(u8g2_font_10x20_tf);
         d.drawStr(x, 30, "KalkMate");
@@ -241,7 +242,7 @@ static void _stAnimation(U8G2 &d) {
     bool visible = true;
     unsigned long lastToggle = millis();
     while (millis() - start < 3000) {
-        if (digitalRead(BTN_OK) == LOW || digitalRead(BTN_LEFT) == LOW) return;
+        if (inputBtn(BTN_OK) == LOW || inputBtn(BTN_LEFT) == LOW) return;
         if (millis() - lastToggle > 350) {
             visible = !visible;
             lastToggle = millis();
@@ -291,11 +292,11 @@ static void _stShowInfo(U8G2 &d, int testNum, int total, const char* name) {
 // Publiczna funkcja
 // ---------------------------------------------------------------------------
 void showScreenTest(U8G2 &display) {
-    pinMode(BTN_OK,    INPUT_PULLUP);
-    pinMode(BTN_LEFT,  INPUT_PULLUP);
-    pinMode(BTN_RIGHT, INPUT_PULLUP);
-    pinMode(BTN_UP,    INPUT_PULLUP);
-    pinMode(BTN_DOWN,  INPUT_PULLUP);
+    // pinMode(BTN_OK,    INPUT_PULLUP);
+    // pinMode(BTN_LEFT,  INPUT_PULLUP);
+    // pinMode(BTN_RIGHT, INPUT_PULLUP);
+    // pinMode(BTN_UP,    INPUT_PULLUP);
+    // pinMode(BTN_DOWN,  INPUT_PULLUP);
 
     // Poczekaj na zwolnienie przyciskow
     delay(300);

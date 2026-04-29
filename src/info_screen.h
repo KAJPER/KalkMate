@@ -8,6 +8,7 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <WiFi.h>
+#include "input.h"
 #include "settings_screen.h"
 
 // === Piny przyciskow (INPUT_PULLUP, LOW = wcisniety) ===
@@ -34,7 +35,7 @@ static unsigned long _infoLastPress = 0;
 #define _INFO_DEBOUNCE_MS 200
 
 static bool _infoBtn(int pin) {
-    if (digitalRead(pin) == LOW) {
+    if (inputBtn(pin) == LOW) {
         unsigned long now = millis();
         if (now - _infoLastPress > _INFO_DEBOUNCE_MS) {
             _infoLastPress = now;
@@ -45,11 +46,11 @@ static bool _infoBtn(int pin) {
 }
 
 static void _infoWaitRelease() {
-    while (digitalRead(BTN_UP)    == LOW ||
-           digitalRead(BTN_DOWN)  == LOW ||
-           digitalRead(BTN_LEFT)  == LOW ||
-           digitalRead(BTN_RIGHT) == LOW ||
-           digitalRead(BTN_OK)    == LOW) {
+    while (inputBtn(BTN_UP)    == LOW ||
+           inputBtn(BTN_DOWN)  == LOW ||
+           inputBtn(BTN_LEFT)  == LOW ||
+           inputBtn(BTN_RIGHT) == LOW ||
+           inputBtn(BTN_OK)    == LOW) {
         delay(10);
     }
     _infoLastPress = millis();
@@ -261,11 +262,11 @@ static void _infoDrawPage(U8G2 &d, int page) {
 // Publiczna funkcja — glowny punkt wejscia
 // ---------------------------------------------------------------------------
 void showInfo(U8G2 &display) {
-    pinMode(BTN_UP,    INPUT_PULLUP);
-    pinMode(BTN_DOWN,  INPUT_PULLUP);
-    pinMode(BTN_LEFT,  INPUT_PULLUP);
-    pinMode(BTN_RIGHT, INPUT_PULLUP);
-    pinMode(BTN_OK,    INPUT_PULLUP);
+    // pinMode(BTN_UP,    INPUT_PULLUP);
+    // pinMode(BTN_DOWN,  INPUT_PULLUP);
+    // pinMode(BTN_LEFT,  INPUT_PULLUP);
+    // pinMode(BTN_RIGHT, INPUT_PULLUP);
+    // pinMode(BTN_OK,    INPUT_PULLUP);
 
     _infoWaitRelease();
 
