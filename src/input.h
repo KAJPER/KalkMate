@@ -34,6 +34,62 @@
 #define BTN_OK     204
 #define BTN_BACK   205
 
+// === Pełna lista 27 klawiszy fizycznych kalkulatora ===
+enum KalkKey : uint8_t {
+    KEY_NONE = 0,
+    KEY_0, KEY_00, KEY_DOT, KEY_EQ, KEY_PLUS,
+    KEY_CCE, KEY_1, KEY_2, KEY_3, KEY_ARROW,
+    KEY_4, KEY_5, KEY_6, KEY_MINUS, KEY_PLUSMINUS,
+    KEY_7, KEY_8, KEY_9, KEY_MUL, KEY_MC,
+    KEY_MR, KEY_MMINUS, KEY_MPLUS, KEY_DIV, KEY_SQRT,
+    KEY_PERCENT, KEY_MU,
+    KEY_COUNT
+};
+
+// Mapowanie para pinów MCP -> KalkKey (z testkeyboard.cpp discovery)
+struct _InKalkMap {
+    uint8_t pinA;     // mniejszy
+    uint8_t pinB;     // większy
+    KalkKey key;
+    const char* label;
+};
+
+static const _InKalkMap _IN_KALK_MAP[] = {
+    { 0, 11, KEY_CCE,        "C/CE" },
+    { 1,  2, KEY_5,          "5"    },
+    { 1,  3, KEY_4,          "4"    },
+    { 1,  4, KEY_3,          "3"    },
+    { 1,  8, KEY_2,          "2"    },
+    { 1,  9, KEY_1,          "1"    },
+    { 1, 10, KEY_0,          "0"    },
+    { 1, 11, KEY_00,         "00"   },
+    { 1, 12, KEY_DOT,        "."    },
+    { 2,  3, KEY_MU,         "MU"   },
+    { 2,  4, KEY_PERCENT,    "%"    },
+    { 2,  8, KEY_EQ,         "="    },
+    { 2,  9, KEY_DIV,        "/"    },
+    { 2, 10, KEY_MUL,        "*"    },
+    { 2, 11, KEY_MINUS,      "-"    },
+    { 2, 12, KEY_PLUS,       "+"    },
+    { 3,  8, KEY_PLUSMINUS,  "+/-"  },
+    { 3,  9, KEY_SQRT,       "sqrt" },
+    { 3, 11, KEY_ARROW,      ">"    },
+    { 4,  8, KEY_MC,         "MC"   },
+    { 4,  9, KEY_MR,         "MR"   },
+    { 4, 11, KEY_MMINUS,     "M-"   },
+    { 4, 12, KEY_MPLUS,      "M+"   },
+    { 8,  9, KEY_9,          "9"    },
+    { 8, 10, KEY_8,          "8"    },
+    { 8, 11, KEY_7,          "7"    },
+    { 8, 12, KEY_6,          "6"    },
+};
+static const uint8_t _IN_KALK_MAP_LEN =
+    sizeof(_IN_KALK_MAP) / sizeof(_IN_KALK_MAP[0]);
+
+// Stan klawiszy fizycznych — ostatni stabilny + edge consume
+static bool _kalkKeyDown[KEY_COUNT];        // czy aktualnie wciśnięty
+static bool _kalkKeyConsumed[KEY_COUNT];    // czy edge został odczytany
+
 // === I2C / MCP23017 ===
 #ifndef I2C_SDA
 #define I2C_SDA   21
@@ -153,24 +209,39 @@ inline void _inRawScan(bool pairPressed[100]) {
     _inMcp.pinMode(_IN_KB_PINS[9], INPUT_PULLUP);
 }
 
-// Aktualizuj stany wirtualnych BTN_xx na podstawie statePair
+// Helper: indeks KB_PINS dla numeru pinu MCP (0,1,2,3,4,8,9,10,11,12 -> 0..9)
+inline uint8_t _inPinIdx(uint8_t mcpPin) {
+    for (uint8_t n = 0; n < 10; n++) {
+        if (_IN_KB_PINS[n] == mcpPin) return n;
+    }
+    return 0;
+}
+
+// Aktualizuj stany wirtualnych BTN_xx + stany 27 klawiszy fizycznych
 inline void _inUpdateVirtBtns() {
     bool any[6] = { false, false, false, false, false, false };
 
     for (uint8_t k = 0; k < _IN_KEY_MAP_LEN; k++) {
         const _InKeyMap& m = _IN_KEY_MAP[k];
-        // znajdź indeksy KB_PINS
-        uint8_t idxA = 0, idxB = 0;
-        for (uint8_t n = 0; n < 10; n++) {
-            if (_IN_KB_PINS[n] == m.pinA) idxA = n;
-            if (_IN_KB_PINS[n] == m.pinB) idxB = n;
-        }
-        uint16_t idx = idxA * 10 + idxB;
+        uint16_t idx = _inPinIdx(m.pinA) * 10 + _inPinIdx(m.pinB);
         if (_inStatePair[idx] && m.virtBtn >= 0 && m.virtBtn < 6) {
             any[m.virtBtn] = true;
         }
     }
     for (uint8_t i = 0; i < 6; i++) _virtBtn[i] = any[i];
+
+    // Stan klawiszy fizycznych — wszystkie 27
+    bool keyNow[KEY_COUNT] = { false };
+    for (uint8_t k = 0; k < _IN_KALK_MAP_LEN; k++) {
+        const _InKalkMap& m = _IN_KALK_MAP[k];
+        uint16_t idx = _inPinIdx(m.pinA) * 10 + _inPinIdx(m.pinB);
+        if (_inStatePair[idx]) keyNow[m.key] = true;
+    }
+    // Reset consumer flag gdy klawisz puszczony
+    for (uint8_t i = 0; i < KEY_COUNT; i++) {
+        if (!keyNow[i]) _kalkKeyConsumed[i] = false;
+        _kalkKeyDown[i] = keyNow[i];
+    }
 }
 
 // Pełny skan + debounce. Wywoływać często z loop() (max raz na 30 ms).
@@ -227,4 +298,54 @@ inline void inputWaitRelease() {
         if (!any) break;
         delay(5);
     }
+}
+
+// ---------------------------------------------------------------------
+//  API klawiszy fizycznych (KalkKey) — używane przez kalkulator i panic
+// ---------------------------------------------------------------------
+
+// Zwraca true raz na każde naciśnięcie (edge detect z consume).
+// Po naciśnięciu klawisz musi zostać puszczony zanim kolejny edge zadziała.
+inline bool inputKeyConsume(KalkKey k) {
+    inputScan();
+    if (k == KEY_NONE || k >= KEY_COUNT) return false;
+    if (_kalkKeyDown[k] && !_kalkKeyConsumed[k]) {
+        _kalkKeyConsumed[k] = true;
+        return true;
+    }
+    return false;
+}
+
+// Czy klawisz jest aktualnie wciśnięty (level, nie edge).
+inline bool inputKeyDown(KalkKey k) {
+    inputScan();
+    if (k == KEY_NONE || k >= KEY_COUNT) return false;
+    return _kalkKeyDown[k];
+}
+
+// Zwraca pierwszy klawisz który dał edge (consume), KEY_NONE gdy brak.
+// Użyteczne dla "naciśnij dowolny klawisz" / wybór panic key.
+inline KalkKey inputAnyKeyConsume() {
+    inputScan();
+    for (uint8_t i = 1; i < KEY_COUNT; i++) {
+        if (_kalkKeyDown[i] && !_kalkKeyConsumed[i]) {
+            _kalkKeyConsumed[i] = true;
+            return (KalkKey)i;
+        }
+    }
+    return KEY_NONE;
+}
+
+// Etykieta tekstowa klawisza
+inline const char* kalkKeyLabel(KalkKey k) {
+    static const char* names[KEY_COUNT] = {
+        "?", "0", "00", ".", "=", "+",
+        "C/CE", "1", "2", "3", ">",
+        "4", "5", "6", "-", "+/-",
+        "7", "8", "9", "*", "MC",
+        "MR", "M-", "M+", "/", "sqrt",
+        "%", "MU"
+    };
+    if (k >= KEY_COUNT) return "?";
+    return names[k];
 }

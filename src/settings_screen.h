@@ -40,9 +40,13 @@ struct KalkMateSettings {
     uint8_t solveMode;    // 0=Szczegolowy, 1=Tylko obliczenia, 2=Tylko wynik
     bool    autoSleep;    // auto sleep ON/OFF
     uint8_t sleepMinutes; // indeks 0-10 w tablicy czasow
+    char    aiUnlockCode[12]; // sekwencja cyfr otwierajaca tryb AI (do 11 znakow)
+    uint8_t panicKey;     // KalkKey ktory wraca z trybu AI do kalkulatora
 };
 
-static KalkMateSettings kalkSettings = {8, 0, 0, true, 4}; // domyslnie 4 min (indeks 4)
+// Domyslne: jasnosc 8, polski, szczegolowy, autoSleep ON, 4 min,
+//           kod "1234", panic = KEY_MU (27)
+static KalkMateSettings kalkSettings = {8, 0, 0, true, 4, "1234", /*KEY_MU*/27};
 
 // Tablica wartosci czasu uśpienia (indeks 0-10)
 static const char* _SET_SLEEP_LABELS[11] = {
@@ -58,17 +62,19 @@ static const char* T(const char* pl, const char* en) {
 }
 
 // ---------------------------------------------------------------------------
-// Stale menu — 5 pozycji
+// Stale menu — 7 pozycji
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        5
+#define _SET_ITEMS        7
 #define _SET_BRIGHTNESS   0
 #define _SET_LANGUAGE     1
 #define _SET_SOLVEMODE    2
 #define _SET_AUTOSLEEP    3
 #define _SET_LICENSE      4
+#define _SET_AICODE       5
+#define _SET_PANICKEY     6
 
-// Wspolrzedne Y 5 pozycji menu (4 widoczne, scrollowanie)
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55};
+// Wspolrzedne Y 7 pozycji menu (4 widoczne, scrollowanie)
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -196,6 +202,19 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         }
         snprintf(lines[4], sizeof(lines[4]), "%s%s [%-10s]", prefix,
                  T("Licencja: ", "License:  "), licShort);
+    }
+    // 5: Kod AI
+    {
+        prefix[0] = (cursor == _SET_AICODE) ? '>' : ' ';
+        snprintf(lines[5], sizeof(lines[5]), "%s%s [%-10s]", prefix,
+                 T("Kod AI:   ", "AI code:  "), kalkSettings.aiUnlockCode);
+    }
+    // 6: Panic key
+    {
+        prefix[0] = (cursor == _SET_PANICKEY) ? '>' : ' ';
+        const char* lab = kalkKeyLabel((KalkKey)kalkSettings.panicKey);
+        snprintf(lines[6], sizeof(lines[6]), "%s%s [%-10s]", prefix,
+                 T("Panic:    ", "Panic key:"), lab);
     }
 
     // Rysuj widoczne pozycje
@@ -584,6 +603,122 @@ static void _editLicense(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
+// Edycja: Kod AI (1-11 cyfr)
+// LEFT/RIGHT — zmień pozycję, UP/DOWN — zmień cyfrę 0-9, OK — zapisz, BACK — anuluj
+// ---------------------------------------------------------------------------
+static void _editAiCode(U8G2 &d) {
+    char buf[12];
+    strncpy(buf, kalkSettings.aiUnlockCode, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    if (!buf[0]) strcpy(buf, "0000");
+
+    int len = strlen(buf);
+    int pos = 0;
+
+    uint32_t blink = millis();
+    bool blinkOn = true;
+
+    while (true) {
+        if (millis() - blink > 400) { blinkOn = !blinkOn; blink = millis(); }
+
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, T("Kod AI (UP/DOWN cyfra, LEFT/RIGHT pozycja)",
+                           "AI code (UP/DOWN digit, LEFT/RIGHT pos)"));
+
+        d.setFont(u8g2_font_logisoso22_tn);
+        int charW = d.getStrWidth("0");
+        int totalW = charW * len;
+        int x0 = (256 - totalW) / 2;
+        for (int i = 0; i < len; i++) {
+            char ch[2] = { buf[i], '\0' };
+            d.drawStr(x0 + i * charW, 50, ch);
+            if (i == pos && blinkOn) {
+                d.drawHLine(x0 + i * charW, 53, charW - 2);
+            }
+        }
+
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 63, T("OK=zapisz  C/CE=anuluj", "OK=save  C/CE=cancel"));
+        d.sendBuffer();
+
+        if (_setBtn(BTN_OK)) {
+            strncpy(kalkSettings.aiUnlockCode, buf, sizeof(kalkSettings.aiUnlockCode) - 1);
+            kalkSettings.aiUnlockCode[sizeof(kalkSettings.aiUnlockCode) - 1] = '\0';
+            saveAiCode(buf);
+            _setWaitRelease();
+            return;
+        }
+        if (inputKeyConsume(KEY_CCE)) {
+            _setWaitRelease();
+            return;
+        }
+        if (_setBtn(BTN_LEFT)) {
+            pos = (pos - 1 + len) % len;
+        }
+        if (_setBtn(BTN_RIGHT)) {
+            pos = (pos + 1) % len;
+        }
+        if (_setBtn(BTN_UP)) {
+            char c = buf[pos];
+            if (c >= '0' && c < '9')      buf[pos] = c + 1;
+            else if (c == '9')            buf[pos] = '0';
+            else                          buf[pos] = '0';
+        }
+        if (_setBtn(BTN_DOWN)) {
+            char c = buf[pos];
+            if (c > '0' && c <= '9')      buf[pos] = c - 1;
+            else if (c == '0')            buf[pos] = '9';
+            else                          buf[pos] = '0';
+        }
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Edycja: Panic key — naciśnij dowolny klawisz fizyczny
+// ---------------------------------------------------------------------------
+static void _editPanicKey(U8G2 &d) {
+    _setWaitRelease();
+    // Czekamy na puszczenie wszystkich KalkKey (żeby nie złapać nadal
+    // wciśniętego OK z wejścia w edycję)
+    uint32_t releaseStart = millis();
+    while (millis() - releaseStart < 300) {
+        inputScan();
+        delay(10);
+    }
+
+    while (true) {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, T("Naciśnij klawisz na panic:",
+                           "Press key for panic:"));
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 30, T("Aktualny:", "Current:"));
+        d.setFont(u8g2_font_logisoso22_tn);
+        d.drawStr(80, 50, kalkKeyLabel((KalkKey)kalkSettings.panicKey));
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 63, T("C/CE=anuluj", "C/CE=cancel"));
+        d.sendBuffer();
+
+        // Anulowanie przez C/CE — ale tylko jeśli aktualny panic to nie C/CE
+        if (kalkSettings.panicKey != KEY_CCE && inputKeyConsume(KEY_CCE)) {
+            _setWaitRelease();
+            return;
+        }
+
+        KalkKey k = inputAnyKeyConsume();
+        if (k != KEY_NONE) {
+            kalkSettings.panicKey = (uint8_t)k;
+            savePanicKey((uint8_t)k);
+            _setWaitRelease();
+            return;
+        }
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Publiczna funkcja — glowny punkt wejscia
 // ---------------------------------------------------------------------------
 void showSettings(U8G2 &display) {
@@ -616,6 +751,8 @@ void showSettings(U8G2 &display) {
                 case _SET_SOLVEMODE:  _editSolveMode(display);  break;
                 case _SET_AUTOSLEEP:  _editAutoSleep(display);  break;
                 case _SET_LICENSE:    _editLicense(display);    break;
+                case _SET_AICODE:     _editAiCode(display);     break;
+                case _SET_PANICKEY:   _editPanicKey(display);   break;
             }
         }
 

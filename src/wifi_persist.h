@@ -62,3 +62,34 @@ static void wifiLoadLicense(char* keyBuf, int keySize) {
     strncpy(keyBuf, k.c_str(), keySize - 1);
     keyBuf[keySize - 1] = '\0';
 }
+
+// === Kod odblokowujacy tryb AI ===
+static void saveAiCode(const char* code) {
+    Preferences prefs;
+    prefs.begin(_WP_NS, false);
+    prefs.putString("ai_code", code);
+    prefs.end();
+}
+static void loadAiCode(char* buf, int bufSize, const char* defaultCode) {
+    Preferences prefs;
+    prefs.begin(_WP_NS, true);
+    String s = prefs.getString("ai_code", defaultCode);
+    prefs.end();
+    strncpy(buf, s.c_str(), bufSize - 1);
+    buf[bufSize - 1] = '\0';
+}
+
+// === Panic key (KalkKey jako uint8_t) ===
+static void savePanicKey(uint8_t key) {
+    Preferences prefs;
+    prefs.begin(_WP_NS, false);
+    prefs.putUChar("panic_key", key);
+    prefs.end();
+}
+static uint8_t loadPanicKey(uint8_t defaultKey) {
+    Preferences prefs;
+    prefs.begin(_WP_NS, true);
+    uint8_t k = prefs.getUChar("panic_key", defaultKey);
+    prefs.end();
+    return k;
+}
