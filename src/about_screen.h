@@ -86,6 +86,12 @@ void showAboutScreen(U8G2 &display) {
     _about_cur_page  = 0;
     _about_last_press = 0;
 
+    // Czekaj az user puscil OK po wybraniu "O programie" w menu — bez tego
+    // pierwsza iteracja petli wykrywa nadal wcisniety BTN_OK i od razu
+    // wychodzi z about screen.
+    inputWaitRelease();
+    _about_last_press = millis();
+
     // Upewnij sie ze piny sa skonfigurowane
     // pinMode(BTN_UP,    INPUT_PULLUP);
     // pinMode(BTN_DOWN,  INPUT_PULLUP);

@@ -21,6 +21,17 @@
 #include "wifi_persist.h"
 #include "wifi_settings.h"  // klawiatura (_runKeyboard, itp.)
 
+// Device ID = MAC ESP32 (12 hex znakow, np. "68FE71E43B94"). Stabilny —
+// kazdy ESP32 ma fabrycznie inny MAC, niezmienny przez calos zycia chipu.
+static String _solDeviceId() {
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    return String(buf);
+}
+
 // ---------------------------------------------------------------------------
 // Konfiguracja serwera
 // ---------------------------------------------------------------------------
@@ -523,6 +534,8 @@ static void _solRunTextMode(U8G2 &d) {
     http.begin(client, _SOL_SOLVE_ENDPOINT);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("x-api-key", KALK_API_KEY);
+    http.addHeader("x-device-id", _solDeviceId());
+    http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
@@ -694,6 +707,8 @@ static void _solRunPhotoMode(U8G2 &d) {
     http.begin(client, _SOL_SOLVE_ENDPOINT);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("x-api-key", KALK_API_KEY);
+    http.addHeader("x-device-id", _solDeviceId());
+    http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
