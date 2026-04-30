@@ -27,6 +27,14 @@ interface SolveItem {
   createdAt: string;
 }
 
+interface Note {
+  id: string;
+  title: string;
+  content: string;
+  position: number;
+  updatedAt: string;
+}
+
 function fmt(s: string) {
   return new Date(s).toLocaleString("pl-PL", {
     day: "2-digit", month: "2-digit", year: "numeric",
@@ -46,6 +54,13 @@ export default function KalkulatorPage() {
   const [error, setError] = useState<string | null>(null);
   const [opened, setOpened] = useState<SolveItem | null>(null);
 
+  // Notatki
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [newTitle, setNewTitle] = useState("");
+  const [newContent, setNewContent] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
   }, [status, router]);
@@ -57,11 +72,17 @@ export default function KalkulatorPage() {
       const j1: ClaimInfo = await r1.json();
       setInfo(j1);
       if (j1.claimed) {
-        const r2 = await fetch("/api/user/conversations?limit=50", { cache: "no-store" });
+        const [r2, r3] = await Promise.all([
+          fetch("/api/user/conversations?limit=50", { cache: "no-store" }),
+          fetch("/api/user/notes", { cache: "no-store" }),
+        ]);
         const j2 = await r2.json();
+        const j3 = await r3.json();
         setItems(j2.items || []);
+        setNotes(j3.notes || []);
       } else {
         setItems([]);
+        setNotes([]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
@@ -69,6 +90,49 @@ export default function KalkulatorPage() {
       setLoading(false);
     }
   }, []);
+
+  const saveNote = async () => {
+    if (!newTitle.trim() && !newContent.trim()) return;
+    setSavingNote(true);
+    try {
+      if (editingNote) {
+        await fetch("/api/user/notes", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editingNote.id,
+            title: newTitle,
+            content: newContent,
+          }),
+        });
+      } else {
+        await fetch("/api/user/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: newTitle, content: newContent }),
+        });
+      }
+      setEditingNote(null);
+      setNewTitle("");
+      setNewContent("");
+      await load();
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const deleteNote = async (id: string) => {
+    if (!confirm("Usunąć notatkę?")) return;
+    await fetch(`/api/user/notes?id=${id}`, { method: "DELETE" });
+    await load();
+  };
+
+  const startEdit = (n: Note) => {
+    setEditingNote(n);
+    setNewTitle(n.title);
+    setNewContent(n.content);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -177,6 +241,108 @@ export default function KalkulatorPage() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Sekcja Notatek */}
+        {info?.claimed && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">
+                Notatki offline ({notes.length}/50)
+              </h2>
+              <span className="text-xs text-gray-500">
+                Synchronizowane do urządzenia przy WiFi
+              </span>
+            </div>
+
+            <div className="bg-gray-50 rounded p-4 mb-4">
+              <div className="font-semibold mb-2 text-sm">
+                {editingNote ? "Edytuj notatkę" : "Nowa notatka"}
+              </div>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Tytuł (max 60 znaków)"
+                maxLength={60}
+                className="w-full px-3 py-2 border rounded mb-2 text-sm"
+              />
+              <textarea
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                placeholder="Treść (max 4000 znaków - wzory, definicje, formuły...)"
+                maxLength={4000}
+                rows={5}
+                className="w-full px-3 py-2 border rounded text-sm font-mono"
+              />
+              <div className="flex justify-between items-center mt-2">
+                <div className="text-xs text-gray-500">
+                  {newContent.length}/4000 znaków
+                </div>
+                <div className="flex gap-2">
+                  {editingNote && (
+                    <button
+                      onClick={() => {
+                        setEditingNote(null);
+                        setNewTitle("");
+                        setNewContent("");
+                      }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Anuluj
+                    </button>
+                  )}
+                  <button
+                    onClick={saveNote}
+                    disabled={savingNote || (!newTitle.trim() && !newContent.trim())}
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingNote ? "Zapisuję..." : editingNote ? "Zapisz zmiany" : "Dodaj"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {notes.length === 0 ? (
+              <div className="text-gray-500 text-sm text-center py-4">
+                Brak notatek. Dodaj swoją pierwszą — będzie dostępna offline na kalkulatorze.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {notes.map((n) => (
+                  <div
+                    key={n.id}
+                    className="border rounded p-3 hover:bg-gray-50"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">
+                          {n.title || <span className="text-gray-400">(bez tytułu)</span>}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1 whitespace-pre-wrap line-clamp-3">
+                          {n.content || <span className="text-gray-400">(pusta)</span>}
+                        </div>
+                      </div>
+                      <div className="ml-2 flex gap-1">
+                        <button
+                          onClick={() => startEdit(n)}
+                          className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded"
+                        >
+                          Edytuj
+                        </button>
+                        <button
+                          onClick={() => deleteNote(n.id)}
+                          className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded"
+                        >
+                          Usuń
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
