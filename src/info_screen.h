@@ -10,6 +10,7 @@
 #include <WiFi.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "power.h"
 
 // === Piny przyciskow (INPUT_PULLUP, LOW = wcisniety) ===
 #ifndef BTN_UP
@@ -274,6 +275,8 @@ void showInfo(U8G2 &display) {
     _infoDrawPage(display, curPage);
 
     while (true) {
+        if (powerCheckSleep()) _infoDrawPage(display, curPage);
+
         bool changed = false;
 
         // Nastepna strona: RIGHT lub DOWN

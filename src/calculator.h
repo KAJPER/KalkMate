@@ -22,6 +22,7 @@
 #include <string.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "power.h"
 
 // Stan kalkulatora
 struct _CalcState {
@@ -194,6 +195,7 @@ static void runCalculator(U8G2& u8g2) {
 
     while (true) {
         inputScan();
+        if (powerCheckSleep()) _calcDraw(u8g2);
 
         // --- Sprawdź unlock code ---
         // Jeśli unlock buffer kończy się dokładnie tą samą sekwencją co

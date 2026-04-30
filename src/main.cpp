@@ -31,7 +31,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "0.2.0"
+#define FW_VERSION "0.3.2"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -48,6 +48,7 @@
 #include "solve_screen.h"      // Rozwiazywanie zadan AI
 #include "splash_screen.h"     // Ekran powitalny
 #include "calculator.h"        // Tryb kalkulatora + unlock code
+#include "power.h"             // Auto-sleep OLED — globalny dla wszystkich ekranow
 
 // === OLED — finalne piny PCB v3 ===
 //   SCK  = GPIO18 (VSPI)
@@ -88,44 +89,12 @@ int scrollOffset = 0;
 unsigned long lastPress = 0;
 #define DEBOUNCE_MS 200
 
-// Auto-sleep
-unsigned long lastActivityMs = 0;
-
-static const uint32_t SLEEP_TIMES_MS[] = {
-    30000, 60000, 120000, 180000, 240000, 300000,
-    600000, 900000, 1200000, 1500000, 1800000
-};
-
 // Forward declaration
 void drawMenu();
 
-void resetActivity() {
-    lastActivityMs = millis();
-}
-
-void checkAutoSleep() {
-    if (!kalkSettings.autoSleep) return;
-    uint8_t idx = kalkSettings.sleepMinutes;
-    if (idx > 10) idx = 10;
-    uint32_t timeout = SLEEP_TIMES_MS[idx];
-    if (millis() - lastActivityMs > timeout) {
-        u8g2.setPowerSave(1);
-        // Light-sleep: budzenie przez aktywność I2C wymaga osobnej obsługi
-        // (MCP23017 INT line). Na razie po prostu czekaj na klawisz w pętli.
-        while (true) {
-            inputScan();
-            if (inputBtn(BTN_UP)    == LOW || inputBtn(BTN_DOWN)  == LOW ||
-                inputBtn(BTN_LEFT)  == LOW || inputBtn(BTN_RIGHT) == LOW ||
-                inputBtn(BTN_OK)    == LOW || inputBtn(BTN_BACK)  == LOW) {
-                break;
-            }
-            delay(50);
-        }
-        u8g2.setPowerSave(0);
-        resetActivity();
-        drawMenu();
-    }
-}
+// Aktywnosc trzymana w input.h (auto-reset przy kazdym klawiszu).
+// Te helpery zostawione jako kompat alias.
+inline void resetActivity() { inputActivityReset(); }
 
 // Drop-in replacement dla btnPressed z test_ui.cpp — z debouncem na poziomie
 // menu. Wirtualne BTN_xx są aktualizowane przez inputScan() w loop().
@@ -199,6 +168,7 @@ void setup() {
     // OLED najpierw — to jedyne co user widzi w pierwszej chwili.
     u8g2.setBusClock(8000000);
     u8g2.begin();
+    powerSetU8g2(&u8g2);  // power.h dostaje pointer do auto-sleep
 
     // Pierwsza klatka kalkulatora: "0" wyrownane do prawej.
     u8g2.clearBuffer();
@@ -289,7 +259,10 @@ static void checkPanicKey() {
 void loop() {
     inputScan();        // skanuj matrycę co iterację (max raz na 30 ms)
     checkPanicKey();    // panic -> kalkulator
-    checkAutoSleep();
+    if (powerCheckSleep()) {
+        // Po wybudzeniu — przerysuj menu
+        drawMenu();
+    }
 
     bool changed = false;
 

@@ -90,6 +90,11 @@ static const uint8_t _IN_KALK_MAP_LEN =
 static bool _kalkKeyDown[KEY_COUNT];        // czy aktualnie wciśnięty
 static bool _kalkKeyConsumed[KEY_COUNT];    // czy edge został odczytany
 
+// Activity tracking — uzywane przez power.h do auto-sleep
+static uint32_t _inputLastActivity = 0;
+inline void inputActivityReset() { _inputLastActivity = millis(); }
+inline uint32_t inputLastActivity() { return _inputLastActivity; }
+
 // === I2C / MCP23017 ===
 #ifndef I2C_SDA
 #define I2C_SDA   21
@@ -176,6 +181,9 @@ inline bool inputBegin() {
     }
     for (uint8_t i = 0; i < 6; i++) _virtBtn[i] = false;
 
+    // Init activity tracker
+    _inputLastActivity = millis();
+
     return true;
 }
 
@@ -238,10 +246,14 @@ inline void _inUpdateVirtBtns() {
         if (_inStatePair[idx]) keyNow[m.key] = true;
     }
     // Reset consumer flag gdy klawisz puszczony
+    bool anyDown = false;
     for (uint8_t i = 0; i < KEY_COUNT; i++) {
         if (!keyNow[i]) _kalkKeyConsumed[i] = false;
         _kalkKeyDown[i] = keyNow[i];
+        if (keyNow[i] && i != KEY_NONE) anyDown = true;
     }
+    // Reset activity timera (do auto-sleep) gdy ktoryskolwiek klawisz wcisniety
+    if (anyDown) _inputLastActivity = millis();
 }
 
 // Pełny skan + debounce. Wywoływać często z loop() (max raz na 30 ms).

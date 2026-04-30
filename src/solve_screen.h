@@ -20,6 +20,8 @@
 #include "settings_screen.h"
 #include "wifi_persist.h"
 #include "wifi_settings.h"  // klawiatura (_runKeyboard, itp.)
+#include "power.h"
+#include "history.h"
 
 // Device ID = MAC ESP32 (12 hex znakow, np. "68FE71E43B94"). Stabilny —
 // kazdy ESP32 ma fabrycznie inny MAC, niezmienny przez calos zycia chipu.
@@ -328,6 +330,9 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
 }
 
 static void _solDisplaySolution(U8G2 &d, const char* solution) {
+    // Wylacz auto-sleep — user czyta dluzsza odpowiedz, ekran nie ma sie wylaczyc
+    powerSetInhibit(true);
+
     // Font 6x10, ekran 256x64
     // Uklad: naglowek y=8 (linia 0-9), separtor y=10
     // Linie tekstu: y=21, 33, 45 (3 widoczne, odstep 12px)
@@ -432,6 +437,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
                 Serial.println("[SOL] EXIT");
                 while (inputBtn(BTN_LEFT) == LOW || inputBtn(BTN_OK) == LOW) delay(10);
                 delay(100);
+                powerSetInhibit(false);   // przywroc auto-sleep przed wyjsciem
                 return;
             }
         }
@@ -612,6 +618,9 @@ static void _solRunTextMode(U8G2 &d) {
 
     Serial.printf("[SOL] Parsed solution len=%d:\n%s\n---END---\n", spos, solution);
 
+    // Zapisz do lokalnej historii (NVS, FIFO 5 ostatnich)
+    historySave(String(taskText), String(solution));
+
     _solDisplaySolution(d, solution);
 }
 
@@ -770,6 +779,9 @@ static void _solRunPhotoMode(U8G2 &d) {
     }
     solution[spos] = '\0';
 
+    // Zapisz do historii (image mode)
+    historySave(String("[Zdjecie kamery]"), String(solution));
+
     _solDisplaySolution(d, solution);
 
 #else
@@ -784,36 +796,43 @@ static void _solRunPhotoMode(U8G2 &d) {
 // Ekran wyboru trybu (zdjecie / tekst)
 // ---------------------------------------------------------------------------
 static void _solModeSelect(U8G2 &d, int &mode) {
-    // mode: 0 = zdjecie, 1 = tekst
+    // mode: 0 = zdjecie, 1 = tekst, 2 = historia
     _solWaitRelease();
 
     while (true) {
+        powerCheckSleep();
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ==="));
         d.drawHLine(0, 12, 256);
 
-        // Pozycja 0: Zdjecie
-        if (mode == 0) {
-            d.drawBox(0, 14, 256, 12);
-            d.setDrawColor(0);
-            d.drawStr(4, 24, _solT("> [1] Zdjecie kamery", "> [1] Camera photo"));
-            d.setDrawColor(1);
-        } else {
-            d.drawStr(4, 24, _solT("  [1] Zdjecie kamery", "  [1] Camera photo"));
+        const char* labels[3][2] = {
+            { "  [1] Zdjecie kamery", "  [1] Camera photo" },
+            { "  [2] Wpisz tekst",    "  [2] Enter text"    },
+            { "  [3] Historia",       "  [3] History"       },
+        };
+        const char* labelsSel[3][2] = {
+            { "> [1] Zdjecie kamery", "> [1] Camera photo" },
+            { "> [2] Wpisz tekst",    "> [2] Enter text"    },
+            { "> [3] Historia",       "> [3] History"       },
+        };
+
+        const int Y[3] = {14, 27, 40};   // top y kazdej pozycji (3 widoczne)
+        const int TEXT_Y[3] = {24, 37, 50};
+        bool en = (kalkSettings.language == 1);
+
+        for (int i = 0; i < 3; i++) {
+            if (mode == i) {
+                d.drawBox(0, Y[i], 256, 12);
+                d.setDrawColor(0);
+                d.drawStr(4, TEXT_Y[i], labelsSel[i][en ? 1 : 0]);
+                d.setDrawColor(1);
+            } else {
+                d.drawStr(4, TEXT_Y[i], labels[i][en ? 1 : 0]);
+            }
         }
 
-        // Pozycja 1: Tekst
-        if (mode == 1) {
-            d.drawBox(0, 27, 256, 12);
-            d.setDrawColor(0);
-            d.drawStr(4, 37, _solT("> [2] Wpisz tekst", "> [2] Enter text"));
-            d.setDrawColor(1);
-        } else {
-            d.drawStr(4, 37, _solT("  [2] Wpisz tekst", "  [2] Enter text"));
-        }
-
-        d.drawHLine(0, 52, 256);
+        d.drawHLine(0, 53, 256);
         d.setFont(u8g2_font_5x7_tf);
         d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
                                 "^/v select   OK: start   < back"));
@@ -822,12 +841,93 @@ static void _solModeSelect(U8G2 &d, int &mode) {
         if (_solBtn(BTN_UP)) {
             if (mode > 0) mode--;
         } else if (_solBtn(BTN_DOWN)) {
-            if (mode < 1) mode++;
+            if (mode < 2) mode++;
         } else if (_solBtn(BTN_OK)) {
             _solWaitRelease();
             return;
         } else if (_solBtn(BTN_LEFT)) {
             mode = -1;  // sygnalizuje wyjscie
+            _solWaitRelease();
+            return;
+        }
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tryb HISTORIA — lokalna lista (do 5) + opcjonalnie z serwera (TODO)
+// ---------------------------------------------------------------------------
+static void _solRunHistoryMode(U8G2 &d) {
+    _solWaitRelease();
+
+    uint8_t count = historyCount();
+    if (count == 0) {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 28, _solT("Brak zapisanych zadan", "No saved tasks"));
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 56, _solT("OK / < = powrot", "OK / < = back"));
+        d.sendBuffer();
+        while (true) {
+            powerCheckSleep();
+            if (_solBtn(BTN_OK) || _solBtn(BTN_LEFT)) {
+                _solWaitRelease();
+                return;
+            }
+            delay(20);
+        }
+    }
+
+    int cursor = 0;   // 0 = najnowszy
+    while (true) {
+        powerCheckSleep();
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        char hdr[32];
+        snprintf(hdr, sizeof(hdr), _solT("Historia (%d/%d)", "History (%d/%d)"),
+                 cursor + 1, count);
+        d.drawStr(2, 10, hdr);
+        d.drawHLine(0, 12, 256);
+
+        HistoryEntry entry;
+        if (historyGet(cursor, entry)) {
+            d.setFont(u8g2_font_6x10_tf);
+            String q = entry.question;
+            if (q.length() > 40) q = q.substring(0, 38) + "..";
+            d.drawStr(2, 24, q.c_str());
+
+            d.setFont(u8g2_font_5x7_tf);
+            // Pierwsze 2 linie odpowiedzi
+            String a = entry.answer;
+            int nl = a.indexOf('\n');
+            String l1 = nl >= 0 ? a.substring(0, nl) : a;
+            String rest = nl >= 0 ? a.substring(nl + 1) : "";
+            int nl2 = rest.indexOf('\n');
+            String l2 = nl2 >= 0 ? rest.substring(0, nl2) : rest;
+            if (l1.length() > 50) l1 = l1.substring(0, 48) + "..";
+            if (l2.length() > 50) l2 = l2.substring(0, 48) + "..";
+            d.drawStr(2, 36, l1.c_str());
+            d.drawStr(2, 46, l2.c_str());
+        }
+
+        d.drawHLine(0, 53, 256);
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 62, _solT("^/v   OK: pokaz   < wstecz",
+                                "^/v   OK: show   < back"));
+        d.sendBuffer();
+
+        if (_solBtn(BTN_UP)) {
+            if (cursor > 0) cursor--;
+        } else if (_solBtn(BTN_DOWN)) {
+            if (cursor < count - 1) cursor++;
+        } else if (_solBtn(BTN_OK)) {
+            // Pokaz pelne rozwiazanie (wykorzystaj _solDisplaySolution)
+            HistoryEntry entry;
+            if (historyGet(cursor, entry)) {
+                _solDisplaySolution(d, entry.answer.c_str());
+            }
+            // po wyjsciu — wracamy do listy
+        } else if (_solBtn(BTN_LEFT)) {
             _solWaitRelease();
             return;
         }
@@ -854,8 +954,10 @@ void showSolveScreen(U8G2 &display) {
 
         if (mode == 0) {
             _solRunPhotoMode(display);
-        } else {
+        } else if (mode == 1) {
             _solRunTextMode(display);
+        } else if (mode == 2) {
+            _solRunHistoryMode(display);
         }
         // Po powrocie z trybu → znow wybor trybu
     }

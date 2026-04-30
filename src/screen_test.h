@@ -6,6 +6,7 @@
 #include <U8g2lib.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "power.h"
 
 #ifndef BTN_OK
 #define BTN_OK 27
@@ -39,6 +40,7 @@ static bool _stBtn(int pin) {
 static void _stWaitBtn() {
     // Czeka na OK lub LEFT zeby przejsc dalej / wyjsc
     while (true) {
+        powerCheckSleep();
         if (_stBtn(BTN_OK) || _stBtn(BTN_RIGHT)) return;
         if (_stBtn(BTN_LEFT)) return;
         delay(20);

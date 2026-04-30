@@ -2,6 +2,12 @@
 #include <U8g2lib.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "power.h"
+
+// Fallback gdy FW_VERSION nie jest zdefiniowany w main.cpp
+#ifndef FW_VERSION
+#define FW_VERSION "?.?.?"
+#endif
 
 // === Przyciski (INPUT_PULLUP, LOW = wcisniety) ===
 #ifndef BTN_UP
@@ -37,10 +43,18 @@ void showAboutScreen(U8G2 &display) {
         _lang_en ? "=== Version ===" : "=== Wersja ==="
     };
 
+    // Linie z dynamiczna wersja firmware — z FW_VERSION zdefiniowanego w main.cpp
+    static char _aboutHeaderLine[40];
+    static char _aboutFwLine[40];
+    snprintf(_aboutHeaderLine, sizeof(_aboutHeaderLine), "KalkMate v%s", FW_VERSION);
+    snprintf(_aboutFwLine, sizeof(_aboutFwLine),
+             _lang_en ? "Firmware version: %s" : "Wersja firmware: %s",
+             FW_VERSION);
+
     // 4 linie tresci na strone (puste ciagi == pusta linia)
     const char* const _about_lines[3][4] = {
         {
-            "KalkMate v1.0",
+            _aboutHeaderLine,
             _lang_en ? "AI calculator for students" : "Kalkulator AI dla maturzystow",
             _lang_en ? "Supports: math, physics," : "Obsluguje: matematyke, fizyke,",
             _lang_en ? "chemistry and biology" : "chemie i biologie"
@@ -52,7 +66,7 @@ void showAboutScreen(U8G2 &display) {
             "  KAJPA"
         },
         {
-            _lang_en ? "Firmware version: 1.0" : "Wersja firmware: 1.0",
+            _aboutFwLine,
             "Chip: ESP32-WROVER-E",
             "Flash: 16MB, PSRAM: 8MB",
             _lang_en ? "Display: OLED 256x64" : "Wyswietlacz: OLED 256x64"
@@ -166,6 +180,8 @@ void showAboutScreen(U8G2 &display) {
     drawPage();
 
     while (true) {
+        if (powerCheckSleep()) drawPage();
+
         bool changed = false;
 
         // Nastepna strona
