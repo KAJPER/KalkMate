@@ -13,8 +13,12 @@ import { prisma } from "@/lib/db";
 
 const CALCULATOR_API_KEY = process.env.CALCULATOR_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
+// Hostname mozna nadpisac przez env (np. proxy Cloudflare Workers gdy
+// IP serwera jest blokowany przez geo-restrykcje Gemini API)
+const GEMINI_HOST = process.env.GEMINI_HOST || "generativelanguage.googleapis.com";
 const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+  `https://${GEMINI_HOST}/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const SYSTEM_PROMPT = `Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii.
 Odpowiadaj KRÓTKO i ZWIĘŹLE — ekran kalkulatora ma ograniczoną przestrzeń.
@@ -162,17 +166,32 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    const geminiRes = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    // Nowy format Gemini API: klucz w headerze "x-goog-api-key"
+    // (zamiast w URL parameter "?key=" - to nadal dziala ale jest legacy)
+    const geminiRes = await fetch(GEMINI_API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY!,
+      },
       body: JSON.stringify(geminiBody),
     });
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
-      console.error("Gemini error:", errText);
+      console.error(`Gemini error ${geminiRes.status} (model=${GEMINI_MODEL}):`, errText);
+      // Wyciagnij krotki opis bledu z JSON (jesli jest)
+      let detail = errText.slice(0, 200);
+      try {
+        const j = JSON.parse(errText);
+        if (j?.error?.message) detail = String(j.error.message).slice(0, 200);
+      } catch {}
       return NextResponse.json(
-        { ok: false, error: "Blad AI (Gemini)" },
+        {
+          ok: false,
+          error: `AI ${geminiRes.status}: ${detail}`,
+          model: GEMINI_MODEL,
+        },
         { status: 502 }
       );
     }

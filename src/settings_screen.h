@@ -13,6 +13,7 @@
 #include <U8g2lib.h>
 #include "input.h"
 #include "wifi_persist.h"
+#include "ota_update.h"
 
 // === Piny przyciskow ===
 #ifndef BTN_UP
@@ -62,9 +63,9 @@ static const char* T(const char* pl, const char* en) {
 }
 
 // ---------------------------------------------------------------------------
-// Stale menu — 7 pozycji
+// Stale menu — 8 pozycji
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        7
+#define _SET_ITEMS        8
 #define _SET_BRIGHTNESS   0
 #define _SET_LANGUAGE     1
 #define _SET_SOLVEMODE    2
@@ -72,9 +73,10 @@ static const char* T(const char* pl, const char* en) {
 #define _SET_LICENSE      4
 #define _SET_AICODE       5
 #define _SET_PANICKEY     6
+#define _SET_UPDATE       7
 
-// Wspolrzedne Y 7 pozycji menu (4 widoczne, scrollowanie)
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55};
+// Wspolrzedne Y 8 pozycji menu (4 widoczne, scrollowanie)
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -215,6 +217,12 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         const char* lab = kalkKeyLabel((KalkKey)kalkSettings.panicKey);
         snprintf(lines[6], sizeof(lines[6]), "%s%s [%-10s]", prefix,
                  T("Panic:    ", "Panic key:"), lab);
+    }
+    // 7: Aktualizacje (firmware update OTA)
+    {
+        prefix[0] = (cursor == _SET_UPDATE) ? '>' : ' ';
+        snprintf(lines[7], sizeof(lines[7]), "%s%s [v%-8s]", prefix,
+                 T("Aktual.:  ", "Updates:  "), FW_VERSION);
     }
 
     // Rysuj widoczne pozycje
@@ -719,6 +727,101 @@ static void _editPanicKey(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
+// Edycja: Aktualizacje firmware (OTA)
+//   - Pokazuje aktualna wersje
+//   - Sprawdz: pyta serwer o najnowsza
+//   - Zainstaluj: pobiera + flashuje + restart
+// ---------------------------------------------------------------------------
+static void _editUpdate(U8G2 &d) {
+    _setWaitRelease();
+
+    enum { ST_IDLE, ST_CHECKING, ST_AVAILABLE, ST_NO_UPDATE, ST_ERROR };
+    int state = ST_IDLE;
+    OtaInfo info;
+
+    while (true) {
+        // Render
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, T("=== Aktualizacje ===", "=== Updates ==="));
+
+        char line[40];
+        snprintf(line, sizeof(line), T("Aktualna wersja: v%s", "Current version: v%s"), FW_VERSION);
+        d.drawStr(2, 24, line);
+
+        d.setFont(u8g2_font_5x7_tf);
+        switch (state) {
+            case ST_IDLE:
+                d.drawStr(2, 40, T("OK = sprawdz aktualizacje", "OK = check for updates"));
+                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit"));
+                break;
+            case ST_CHECKING:
+                d.drawStr(2, 40, T("Sprawdzam serwer...", "Checking server..."));
+                break;
+            case ST_AVAILABLE: {
+                char av[40];
+                snprintf(av, sizeof(av), T("Dostepna: v%s", "Available: v%s"),
+                         info.latestVersion.c_str());
+                d.drawStr(2, 38, av);
+                d.drawStr(2, 48, T("OK = zainstaluj", "OK = install"));
+                d.drawStr(2, 58, T("C/CE = anuluj", "C/CE = cancel"));
+                break;
+            }
+            case ST_NO_UPDATE:
+                d.drawStr(2, 40, T("Masz najnowsza wersje :)", "You have the latest :)"));
+                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit"));
+                break;
+            case ST_ERROR: {
+                char eb[60];
+                snprintf(eb, sizeof(eb), "Blad: %.40s", info.error.c_str());
+                d.drawStr(2, 40, eb);
+                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit"));
+                break;
+            }
+        }
+        d.sendBuffer();
+
+        // Klawisze
+        if (inputKeyConsume(KEY_CCE)) {
+            _setWaitRelease();
+            return;
+        }
+        if (_setBtn(BTN_LEFT)) {
+            _setWaitRelease();
+            return;
+        }
+        if (_setBtn(BTN_OK)) {
+            _setWaitRelease();
+            if (state == ST_IDLE || state == ST_NO_UPDATE || state == ST_ERROR) {
+                // Sprawdz aktualizacje
+                state = ST_CHECKING;
+                d.clearBuffer();
+                d.setFont(u8g2_font_6x10_tf);
+                d.drawStr(2, 32, T("Sprawdzam serwer...", "Checking server..."));
+                d.sendBuffer();
+
+                info = otaCheck();
+                if (!info.error.isEmpty()) {
+                    state = ST_ERROR;
+                } else if (info.available) {
+                    state = ST_AVAILABLE;
+                } else {
+                    state = ST_NO_UPDATE;
+                }
+            } else if (state == ST_AVAILABLE) {
+                // Zainstaluj
+                otaInstall(d, info.url);
+                // Po sukcesie restart, w przeciwnym wypadku zwraca false
+                state = ST_ERROR;
+                info.error = "Install failed";
+            }
+        }
+
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Publiczna funkcja — glowny punkt wejscia
 // ---------------------------------------------------------------------------
 void showSettings(U8G2 &display) {
@@ -753,6 +856,7 @@ void showSettings(U8G2 &display) {
                 case _SET_LICENSE:    _editLicense(display);    break;
                 case _SET_AICODE:     _editAiCode(display);     break;
                 case _SET_PANICKEY:   _editPanicKey(display);   break;
+                case _SET_UPDATE:     _editUpdate(display);     break;
             }
         }
 

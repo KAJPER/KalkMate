@@ -515,6 +515,10 @@ static void _solRunTextMode(U8G2 &d) {
 
     WiFiClientSecure client;
     client.setInsecure();  // akceptuj kazdy cert (dla uproszczenia)
+    // KLUCZOWE: WiFiClientSecure ma domyslny socket timeout ~5-10 s.
+    // Gdy Gemini myśli długo, socket sie zamyka i HTTPClient zwraca -11
+    // (HTTPC_ERROR_READ_TIMEOUT). Ustawiamy 60 s.
+    client.setTimeout(60);  // sekundy
     HTTPClient http;
     http.begin(client, _SOL_SOLVE_ENDPOINT);
     http.addHeader("Content-Type", "application/json");
@@ -522,33 +526,25 @@ static void _solRunTextMode(U8G2 &d) {
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
-    // Animowany ekran wysylania
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 16, _solT("Wysylam zadanie...", "Sending task..."));
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 32, _solT("Laczenie z AI...", "Connecting to AI..."));
-    d.sendBuffer();
-
     // Log wysylanego requestu — diagnostyka HTTP 400/401 itd.
     Serial.printf("[SOL] POST %s\n", _SOL_SOLVE_ENDPOINT);
     Serial.printf("[SOL] x-api-key=%s\n", KALK_API_KEY);
     Serial.printf("[SOL] x-license-key=%s\n", licKey[0] ? licKey : "(none)");
     Serial.printf("[SOL] Body (%d B): %s\n", jsonBody.length(), jsonBody.c_str());
 
-    // POST (blokujacy) — pokaz spinner klatka przed
-    int httpCode = http.POST(jsonBody);
+    // Pokaz "AI rozwiazuje zadanie" OD RAZU, nie po POST.
+    // POST blokuje 5-20 s czekajac na odpowiedz Gemini — przez ten czas
+    // user widzi "AI rozwiazuje zadanie / Prosze czekac" zamiast martwego
+    // "Wysylam zadanie".
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
+    d.setFont(u8g2_font_5x7_tf);
+    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
+    d.sendBuffer();
 
-    // Ekran oczekiwania na odpowiedz AI
-    if (httpCode > 0) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
-        d.sendBuffer();
-        delay(200); // krotka pauza zeby ekran byl widoczny
-    }
+    // POST blokujacy — Gemini moze odpowiadac do 30 s, klient czeka.
+    int httpCode = http.POST(jsonBody);
 
     String resp = http.getString();
     http.end();
@@ -691,16 +687,23 @@ static void _solRunPhotoMode(U8G2 &d) {
              "{\"mode\":\"image\",\"mimeType\":\"image/jpeg\",\"image\":\"%s\"}", b64buf);
     free(b64buf);
 
-    _solDrawLoading(d, _solT("Wysylam zdjecie...", "Sending photo..."), 1);
-
     WiFiClientSecure client;
     client.setInsecure();
+    client.setTimeout(60);  // socket timeout 60s — vs domyslny 5-10s
     HTTPClient http;
     http.begin(client, _SOL_SOLVE_ENDPOINT);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("x-api-key", KALK_API_KEY);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
+
+    // Pokaz "AI rozwiazuje zadanie" OD RAZU — przed blokujacym POST
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
+    d.setFont(u8g2_font_5x7_tf);
+    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
+    d.sendBuffer();
 
     int httpCode = http.POST(jsonBuf);
     free(jsonBuf);

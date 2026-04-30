@@ -3,3 +3,7 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Deploy scripts — zawieraja haslo SSH, nie commitowac
+deploy.ps1
+deploy.bat

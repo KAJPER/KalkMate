@@ -30,6 +30,9 @@
 #define KALK_SERVER_URL "https://kalkmate.pl"
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
+// Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
+#define FW_VERSION "0.1.0"
+
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
 // (>=200) i funkcję inputBtn(). UI files ze swoimi `#ifndef BTN_xx`
