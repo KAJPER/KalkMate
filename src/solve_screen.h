@@ -20,6 +20,7 @@
 #include "settings_screen.h"
 #include "wifi_persist.h"
 #include "wifi_settings.h"  // klawiatura (_runKeyboard, itp.)
+#include "panic.h"
 #include "power.h"
 #include "history.h"
 
@@ -389,6 +390,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
     int scroll = 0;
 
     while (true) {
+        if (panicTriggered()) return;
         if (needRedraw) {
             d.clearBuffer();
 
@@ -641,6 +643,7 @@ static void _solRunPhotoMode(U8G2 &d) {
 
     _solWaitRelease();
     while (true) {
+        if (panicTriggered()) return;
         if (_solBtn(BTN_OK)) break;
         if (_solBtn(BTN_LEFT)) { _solWaitRelease(); return; }
         delay(20);
@@ -800,6 +803,7 @@ static void _solModeSelect(U8G2 &d, int &mode) {
     _solWaitRelease();
 
     while (true) {
+        if (panicTriggered()) return;
         powerCheckSleep();
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
@@ -869,6 +873,7 @@ static void _solRunHistoryMode(U8G2 &d) {
         d.drawStr(2, 56, _solT("OK / < = powrot", "OK / < = back"));
         d.sendBuffer();
         while (true) {
+        if (panicTriggered()) return;
             powerCheckSleep();
             if (_solBtn(BTN_OK) || _solBtn(BTN_LEFT)) {
                 _solWaitRelease();
@@ -880,6 +885,7 @@ static void _solRunHistoryMode(U8G2 &d) {
 
     int cursor = 0;   // 0 = najnowszy
     while (true) {
+        if (panicTriggered()) return;
         powerCheckSleep();
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
@@ -948,6 +954,7 @@ void showSolveScreen(U8G2 &display) {
     int mode = 1;  // domyslnie tekst (kamera moze byc niedostepna)
 
     while (true) {
+        if (panicTriggered()) return;
         _solModeSelect(display, mode);
 
         if (mode < 0) return;  // wyjdz do menu

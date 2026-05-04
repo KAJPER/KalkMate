@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "0.3.3"
+#define FW_VERSION "0.3.4"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -49,6 +49,7 @@
 #include "solve_screen.h"      // Rozwiazywanie zadan AI
 #include "splash_screen.h"     // Ekran powitalny
 #include "calculator.h"        // Tryb kalkulatora + unlock code
+#include "panic.h"             // Globalny panic button (powrot do kalkulatora)
 #include "power.h"             // Auto-sleep OLED — globalny dla wszystkich ekranow
 #include "notes.h"             // Offline notatki uzytkownika
 
@@ -241,6 +242,7 @@ static void showNotesScreen() {
 
         while (true) {
             powerCheckSleep();
+            if (panicTriggered()) { powerSetInhibit(false); return; }
             u8g2.clearBuffer();
             u8g2.setFont(u8g2_font_6x10_tf);
             String t = n.title.length() == 0 ? "(bez tytulu)" : n.title;
@@ -358,6 +360,7 @@ static void showNotesScreen() {
 
     while (true) {
         powerCheckSleep();
+        if (panicTriggered()) return;
         if (btnPressed(BTN_UP)) {
             if (cursor > 0) cursor--;
             drawList(cursor, count);
@@ -488,14 +491,17 @@ void setup() {
     drawMenu();
 }
 
-// Sprawdz czy panic key zostal wcisniety -> wroc do kalkulatora
-static void checkPanicKey() {
-    KalkKey pk = (KalkKey)kalkSettings.panicKey;
-    if (pk == KEY_NONE || pk >= KEY_COUNT) return;
-    if (inputKeyConsume(pk)) {
-        Serial.printf("PANIC! key=%s -> tryb kalkulatora\n", kalkKeyLabel(pk));
+// Definicja globalnej flagi panic (extern w panic.h)
+volatile bool _panicRequested = false;
+
+// Obsluz panic — wywolywane w loop() po wyjsciu z UI screen.
+// Jesli flaga ustawiona (przez panicCheck() ktore woluje sie automatycznie
+// w powerCheckSleep i przez sprawdzanie w petlach UI), uruchom kalkulator.
+static void handlePanicIfRequested() {
+    if (_panicRequested) {
+        Serial.printf("PANIC! -> tryb kalkulatora\n");
+        _panicRequested = false;
         runCalculator(u8g2);
-        // Po wyjsciu z kalkulatora od razu menu (bez splash)
         resetActivity();
         drawMenu();
     }
@@ -503,7 +509,8 @@ static void checkPanicKey() {
 
 void loop() {
     inputScan();        // skanuj matrycę co iterację (max raz na 30 ms)
-    checkPanicKey();    // panic -> kalkulator
+    panicCheck();       // sprawdz panic key, ustaw flagę gdy nacisnięty
+    handlePanicIfRequested();  // jesli flaga -> kalkulator
     if (powerCheckSleep()) {
         // Po wybudzeniu — przerysuj menu
         drawMenu();
@@ -549,6 +556,8 @@ void loop() {
             case 7: showAboutScreen(u8g2);  break;
             default: showSelected();        break;   // 4 = test kamery (TODO)
         }
+        // Jesli panic byl wywolany w trakcie ekranu, przejdz do kalkulatora
+        handlePanicIfRequested();
         resetActivity();
         changed = true;
     }

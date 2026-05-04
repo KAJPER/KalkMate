@@ -181,6 +181,7 @@ void showAboutScreen(U8G2 &display) {
 
     while (true) {
         if (powerCheckSleep()) drawPage();
+        if (panicTriggered()) return;
 
         bool changed = false;
 

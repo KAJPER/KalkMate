@@ -15,6 +15,7 @@
 #include <U8g2lib.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "panic.h"
 
 static bool   _powerInhibit = false;
 static U8G2*  _powerU8g2    = nullptr;   // globalny pointer ustawiony w main.cpp
@@ -38,6 +39,7 @@ inline void powerSetInhibit(bool b) {
 // Sprawdza czy nadszedl czas snu. Jesli tak — wylacza OLED, czeka
 // na klawisz, wybudza. Wraca true gdy spal/wybudzil sie.
 inline bool powerCheckSleep() {
+    panicCheck();   // przy okazji zawsze sprawdzaj panic key
     if (!_powerU8g2) return false;
     if (!kalkSettings.autoSleep) return false;
     if (_powerInhibit) return false;

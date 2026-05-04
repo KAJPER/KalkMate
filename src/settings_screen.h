@@ -15,6 +15,10 @@
 #include "wifi_persist.h"
 #include "ota_update.h"
 
+// Forward declaration panic flag (definicja w main.cpp). Nie includujemy
+// panic.h zeby uniknac circular include z power.h.
+extern volatile bool _panicRequested;
+
 // === Piny przyciskow ===
 #ifndef BTN_UP
 #define BTN_UP    26
@@ -84,7 +88,15 @@ static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55};
 static unsigned long _setLastPress = 0;
 #define _SET_DEBOUNCE_MS 200
 
+// Lokalny panic check (settings_screen.h nie ma include panic.h przez circular)
+static inline void _setPanicCheck() {
+    KalkKey pk = (KalkKey)kalkSettings.panicKey;
+    if (pk == KEY_NONE || pk >= KEY_COUNT) return;
+    if (inputKeyConsume(pk)) _panicRequested = true;
+}
+
 static bool _setBtn(int pin) {
+    _setPanicCheck();   // Przy okazji sprawdz panic key
     if (inputBtn(pin) == LOW) {
         unsigned long now = millis();
         if (now - _setLastPress > _SET_DEBOUNCE_MS) {
@@ -263,6 +275,7 @@ static void _editBrightness(U8G2 &d) {
     _setWaitRelease();
 
     while (true) {
+        if (_panicRequested) return;
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, T("Jasnosc:", "Brightness:"));
@@ -305,6 +318,7 @@ static void _editLanguage(U8G2 &d) {
     _setWaitRelease();
 
     while (true) {
+        if (_panicRequested) return;
         // Po zmianie jezyka rysuj od razu w nowym jezyku
         uint8_t prevLang = kalkSettings.language;
         kalkSettings.language = val; // tymczasowo ustaw aby T() dzialalo poprawnie
@@ -349,6 +363,7 @@ static void _editSolveMode(U8G2 &d) {
     _setWaitRelease();
 
     while (true) {
+        if (_panicRequested) return;
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, T("Tryb rozwiazan:", "Solve mode:"));
@@ -391,6 +406,7 @@ static void _editAutoSleep(U8G2 &d) {
     _setWaitRelease();
 
     while (true) {
+        if (_panicRequested) return;
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, "Auto-sleep:");
@@ -483,6 +499,7 @@ static void _editLicense(U8G2 &d) {
     unsigned long blinkStart = millis();
 
     while (true) {
+        if (_panicRequested) return;
         // Rysuj ekran
         d.clearBuffer();
         d.setFont(u8g2_font_5x7_tf);
@@ -627,6 +644,7 @@ static void _editAiCode(U8G2 &d) {
     bool blinkOn = true;
 
     while (true) {
+        if (_panicRequested) return;
         if (millis() - blink > 400) { blinkOn = !blinkOn; blink = millis(); }
 
         d.clearBuffer();
@@ -697,6 +715,7 @@ static void _editPanicKey(U8G2 &d) {
     }
 
     while (true) {
+        if (_panicRequested) return;
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, T("Naciśnij klawisz na panic:",
@@ -740,6 +759,7 @@ static void _editUpdate(U8G2 &d) {
     OtaInfo info;
 
     while (true) {
+        if (_panicRequested) return;
         // Render
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
@@ -836,6 +856,7 @@ void showSettings(U8G2 &display) {
     int cursor = 0; // aktualnie zaznaczona pozycja (0-3)
 
     while (true) {
+        if (_panicRequested) return;
         _drawSettingsList(display, cursor);
 
         if (_setBtn(BTN_UP)) {

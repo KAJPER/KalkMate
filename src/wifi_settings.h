@@ -96,7 +96,18 @@ static const int _KB_ACT_WS[4] = {59, 63, 67, 64};
 // ---------------------------------------------------------------------------
 static unsigned long _wifiLastPress = 0;
 
+// extern z main.cpp (definicja flagi panic)
+extern volatile bool _panicRequested;
+
+// Lokalny panic check
+static inline void _wifiPanicCheck() {
+    KalkKey pk = (KalkKey)kalkSettings.panicKey;
+    if (pk == KEY_NONE || pk >= KEY_COUNT) return;
+    if (inputKeyConsume(pk)) _panicRequested = true;
+}
+
 static bool _wifiBtn(int pin) {
+    _wifiPanicCheck();
     if (inputBtn(pin) == LOW) {
         unsigned long now = millis();
         if (now - _wifiLastPress > WIFI_DEBOUNCE_MS) {
@@ -237,6 +248,7 @@ static int _runNetworkList(U8G2 &d) {
     _wifiWaitRelease();
 
     while (true) {
+        if (_panicRequested) return -1;
         _drawNetworkList(d, n, scroll, selected);
 
         if (_wifiBtn(BTN_UP)) {
@@ -395,6 +407,7 @@ static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label =
     _wifiWaitRelease();
 
     while (true) {
+        if (_panicRequested) return false;
         _drawKeyboard(d, outBuf, inputLen, curRow, curCol, mode, blinkStart, label);
 
         const int* counts = _kbGetCounts(mode);
@@ -530,12 +543,14 @@ void showWifiSettings(U8G2 &display) {
     _wifiWaitRelease();
 
     while (true) {
+        if (_panicRequested) return;
         // --- 1. Ekran statusu ---
         _drawWifiStatus(display);
 
         // Czekaj na OK lub WSTECZ (BTN_LEFT)
         bool goBack = false;
         while (true) {
+        if (_panicRequested) return;
             if (_wifiBtn(BTN_OK))   { break; }
             if (_wifiBtn(BTN_LEFT)) { goBack = true; break; }
             delay(20);

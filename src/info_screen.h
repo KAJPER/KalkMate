@@ -276,6 +276,7 @@ void showInfo(U8G2 &display) {
 
     while (true) {
         if (powerCheckSleep()) _infoDrawPage(display, curPage);
+        if (panicTriggered()) return;
 
         bool changed = false;
 

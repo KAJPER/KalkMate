@@ -41,6 +41,7 @@ static void _stWaitBtn() {
     // Czeka na OK lub LEFT zeby przejsc dalej / wyjsc
     while (true) {
         powerCheckSleep();
+        if (panicTriggered()) return;
         if (_stBtn(BTN_OK) || _stBtn(BTN_RIGHT)) return;
         if (_stBtn(BTN_LEFT)) return;
         delay(20);
