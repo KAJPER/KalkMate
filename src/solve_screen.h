@@ -46,8 +46,8 @@ static String _solDeviceId() {
 #endif
 
 #define _SOL_SOLVE_ENDPOINT  KALK_SERVER_URL "/api/device/solve"
-#define _SOL_TEXT_MAX        512    // max znakow zadania
-#define _SOL_SOLUTION_MAX    2000   // max znakow odpowiedzi
+#define _SOL_TEXT_MAX        2048   // max znakow zadania (input)
+#define _SOL_SOLUTION_MAX    16384  // max znakow odpowiedzi AI (16 KB)
 #define _SOL_HTTP_TIMEOUT_MS 45000  // 45s timeout HTTP
 
 // ---------------------------------------------------------------------------
@@ -390,7 +390,14 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
     int scroll = 0;
 
     while (true) {
-        if (panicTriggered()) return;
+        // Wymuszaj sprawdzenie panic key — sleep jest tu inhibitowany,
+        // wiec powerCheckSleep() (gdzie zwykle siedzi panicCheck) zwraca
+        // natychmiast i panic nigdy by nie byl wykryty.
+        panicCheck();
+        if (panicTriggered()) {
+            powerSetInhibit(false);
+            return;
+        }
         if (needRedraw) {
             d.clearBuffer();
 
@@ -496,10 +503,17 @@ static bool _solEnsureWifi(U8G2 &d) {
 // ---------------------------------------------------------------------------
 // Tryb TEXT: klawiatura → wyslij do API → pokaz wynik
 // ---------------------------------------------------------------------------
-static void _solRunTextMode(U8G2 &d) {
+// Opcjonalny prefill — gdy != nullptr, klawiatura otwiera sie z tym tekstem
+// (uzywane przy "edytuj pytanie" z historii).
+static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
     // Klawiatura: label "Zadanie:" zamiast "Haslo:"
     static char taskText[_SOL_TEXT_MAX + 1];
-    taskText[0] = '\0';
+    if (prefill && prefill[0]) {
+        strncpy(taskText, prefill, sizeof(taskText) - 1);
+        taskText[sizeof(taskText) - 1] = '\0';
+    } else {
+        taskText[0] = '\0';
+    }
 
     // Uzyj klawiatury z wifi_settings.h, zmien tylko naglowek
     // _runKeyboard rysuje "Haslo:" — tutaj nadpiszemy przez wlasny wrapper
@@ -918,8 +932,8 @@ static void _solRunHistoryMode(U8G2 &d) {
 
         d.drawHLine(0, 53, 256);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, _solT("^/v   OK: pokaz   < wstecz",
-                                "^/v   OK: show   < back"));
+        d.drawStr(2, 62, _solT("^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
+                                "^/v OK:show  >:edit+resend  <:back"));
         d.sendBuffer();
 
         if (_solBtn(BTN_UP)) {
@@ -931,6 +945,15 @@ static void _solRunHistoryMode(U8G2 &d) {
             HistoryEntry entry;
             if (historyGet(cursor, entry)) {
                 _solDisplaySolution(d, entry.answer.c_str());
+            }
+            // po wyjsciu — wracamy do listy
+        } else if (_solBtn(BTN_RIGHT)) {
+            // Edytuj pytanie z historii i wyslij ponownie do AI
+            HistoryEntry entry;
+            if (historyGet(cursor, entry)) {
+                _solWaitRelease();
+                _solRunTextMode(d, entry.question.c_str());
+                _solWaitRelease();
             }
             // po wyjsciu — wracamy do listy
         } else if (_solBtn(BTN_LEFT)) {

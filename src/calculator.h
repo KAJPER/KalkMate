@@ -34,6 +34,10 @@ struct _CalcState {
     bool    hasMemory;
     char    unlockBuf[12];    // ostatnio wpisane cyfry (do match z unlock code)
     char    statusFlags[16];  // tekst statusu (M, ERR, itd.)
+    // === Powtarzanie operacji przez kolejne "=" ===
+    // Po "2 * 3 =" repeat = ('*', 3). Kolejne "=" mnoży wynik przez 3.
+    char    repeatOp;         // 0 = brak repeatu
+    double  repeatOperand;
 };
 
 static _CalcState _calc;
@@ -45,6 +49,8 @@ static void _calcReset() {
     _calc.awaitingNext = true;
     _calc.unlockBuf[0] = '\0';
     _calc.statusFlags[0] = '\0';
+    _calc.repeatOp = 0;
+    _calc.repeatOperand = 0.0;
 }
 
 // Konwersja double -> string z odpowiednim formatowaniem
@@ -91,7 +97,7 @@ static void _calcAppendDigit(char d) {
         _calc.awaitingNext = false;
     } else {
         size_t len = strlen(_calc.display);
-        if (len >= 11) return;          // limit cyfr
+        if (len >= 10) return;          // limit cyfr (10 - inaczej ostatnia wystaje poza ekran)
         if (d == '.' && strchr(_calc.display, '.')) return;  // tylko jedna kropka
         _calc.display[len] = d;
         _calc.display[len + 1] = '\0';
@@ -112,23 +118,52 @@ static void _calcAppendDigit(char d) {
     }
 }
 
-static void _calcCompute() {
-    double current = _calcDisplayValue();
-    double result = _calc.accumulator;
-    switch (_calc.pendingOp) {
-        case '+': result = _calc.accumulator + current; break;
-        case '-': result = _calc.accumulator - current; break;
-        case '*': result = _calc.accumulator * current; break;
+// Pomocnicza: wykonuje "lhs OP rhs" i zwraca wynik. Bledy ustawia "Error".
+static double _calcApply(double lhs, char op, double rhs, bool &err) {
+    err = false;
+    switch (op) {
+        case '+': return lhs + rhs;
+        case '-': return lhs - rhs;
+        case '*': return lhs * rhs;
         case '/':
-            if (current == 0.0) {
-                strcpy(_calc.display, "Error");
-                _calc.awaitingNext = true;
-                _calc.pendingOp = 0;
-                return;
-            }
-            result = _calc.accumulator / current;
-            break;
-        default: result = current; break;
+            if (rhs == 0.0) { err = true; return 0.0; }
+            return lhs / rhs;
+        default:  return rhs;
+    }
+}
+
+static void _calcCompute() {
+    char  op;
+    double lhs, rhs;
+
+    if (_calc.pendingOp != 0) {
+        // Pierwsze "=" po wpisaniu liczby (mamy aktywna operacje)
+        // Format: accumulator OP display = wynik
+        op  = _calc.pendingOp;
+        lhs = _calc.accumulator;
+        rhs = _calcDisplayValue();
+        // Zapamietaj do powtarzania: rhs i op
+        _calc.repeatOp = op;
+        _calc.repeatOperand = rhs;
+    } else if (_calc.repeatOp != 0) {
+        // Kolejne "=" — powtorz ostatnia operacje
+        // Format: display OP repeatOperand = wynik
+        op  = _calc.repeatOp;
+        lhs = _calcDisplayValue();
+        rhs = _calc.repeatOperand;
+    } else {
+        // Brak pendingOp i brak repeat — nic do zrobienia, "=" w pustce
+        return;
+    }
+
+    bool err = false;
+    double result = _calcApply(lhs, op, rhs, err);
+    if (err) {
+        strcpy(_calc.display, "Error");
+        _calc.awaitingNext = true;
+        _calc.pendingOp = 0;
+        _calc.repeatOp = 0;
+        return;
     }
     _calcShowValue(result);
     _calc.accumulator = result;
@@ -144,6 +179,8 @@ static void _calcSetOp(char op) {
     }
     _calc.pendingOp = op;
     _calc.awaitingNext = true;
+    // Nowy operator — porzuc dotychczasowy repeat (zostanie nadpisany przy '=')
+    _calc.repeatOp = 0;
 }
 
 // Aktualizuj wyświetlone flagi statusu (np. M)
@@ -305,10 +342,37 @@ static void runCalculator(U8G2& u8g2) {
             continue;
         }
 
-        // --- Klawisze których kalkulator nie ma:
-        // KEY_ARROW (▶), KEY_MU — ignorujemy ale czyścimy unlock buf żeby
-        // przypadkowe wcisniecie nie sztormowalo unlock detection
-        if (inputKeyConsume(KEY_ARROW) || inputKeyConsume(KEY_MU)) {
+        // --- KEY_ARROW (▶) = backspace — kasuje ostatnia cyfre ---
+        if (inputKeyConsume(KEY_ARROW)) {
+            if (_calc.awaitingNext) {
+                // Po operatorze / sqrt / itp. — backspace czysci wszystko
+                strcpy(_calc.display, "0");
+                _calc.awaitingNext = true;
+            } else {
+                size_t len = strlen(_calc.display);
+                if (len > 1 || (len == 1 && _calc.display[0] != '-')) {
+                    if (len <= 1) {
+                        strcpy(_calc.display, "0");
+                        _calc.awaitingNext = true;
+                    } else {
+                        _calc.display[len - 1] = '\0';
+                        // Jesli zostal tylko "-", przywroc "0"
+                        if (strcmp(_calc.display, "-") == 0) {
+                            strcpy(_calc.display, "0");
+                            _calc.awaitingNext = true;
+                        }
+                    }
+                }
+                // Skroc tez unlock buffer (sa tam tylko cyfry, kropka pomija sie)
+                size_t ulen = strlen(_calc.unlockBuf);
+                if (ulen > 0) _calc.unlockBuf[ulen - 1] = '\0';
+            }
+            _calcDraw(u8g2);
+            continue;
+        }
+
+        // --- KEY_MU — ignorujemy (zarezerwowany na panic) ---
+        if (inputKeyConsume(KEY_MU)) {
             // ignoruj
         }
 

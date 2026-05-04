@@ -397,8 +397,16 @@ static void _drawKeyboard(U8G2 &d,
 // Glowna petla klawiatury
 // ---------------------------------------------------------------------------
 static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label = nullptr) {
-    outBuf[0] = '\0';
+    // Jezeli outBuf zawiera juz tekst (prefill), zaczynamy od edycji.
+    // Inaczej startujemy z pustym buforem.
     int inputLen = 0;
+    if (outBuf[0] != '\0') {
+        inputLen = (int)strlen(outBuf);
+        if (inputLen >= bufSize) inputLen = bufSize - 1;
+        outBuf[inputLen] = '\0';
+    } else {
+        outBuf[0] = '\0';
+    }
     int curRow   = 0;
     int curCol   = 0;
     int mode     = _KB_MODE_LOWER;
