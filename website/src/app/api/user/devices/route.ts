@@ -49,52 +49,96 @@ export async function GET() {
   });
 }
 
-// POST /api/user/devices — sparuj device (body: { deviceId })
-// Wymaga: user ma claim'd licencje
+// POST /api/user/devices — sparuj device (body: { deviceId, unlockCode })
+// Wymaga: user ma claim'd licencje + unlockCode pasuje do zapisanego przez kalkulator
 export async function POST(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Nie zalogowany" }, { status: 401 });
 
-  // Sprawdz czy user ma licencje
+  // Sprawdz czy user ma aktywny dostep: licencja LUB aktywna sub LUB aktywny trial
   const license = await prisma.license.findFirst({
     where: { claimedByUserId: user.id },
   });
-  if (!license) {
+  const subscription = await prisma.subscription.findUnique({
+    where: { userId: user.id },
+  });
+  const now = new Date();
+  const trialActive =
+    subscription?.status === "trial" &&
+    subscription.trialEndsAt &&
+    new Date(subscription.trialEndsAt) > now;
+  const subActive = subscription?.status === "active";
+  if (!license && !trialActive && !subActive) {
     return NextResponse.json(
-      { ok: false, error: "Najpierw przypisz licencje do konta" },
+      {
+        ok: false,
+        error:
+          "Brak aktywnego dostepu. Przypisz licencje (Subskrypcja) lub aktywuj trial.",
+      },
       { status: 400 }
     );
   }
 
   const body = await req.json();
   const deviceId = String(body?.deviceId || "").trim().toUpperCase();
+  const unlockCode = String(body?.unlockCode || "").trim();
   if (!deviceId || deviceId.length < 6) {
-    return NextResponse.json({ ok: false, error: "Nieprawidlowy device ID" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Nieprawidlowy Device ID" }, { status: 400 });
+  }
+  if (!unlockCode) {
+    return NextResponse.json(
+      { ok: false, error: "Wpisz kod odblokowania (Settings -> Kod AI w kalkulatorze)" },
+      { status: 400 }
+    );
   }
 
-  // Pair: znajdz lub utworz device
+  // Sprawdz czy kalkulator zglosil sie do serwera (Device musi istniec)
   const existing = await prisma.device.findUnique({ where: { deviceId } });
-  if (existing) {
-    if (existing.userId && existing.userId !== user.id) {
-      return NextResponse.json(
-        { ok: false, error: "Urzadzenie sparowane z innym kontem" },
-        { status: 409 }
-      );
-    }
-    const updated = await prisma.device.update({
-      where: { id: existing.id },
-      data: { userId: user.id },
-    });
-    return NextResponse.json({ ok: true, device: updated, action: "paired" });
-  } else {
-    const created = await prisma.device.create({
-      data: {
-        deviceId,
-        userId: user.id,
+  if (!existing) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Kalkulator jeszcze nie zglosil sie do serwera. Polacz go z WiFi i odczekaj chwile.",
       },
-    });
-    return NextResponse.json({ ok: true, device: created, action: "created" });
+      { status: 404 }
+    );
   }
+
+  // Walidacja unlockCode (raw SQL bo schema nie ma tej kolumny)
+  const rows = await prisma.$queryRaw<{ unlockCode: string | null }[]>`
+    SELECT "unlockCode" FROM "Device" WHERE "deviceId" = ${deviceId} LIMIT 1
+  `;
+  const storedUnlock = rows?.[0]?.unlockCode || null;
+  if (!storedUnlock) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Brak zapisanego kodu odblokowania. Zaktualizuj firmware kalkulatora i polacz z WiFi.",
+      },
+      { status: 400 }
+    );
+  }
+  if (storedUnlock !== unlockCode) {
+    return NextResponse.json(
+      { ok: false, error: "Nieprawidlowy kod odblokowania" },
+      { status: 403 }
+    );
+  }
+
+  // Pair
+  if (existing.userId && existing.userId !== user.id) {
+    return NextResponse.json(
+      { ok: false, error: "Urzadzenie sparowane z innym kontem" },
+      { status: 409 }
+    );
+  }
+  const updated = await prisma.device.update({
+    where: { id: existing.id },
+    data: { userId: user.id },
+  });
+  return NextResponse.json({ ok: true, device: updated, action: "paired" });
 }
 
 // DELETE /api/user/devices?deviceId=... — odepnij urzadzenie

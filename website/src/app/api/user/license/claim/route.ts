@@ -109,25 +109,60 @@ export async function GET() {
     const license = await prisma.license.findFirst({
       where: { claimedByUserId: user.id },
     });
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId: user.id },
+    });
 
-    if (!license) {
+    // canPair = user moze sparowac kalkulator. Wystarczy jeden z:
+    //  - claimed License,
+    //  - aktywny trial (Subscription.status='trial' AND trialEndsAt > now),
+    //  - aktywna platna (status='active')
+    const now = new Date();
+    let canPair = false;
+    if (license) canPair = true;
+    if (subscription) {
+      if (subscription.status === "active") canPair = true;
+      if (
+        subscription.status === "trial" &&
+        new Date(subscription.trialEndsAt) > now
+      ) {
+        canPair = true;
+      }
+    }
+
+    if (!canPair) {
       return NextResponse.json({ ok: true, claimed: false });
     }
 
-    // Znajdz device powiazane z ta licencja (ostatnio uzyte)
-    const device = await prisma.device.findFirst({
-      where: { licenseCode: license.code },
+    // Znajdz device sparowane z tym kontem (nowy model: Device.userId).
+    let device = await prisma.device.findFirst({
+      where: { userId: user.id },
       orderBy: { lastSeen: "desc" },
     });
+    if (!device && license) {
+      device = await prisma.device.findFirst({
+        where: { licenseCode: license.code },
+        orderBy: { lastSeen: "desc" },
+      });
+    }
 
     return NextResponse.json({
       ok: true,
-      claimed: true,
-      license: {
-        code: license.code,
-        durationDays: license.durationDays,
-        activatedAt: license.usedAt,
-      },
+      claimed: true, // historyczna nazwa = "ma aktywny dostep"
+      license: license
+        ? {
+            code: license.code,
+            durationDays: license.durationDays,
+            activatedAt: license.usedAt,
+          }
+        : null,
+      subscription: subscription
+        ? {
+            status: subscription.status,
+            trialEndsAt: subscription.trialEndsAt,
+            trialDays: subscription.trialDays,
+          }
+        : null,
       device: device
         ? {
             deviceId: device.deviceId,

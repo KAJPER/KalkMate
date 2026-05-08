@@ -458,8 +458,14 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
 // Sprawdz WiFi — polacz jesli nie jest polaczony (uzyj zapisanych danych)
 // Zwraca true jesli polaczony
 // ---------------------------------------------------------------------------
+// Forward decl z device_account.h (zaimplementowane w main.cpp helperze)
+extern bool accountRegisterOnce();
+
 static bool _solEnsureWifi(U8G2 &d) {
-    if (WiFi.status() == WL_CONNECTED) return true;
+    if (WiFi.status() == WL_CONNECTED) {
+        accountRegisterOnce();
+        return true;
+    }
 
     // Sprobuj zaladowac zapisane dane
     char ssid[33] = "";
@@ -497,6 +503,7 @@ static bool _solEnsureWifi(U8G2 &d) {
         _solDrawLoading(d, _solT("Laczenie WiFi...", "Connecting WiFi..."), frame++);
         delay(250);
     }
+    accountRegisterOnce();   // zarejestruj device po pierwszym polaczeniu
     return true;
 }
 

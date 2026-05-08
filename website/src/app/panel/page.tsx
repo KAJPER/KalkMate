@@ -11,7 +11,7 @@ import MessageRenderer from "@/components/MessageRenderer";
 export default function PanelPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"orders" | "chat" | "subscription">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "chat" | "subscription" | "calculator" | "notes" | "tests">("orders");
   const [isLoading, setIsLoading] = useState(false);
 
   // Chat state
@@ -39,6 +39,197 @@ export default function PanelPage() {
   // Orders state
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // === Kalkulator: state ===
+  const [calcInfo, setCalcInfo] = useState<any>(null);
+  const [calcConvs, setCalcConvs] = useState<any[]>([]);
+  const [calcNotes, setCalcNotes] = useState<any[]>([]);
+  const [calcTests, setCalcTests] = useState<any[]>([]);
+  const [calcLoading, setCalcLoading] = useState(false);
+  const [calcClaimCode, setCalcClaimCode] = useState("");
+  const [calcClaiming, setCalcClaiming] = useState(false);
+  const [calcError, setCalcError] = useState<string | null>(null);
+  const [calcOpenedConv, setCalcOpenedConv] = useState<any>(null);
+  const [showChangeLicense, setShowChangeLicense] = useState(false);
+  const [unclaiming, setUnclaiming] = useState(false);
+
+  // === Pair device (deviceId + unlockCode) ===
+  const [pairDeviceId, setPairDeviceId] = useState("");
+  const [pairUnlockCode, setPairUnlockCode] = useState("");
+  const [pairing, setPairing] = useState(false);
+  const [pairError, setPairError] = useState<string | null>(null);
+  const [pairOk, setPairOk] = useState(false);
+
+  const pairDevice = async () => {
+    setPairError(null);
+    setPairOk(false);
+    setPairing(true);
+    try {
+      const r = await fetch("/api/user/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: pairDeviceId.trim(),
+          unlockCode: pairUnlockCode.trim(),
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        setPairError(j.error || "Nie udalo sie sparowac");
+      } else {
+        setPairOk(true);
+        setPairDeviceId("");
+        setPairUnlockCode("");
+        // Odswiez calcInfo
+        const r2 = await fetch("/api/user/license/claim", { cache: "no-store" });
+        setCalcInfo(await r2.json());
+      }
+    } catch (e) {
+      setPairError(e instanceof Error ? e.message : "Blad sieci");
+    } finally {
+      setPairing(false);
+    }
+  };
+
+  // Notes
+  const [editingNote, setEditingNote] = useState<any>(null);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteContent, setNoteContent] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  // Tests
+  const [editingTest, setEditingTest] = useState<any>(null);
+  const [testTitle, setTestTitle] = useState("");
+  const [testContent, setTestContent] = useState("");
+  const [savingTest, setSavingTest] = useState(false);
+
+  // Load calculator data when tab activated
+  useEffect(() => {
+    if (session && (activeTab === "calculator" || activeTab === "notes" || activeTab === "tests" || activeTab === "subscription")) {
+      const load = async () => {
+        setCalcLoading(true);
+        try {
+          const r1 = await fetch("/api/user/license/claim", { cache: "no-store" });
+          const j1 = await r1.json();
+          setCalcInfo(j1);
+          if (j1.claimed) {
+            const [r2, r3, r4] = await Promise.all([
+              fetch("/api/user/conversations?limit=50", { cache: "no-store" }),
+              fetch("/api/user/notes", { cache: "no-store" }),
+              fetch("/api/user/tests", { cache: "no-store" }),
+            ]);
+            setCalcConvs((await r2.json()).items || []);
+            setCalcNotes((await r3.json()).notes || []);
+            setCalcTests((await r4.json()).tests || []);
+          }
+        } finally {
+          setCalcLoading(false);
+        }
+      };
+      load();
+    }
+  }, [session, activeTab]);
+
+  const calcUnclaim = async () => {
+    if (!confirm("Odepnij licencje? Notatki, sprawdziany i historia zostana — mozesz potem przypisac inna licencje.")) return;
+    setUnclaiming(true);
+    try {
+      const r = await fetch("/api/user/license/claim", { method: "DELETE" });
+      const j = await r.json();
+      if (j.ok) {
+        setShowChangeLicense(false);
+        // Odswiez calcInfo
+        const r2 = await fetch("/api/user/license/claim", { cache: "no-store" });
+        setCalcInfo(await r2.json());
+      } else {
+        alert(j.error || "Blad");
+      }
+    } finally {
+      setUnclaiming(false);
+    }
+  };
+
+  const calcDoClaim = async () => {
+    if (!calcClaimCode.trim()) return;
+    setCalcClaiming(true);
+    setCalcError(null);
+    try {
+      const r = await fetch("/api/user/license/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: calcClaimCode.trim() }),
+      });
+      const j = await r.json();
+      if (!j.ok) setCalcError(j.error || "Blad");
+      else {
+        setCalcClaimCode("");
+        // reload
+        const r1 = await fetch("/api/user/license/claim", { cache: "no-store" });
+        setCalcInfo(await r1.json());
+      }
+    } finally {
+      setCalcClaiming(false);
+    }
+  };
+
+  const calcSaveNote = async () => {
+    if (!noteTitle.trim() && !noteContent.trim()) return;
+    setSavingNote(true);
+    try {
+      if (editingNote) {
+        await fetch("/api/user/notes", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingNote.id, title: noteTitle, content: noteContent }),
+        });
+      } else {
+        await fetch("/api/user/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: noteTitle, content: noteContent }),
+        });
+      }
+      setEditingNote(null); setNoteTitle(""); setNoteContent("");
+      const r = await fetch("/api/user/notes", { cache: "no-store" });
+      setCalcNotes((await r.json()).notes || []);
+    } finally { setSavingNote(false); }
+  };
+  const calcDelNote = async (id: string) => {
+    if (!confirm("Usunac notatke?")) return;
+    await fetch(`/api/user/notes?id=${id}`, { method: "DELETE" });
+    const r = await fetch("/api/user/notes", { cache: "no-store" });
+    setCalcNotes((await r.json()).notes || []);
+  };
+
+  const calcSaveTest = async () => {
+    if (!testTitle.trim() && !testContent.trim()) return;
+    setSavingTest(true);
+    try {
+      if (editingTest) {
+        await fetch("/api/user/tests", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingTest.id, title: testTitle, content: testContent }),
+        });
+      } else {
+        await fetch("/api/user/tests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: testTitle, content: testContent }),
+        });
+      }
+      setEditingTest(null); setTestTitle(""); setTestContent("");
+      const r = await fetch("/api/user/tests", { cache: "no-store" });
+      setCalcTests((await r.json()).tests || []);
+    } finally { setSavingTest(false); }
+  };
+  const calcDelTest = async (id: string) => {
+    if (!confirm("Usunac sprawdzian?")) return;
+    await fetch(`/api/user/tests?id=${id}`, { method: "DELETE" });
+    const r = await fetch("/api/user/tests", { cache: "no-store" });
+    setCalcTests((await r.json()).tests || []);
+  };
+
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -409,6 +600,31 @@ export default function PanelPage() {
                 <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
               </svg>
             ) },
+            { id: "calculator" as const, label: "Kalkulator", icon: (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="4" y="2" width="16" height="20" rx="2" />
+                <line x1="8" y1="6" x2="16" y2="6" />
+                <line x1="8" y1="10" x2="16" y2="10" />
+                <line x1="8" y1="14" x2="10" y2="14" />
+                <line x1="13" y1="14" x2="16" y2="14" />
+                <line x1="8" y1="18" x2="16" y2="18" />
+              </svg>
+            ) },
+            { id: "notes" as const, label: "Notatki", icon: (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+            ) },
+            { id: "tests" as const, label: "Sprawdziany", icon: (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+            ) },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -423,7 +639,7 @@ export default function PanelPage() {
               {tab.label}
             </button>
           ))}
-        </div>
+          </div>
 
         {/* Tab Content */}
         <AnimatePresence mode="wait">
@@ -634,7 +850,7 @@ export default function PanelPage() {
               </div>
 
               {/* Main chat area */}
-              <div className="flex-1 flex flex-col min-h-0"
+              <div className="flex-1 flex flex-col"
             >
               {/* Chat header */}
               <div className="p-6 border-b border-gray-100 dark:border-[#3F4147] bg-gradient-to-r from-[#2563EB]/5 to-[#3B82F6]/5 dark:from-[#2563EB]/10 dark:to-[#3B82F6]/10">
@@ -904,6 +1120,33 @@ export default function PanelPage() {
                       </span>
                     </div>
 
+                    {/* Aktualnie przypisana licencja */}
+                    {calcInfo?.claimed && calcInfo?.license?.code && (
+                      <div className="flex items-center justify-between p-4 bg-[#F5F5F5] dark:bg-[#313338] rounded-xl">
+                        <div>
+                          <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-1">
+                            Przypisana licencja
+                          </div>
+                          <div className="font-mono text-sm text-[#1a1a1a] dark:text-[#E0E0E0]">
+                            {calcInfo.license.code}
+                          </div>
+                          <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1">
+                            {calcInfo.license.durationDays} dni
+                            {calcInfo.license.activatedAt
+                              ? ` · aktywowana ${new Date(calcInfo.license.activatedAt).toLocaleDateString("pl-PL")}`
+                              : " · nieaktywowana"}
+                          </div>
+                        </div>
+                        <button
+                          onClick={calcUnclaim}
+                          disabled={unclaiming}
+                          className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg disabled:opacity-50"
+                        >
+                          {unclaiming ? "Odpinanie..." : "Odepnij"}
+                        </button>
+                      </div>
+                    )}
+
                     {/* License Redemption */}
                     <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-500/10 dark:to-blue-500/10 border border-purple-200 dark:border-purple-500/20 rounded-xl p-6">
                       <div className="flex items-center gap-3 mb-4">
@@ -1091,6 +1334,371 @@ export default function PanelPage() {
               </div>
             </motion.div>
           )}
+
+          {activeTab === "calculator" && (
+            <motion.div
+              key="calculator"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" as const }}
+              className="space-y-6"
+            >
+              {calcLoading && (
+                <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Ladowanie...</div>
+              )}
+
+              {!calcLoading && calcInfo && !calcInfo.claimed && (
+                <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                  <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-2">
+                    Najpierw przypisz licencje
+                  </h2>
+                  <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-4">
+                    Aby sparowac kalkulator z kontem, najpierw przypisz licencje
+                    do swojego konta w zakladce <strong>Subskrypcja</strong>.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab("subscription")}
+                    className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded font-medium"
+                  >
+                    Przejdz do Subskrypcji
+                  </button>
+                </div>
+              )}
+
+              {!calcLoading && calcInfo && calcInfo.claimed && !calcInfo.device && (
+                <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                  <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-2">
+                    Sparuj kalkulator z kontem
+                  </h2>
+                  <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-4">
+                    Wpisz <strong>Device ID</strong> z kalkulatora (Settings → Device ID + QR)
+                    oraz <strong>kod odblokowania</strong> (Settings → Kod AI). Po sparowaniu
+                    zobaczysz tutaj historie rozwiazan, notatki i sprawdziany.
+                    <br /><br />
+                    <em className="text-xs">Uwaga: kalkulator musi byc polaczony z WiFi i zglosic
+                    sie do serwera, zanim sie sparuje.</em>
+                  </p>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-1">
+                        Device ID (MAC)
+                      </label>
+                      <input
+                        type="text"
+                        value={pairDeviceId}
+                        onChange={(e) => setPairDeviceId(e.target.value.toUpperCase())}
+                        placeholder="np. 68FE71E43B94"
+                        className="w-full px-3 py-2 bg-white dark:bg-[#1A1B1E] border border-gray-200 dark:border-[#3F4147] rounded text-sm font-mono text-[#1a1a1a] dark:text-[#E0E0E0]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-1">
+                        Kod odblokowania
+                      </label>
+                      <input
+                        type="text"
+                        value={pairUnlockCode}
+                        onChange={(e) => setPairUnlockCode(e.target.value)}
+                        placeholder="np. 1111"
+                        className="w-full px-3 py-2 bg-white dark:bg-[#1A1B1E] border border-gray-200 dark:border-[#3F4147] rounded text-sm font-mono text-[#1a1a1a] dark:text-[#E0E0E0]"
+                      />
+                    </div>
+                    <button
+                      onClick={pairDevice}
+                      disabled={pairing || !pairDeviceId.trim() || !pairUnlockCode.trim()}
+                      className="w-full px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded disabled:opacity-50 font-medium"
+                    >
+                      {pairing ? "Paruje..." : "Sparuj urzadzenie"}
+                    </button>
+                  </div>
+                  {pairError && <div className="mt-2 text-red-400 text-sm">{pairError}</div>}
+                  {pairOk && <div className="mt-2 text-green-400 text-sm">Sparowano!</div>}
+                </div>
+              )}
+
+              {!calcLoading && calcInfo && calcInfo.claimed && (
+                <>
+                  {/* Info o urzadzeniu */}
+                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                    <div className="flex justify-between items-start mb-3">
+                      <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                        Twoje urzadzenie
+                      </h2>
+                      <button
+                        onClick={calcUnclaim}
+                        disabled={unclaiming}
+                        className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg disabled:opacity-50"
+                      >
+                        {unclaiming ? "Odpinanie..." : "Zmien licencje"}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Licencja</div>
+                        <div className="font-mono text-[#1a1a1a] dark:text-[#E0E0E0]">{calcInfo.license?.code}</div>
+                      </div>
+                      {calcInfo.device && (
+                        <>
+                          <div>
+                            <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Device ID (MAC)</div>
+                            <div className="font-mono text-[#1a1a1a] dark:text-[#E0E0E0]">{calcInfo.device.deviceId}</div>
+                          </div>
+                          <div>
+                            <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Firmware</div>
+                            <div className="font-mono text-[#1a1a1a] dark:text-[#E0E0E0]">{calcInfo.device.firmwareVersion || "—"}</div>
+                          </div>
+                          <div>
+                            <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Zapytan</div>
+                            <div className="font-bold text-[#3B82F6]">{calcInfo.device.requestCount}</div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>{/* Historia rozmów */}
+                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                    <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-4">
+                      Historia rozwiazan ({calcConvs.length})
+                    </h2>
+                    {calcConvs.length === 0 ? (
+                      <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 text-sm">
+                        Zadnych zadan jeszcze nie rozwiazano.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {calcConvs.map((it: any) => (
+                          <button
+                            key={it.id}
+                            onClick={() => setCalcOpenedConv(it)}
+                            className="block w-full text-left bg-gray-50 dark:bg-[#1A1B1E] hover:bg-gray-100 dark:hover:bg-[#3F4147]/40 rounded p-3 border border-gray-100 dark:border-[#3F4147]"
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-[#1a1a1a] dark:text-[#E0E0E0] truncate">
+                                  {it.mode === "image" ? "Zdjecie" : it.question}
+                                </div>
+                                <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1 line-clamp-2">
+                                  {it.answer.slice(0, 120)}...
+                                </div>
+                              </div>
+                              <div className="text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40 ml-2 whitespace-nowrap">
+                                {new Date(it.createdAt).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Modal pelnego widoku konwersacji */}
+              {calcOpenedConv && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setCalcOpenedConv(null)}>
+                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 border border-gray-100 dark:border-[#3F4147]" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">{new Date(calcOpenedConv.createdAt).toLocaleString("pl-PL")}</div>
+                        <div className="text-xs font-mono text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40">{calcOpenedConv.deviceId}</div>
+                      </div>
+                      <button onClick={() => setCalcOpenedConv(null)} className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 hover:text-[#1a1a1a] dark:hover:text-[#E0E0E0] text-2xl leading-none">×</button>
+                    </div>
+                    <div className="mb-4">
+                      <div className="text-sm font-bold mb-1 text-[#1a1a1a] dark:text-[#E0E0E0]">Zadanie:</div>
+                      <div className="bg-gray-50 dark:bg-[#1A1B1E] p-3 rounded text-sm whitespace-pre-wrap text-[#1a1a1a] dark:text-[#E0E0E0]">{calcOpenedConv.question}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold mb-1 text-[#1a1a1a] dark:text-[#E0E0E0]">Rozwiazanie:</div>
+                      <div className="bg-blue-50 dark:bg-[#1A1B1E] p-3 rounded text-sm whitespace-pre-wrap font-mono text-[#1a1a1a] dark:text-[#E0E0E0] border border-blue-100 dark:border-[#3B82F6]/30">{calcOpenedConv.answer}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+
+          {activeTab === "notes" && (
+            <motion.div
+              key="notes"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" as const }}
+            >
+              {calcLoading && (
+                <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Ladowanie...</div>
+              )}
+              {!calcLoading && calcInfo && !calcInfo.claimed && (
+                <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147] text-sm text-[#1a1a1a]/70 dark:text-[#E0E0E0]/70">
+                  Najpierw przypisz licencje w zakladce <strong>Kalkulator</strong>.
+                </div>
+              )}
+              {!calcLoading && calcInfo && calcInfo.claimed && (<>{/* Notatki */}
+                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                        Notatki offline ({calcNotes.length}/50)
+                      </h2>
+                      <span className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+                        Sync do urzadzenia przy WiFi
+                      </span>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-[#1A1B1E] rounded p-4 mb-4 border border-gray-100 dark:border-[#3F4147]">
+                      <div className="font-semibold mb-2 text-sm text-[#1a1a1a] dark:text-[#E0E0E0]">
+                        {editingNote ? "Edytuj notatke" : "Nowa notatka"}
+                      </div>
+                      <input
+                        type="text"
+                        value={noteTitle}
+                        onChange={(e) => setNoteTitle(e.target.value)}
+                        placeholder="Tytul (max 60 znakow)"
+                        maxLength={60}
+                        className="w-full px-3 py-2 bg-white dark:bg-[#2B2D31] border border-gray-200 dark:border-[#3F4147] rounded mb-2 text-sm text-[#1a1a1a] dark:text-[#E0E0E0]"
+                      />
+                      <textarea
+                        value={noteContent}
+                        onChange={(e) => setNoteContent(e.target.value)}
+                        placeholder="Tresc (max 4000 znakow - wzory, definicje)"
+                        maxLength={4000}
+                        rows={4}
+                        className="w-full px-3 py-2 bg-white dark:bg-[#2B2D31] border border-gray-200 dark:border-[#3F4147] rounded text-sm font-mono text-[#1a1a1a] dark:text-[#E0E0E0]"
+                      />
+                      <div className="flex justify-between items-center mt-2">
+                        <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">{noteContent.length}/4000</div>
+                        <div className="flex gap-2">
+                          {editingNote && (
+                            <button
+                              onClick={() => { setEditingNote(null); setNoteTitle(""); setNoteContent(""); }}
+                              className="px-3 py-1 text-sm bg-gray-200 dark:bg-[#3F4147] hover:bg-gray-300 dark:hover:bg-[#4A4D52] text-[#1a1a1a] dark:text-[#E0E0E0] rounded"
+                            >Anuluj</button>
+                          )}
+                          <button
+                            onClick={calcSaveNote}
+                            disabled={savingNote || (!noteTitle.trim() && !noteContent.trim())}
+                            className="px-3 py-1 text-sm bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded disabled:opacity-50"
+                          >{savingNote ? "Zapisuje..." : editingNote ? "Zapisz" : "Dodaj"}</button>
+                        </div>
+                      </div>
+                    </div>
+                    {calcNotes.length === 0 ? (
+                      <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 text-sm text-center py-4">
+                        Brak notatek.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {calcNotes.map((n: any) => (
+                          <div key={n.id} className="border border-gray-100 dark:border-[#3F4147] rounded p-3 hover:bg-gray-50 dark:hover:bg-[#3F4147]/30">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-[#1a1a1a] dark:text-[#E0E0E0]">{n.title || "(bez tytulu)"}</div>
+                                <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1 line-clamp-2 whitespace-pre-wrap">{n.content || "(pusta)"}</div>
+                              </div>
+                              <div className="ml-2 flex gap-1">
+                                <button onClick={() => { setEditingNote(n); setNoteTitle(n.title); setNoteContent(n.content); }}
+                                  className="text-xs px-2 py-1 bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 text-[#3B82F6] rounded">Edytuj</button>
+                                <button onClick={() => calcDelNote(n.id)}
+                                  className="text-xs px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded">Usun</button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div></>)}
+            </motion.div>
+          )}
+
+          {activeTab === "tests" && (
+            <motion.div
+              key="tests"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" as const }}
+            >
+              {calcLoading && (
+                <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Ladowanie...</div>
+              )}
+              {!calcLoading && calcInfo && !calcInfo.claimed && (
+                <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147] text-sm text-[#1a1a1a]/70 dark:text-[#E0E0E0]/70">
+                  Najpierw przypisz licencje w zakladce <strong>Kalkulator</strong>.
+                </div>
+              )}
+              {!calcLoading && calcInfo && calcInfo.claimed && (<>{/* Sprawdziany */}
+                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                        Sprawdziany ({calcTests.length}/50)
+                      </h2>
+                      <span className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Markdown/LaTeX OK</span>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-[#1A1B1E] rounded p-4 mb-4 border border-gray-100 dark:border-[#3F4147]">
+                      <div className="font-semibold mb-2 text-sm text-[#1a1a1a] dark:text-[#E0E0E0]">
+                        {editingTest ? "Edytuj sprawdzian" : "Nowy sprawdzian"}
+                      </div>
+                      <input
+                        type="text"
+                        value={testTitle}
+                        onChange={(e) => setTestTitle(e.target.value)}
+                        placeholder="Tytul (np. Matma 2026 - probna 1)"
+                        maxLength={100}
+                        className="w-full px-3 py-2 bg-white dark:bg-[#2B2D31] border border-gray-200 dark:border-[#3F4147] rounded mb-2 text-sm text-[#1a1a1a] dark:text-[#E0E0E0]"
+                      />
+                      <textarea
+                        value={testContent}
+                        onChange={(e) => setTestContent(e.target.value)}
+                        placeholder="Wklej tutaj rozwiazanie (markdown, LaTeX, $..$, **bold**...)"
+                        maxLength={30000}
+                        rows={8}
+                        className="w-full px-3 py-2 bg-white dark:bg-[#2B2D31] border border-gray-200 dark:border-[#3F4147] rounded text-sm font-mono text-[#1a1a1a] dark:text-[#E0E0E0]"
+                      />
+                      <div className="flex justify-between items-center mt-2">
+                        <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">{testContent.length}/30000</div>
+                        <div className="flex gap-2">
+                          {editingTest && (
+                            <button
+                              onClick={() => { setEditingTest(null); setTestTitle(""); setTestContent(""); }}
+                              className="px-3 py-1 text-sm bg-gray-200 dark:bg-[#3F4147] text-[#1a1a1a] dark:text-[#E0E0E0] rounded"
+                            >Anuluj</button>
+                          )}
+                          <button
+                            onClick={calcSaveTest}
+                            disabled={savingTest || (!testTitle.trim() && !testContent.trim())}
+                            className="px-3 py-1 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50"
+                          >{savingTest ? "Zapisuje..." : editingTest ? "Zapisz" : "Dodaj"}</button>
+                        </div>
+                      </div>
+                    </div>
+                    {calcTests.length === 0 ? (
+                      <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 text-sm text-center py-4">
+                        Brak sprawdzianow.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {calcTests.map((t: any) => (
+                          <div key={t.id} className="border border-gray-100 dark:border-[#3F4147] rounded p-3 hover:bg-gray-50 dark:hover:bg-[#3F4147]/30">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-[#1a1a1a] dark:text-[#E0E0E0]">{t.title || "(bez tytulu)"}</div>
+                                <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1">{t.content.length} znakow</div>
+                              </div>
+                              <div className="ml-2 flex gap-1">
+                                <button onClick={() => { setEditingTest(t); setTestTitle(t.title); setTestContent(t.content); }}
+                                  className="text-xs px-2 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded">Edytuj</button>
+                                <button onClick={() => calcDelTest(t.id)}
+                                  className="text-xs px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded">Usun</button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div></>)}
+            </motion.div>
+          )}
+
         </AnimatePresence>
       </div>
     </div>

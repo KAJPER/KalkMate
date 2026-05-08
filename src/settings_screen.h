@@ -67,7 +67,7 @@ static const char* T(const char* pl, const char* en) {
 }
 
 // ---------------------------------------------------------------------------
-// Stale menu — 16 pozycji
+// Stale menu — 16 pozycji (bez Licencja - licencja jest na stronie kalkmate.pl)
 // ---------------------------------------------------------------------------
 #define _SET_ITEMS        16
 #define _SET_BRIGHTNESS   0
@@ -77,15 +77,15 @@ static const char* T(const char* pl, const char* en) {
 #define _SET_WIFI         4   // WiFi setup (przeniesiony z menu glownego)
 #define _SET_SCREENTEST   5   // Test ekranu
 #define _SET_CAMTEST      6   // Test kamery
-#define _SET_LICENSE      7
-#define _SET_AICODE       8
-#define _SET_PANICKEY     9
-#define _SET_UPDATE       10
-#define _SET_DEVICEID     11
-#define _SET_KEYTEST      12  // Test klawiatury (siatka klawiszy)
-#define _SET_KEYSCAN      13  // Skaner par MCP23017 (debug niedzialajacych)
-#define _SET_PINDRIVER    14  // Pin Driver Test (multimetrem na pin chipa)
-#define _SET_KEYMAP       15  // Mapowanie klawiatury (kreator)
+#define _SET_AICODE       7
+#define _SET_PANICKEY     8
+#define _SET_UPDATE       9
+#define _SET_DEVICEID     10
+#define _SET_KEYTEST      11  // Test klawiatury (siatka klawiszy)
+#define _SET_KEYSCAN      12  // Skaner par MCP23017 (debug niedzialajacych)
+#define _SET_PINDRIVER    13  // Pin Driver Test (multimetrem na pin chipa)
+#define _SET_KEYMAP       14  // Mapowanie klawiatury (kreator)
+#define _SET_ACCOUNT      15  // Status konta (pairing + licencja)
 
 // Wspolrzedne Y - 4 widoczne, scrollowanie
 static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
@@ -224,72 +224,60 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         snprintf(lines[6], sizeof(lines[6]), "%s%s",
                  prefix, T("Test kamery", "Camera test"));
     }
-    // 7: Licencja
-    {
-        prefix[0] = (cursor == _SET_LICENSE) ? '>' : ' ';
-        char licKey[40];
-        wifiLoadLicense(licKey, sizeof(licKey));
-        char licShort[12] = "";
-        if (licKey[0]) {
-            strncpy(licShort, licKey, 8);
-            licShort[8] = '.';
-            licShort[9] = '.';
-            licShort[10] = '.';
-            licShort[11] = '\0';
-        } else {
-            strncpy(licShort, T("brak", "none"), sizeof(licShort) - 1);
-        }
-        snprintf(lines[7], sizeof(lines[7]), "%s%s [%-10s]", prefix,
-                 T("Licencja: ", "License:  "), licShort);
-    }
-    // 8: Kod AI
+    // 7: Kod AI
     {
         prefix[0] = (cursor == _SET_AICODE) ? '>' : ' ';
-        snprintf(lines[8], sizeof(lines[8]), "%s%s [%-10s]", prefix,
+        snprintf(lines[7], sizeof(lines[7]), "%s%s [%-10s]", prefix,
                  T("Kod AI:   ", "AI code:  "), kalkSettings.aiUnlockCode);
     }
-    // 9: Panic key
+    // 8: Panic key
     {
         prefix[0] = (cursor == _SET_PANICKEY) ? '>' : ' ';
         const char* lab = kalkKeyLabel((KalkKey)kalkSettings.panicKey);
-        snprintf(lines[9], sizeof(lines[9]), "%s%s [%-10s]", prefix,
+        snprintf(lines[8], sizeof(lines[8]), "%s%s [%-10s]", prefix,
                  T("Panic:    ", "Panic key:"), lab);
     }
-    // 10: Aktualizacje (firmware update OTA)
+    // 9: Aktualizacje (firmware update OTA)
     {
         prefix[0] = (cursor == _SET_UPDATE) ? '>' : ' ';
-        snprintf(lines[10], sizeof(lines[10]), "%s%s [v%-8s]", prefix,
+        snprintf(lines[9], sizeof(lines[9]), "%s%s [v%-8s]", prefix,
                  T("Aktual.:  ", "Updates:  "), FW_VERSION);
     }
-    // 11: Device ID + QR
+    // 10: Device ID + QR
     {
         prefix[0] = (cursor == _SET_DEVICEID) ? '>' : ' ';
-        snprintf(lines[11], sizeof(lines[11]), "%s%s",
+        snprintf(lines[10], sizeof(lines[10]), "%s%s",
                  prefix, T("Device ID + QR (podlacz)", "Device ID + QR (link)"));
     }
-    // 12: Test klawiatury
+    // 11: Test klawiatury
     {
         prefix[0] = (cursor == _SET_KEYTEST) ? '>' : ' ';
-        snprintf(lines[12], sizeof(lines[12]), "%s%s",
+        snprintf(lines[11], sizeof(lines[11]), "%s%s",
                  prefix, T("Test klawiatury", "Keyboard test"));
     }
-    // 13: Skaner par MCP23017
+    // 12: Skaner par MCP23017
     {
         prefix[0] = (cursor == _SET_KEYSCAN) ? '>' : ' ';
-        snprintf(lines[13], sizeof(lines[13]), "%s%s",
+        snprintf(lines[12], sizeof(lines[12]), "%s%s",
                  prefix, T("Skaner kl. (debug)", "Keyboard scanner"));
     }
-    // 14: Pin Driver Test
+    // 13: Pin Driver Test
     {
         prefix[0] = (cursor == _SET_PINDRIVER) ? '>' : ' ';
-        snprintf(lines[14], sizeof(lines[14]), "%s%s",
+        snprintf(lines[13], sizeof(lines[13]), "%s%s",
                  prefix, T("Pin Driver Test", "Pin Driver Test"));
     }
-    // 15: Mapowanie klawiatury
+    // 14: Mapowanie klawiatury
     {
         prefix[0] = (cursor == _SET_KEYMAP) ? '>' : ' ';
-        snprintf(lines[15], sizeof(lines[15]), "%s%s",
+        snprintf(lines[14], sizeof(lines[14]), "%s%s",
                  prefix, T("Mapowanie klawiatury", "Keyboard mapping"));
+    }
+    // 15: Status konta
+    {
+        prefix[0] = (cursor == _SET_ACCOUNT) ? '>' : ' ';
+        snprintf(lines[15], sizeof(lines[15]), "%s%s",
+                 prefix, T("Status konta", "Account status"));
     }
 
     // Rysuj widoczne pozycje
@@ -898,6 +886,7 @@ static void _editUpdate(U8G2 &d) {
 
 // Forward declarations — implementacje w innych plikach
 extern void showDeviceIdQrScreen(U8G2 &d);
+extern void showAccountStatusScreen(U8G2 &d);   // implementacja w main.cpp
 // Z innych UI files (wifi_settings.h, screen_test.h):
 void showWifiSettings(U8G2 &display);
 void showScreenTest(U8G2 &display);
@@ -1395,7 +1384,6 @@ void showSettings(U8G2 &display) {
                 case _SET_LANGUAGE:   _editLanguage(display);   break;
                 case _SET_SOLVEMODE:  _editSolveMode(display);  break;
                 case _SET_AUTOSLEEP:  _editAutoSleep(display);  break;
-                case _SET_LICENSE:    _editLicense(display);    break;
                 case _SET_AICODE:     _editAiCode(display);     break;
                 case _SET_PANICKEY:   _editPanicKey(display);   break;
                 case _SET_UPDATE:     _editUpdate(display);     break;
@@ -1407,6 +1395,7 @@ void showSettings(U8G2 &display) {
                 case _SET_KEYSCAN:    _editKeyScan(display);    break;
                 case _SET_PINDRIVER:  _editPinDriver(display);  break;
                 case _SET_KEYMAP:     _editKeyMap(display);     break;
+                case _SET_ACCOUNT:    showAccountStatusScreen(display); break;
             }
         }
 

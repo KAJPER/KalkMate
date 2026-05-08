@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "0.4.9"
+#define FW_VERSION "0.5.4"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -46,6 +46,7 @@
 #include "about_screen.h"
 #include "info_screen.h"
 #include "screen_test.h"
+#include "device_account.h"    // Rejestracja kalkulator -> serwer + status konta (przed solve_screen)
 #include "solve_screen.h"      // Rozwiazywanie zadan AI
 #include "splash_screen.h"     // Ekran powitalny
 #include "calculator.h"        // Tryb kalkulatora + unlock code
@@ -54,6 +55,9 @@
 #include "notes.h"             // Offline notatki uzytkownika
 #include "tests.h"             // Sprawdziany (dev mode)
 #include <qrcode.h>            // QR generator dla device ID (lib ricmoo/QRCode)
+
+// Implementacja helpera z device_account.h (potrzebuje pelnej def kalkSettings).
+const char* _accGetUnlockCode() { return kalkSettings.aiUnlockCode; }
 
 // === OLED — finalne piny PCB v3 ===
 //   SCK  = GPIO18 (VSPI)
@@ -316,20 +320,10 @@ static void showNotesScreen() {
             return -1;
         }
 
+        // Licencja opcjonalna - nowy model uzywa deviceId. Stara licencja
+        // moze byc dalej obecna jako fallback.
         char licKey[40];
         wifiLoadLicense(licKey, sizeof(licKey));
-        if (!licKey[0]) {
-            u8g2.clearBuffer();
-            u8g2.setFont(u8g2_font_6x10_tf);
-            u8g2.drawStr(2, 30,
-                kalkSettings.language == 0
-                    ? "Brak licencji"
-                    : "No license");
-            u8g2.sendBuffer();
-            delay(2000);
-            return -1;
-        }
-
         int n = notesSync(licKey, KALK_API_KEY);
         u8g2.clearBuffer();
         u8g2.setFont(u8g2_font_6x10_tf);
@@ -414,19 +408,168 @@ static String _mainDeviceMac() {
     return String(buf);
 }
 
+// Pokazuje status sparowania urzadzenia z kontem (Settings -> Status konta).
+// Wymaga WiFi. Pyta serwer GET /api/device/account-status.
+void showAccountStatusScreen(U8G2 &d) {
+    inputWaitRelease();
+    powerSetInhibit(true);
+
+    auto exitWait = [&]() {
+        inputWaitRelease();
+        powerSetInhibit(false);
+    };
+
+    // Render: laczenie / rejestracja
+    auto drawBusy = [&](const char* msg) {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, "Status konta");
+        d.drawHLine(0, 12, 256);
+        d.drawStr(2, 32, msg);
+        d.sendBuffer();
+    };
+
+    drawBusy("Sprawdzam WiFi...");
+    if (WiFi.status() != WL_CONNECTED) {
+        char ssid[33] = "", pass[64] = "";
+        wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
+        if (ssid[0] == '\0') {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 10, "Status konta");
+            d.drawHLine(0, 12, 256);
+            d.drawStr(2, 32, "Brak zapisanego WiFi.");
+            d.drawStr(2, 44, "Settings -> Ustaw WiFi");
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, "C/CE = wyjscie");
+            d.sendBuffer();
+            while (true) {
+                if (_panicRequested) { exitWait(); return; }
+                if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
+                delay(20);
+            }
+        }
+        drawBusy("Lacze z WiFi...");
+        WiFi.mode(WIFI_STA);
+        WiFi.begin(ssid, pass);
+        unsigned long t0 = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - t0 < 12000) delay(150);
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, "Status konta");
+        d.drawHLine(0, 12, 256);
+        d.drawStr(2, 32, "Brak polaczenia z WiFi.");
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 62, "C/CE = wyjscie");
+        d.sendBuffer();
+        while (true) {
+            if (_panicRequested) { exitWait(); return; }
+            if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
+            delay(20);
+        }
+    }
+
+    // Zarejestruj device (zaktualizuj unlock code) + pobierz status
+    drawBusy("Rejestruje urzadzenie...");
+    accountRegister();
+
+    drawBusy("Pobieram status...");
+    AccountStatus st;
+    bool ok = accountFetchStatus(st);
+
+    // Render
+    while (true) {
+        if (_panicRequested) { exitWait(); return; }
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, "Status konta");
+        d.drawHLine(0, 12, 256);
+
+        d.setFont(u8g2_font_5x7_tf);
+        char line[80];
+        if (!ok) {
+            d.drawStr(2, 22, "Blad pobierania:");
+            snprintf(line, sizeof(line), "%s", st.error.c_str());
+            d.drawStr(2, 32, line);
+        } else if (!st.paired) {
+            d.drawStr(2, 22, "Status:  NIEPODLACZONE");
+            d.drawStr(2, 34, "Sparuj na stronie:");
+            d.drawStr(2, 44, "kalkmate.pl/panel -> Kalkulator");
+            d.drawStr(2, 54, "Wpisz Device ID + kod odblokowania.");
+        } else {
+            d.drawStr(2, 22, "Status:  PODLACZONE");
+            snprintf(line, sizeof(line), "Konto: %s", st.userEmail.c_str());
+            d.drawStr(2, 32, line);
+            if (st.hasLicense) {
+                if (st.licenseStatus == "active" || st.licenseStatus == "trial") {
+                    snprintf(line, sizeof(line), "Licencja: %.16s (%s)",
+                             st.licenseCode.c_str(), st.licenseStatus.c_str());
+                } else {
+                    snprintf(line, sizeof(line), "Licencja: WYGASLA");
+                }
+                d.drawStr(2, 42, line);
+                if (st.daysLeft >= 0) {
+                    snprintf(line, sizeof(line), "Dni pozostalo: %d", st.daysLeft);
+                    d.drawStr(2, 52, line);
+                }
+            } else {
+                d.drawStr(2, 42, "Brak licencji na koncie");
+            }
+        }
+
+        d.drawStr(2, 63, "C/CE = wyjscie   OK = odswiez");
+        d.sendBuffer();
+
+        if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
+        if (_setBtn(BTN_OK)) {
+            drawBusy("Odswiezam...");
+            accountRegister();
+            ok = accountFetchStatus(st);
+            inputWaitRelease();
+        }
+        delay(30);
+    }
+}
+
 void showDeviceIdQrScreen(U8G2 &d) {
     inputWaitRelease();
 
     String deviceId = _mainDeviceMac();
-    char licKey[40];
-    wifiLoadLicense(licKey, sizeof(licKey));
 
-    // URL: kalkmate.pl/claim?d=<MAC>&c=<lic>  (skrocony zeby zmiescic w QR)
-    String url = String(KALK_SERVER_URL) + "/claim?d=" + deviceId;
-    if (licKey[0]) {
-        url += "&c=";
-        url += licKey;
+    // Sprobuj zarejestrowac device na serwerze (zapisac unlockCode).
+    // Robi sie raz — jesli WiFi off, ladujemy zapisane creds i probujemy.
+    {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, "Device ID + QR");
+        d.drawHLine(0, 12, 256);
+        d.drawStr(2, 32, "Rejestruje na serwerze...");
+        d.sendBuffer();
+
+        if (WiFi.status() != WL_CONNECTED) {
+            char ssid[33] = "", pass[64] = "";
+            wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
+            if (ssid[0]) {
+                WiFi.mode(WIFI_STA);
+                WiFi.begin(ssid, pass);
+                unsigned long t0 = millis();
+                while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) {
+                    delay(150);
+                    if (panicTriggered()) return;
+                }
+            }
+        }
+        if (WiFi.status() == WL_CONNECTED) {
+            accountRegister();   // POST /api/device/register z unlockCode
+        }
     }
+
+    // URL: kalkmate.pl/claim?d=<MAC>  (po sparowaniu nie trzeba kodu licencji,
+    // user na stronie wpisze unlockCode)
+    String url = String(KALK_SERVER_URL) + "/claim?d=" + deviceId;
 
     // Generuj QR code (wersja 4 = 33x33 modules, mieści się 70+ znakow ASCII)
     QRCode qrcode;
@@ -625,16 +768,9 @@ static void showTestsScreen() {
             delay(2000);
             return -1;
         }
+        // Licencja opcjonalna - nowy model uzywa deviceId.
         char licKey[40];
         wifiLoadLicense(licKey, sizeof(licKey));
-        if (!licKey[0]) {
-            u8g2.clearBuffer();
-            u8g2.setFont(u8g2_font_6x10_tf);
-            u8g2.drawStr(2, 30, kalkSettings.language == 0 ? "Brak licencji" : "No license");
-            u8g2.sendBuffer();
-            delay(2000);
-            return -1;
-        }
         int n = testsSync(licKey, KALK_API_KEY);
         u8g2.clearBuffer();
         u8g2.setFont(u8g2_font_6x10_tf);

@@ -125,6 +125,9 @@ inline bool testsGet(uint16_t idx, TestEntry &out) {
     return false;
 }
 
+// _jsonSkipString, _jsonMatchBracket, _jsonGetStringField — zdefiniowane w notes.h
+// (notes.h jest dolaczony przed tests.h w main.cpp).
+
 inline int testsSync(const char* licenseCode, const char* apiKey) {
     if (!_testsEnsureFs()) return -1;
     if (WiFi.status() != WL_CONNECTED) return -1;
@@ -137,6 +140,15 @@ inline int testsSync(const char* licenseCode, const char* apiKey) {
     http.addHeader("x-api-key", apiKey);
     if (licenseCode && licenseCode[0])
         http.addHeader("x-license-key", licenseCode);
+    // Device ID (MAC) — uzywane w nowym modelu konta (Device.userId)
+    {
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        char did[16];
+        snprintf(did, sizeof(did), "%02X%02X%02X%02X%02X%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        http.addHeader("x-device-id", did);
+    }
     http.setTimeout(_TESTS_HTTP_TIMEOUT);
 
     int code = http.GET();
@@ -149,72 +161,68 @@ inline int testsSync(const char* licenseCode, const char* apiKey) {
     String body = http.getString();
     http.end();
 
+    Serial.printf("[TESTS] body length=%d\n", body.length());
+
     int testsIdx = body.indexOf("\"tests\":");
-    if (testsIdx < 0) return 0;
+    if (testsIdx < 0) {
+        Serial.println("[TESTS] no tests field");
+        return 0;
+    }
     int arrStart = body.indexOf('[', testsIdx);
     if (arrStart < 0) return 0;
 
-    int depth = 0;
-    int arrEnd = -1;
-    for (int i = arrStart; i < (int)body.length(); i++) {
-        if (body[i] == '[') depth++;
-        else if (body[i] == ']') {
-            depth--;
-            if (depth == 0) { arrEnd = i; break; }
-        }
+    int arrEnd = _jsonMatchBracket(body, arrStart, '[', ']');
+    if (arrEnd < 0) {
+        Serial.println("[TESTS] cannot find array end");
+        return -1;
     }
-    if (arrEnd < 0) return 0;
 
     String arr = body.substring(arrStart, arrEnd + 1);
     if (arr.length() > _TESTS_MAX_BYTES) {
         Serial.printf("[TESTS] dump too large: %d B\n", arr.length());
         return -1;
     }
+    Serial.printf("[TESTS] arr length=%d\n", arr.length());
 
+    // Iteruj po obiektach w arr (JSON-aware)
     String compact = "[";
+    compact.reserve(arr.length() + 64);
     bool first = true;
-    int cursor = 0;
-    int nDepth = 0;
-    int nStart = -1;
-    while (cursor < (int)arr.length()) {
-        char c = arr[cursor];
-        if (c == '{') {
-            if (nDepth == 0) nStart = cursor;
-            nDepth++;
-        } else if (c == '}') {
-            nDepth--;
-            if (nDepth == 0 && nStart >= 0) {
-                String obj = arr.substring(nStart, cursor + 1);
-                String t = "", co = "";
-                int tIdx = obj.indexOf("\"title\":\"");
-                if (tIdx >= 0) {
-                    int s = tIdx + 9;
-                    int e = s;
-                    while (e < (int)obj.length()) {
-                        if (obj[e] == '"' && obj[e-1] != '\\') break;
-                        e++;
-                    }
-                    t = obj.substring(s, e);
-                }
-                int cIdx = obj.indexOf("\"content\":\"");
-                if (cIdx >= 0) {
-                    int s = cIdx + 11;
-                    int e = s;
-                    while (e < (int)obj.length()) {
-                        if (obj[e] == '"' && obj[e-1] != '\\') break;
-                        e++;
-                    }
-                    co = obj.substring(s, e);
-                }
-                if (!first) compact += ",";
-                compact += "{\"t\":\"" + t + "\",\"c\":\"" + co + "\"}";
-                first = false;
-                nStart = -1;
-            }
+    int cursor = 1;  // skip opening [
+    int testCount = 0;
+    while (cursor < (int)arr.length() - 1) {
+        // skip whitespace + przecinki
+        while (cursor < (int)arr.length() &&
+               (arr[cursor] == ' ' || arr[cursor] == '\t' || arr[cursor] == '\n' ||
+                arr[cursor] == '\r' || arr[cursor] == ',')) {
+            cursor++;
         }
-        cursor++;
+        if (cursor >= (int)arr.length() - 1 || arr[cursor] != '{') break;
+
+        int objEnd = _jsonMatchBracket(arr, cursor, '{', '}');
+        if (objEnd < 0) {
+            Serial.printf("[TESTS] obj parse fail at %d\n", cursor);
+            break;
+        }
+        String obj = arr.substring(cursor, objEnd + 1);
+        String t  = _jsonGetStringField(obj, "title");
+        String co = _jsonGetStringField(obj, "content");
+
+        if (!first) compact += ",";
+        compact += "{\"t\":\"";
+        compact += t;
+        compact += "\",\"c\":\"";
+        compact += co;
+        compact += "\"}";
+        first = false;
+        testCount++;
+
+        cursor = objEnd + 1;
     }
     compact += "]";
+
+    Serial.printf("[TESTS] parsed %d tests, compact=%d B\n",
+                  testCount, compact.length());
 
     File f = SPIFFS.open(_TESTS_FILE, "w");
     if (!f) {
