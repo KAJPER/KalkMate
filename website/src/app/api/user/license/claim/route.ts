@@ -143,3 +143,45 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
   }
 }
+
+// DELETE /api/user/license/claim — odepnij aktualnie zaclaimowana licencje
+// (NIE usuwa licencji ani danych — pozwala na claim innej)
+export async function DELETE() {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ ok: false, error: "Nie zalogowany" }, { status: 401 });
+    }
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+    if (!user) {
+      return NextResponse.json({ ok: false, error: "Brak konta" }, { status: 401 });
+    }
+
+    const license = await prisma.license.findFirst({
+      where: { claimedByUserId: user.id },
+    });
+
+    if (!license) {
+      return NextResponse.json(
+        { ok: false, error: "Brak zaclaimowanej licencji" },
+        { status: 404 }
+      );
+    }
+
+    // Odepnij licencje — zostaw rekord (i historie konwersacji), tylko zwolnij claim
+    await prisma.license.update({
+      where: { id: license.id },
+      data: { claimedByUserId: null },
+    });
+
+    // Notatki/sprawdziany/konwersacje zostaja przy userze (dane nie znikaja)
+    // Aby je przeniesc do innego konta, user musi je usunac/zmigrowac recznie
+
+    return NextResponse.json({ ok: true, code: license.code });
+  } catch (e) {
+    console.error("[user/license/claim DELETE]", e);
+    return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
+  }
+}

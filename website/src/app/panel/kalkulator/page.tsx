@@ -35,6 +35,14 @@ interface Note {
   updatedAt: string;
 }
 
+interface Test {
+  id: string;
+  title: string;
+  content: string;
+  position: number;
+  updatedAt: string;
+}
+
 function fmt(s: string) {
   return new Date(s).toLocaleString("pl-PL", {
     day: "2-digit", month: "2-digit", year: "numeric",
@@ -61,6 +69,13 @@ export default function KalkulatorPage() {
   const [newContent, setNewContent] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
+  // Sprawdziany
+  const [tests, setTests] = useState<Test[]>([]);
+  const [editingTest, setEditingTest] = useState<Test | null>(null);
+  const [newTestTitle, setNewTestTitle] = useState("");
+  const [newTestContent, setNewTestContent] = useState("");
+  const [savingTest, setSavingTest] = useState(false);
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/auth/signin");
   }, [status, router]);
@@ -72,17 +87,21 @@ export default function KalkulatorPage() {
       const j1: ClaimInfo = await r1.json();
       setInfo(j1);
       if (j1.claimed) {
-        const [r2, r3] = await Promise.all([
+        const [r2, r3, r4] = await Promise.all([
           fetch("/api/user/conversations?limit=50", { cache: "no-store" }),
           fetch("/api/user/notes", { cache: "no-store" }),
+          fetch("/api/user/tests", { cache: "no-store" }),
         ]);
         const j2 = await r2.json();
         const j3 = await r3.json();
+        const j4 = await r4.json();
         setItems(j2.items || []);
         setNotes(j3.notes || []);
+        setTests(j4.tests || []);
       } else {
         setItems([]);
         setNotes([]);
+        setTests([]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
@@ -131,6 +150,46 @@ export default function KalkulatorPage() {
     setEditingNote(n);
     setNewTitle(n.title);
     setNewContent(n.content);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // === Sprawdziany ===
+  const saveTest = async () => {
+    if (!newTestTitle.trim() && !newTestContent.trim()) return;
+    setSavingTest(true);
+    try {
+      if (editingTest) {
+        await fetch("/api/user/tests", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingTest.id, title: newTestTitle, content: newTestContent }),
+        });
+      } else {
+        await fetch("/api/user/tests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: newTestTitle, content: newTestContent }),
+        });
+      }
+      setEditingTest(null);
+      setNewTestTitle("");
+      setNewTestContent("");
+      await load();
+    } finally {
+      setSavingTest(false);
+    }
+  };
+
+  const deleteTest = async (id: string) => {
+    if (!confirm("Usunąć sprawdzian?")) return;
+    await fetch(`/api/user/tests?id=${id}`, { method: "DELETE" });
+    await load();
+  };
+
+  const startEditTest = (t: Test) => {
+    setEditingTest(t);
+    setNewTestTitle(t.title);
+    setNewTestContent(t.content);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -333,6 +392,105 @@ export default function KalkulatorPage() {
                         </button>
                         <button
                           onClick={() => deleteNote(n.id)}
+                          className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded"
+                        >
+                          Usuń
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Sekcja Sprawdziany */}
+        {info?.claimed && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">
+                Sprawdziany ({tests.length}/50)
+              </h2>
+              <span className="text-xs text-gray-500">
+                Wklej rozwiązanie z markdown/LaTeX. Synchronizuje się do urządzenia.
+              </span>
+            </div>
+
+            <div className="bg-gray-50 rounded p-4 mb-4">
+              <div className="font-semibold mb-2 text-sm">
+                {editingTest ? "Edytuj sprawdzian" : "Nowy sprawdzian"}
+              </div>
+              <input
+                type="text"
+                value={newTestTitle}
+                onChange={(e) => setNewTestTitle(e.target.value)}
+                placeholder="Tytuł (np. Matma 2026 - próbna 1)"
+                maxLength={100}
+                className="w-full px-3 py-2 border rounded mb-2 text-sm"
+              />
+              <textarea
+                value={newTestContent}
+                onChange={(e) => setNewTestContent(e.target.value)}
+                placeholder="Wklej tutaj rozwiązanie (markdown, LaTeX, wzory $..$, **bold**, listy itd.)"
+                maxLength={30000}
+                rows={10}
+                className="w-full px-3 py-2 border rounded text-sm font-mono"
+              />
+              <div className="flex justify-between items-center mt-2">
+                <div className="text-xs text-gray-500">
+                  {newTestContent.length}/30000 znaków
+                </div>
+                <div className="flex gap-2">
+                  {editingTest && (
+                    <button
+                      onClick={() => {
+                        setEditingTest(null);
+                        setNewTestTitle("");
+                        setNewTestContent("");
+                      }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Anuluj
+                    </button>
+                  )}
+                  <button
+                    onClick={saveTest}
+                    disabled={savingTest || (!newTestTitle.trim() && !newTestContent.trim())}
+                    className="px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {savingTest ? "Zapisuję..." : editingTest ? "Zapisz zmiany" : "Dodaj"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {tests.length === 0 ? (
+              <div className="text-gray-500 text-sm text-center py-4">
+                Brak sprawdzianów. Wklej pierwszy — będzie dostępny offline na kalkulatorze.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {tests.map((t) => (
+                  <div key={t.id} className="border rounded p-3 hover:bg-gray-50">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">
+                          {t.title || <span className="text-gray-400">(bez tytułu)</span>}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {t.content.length} znaków
+                        </div>
+                      </div>
+                      <div className="ml-2 flex gap-1">
+                        <button
+                          onClick={() => startEditTest(t)}
+                          className="text-xs px-2 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded"
+                        >
+                          Edytuj
+                        </button>
+                        <button
+                          onClick={() => deleteTest(t.id)}
                           className="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded"
                         >
                           Usuń

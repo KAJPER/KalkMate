@@ -25,6 +25,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_MCP23X17.h>
+#include <Preferences.h>
 
 // === Wirtualne ID przycisków UI (poza zakresem GPIO ESP32) ===
 #define BTN_UP     200
@@ -55,36 +56,48 @@ struct _InKalkMap {
 };
 
 static const _InKalkMap _IN_KALK_MAP[] = {
-    { 0, 11, KEY_CCE,        "C/CE" },
-    { 1,  2, KEY_5,          "5"    },
-    { 1,  3, KEY_4,          "4"    },
-    { 1,  4, KEY_3,          "3"    },
-    { 1,  8, KEY_2,          "2"    },
-    { 1,  9, KEY_1,          "1"    },
-    { 1, 10, KEY_0,          "0"    },
-    { 1, 11, KEY_00,         "00"   },
-    { 1, 12, KEY_DOT,        "."    },
-    { 2,  3, KEY_MU,         "MU"   },
-    { 2,  4, KEY_PERCENT,    "%"    },
-    { 2,  8, KEY_EQ,         "="    },
-    { 2,  9, KEY_DIV,        "/"    },
-    { 2, 10, KEY_MUL,        "*"    },
-    { 2, 11, KEY_MINUS,      "-"    },
-    { 2, 12, KEY_PLUS,       "+"    },
-    { 3,  8, KEY_PLUSMINUS,  "+/-"  },
-    { 3,  9, KEY_SQRT,       "sqrt" },
-    { 3, 11, KEY_ARROW,      ">"    },
-    { 4,  8, KEY_MC,         "MC"   },
-    { 4,  9, KEY_MR,         "MR"   },
-    { 4, 11, KEY_MMINUS,     "M-"   },
-    { 4, 12, KEY_MPLUS,      "M+"   },
-    { 8,  9, KEY_9,          "9"    },
-    { 8, 10, KEY_8,          "8"    },
-    { 8, 11, KEY_7,          "7"    },
-    { 8, 12, KEY_6,          "6"    },
+    {  0,  4, KEY_6,         "6"    },
+    {  0,  8, KEY_MPLUS,     "M+"   },
+    {  0, 10, KEY_PLUS,      "+"    },
+    {  0, 11, KEY_DOT,       "."    },
+    {  1,  4, KEY_7,         "7"    },
+    {  1,  8, KEY_MMINUS,    "M-"   },
+    {  1,  9, KEY_ARROW,     ">"    },
+    {  1, 10, KEY_MINUS,     "-"    },
+    {  1, 11, KEY_00,        "00"   },
+    {  1, 12, KEY_CCE,       "C/CE" },
+    {  2,  4, KEY_8,         "8"    },
+    {  2, 10, KEY_MUL,       "*"    },
+    {  2, 11, KEY_0,         "0"    },
+    {  3,  4, KEY_9,         "9"    },
+    {  3,  8, KEY_MR,        "MR"   },
+    {  3,  9, KEY_SQRT,      "sqrt" },
+    {  3, 10, KEY_DIV,       "/"    },
+    {  3, 11, KEY_1,         "1"    },
+    {  4,  8, KEY_MC,        "MC"   },
+    {  4,  9, KEY_PLUSMINUS, "+/-"  },
+    {  4, 10, KEY_EQ,        "="    },
+    {  4, 11, KEY_2,         "2"    },
+    {  8, 10, KEY_PERCENT,   "%"    },
+    {  8, 11, KEY_3,         "3"    },
+    {  9, 10, KEY_MU,        "MU"   },
+    {  9, 11, KEY_4,         "4"    },
+    { 10, 11, KEY_5,         "5"    },
 };
 static const uint8_t _IN_KALK_MAP_LEN =
     sizeof(_IN_KALK_MAP) / sizeof(_IN_KALK_MAP[0]);
+
+// =====================================================================
+//  Dynamiczne mapowanie KalkKey -> para pinow MCP23017
+//  Inicjalnie kopia _IN_KALK_MAP (defaulty), ale moze byc nadpisana przez
+//  uzytkownika (kreator "Mapowanie klawiatury" w Settings) i zapisana w NVS.
+// =====================================================================
+#define _KALK_MAP_NONE 0xFF
+struct _KalkKeyMap {
+    uint8_t pinA;   // _KALK_MAP_NONE = nieprzypisany
+    uint8_t pinB;
+};
+static _KalkKeyMap _kalkMap[KEY_COUNT];
 
 // Stan klawiszy fizycznych — ostatni stabilny + edge consume
 static bool _kalkKeyDown[KEY_COUNT];        // czy aktualnie wciśnięty
@@ -156,9 +169,83 @@ static const uint8_t _IN_KEY_MAP_LEN =
     sizeof(_IN_KEY_MAP) / sizeof(_IN_KEY_MAP[0]);
 
 // ---------------------------------------------------------------------
+//  Dynamiczne mapowanie KalkKey -> para pinow (load/save NVS)
+// ---------------------------------------------------------------------
+#define _KALK_MAP_NS  "kalkmap"
+#define _KALK_MAP_KEY "v1"
+
+inline void inputKeyMapLoadDefaults() {
+    for (int i = 0; i < KEY_COUNT; i++) {
+        _kalkMap[i].pinA = _KALK_MAP_NONE;
+        _kalkMap[i].pinB = _KALK_MAP_NONE;
+    }
+    for (uint8_t k = 0; k < _IN_KALK_MAP_LEN; k++) {
+        const _InKalkMap& m = _IN_KALK_MAP[k];
+        if (m.key < KEY_COUNT) {
+            _kalkMap[m.key].pinA = m.pinA;
+            _kalkMap[m.key].pinB = m.pinB;
+        }
+    }
+}
+
+// Zaladuj zapisany w NVS keymap. Jesli nie istnieje, uzyj defaultow.
+inline void inputKeyMapLoad() {
+    Preferences p;
+    if (p.begin(_KALK_MAP_NS, true)) {
+        size_t expected = sizeof(_kalkMap);
+        if (p.isKey(_KALK_MAP_KEY)) {
+            size_t sz = p.getBytesLength(_KALK_MAP_KEY);
+            if (sz == expected) {
+                p.getBytes(_KALK_MAP_KEY, _kalkMap, sz);
+                p.end();
+                return;
+            }
+        }
+        p.end();
+    }
+    inputKeyMapLoadDefaults();
+}
+
+inline void inputKeyMapSave() {
+    Preferences p;
+    if (p.begin(_KALK_MAP_NS, false)) {
+        p.putBytes(_KALK_MAP_KEY, _kalkMap, sizeof(_kalkMap));
+        p.end();
+    }
+}
+
+// Reset do defaultow + zapis (kasuje custom mapowanie z NVS)
+inline void inputKeyMapResetSave() {
+    inputKeyMapLoadDefaults();
+    inputKeyMapSave();
+}
+
+// Ustaw pojedyncza pare dla KalkKey (RAM only, save oddzielnie)
+inline void inputKeyMapSet(KalkKey k, uint8_t pinA, uint8_t pinB) {
+    if (k == KEY_NONE || k >= KEY_COUNT) return;
+    _kalkMap[k].pinA = pinA;
+    _kalkMap[k].pinB = pinB;
+}
+
+// Pobierz aktualne mapowanie pojedynczej pary (do UI)
+inline void inputKeyMapGet(KalkKey k, uint8_t& outA, uint8_t& outB) {
+    if (k == KEY_NONE || k >= KEY_COUNT) {
+        outA = outB = _KALK_MAP_NONE;
+        return;
+    }
+    outA = _kalkMap[k].pinA;
+    outB = _kalkMap[k].pinB;
+}
+
+// ---------------------------------------------------------------------
 //  Init: I2C + MCP23017 + matryca w stan idle
 // ---------------------------------------------------------------------
 inline bool inputBegin() {
+    // Zaladuj keymap (z NVS lub defaulty) - zanim cokolwiek innego zacznie
+    // czytac _kalkMap (np. przerwany inputScan, default-constructed array
+    // moglby miec losowe wartosci)
+    inputKeyMapLoad();
+
     Wire.begin(I2C_SDA, I2C_SCL);
     Wire.setClock(400000);
 
@@ -225,26 +312,47 @@ inline uint8_t _inPinIdx(uint8_t mcpPin) {
     return 0;
 }
 
+// Mapowanie KalkKey -> wirtualny BTN. Wirtualne BTN sa derywowane
+// z KalkKey state (NIE z surowych par), zeby remapping kreatora "Mapowanie
+// klawiatury" automatycznie zmienial tez nawigacje UI.
+struct _InKeyMap2 { KalkKey key; int8_t virtBtn; };
+static const _InKeyMap2 _IN_KEY_BY_KALK[] = {
+    { KEY_PLUS,       0 },  // UP
+    { KEY_8,          0 },  // UP alt
+    { KEY_MINUS,      1 },  // DOWN
+    { KEY_2,          1 },  // DOWN alt
+    { KEY_PLUSMINUS,  2 },  // LEFT
+    { KEY_4,          2 },  // LEFT alt
+    { KEY_ARROW,      3 },  // RIGHT
+    { KEY_6,          3 },  // RIGHT alt
+    { KEY_EQ,         4 },  // OK
+    { KEY_5,          4 },  // OK alt
+    { KEY_CCE,        5 },  // BACK
+};
+static const uint8_t _IN_KEY_BY_KALK_LEN =
+    sizeof(_IN_KEY_BY_KALK) / sizeof(_IN_KEY_BY_KALK[0]);
+
 // Aktualizuj stany wirtualnych BTN_xx + stany 27 klawiszy fizycznych
 inline void _inUpdateVirtBtns() {
-    bool any[6] = { false, false, false, false, false, false };
+    // Stan klawiszy fizycznych — uzywaj dynamicznego _kalkMap (z NVS)
+    bool keyNow[KEY_COUNT] = { false };
+    for (uint8_t i = 1; i < KEY_COUNT; i++) {
+        if (_kalkMap[i].pinA == _KALK_MAP_NONE) continue;
+        if (_kalkMap[i].pinB == _KALK_MAP_NONE) continue;
+        uint16_t idx = _inPinIdx(_kalkMap[i].pinA) * 10 + _inPinIdx(_kalkMap[i].pinB);
+        if (_inStatePair[idx]) keyNow[i] = true;
+    }
 
-    for (uint8_t k = 0; k < _IN_KEY_MAP_LEN; k++) {
-        const _InKeyMap& m = _IN_KEY_MAP[k];
-        uint16_t idx = _inPinIdx(m.pinA) * 10 + _inPinIdx(m.pinB);
-        if (_inStatePair[idx] && m.virtBtn >= 0 && m.virtBtn < 6) {
+    // Wirtualne BTN_xx — derywowane z KalkKey state (po remappingu)
+    bool any[6] = { false, false, false, false, false, false };
+    for (uint8_t k = 0; k < _IN_KEY_BY_KALK_LEN; k++) {
+        const _InKeyMap2& m = _IN_KEY_BY_KALK[k];
+        if (keyNow[m.key] && m.virtBtn >= 0 && m.virtBtn < 6) {
             any[m.virtBtn] = true;
         }
     }
     for (uint8_t i = 0; i < 6; i++) _virtBtn[i] = any[i];
 
-    // Stan klawiszy fizycznych — wszystkie 27
-    bool keyNow[KEY_COUNT] = { false };
-    for (uint8_t k = 0; k < _IN_KALK_MAP_LEN; k++) {
-        const _InKalkMap& m = _IN_KALK_MAP[k];
-        uint16_t idx = _inPinIdx(m.pinA) * 10 + _inPinIdx(m.pinB);
-        if (_inStatePair[idx]) keyNow[m.key] = true;
-    }
     // Reset consumer flag gdy klawisz puszczony
     bool anyDown = false;
     for (uint8_t i = 0; i < KEY_COUNT; i++) {
@@ -346,6 +454,23 @@ inline KalkKey inputAnyKeyConsume() {
         }
     }
     return KEY_NONE;
+}
+
+// Debug: zwraca aktualnie zwarte pary jako tablice 100 boolow
+// (indeks = i*10+j, gdzie i<j to indeksy w _IN_KB_PINS).
+// Robi wlasny pelen scan - blokujace ~3ms.
+inline void inputDebugRawScan(bool pairPressed[100]) {
+    _inRawScan(pairPressed);
+}
+
+// Pomocnik: zwraca etykiete pinu wg kbIdx (0-9 -> GPA0..GPB4)
+inline const char* kalkPinLabel(uint8_t kbIdx) {
+    static const char* names[10] = {
+        "GPA0","GPA1","GPA2","GPA3","GPA4",
+        "GPB0","GPB1","GPB2","GPB3","GPB4"
+    };
+    if (kbIdx >= 10) return "?";
+    return names[kbIdx];
 }
 
 // Etykieta tekstowa klawisza

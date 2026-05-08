@@ -22,10 +22,18 @@ inline void panicClear()      { _panicRequested = false; }
 
 // Wywoluj w petlach UI - sprawdza czy panic key zostal nacisniety
 // (z `kalkSettings.panicKey`). Jesli tak, ustawia flage.
+//
+// WAZNE: NIE uzywamy inputKeyConsume() bo to konsumowaloby klawisz
+// dla innych miejsc (np. KEY_ARROW = backspace w calc, KEY_4 = LEFT).
+// Wlasna edge detection przez ostatni stan.
 inline void panicCheck() {
     KalkKey pk = (KalkKey)kalkSettings.panicKey;
     if (pk == KEY_NONE || pk >= KEY_COUNT) return;
-    if (inputKeyConsume(pk)) {
+
+    static bool _panicLastDown = false;
+    bool nowDown = inputKeyDown(pk);
+    if (nowDown && !_panicLastDown) {
         _panicRequested = true;
     }
+    _panicLastDown = nowDown;
 }

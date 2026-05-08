@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-// GET /api/device/notes
+// GET /api/device/tests
 // Headers: x-api-key + (x-device-id [paired] LUB x-license-key [legacy])
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    // Najpierw sprobuj device pairing
     const deviceIdHeader = request.headers.get("x-device-id");
     let userId: string | null = null;
 
@@ -20,8 +19,6 @@ export async function GET(request: NextRequest) {
       });
       if (dev?.userId) userId = dev.userId;
     }
-
-    // Fallback: license header
     if (!userId) {
       const licenseKey = request.headers.get("x-license-key")?.trim().toLowerCase();
       if (licenseKey) {
@@ -29,20 +26,18 @@ export async function GET(request: NextRequest) {
         if (license?.claimedByUserId) userId = license.claimedByUserId;
       }
     }
-
     if (!userId) {
-      return NextResponse.json({ ok: true, notes: [], userClaimed: false });
+      return NextResponse.json({ ok: true, tests: [], userClaimed: false });
     }
 
-    const notes = await prisma.note.findMany({
+    const tests = await prisma.test.findMany({
       where: { userId },
       orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
       select: { id: true, title: true, content: true, position: true, updatedAt: true },
     });
-
-    return NextResponse.json({ ok: true, notes, userClaimed: true });
+    return NextResponse.json({ ok: true, tests, userClaimed: true });
   } catch (e) {
-    console.error("[device/notes]", e);
+    console.error("[device/tests]", e);
     return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
   }
 }

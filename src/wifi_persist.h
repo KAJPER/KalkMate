@@ -93,3 +93,4 @@ static uint8_t loadPanicKey(uint8_t defaultKey) {
     prefs.end();
     return k;
 }
+
