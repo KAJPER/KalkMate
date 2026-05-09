@@ -67,28 +67,35 @@ static const char* T(const char* pl, const char* en) {
 }
 
 // ---------------------------------------------------------------------------
-// Stale menu — 16 pozycji (bez Licencja - licencja jest na stronie kalkmate.pl)
+// Stale menu — 15 pozycji, ulozone tematycznie:
+//   Preferencje:    Jasnosc, Jezyk, Tryb, Sleep, Kod AI, Panic
+//   Konto/siec:     WiFi, Status konta, Device ID + QR
+//   System:         Aktualizacje
+//   Diagnostyka:    Test ekranu, Test kamery, Test klawiatury, Skaner, Pin Driver
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        16
+#define _SET_ITEMS        15
+// --- Preferencje ---
 #define _SET_BRIGHTNESS   0
 #define _SET_LANGUAGE     1
 #define _SET_SOLVEMODE    2
 #define _SET_AUTOSLEEP    3
-#define _SET_WIFI         4   // WiFi setup (przeniesiony z menu glownego)
-#define _SET_SCREENTEST   5   // Test ekranu
-#define _SET_CAMTEST      6   // Test kamery
-#define _SET_AICODE       7
-#define _SET_PANICKEY     8
+#define _SET_AICODE       4
+#define _SET_PANICKEY     5
+// --- Konto / siec ---
+#define _SET_WIFI         6
+#define _SET_ACCOUNT      7
+#define _SET_DEVICEID     8
+// --- System ---
 #define _SET_UPDATE       9
-#define _SET_DEVICEID     10
-#define _SET_KEYTEST      11  // Test klawiatury (siatka klawiszy)
-#define _SET_KEYSCAN      12  // Skaner par MCP23017 (debug niedzialajacych)
-#define _SET_PINDRIVER    13  // Pin Driver Test (multimetrem na pin chipa)
-#define _SET_KEYMAP       14  // Mapowanie klawiatury (kreator)
-#define _SET_ACCOUNT      15  // Status konta (pairing + licencja)
+// --- Diagnostyka ---
+#define _SET_SCREENTEST   10
+#define _SET_CAMTEST      11
+#define _SET_KEYTEST      12
+#define _SET_KEYSCAN      13
+#define _SET_PINDRIVER    14
 
 // Wspolrzedne Y - 4 widoczne, scrollowanie
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -171,19 +178,20 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
     char lines[_SET_ITEMS][56];
     char prefix[3] = "  ";
 
+    // === PREFERENCJE ===
     // 0: Jasnosc
     {
         prefix[0] = (cursor == _SET_BRIGHTNESS) ? '>' : ' ';
         char bar[20];
         _setBrightnessBar(bar, sizeof(bar), kalkSettings.brightness);
-        snprintf(lines[0], sizeof(lines[0]), "%s%s %s", prefix,
+        snprintf(lines[_SET_BRIGHTNESS], sizeof(lines[0]), "%s%s %s", prefix,
                  T("Jasnosc:  ", "Bright:   "), bar);
     }
     // 1: Jezyk
     {
         prefix[0] = (cursor == _SET_LANGUAGE) ? '>' : ' ';
         const char* langStr = (kalkSettings.language == 0) ? "Polski" : "English";
-        snprintf(lines[1], sizeof(lines[1]), "%s%s [%-10s]", prefix,
+        snprintf(lines[_SET_LANGUAGE], sizeof(lines[0]), "%s%s [%-10s]", prefix,
                  T("Jezyk:    ", "Language: "), langStr);
     }
     // 2: Tryb
@@ -193,7 +201,7 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         if (kalkSettings.solveMode == 0)      modeStr = T("Szczegolowy", "Detailed");
         else if (kalkSettings.solveMode == 1) modeStr = T("Obliczenia", "Calc only");
         else                                   modeStr = T("Wynik", "Result");
-        snprintf(lines[2], sizeof(lines[2]), "%s%s [%-12s]", prefix,
+        snprintf(lines[_SET_SOLVEMODE], sizeof(lines[0]), "%s%s [%-12s]", prefix,
                  T("Tryb:     ", "Mode:     "), modeStr);
     }
     // 3: Auto-sleep
@@ -204,80 +212,80 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
             snprintf(slpVal, sizeof(slpVal), "ON %s", _SET_SLEEP_LABELS[kalkSettings.sleepMinutes]);
         else
             snprintf(slpVal, sizeof(slpVal), "OFF");
-        snprintf(lines[3], sizeof(lines[3]), "%sSleep:    [%-10s]", prefix, slpVal);
+        snprintf(lines[_SET_AUTOSLEEP], sizeof(lines[0]), "%sSleep:    [%-10s]", prefix, slpVal);
     }
-    // 4: WiFi setup (przeniesione z menu glownego)
-    {
-        prefix[0] = (cursor == _SET_WIFI) ? '>' : ' ';
-        snprintf(lines[4], sizeof(lines[4]), "%s%s",
-                 prefix, T("Ustaw WiFi (siec, haslo)", "Set WiFi (network, pass)"));
-    }
-    // 5: Test ekranu
-    {
-        prefix[0] = (cursor == _SET_SCREENTEST) ? '>' : ' ';
-        snprintf(lines[5], sizeof(lines[5]), "%s%s",
-                 prefix, T("Test ekranu", "Screen test"));
-    }
-    // 6: Test kamery
-    {
-        prefix[0] = (cursor == _SET_CAMTEST) ? '>' : ' ';
-        snprintf(lines[6], sizeof(lines[6]), "%s%s",
-                 prefix, T("Test kamery", "Camera test"));
-    }
-    // 7: Kod AI
+    // 4: Kod AI
     {
         prefix[0] = (cursor == _SET_AICODE) ? '>' : ' ';
-        snprintf(lines[7], sizeof(lines[7]), "%s%s [%-10s]", prefix,
+        snprintf(lines[_SET_AICODE], sizeof(lines[0]), "%s%s [%-10s]", prefix,
                  T("Kod AI:   ", "AI code:  "), kalkSettings.aiUnlockCode);
     }
-    // 8: Panic key
+    // 5: Panic key
     {
         prefix[0] = (cursor == _SET_PANICKEY) ? '>' : ' ';
         const char* lab = kalkKeyLabel((KalkKey)kalkSettings.panicKey);
-        snprintf(lines[8], sizeof(lines[8]), "%s%s [%-10s]", prefix,
+        snprintf(lines[_SET_PANICKEY], sizeof(lines[0]), "%s%s [%-10s]", prefix,
                  T("Panic:    ", "Panic key:"), lab);
     }
-    // 9: Aktualizacje (firmware update OTA)
+
+    // === KONTO / SIEC ===
+    // 6: WiFi
     {
-        prefix[0] = (cursor == _SET_UPDATE) ? '>' : ' ';
-        snprintf(lines[9], sizeof(lines[9]), "%s%s [v%-8s]", prefix,
-                 T("Aktual.:  ", "Updates:  "), FW_VERSION);
+        prefix[0] = (cursor == _SET_WIFI) ? '>' : ' ';
+        snprintf(lines[_SET_WIFI], sizeof(lines[0]), "%s%s",
+                 prefix, T("WiFi (siec + haslo)", "WiFi (network + pass)"));
     }
-    // 10: Device ID + QR
-    {
-        prefix[0] = (cursor == _SET_DEVICEID) ? '>' : ' ';
-        snprintf(lines[10], sizeof(lines[10]), "%s%s",
-                 prefix, T("Device ID + QR (podlacz)", "Device ID + QR (link)"));
-    }
-    // 11: Test klawiatury
-    {
-        prefix[0] = (cursor == _SET_KEYTEST) ? '>' : ' ';
-        snprintf(lines[11], sizeof(lines[11]), "%s%s",
-                 prefix, T("Test klawiatury", "Keyboard test"));
-    }
-    // 12: Skaner par MCP23017
-    {
-        prefix[0] = (cursor == _SET_KEYSCAN) ? '>' : ' ';
-        snprintf(lines[12], sizeof(lines[12]), "%s%s",
-                 prefix, T("Skaner kl. (debug)", "Keyboard scanner"));
-    }
-    // 13: Pin Driver Test
-    {
-        prefix[0] = (cursor == _SET_PINDRIVER) ? '>' : ' ';
-        snprintf(lines[13], sizeof(lines[13]), "%s%s",
-                 prefix, T("Pin Driver Test", "Pin Driver Test"));
-    }
-    // 14: Mapowanie klawiatury
-    {
-        prefix[0] = (cursor == _SET_KEYMAP) ? '>' : ' ';
-        snprintf(lines[14], sizeof(lines[14]), "%s%s",
-                 prefix, T("Mapowanie klawiatury", "Keyboard mapping"));
-    }
-    // 15: Status konta
+    // 7: Status konta
     {
         prefix[0] = (cursor == _SET_ACCOUNT) ? '>' : ' ';
-        snprintf(lines[15], sizeof(lines[15]), "%s%s",
+        snprintf(lines[_SET_ACCOUNT], sizeof(lines[0]), "%s%s",
                  prefix, T("Status konta", "Account status"));
+    }
+    // 8: Device ID + QR
+    {
+        prefix[0] = (cursor == _SET_DEVICEID) ? '>' : ' ';
+        snprintf(lines[_SET_DEVICEID], sizeof(lines[0]), "%s%s",
+                 prefix, T("Device ID + QR", "Device ID + QR"));
+    }
+
+    // === SYSTEM ===
+    // 9: Aktualizacje
+    {
+        prefix[0] = (cursor == _SET_UPDATE) ? '>' : ' ';
+        snprintf(lines[_SET_UPDATE], sizeof(lines[0]), "%s%s [v%-8s]", prefix,
+                 T("Aktual.:  ", "Updates:  "), FW_VERSION);
+    }
+
+    // === DIAGNOSTYKA ===
+    // 10: Test ekranu
+    {
+        prefix[0] = (cursor == _SET_SCREENTEST) ? '>' : ' ';
+        snprintf(lines[_SET_SCREENTEST], sizeof(lines[0]), "%s%s",
+                 prefix, T("Test ekranu", "Screen test"));
+    }
+    // 11: Test kamery
+    {
+        prefix[0] = (cursor == _SET_CAMTEST) ? '>' : ' ';
+        snprintf(lines[_SET_CAMTEST], sizeof(lines[0]), "%s%s",
+                 prefix, T("Test kamery", "Camera test"));
+    }
+    // 12: Test klawiatury
+    {
+        prefix[0] = (cursor == _SET_KEYTEST) ? '>' : ' ';
+        snprintf(lines[_SET_KEYTEST], sizeof(lines[0]), "%s%s",
+                 prefix, T("Test klawiatury", "Keyboard test"));
+    }
+    // 13: Skaner klawiatury
+    {
+        prefix[0] = (cursor == _SET_KEYSCAN) ? '>' : ' ';
+        snprintf(lines[_SET_KEYSCAN], sizeof(lines[0]), "%s%s",
+                 prefix, T("Skaner kl. (debug)", "Keyboard scanner"));
+    }
+    // 14: Pin Driver Test
+    {
+        prefix[0] = (cursor == _SET_PINDRIVER) ? '>' : ' ';
+        snprintf(lines[_SET_PINDRIVER], sizeof(lines[0]), "%s%s",
+                 prefix, T("Pin Driver Test", "Pin Driver Test"));
     }
 
     // Rysuj widoczne pozycje
@@ -1018,240 +1026,6 @@ static void _editPinDriver(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
-// Mapowanie klawiatury — kreator. Iteruje przez wszystkie 27 klawiszy i prosi
-// uzytkownika o nacisniecie. Zapisuje par pinow do _kalkMap (NVS).
-//
-// Sterowanie:
-//   - krotki klik dowolnego klawisza => zapis do biezacego KalkKey, advance
-//   - przytrzymanie 2s => pomin biezacy klawisz (zostanie nieprzypisany)
-//   - przytrzymanie 5s => abort, nie zapisuj (przywroc poprzednia mape)
-// ---------------------------------------------------------------------------
-static void _editKeyMap(U8G2 &d) {
-    _setWaitRelease();
-
-    // Kolejnosc fizyczna (top-to-bottom, left-to-right wg LAYOUT z _editKeyTest)
-    static const KalkKey ORDER[] = {
-        KEY_SQRT, KEY_PERCENT, KEY_MU,
-        KEY_MC, KEY_MR, KEY_MMINUS, KEY_MPLUS, KEY_DIV,
-        KEY_PLUSMINUS, KEY_7, KEY_8, KEY_9, KEY_MUL,
-        KEY_ARROW, KEY_4, KEY_5, KEY_6, KEY_MINUS,
-        KEY_CCE, KEY_1, KEY_2, KEY_3, KEY_PLUS,
-        KEY_0, KEY_00, KEY_DOT, KEY_EQ
-    };
-    const int N = sizeof(ORDER) / sizeof(ORDER[0]);
-
-    // Backup mapy aktualnej (na wypadek aborta)
-    _KalkKeyMap backup[KEY_COUNT];
-    for (int i = 0; i < KEY_COUNT; i++) backup[i] = _kalkMap[i];
-
-    // Robocza mapa — start z czystej, zeby nie bylo "ducha" starych mapowan
-    _KalkKeyMap working[KEY_COUNT];
-    for (int i = 0; i < KEY_COUNT; i++) {
-        working[i].pinA = _KALK_MAP_NONE;
-        working[i].pinB = _KALK_MAP_NONE;
-    }
-
-    // Intro screen
-    {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, "Mapowanie klawiatury");
-        d.drawHLine(0, 12, 256);
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 24, "Kreator zapyta o kazdy z 27 klawiszy.");
-        d.drawStr(2, 33, "- klik = zapisz pare pinow");
-        d.drawStr(2, 42, "- przytrzymaj 2s = pomin (nieprzyp.)");
-        d.drawStr(2, 51, "- przytrzymaj 5s = abort (bez zapisu)");
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 63, "Nacisnij dowolny klawisz aby start");
-        d.sendBuffer();
-
-        // Wait for any press to begin
-        bool pairs[100];
-        while (true) {
-            if (_panicRequested) return;
-            inputDebugRawScan(pairs);
-            bool any = false;
-            for (int i = 0; i < 100; i++) if (pairs[i]) { any = true; break; }
-            if (any) {
-                // Wait for release before starting
-                while (true) {
-                    inputDebugRawScan(pairs);
-                    bool a = false;
-                    for (int i = 0; i < 100; i++) if (pairs[i]) { a = true; break; }
-                    if (!a) break;
-                    delay(20);
-                }
-                break;
-            }
-            delay(20);
-        }
-    }
-
-    bool aborted = false;
-
-    for (int idx = 0; idx < N && !aborted; idx++) {
-        KalkKey k = ORDER[idx];
-
-        // Wait for full release before each key
-        {
-            bool pairs[100];
-            while (true) {
-                if (_panicRequested) return;
-                inputDebugRawScan(pairs);
-                bool a = false;
-                for (int i = 0; i < 100; i++) if (pairs[i]) { a = true; break; }
-                if (!a) break;
-                delay(20);
-            }
-        }
-
-        // Step state
-        bool done = false;
-        bool skip = false;
-        uint32_t pressStart = 0;
-        bool pressing = false;
-        int curI = -1, curJ = -1;
-        bool warnDup = false;
-        KalkKey dupKey = KEY_NONE;
-
-        while (!done && !skip && !aborted) {
-            if (_panicRequested) return;
-
-            // Render
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            char hdr[40];
-            snprintf(hdr, sizeof(hdr), "Mapowanie %d/%d", idx + 1, N);
-            d.drawStr(2, 10, hdr);
-            d.drawHLine(0, 12, 256);
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 22, "Nacisnij klawisz:");
-
-            d.setFont(u8g2_font_logisoso22_tn);
-            const char* lab = kalkKeyLabel(k);
-            int tw = d.getStrWidth(lab);
-            d.drawStr((256 - tw) / 2, 50, lab);
-
-            d.setFont(u8g2_font_5x7_tf);
-            if (warnDup) {
-                char w[40];
-                snprintf(w, sizeof(w), "ZAJETY przez %s, wybierz inny",
-                         kalkKeyLabel(dupKey));
-                d.drawStr(2, 62, w);
-            } else if (pressing) {
-                uint32_t e = millis() - pressStart;
-                char p[40];
-                if (e >= 5000) snprintf(p, sizeof(p), "trzymasz %lus -> abort", e/1000);
-                else if (e >= 2000) snprintf(p, sizeof(p), "trzymasz %lus -> pomin", e/1000);
-                else snprintf(p, sizeof(p), "trzymasz %lus", e/1000);
-                d.drawStr(2, 62, p);
-            } else {
-                d.drawStr(2, 62, "2s=pomin  5s=abort");
-            }
-            d.sendBuffer();
-
-            // Scan
-            bool pairs[100];
-            inputDebugRawScan(pairs);
-            int actI = -1, actJ = -1, actCount = 0;
-            for (uint8_t i = 0; i < 10; i++) {
-                for (uint8_t j = i + 1; j < 10; j++) {
-                    if (pairs[i * 10 + j]) {
-                        actCount++;
-                        if (actI == -1) { actI = i; actJ = j; }
-                    }
-                }
-            }
-
-            if (actCount == 1) {
-                if (!pressing || curI != actI || curJ != actJ) {
-                    pressing = true;
-                    curI = actI;
-                    curJ = actJ;
-                    pressStart = millis();
-                    warnDup = false;
-                } else {
-                    uint32_t e = millis() - pressStart;
-                    if (e >= 5000) {
-                        // Abort: wait for full release
-                        while (true) {
-                            inputDebugRawScan(pairs);
-                            bool a = false;
-                            for (int i = 0; i < 100; i++) if (pairs[i]) { a = true; break; }
-                            if (!a) break;
-                            delay(20);
-                        }
-                        aborted = true;
-                    } else if (e >= 2000) {
-                        // Skip: wait for release
-                        while (true) {
-                            inputDebugRawScan(pairs);
-                            bool a = false;
-                            for (int i = 0; i < 100; i++) if (pairs[i]) { a = true; break; }
-                            if (!a) break;
-                            delay(20);
-                        }
-                        skip = true;
-                    }
-                }
-            } else if (actCount == 0 && pressing) {
-                // Released — record this pair, ale sprawdz duplikat
-                uint8_t pinA = _IN_KB_PINS[curI];
-                uint8_t pinB = _IN_KB_PINS[curJ];
-                // Sprawdz czy juz jest przypisany do innego KalkKey
-                KalkKey dup = KEY_NONE;
-                for (int i = 1; i < KEY_COUNT; i++) {
-                    if (working[i].pinA == pinA && working[i].pinB == pinB) {
-                        dup = (KalkKey)i;
-                        break;
-                    }
-                }
-                if (dup != KEY_NONE) {
-                    warnDup = true;
-                    dupKey = dup;
-                    pressing = false;
-                    curI = curJ = -1;
-                } else {
-                    working[k].pinA = pinA;
-                    working[k].pinB = pinB;
-                    done = true;
-                }
-            }
-
-            delay(30);
-        }
-
-        if (aborted) break;
-    }
-
-    if (aborted) {
-        // Przywroc poprzednia mape
-        for (int i = 0; i < KEY_COUNT; i++) _kalkMap[i] = backup[i];
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(40, 30, "Anulowano");
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(20, 45, "Mapa nie zmieniona.");
-        d.sendBuffer();
-        delay(1500);
-    } else {
-        // Zapisz nowa mape
-        for (int i = 0; i < KEY_COUNT; i++) _kalkMap[i] = working[i];
-        inputKeyMapSave();
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(60, 30, "Zapisano!");
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(20, 45, "Mapa zapisana w NVS.");
-        d.sendBuffer();
-        delay(1500);
-    }
-
-    _setWaitRelease();
-}
-
-// ---------------------------------------------------------------------------
 // Skaner par MCP23017 — pokazuje wszystkie aktualnie zwarte pary pinow
 // (debug niedzialajacych klawiszy)
 // ---------------------------------------------------------------------------
@@ -1394,7 +1168,6 @@ void showSettings(U8G2 &display) {
                 case _SET_KEYTEST:    _editKeyTest(display);    break;
                 case _SET_KEYSCAN:    _editKeyScan(display);    break;
                 case _SET_PINDRIVER:  _editPinDriver(display);  break;
-                case _SET_KEYMAP:     _editKeyMap(display);     break;
                 case _SET_ACCOUNT:    showAccountStatusScreen(display); break;
             }
         }

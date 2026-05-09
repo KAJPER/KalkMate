@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "0.5.4"
+#define FW_VERSION "0.5.9"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -715,7 +715,7 @@ static void showTestsScreen() {
             for (int i = 0; i < 4; i++) {
                 int idx = scrollLine + i;
                 if (idx >= (int)lines.size()) break;
-                u8g2.drawStr(2, 24 + i * 11, lines[idx].c_str());
+                testsDrawLine(u8g2, 2, 24 + i * 11, lines[idx]);
             }
 
             u8g2.setFont(u8g2_font_5x7_tf);

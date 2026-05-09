@@ -244,6 +244,40 @@ inline void testsClear() {
 // ---------------------------------------------------------------------
 //  Formatowanie: konwersja markdown/LaTeX -> ASCII dla OLED 6x10 fonta
 // ---------------------------------------------------------------------
+// Helper: usun LaTeX-owe komendy typu "\<name>{<content>}" zachowujac
+// wewnetrzny <content>. Wywoluje sie z lista znanych nazw (\\text, \\mathrm, ...).
+// Brace-matching obsluguje zagniezdzone {}.
+static void _stripBracedCommand(String& s, const char* cmdWithSlash) {
+    int cmdLen = strlen(cmdWithSlash);
+    while (true) {
+        int idx = s.indexOf(cmdWithSlash);
+        if (idx < 0) break;
+        int braceStart = idx + cmdLen;
+        // Pomin biale znaki miedzy nazwa a {
+        while (braceStart < (int)s.length() &&
+               (s[braceStart] == ' ' || s[braceStart] == '\t')) braceStart++;
+        if (braceStart >= (int)s.length() || s[braceStart] != '{') {
+            // Nie nastepuje { — usun samo polecenie i jedz dalej
+            s = s.substring(0, idx) + s.substring(idx + cmdLen);
+            continue;
+        }
+        // Znajdz pasujacy } z licznikiem zagniezdzenia
+        int depth = 1;
+        int end = braceStart + 1;
+        while (end < (int)s.length() && depth > 0) {
+            if (s[end] == '{') depth++;
+            else if (s[end] == '}') {
+                depth--;
+                if (depth == 0) break;
+            }
+            end++;
+        }
+        if (end >= (int)s.length()) break;  // niedomkniete {} — wyjdz
+        // Sklej: prefix + zawartosc {} + suffix
+        s = s.substring(0, idx) + s.substring(braceStart + 1, end) + s.substring(end + 1);
+    }
+}
+
 inline String testsFormat(const String& src) {
     String s = src;
     // Bold/italic markdown — usun znaczniki
@@ -256,6 +290,18 @@ inline String testsFormat(const String& src) {
     // Math delimiters $$...$$ i $...$
     s.replace("$$", "");
     s.replace("$", "");
+
+    // LaTeX komendy z argumentem {...} — zachowaj tylko zawartosc
+    _stripBracedCommand(s, "\\text");
+    _stripBracedCommand(s, "\\textbf");
+    _stripBracedCommand(s, "\\textit");
+    _stripBracedCommand(s, "\\textrm");
+    _stripBracedCommand(s, "\\mathrm");
+    _stripBracedCommand(s, "\\mathbf");
+    _stripBracedCommand(s, "\\mathit");
+    _stripBracedCommand(s, "\\boxed");
+    _stripBracedCommand(s, "\\overline");
+    _stripBracedCommand(s, "\\underline");
 
     // LaTeX commands -> ASCII
     s.replace("\\Delta", "delta");
@@ -270,7 +316,8 @@ inline String testsFormat(const String& src) {
     s.replace("\\geq", ">=");
     s.replace("\\leq", "<=");
     s.replace("\\neq", "!=");
-    s.replace("\\infty", "inf");
+    s.replace("\\infty", "\x01");   // placeholder dla symbolu nieskonczonosci ∞
+                                      // (rysowane jako bitmapa w testsDrawLine)
     s.replace("\\in", " in ");
     s.replace("\\cup", " U ");
     s.replace("\\cap", " I ");
@@ -293,6 +340,17 @@ inline String testsFormat(const String& src) {
     s.replace("\\Rightarrow", "=>");
     s.replace("\\implies", "=>");
 
+    // LaTeX spacing commands -> spacja lub puste
+    s.replace("\\qquad", "  ");   // 2em space
+    s.replace("\\quad", " ");     // 1em space
+    s.replace("\\,", "");          // mala spacja (\\thinspace)
+    s.replace("\\:", "");          // medium
+    s.replace("\\;", "");          // large
+    s.replace("\\!", "");          // negative
+    s.replace("\\space", " ");
+    s.replace("\\\\", "\n");      // \\ = newline w LaTeX
+    s.replace("\\ ", " ");         // backslash-space = wymuszona spacja
+
     // Niedomkniete } po \\frac{ — zostaw, user zauwazy
 
     // Polskie znaki -> ASCII (ekran nie ma) — najczestsze
@@ -306,8 +364,57 @@ inline String testsFormat(const String& src) {
     s.replace("ż", "z"); s.replace("Ż", "Z");
     s.replace("ź", "z"); s.replace("Ź", "Z");
 
+    // Unicode punctuation -> ASCII (ekran 6x10 jest ASCII-only)
+    s.replace("–", "-");          // en dash (U+2013)
+    s.replace("—", "-");          // em dash (U+2014)
+    s.replace("−", "-");          // minus sign (U+2212)
+    s.replace("…", "...");        // ellipsis (U+2026)
+    s.replace("„", "\"");         // double low-9 quote (U+201E)
+    s.replace("”", "\"");         // right double quote (U+201D)
+    s.replace("“", "\"");         // left double quote (U+201C)
+    s.replace("‘", "'");          // left single quote (U+2018)
+    s.replace("’", "'");          // right single quote (U+2019)
+    s.replace("×", "x");          // multiplication sign (U+00D7)
+    s.replace("÷", "/");          // division sign (U+00F7)
+    s.replace("°", "deg");        // degree sign (U+00B0)
+    s.replace("·", "*");          // middle dot (U+00B7)
+    s.replace("≤", "<=");         // less-or-equal (U+2264)
+    s.replace("≥", ">=");         // greater-or-equal (U+2265)
+    s.replace("≠", "!=");         // not equal (U+2260)
+    s.replace("±", "+/-");        // plus-minus (U+00B1)
+    s.replace("\xC2\xA0", " ");   // non-breaking space (U+00A0)
+
     // Wielokrotne newlines -> max 2
     while (s.indexOf("\n\n\n") >= 0) s.replace("\n\n\n", "\n\n");
 
     return s;
+}
+
+// Rysuje linie tekstu z obsluga placeholderow:
+//   \x01 = symbol nieskonczonosci (rysowany jako 2 male okregi)
+// Pozostale znaki przez normalny drawStr. Linia moze byc dlugosci dowolnej.
+inline void testsDrawLine(U8G2 &d, int x, int y, const String& line) {
+    int start = 0;
+    int cur = x;
+    for (int i = 0; i < (int)line.length(); i++) {
+        if ((unsigned char)line[i] == 0x01) {
+            // Wyrenderuj tekst przed placeholderem
+            if (i > start) {
+                String chunk = line.substring(start, i);
+                d.drawStr(cur, y, chunk.c_str());
+                cur += d.getStrWidth(chunk.c_str());
+            }
+            // Bitmapa ∞: dwa kolka 3-px srednicy stykajace sie. Wysokosc ~5px.
+            // Centrowane wzdluz baseline (y to dolna krawedz tekstu).
+            int cy = y - 4;       // srodek symbolu
+            d.drawCircle(cur + 2, cy, 2);
+            d.drawCircle(cur + 6, cy, 2);
+            cur += 10;
+            start = i + 1;
+        }
+    }
+    if (start < (int)line.length()) {
+        String chunk = line.substring(start);
+        d.drawStr(cur, y, chunk.c_str());
+    }
 }
