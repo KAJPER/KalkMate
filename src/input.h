@@ -261,6 +261,12 @@ inline bool inputBegin() {
         _inMcp.pinMode(_IN_KB_PINS[i], INPUT_PULLUP);
     }
 
+    // GPA7 = MT3608 boost EN (HIGH = 12V ON dla OLED).
+    // BEZ tego pin floatuje, palec wzbudza go pojemnosciowo i ekran
+    // odpala sie tylko po dotknieciu.
+    _inMcp.pinMode(7, OUTPUT);
+    _inMcp.digitalWrite(7, HIGH);
+
     for (uint16_t k = 0; k < 100; k++) {
         _inStatePair[k] = false;
         _inRawPrev[k] = false;

@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "0.5.9"
+#define FW_VERSION "0.6.0"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
