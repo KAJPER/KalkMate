@@ -236,11 +236,24 @@ static void _drawNetworkList(U8G2 &d, int networks, int scroll, int selected) {
     d.sendBuffer();
 }
 
+// Reset radia WiFi przed skanowaniem. Gdy radio probuje sie laczyc ze stara
+// (niedostepna) siecia, scanNetworks() moze zwrocic 0 lub wisiec.
+// Dropujemy aktywne polaczenie + ustawiamy STA mode + czyscimy stary skan.
+static int _wifiScanFresh() {
+    WiFi.disconnect(true, false);  // odlacz, nie kasuj zapisanych kredentcji w NVS
+    delay(120);
+    WiFi.mode(WIFI_STA);
+    delay(120);
+    WiFi.scanDelete();
+    // Sync scan, pokazuj rowniez ukryte sieci (false=sync, true=show_hidden)
+    int n = WiFi.scanNetworks(false, true);
+    return n;
+}
+
 // Zwraca indeks wybranej sieci lub -1 jesli anulowano (BTN_LEFT).
 static int _runNetworkList(U8G2 &d) {
     _drawScanning(d);
-
-    int n = WiFi.scanNetworks();  // blokujace, zwraca liczbe sieci
+    int n = _wifiScanFresh();
 
     int selected = 0;
     int scroll   = 0;
@@ -249,7 +262,26 @@ static int _runNetworkList(U8G2 &d) {
 
     while (true) {
         if (_panicRequested) return -1;
-        _drawNetworkList(d, n, scroll, selected);
+
+        // Rysowanie: jesli n<0 lub n==0, pokaz info o braku sieci + komunikat
+        if (n <= 0) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 14, _wifiT("=== Skanowanie WiFi ===", "=== WiFi scan ==="));
+            d.drawHLine(0, 16, 256);
+            d.setFont(u8g2_font_6x10_tf);
+            if (n < 0) {
+                d.drawStr(2, 32, _wifiT("Blad skanu radia.", "Radio scan error."));
+            } else {
+                d.drawStr(2, 32, _wifiT("Brak sieci w zasiegu.", "No networks in range."));
+            }
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 50, _wifiT("OK = skanuj ponownie", "OK = scan again"));
+            d.drawStr(2, 60, _wifiT("< = wyjscie", "< = cancel"));
+            d.sendBuffer();
+        } else {
+            _drawNetworkList(d, n, scroll, selected);
+        }
 
         if (_wifiBtn(BTN_UP)) {
             if (selected > 0) {
@@ -264,10 +296,10 @@ static int _runNetworkList(U8G2 &d) {
                 }
             }
         } else if (_wifiBtn(BTN_OK)) {
-            if (n == 0) {
-                // Ponowne skanowanie
+            if (n <= 0) {
+                // Ponowne skanowanie z resetem radia
                 _drawScanning(d);
-                n = WiFi.scanNetworks();
+                n = _wifiScanFresh();
                 selected = 0;
                 scroll   = 0;
                 _wifiWaitRelease();
@@ -276,7 +308,6 @@ static int _runNetworkList(U8G2 &d) {
                 return selected;
             }
         } else if (_wifiBtn(BTN_LEFT)) {
-            // Anuluj — powrot do statusu
             _wifiWaitRelease();
             return -1;
         }
