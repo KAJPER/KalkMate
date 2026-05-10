@@ -299,46 +299,259 @@ inline String testsFormat(const String& src) {
     _stripBracedCommand(s, "\\mathrm");
     _stripBracedCommand(s, "\\mathbf");
     _stripBracedCommand(s, "\\mathit");
+    _stripBracedCommand(s, "\\mathbb");        // \mathbb{R} -> R itp.
+    _stripBracedCommand(s, "\\mathcal");
+    _stripBracedCommand(s, "\\mathfrak");
     _stripBracedCommand(s, "\\boxed");
     _stripBracedCommand(s, "\\overline");
     _stripBracedCommand(s, "\\underline");
+    _stripBracedCommand(s, "\\vec");           // wektor: \vec{v} -> v
+    _stripBracedCommand(s, "\\overrightarrow"); // \overrightarrow{AB} -> AB
+    _stripBracedCommand(s, "\\overleftarrow");
+    _stripBracedCommand(s, "\\overleftrightarrow");
+    _stripBracedCommand(s, "\\widehat");
+    _stripBracedCommand(s, "\\widetilde");
+    _stripBracedCommand(s, "\\hat");
+    _stripBracedCommand(s, "\\bar");
+    _stripBracedCommand(s, "\\tilde");
+    _stripBracedCommand(s, "\\dot");
+    _stripBracedCommand(s, "\\ddot");
+    _stripBracedCommand(s, "\\operatorname");
+    _stripBracedCommand(s, "\\substack");
+    _stripBracedCommand(s, "\\stackrel");
+    _stripBracedCommand(s, "\\overset");
+    _stripBracedCommand(s, "\\underset");
+
+    // \sqrt[n]{x} -> n-rt(x): obsluga pierwiastka n-tego stopnia
+    // Prosty hack: \sqrt[ -> "" potem ]{ -> "-rt("
+    // (musi byc przed \sqrt{ ktore zamienia { na ( )
+    while (true) {
+        int sqIdx = s.indexOf("\\sqrt[");
+        if (sqIdx < 0) break;
+        int closeBracket = s.indexOf("]", sqIdx);
+        int openBrace = (closeBracket >= 0) ? s.indexOf("{", closeBracket) : -1;
+        if (closeBracket < 0 || openBrace < 0) break;
+        String n = s.substring(sqIdx + 6, closeBracket);  // np. "3"
+        s = s.substring(0, sqIdx) + n + "-rt(" + s.substring(openBrace + 1);
+    }
+
+    // Srodowiska \begin{name}...\end{name} - usun znaczniki, zostaw zawartosc.
+    // Niektore maja arg {cc} po nazwie (np. \begin{array}{cc}) - tez usun.
+    auto _stripBeginEnd = [&]() {
+        while (true) {
+            int idx = s.indexOf("\\begin{");
+            if (idx < 0) break;
+            int end = s.indexOf("}", idx);
+            if (end < 0) break;
+            // Sprawdz czy zaraz po } jest { (dodatkowy argument)
+            if (end + 1 < (int)s.length() && s[end + 1] == '{') {
+                int end2 = s.indexOf("}", end + 1);
+                if (end2 > 0) end = end2;
+            }
+            s = s.substring(0, idx) + s.substring(end + 1);
+        }
+        while (true) {
+            int idx = s.indexOf("\\end{");
+            if (idx < 0) break;
+            int end = s.indexOf("}", idx);
+            if (end < 0) break;
+            s = s.substring(0, idx) + s.substring(end + 1);
+        }
+    };
+    _stripBeginEnd();
+    // Separator kolumn w macierzach/tabelach: & -> spacja
+    s.replace("&", " ");
 
     // LaTeX commands -> ASCII
-    s.replace("\\Delta", "delta");
-    s.replace("\\delta", "delta");
+
+    // === Frakcje (wszystkie warianty) ===
+    s.replace("\\dfrac{", "(");      // display fraction
+    s.replace("\\tfrac{", "(");      // text fraction
+    s.replace("\\frac{", "(");
+    s.replace("}{", ")/(");          // koncowka pierwszego {} + start drugiego
+    // \binom{n}{k} -> (n)C(k) — uwaga: }{ juz zamienione wczesniej
+    s.replace("\\binom{", "C(");
+    s.replace("\\choose", " C ");
+
+    // === Pierwiastki ===
     s.replace("\\sqrt{", "sqrt(");
     s.replace("\\sqrt", "sqrt");
-    s.replace("\\frac{", "(");
-    s.replace("}{", ")/(");      // koncowka pierwszego {} + start drugiego
+
+    // === Operatory ===
     s.replace("\\cdot", "*");
     s.replace("\\times", "x");
     s.replace("\\div", "/");
+    s.replace("\\pm", "+/-");
+    s.replace("\\mp", "-/+");
     s.replace("\\geq", ">=");
     s.replace("\\leq", "<=");
     s.replace("\\neq", "!=");
+    s.replace("\\approx", "~=");
+    s.replace("\\equiv", "==");
+    s.replace("\\sim", "~");
+    s.replace("\\propto", "~");
+    s.replace("\\circ", "deg");     // ^\circ = stopnie
+
+    // === Zbiory ===
     s.replace("\\infty", "\x01");   // placeholder dla symbolu nieskonczonosci ∞
-                                      // (rysowane jako bitmapa w testsDrawLine)
+    s.replace("\\emptyset", "{}");
+    s.replace("\\varnothing", "{}");
+    s.replace("\\subseteq", " sub= ");
+    s.replace("\\subset", " sub ");
+    s.replace("\\supseteq", " sup= ");
+    s.replace("\\supset", " sup ");
+    s.replace("\\notin", " not in ");
     s.replace("\\in", " in ");
     s.replace("\\cup", " U ");
     s.replace("\\cap", " I ");
+    s.replace("\\setminus", " \\ ");
+    s.replace("\\bigcup", "U");
+    s.replace("\\bigcap", "I");
+
+    // === Logika ===
+    s.replace("\\land", " AND ");
+    s.replace("\\wedge", " AND ");
+    s.replace("\\lor", " OR ");
+    s.replace("\\vee", " OR ");
+    s.replace("\\lnot", "NOT ");
+    s.replace("\\neg", "NOT ");
+    s.replace("\\forall", "for_each ");
+    s.replace("\\exists", "exists ");
+    s.replace("\\iff", " <=> ");
+
+    // === Geometria ===
+    s.replace("\\angle", "kat ");
+    s.replace("\\triangle", "tr.");
+    s.replace("\\parallel", " || ");
+    s.replace("\\perp", " perp ");
+    s.replace("\\cong", " ~= ");
+    s.replace("\\similar", " ~ ");
+
+    // === Brackety ===
     s.replace("\\left(", "(");
     s.replace("\\right)", ")");
     s.replace("\\left[", "[");
     s.replace("\\right]", "]");
+    s.replace("\\left\\{", "{");
+    s.replace("\\right\\}", "}");
+    s.replace("\\left|", "|");
+    s.replace("\\right|", "|");
+    s.replace("\\langle", "<");
+    s.replace("\\rangle", ">");
+    s.replace("\\lfloor", "[");
+    s.replace("\\rfloor", "]");
+    s.replace("\\lceil", "[");
+    s.replace("\\rceil", "]");
     s.replace("\\left", "");
     s.replace("\\right", "");
-    s.replace("\\pi", "pi");
+    s.replace("\\Big", "");
+    s.replace("\\big", "");
+    s.replace("\\bigg", "");
+    s.replace("\\Bigg", "");
+
+    // === Wielkie greckie ===
+    s.replace("\\Delta", "delta");
+    s.replace("\\Sigma", "SUM");
+    s.replace("\\Pi", "PROD");
+    s.replace("\\Omega", "Omega");
+    s.replace("\\Gamma", "Gamma");
+    s.replace("\\Lambda", "Lambda");
+    s.replace("\\Theta", "Theta");
+    s.replace("\\Phi", "Phi");
+    s.replace("\\Psi", "Psi");
+    s.replace("\\Xi", "Xi");
+
+    // === Male greckie ===
     s.replace("\\alpha", "alfa");
     s.replace("\\beta", "beta");
     s.replace("\\gamma", "gamma");
+    s.replace("\\delta", "delta");
+    s.replace("\\epsilon", "eps");
+    s.replace("\\varepsilon", "eps");
+    s.replace("\\zeta", "dzeta");
+    s.replace("\\eta", "eta");
+    s.replace("\\iota", "iota");
+    s.replace("\\kappa", "kappa");
+    s.replace("\\mu", "mu");
+    s.replace("\\nu", "nu");
+    s.replace("\\xi", "xi");
+    s.replace("\\rho", "rho");
+    s.replace("\\sigma", "sigma");
+    s.replace("\\tau", "tau");
+    s.replace("\\upsilon", "upsilon");
+    s.replace("\\varphi", "fi");
+    s.replace("\\phi", "fi");
+    s.replace("\\chi", "chi");
+    s.replace("\\psi", "psi");
+    s.replace("\\omega", "omega");
+    s.replace("\\pi", "pi");
     s.replace("\\theta", "theta");
     s.replace("\\lambda", "lambda");
+
+    // === Duze operatory ===
     s.replace("\\sum", "SUM");
+    s.replace("\\prod", "PROD");
     s.replace("\\int", "INT");
+    s.replace("\\oint", "INT");
+    s.replace("\\partial", "d");
+    s.replace("\\nabla", "nabla");
+
+    // === Kropki/wielokropki ===
+    s.replace("\\ldots", "...");
+    s.replace("\\cdots", "...");
+    s.replace("\\vdots", ":");
+    s.replace("\\ddots", "...");
+    s.replace("\\dots", "...");
+
+    // === Mod ===
+    s.replace("\\pmod", "mod");
+    s.replace("\\bmod", "mod");
+    s.replace("\\mod", "mod");
+
+    // === Therefore/because ===
+    s.replace("\\therefore", "=>");
+    s.replace("\\because", "<=");
+
+    // === Strzalki ===
     s.replace("\\to", "->");
     s.replace("\\rightarrow", "->");
     s.replace("\\Rightarrow", "=>");
+    s.replace("\\leftarrow", "<-");
+    s.replace("\\Leftarrow", "<=");
+    s.replace("\\leftrightarrow", "<->");
+    s.replace("\\Leftrightarrow", "<=>");
+    s.replace("\\uparrow", "^");
+    s.replace("\\downarrow", "v");
+    s.replace("\\mapsto", "->");
     s.replace("\\implies", "=>");
+    s.replace("\\impliedby", "<=");
+
+    // Funkcje matematyczne — usun backslash, zostaw nazwe
+    s.replace("\\arcsin", "arcsin");
+    s.replace("\\arccos", "arccos");
+    s.replace("\\arctan", "arctan");
+    s.replace("\\arctg", "arctg");
+    s.replace("\\sinh", "sinh");
+    s.replace("\\cosh", "cosh");
+    s.replace("\\tanh", "tanh");
+    s.replace("\\sin", "sin");
+    s.replace("\\cos", "cos");
+    s.replace("\\tan", "tan");
+    s.replace("\\tg", "tg");
+    s.replace("\\ctg", "ctg");
+    s.replace("\\cot", "cot");
+    s.replace("\\sec", "sec");
+    s.replace("\\csc", "csc");
+    s.replace("\\log", "log");
+    s.replace("\\ln", "ln");
+    s.replace("\\lg", "lg");
+    s.replace("\\exp", "exp");
+    s.replace("\\lim", "lim");
+    s.replace("\\max", "max");
+    s.replace("\\min", "min");
+    s.replace("\\det", "det");
+    s.replace("\\gcd", "gcd");
+    s.replace("\\mod", "mod");
 
     // LaTeX spacing commands -> spacja lub puste
     s.replace("\\qquad", "  ");   // 2em space
@@ -386,6 +599,12 @@ inline String testsFormat(const String& src) {
 
     // Wielokrotne newlines -> max 2
     while (s.indexOf("\n\n\n") >= 0) s.replace("\n\n\n", "\n\n");
+
+    // Pozostale luzne nawiasy grupujace LaTeX-a (po \frac, e^{i\pi}, x_{n+1} itp.)
+    // sa juz tylko czystymi {} - usun je. Userowy literal {} przepadnie,
+    // ale w tekstach matematycznych to rzadkosc.
+    s.replace("{", "");
+    s.replace("}", "");
 
     return s;
 }
