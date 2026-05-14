@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent";
 
 // System prompt załadowany z pliku system_prompt_matura_all.md
 const SYSTEM_PROMPT = `# Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki (poziom podstawowy i rozszerzony), fizyki (poziom rozszerzony), biologii (poziom rozszerzony) i chemii (poziom rozszerzony).

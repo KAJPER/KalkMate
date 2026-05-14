@@ -19,7 +19,10 @@ export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Nie zalogowany" }, { status: 401 });
 
-  const notes = await prisma.note.findMany({
+  const noteModel = (prisma as any).note;
+  if (!noteModel) return NextResponse.json({ ok: true, notes: [] });
+
+  const notes = await noteModel.findMany({
     where: { userId: user.id },
     orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
   });

@@ -32,6 +32,14 @@ struct TestEntry {
 
 static bool _testsFsReady = false;
 
+// === Cache tytulow (do listy w UI) ===
+// Lista jest rysowana wiele razy na sekunde (kazdy frame UI) i robienie
+// pelnego parsowania pliku SPIFFS dla kazdej ramki jest powodem lagow.
+// Buduje sie raz przy wejsciu na ekran, refresh dopiero po sync.
+#include <vector>
+static std::vector<String> _testsTitleCache;
+static bool _testsCacheValid = false;
+
 inline bool _testsEnsureFs() {
     if (_testsFsReady) return true;
     if (!SPIFFS.begin(true)) {
@@ -42,7 +50,60 @@ inline bool _testsEnsureFs() {
     return true;
 }
 
+// Forward decl - testsGet zdefiniowane nizej
+inline bool testsGet(uint16_t idx, TestEntry &out);
+
+// Zbuduj cache tytulow (czyta plik raz). Wywolaj przy wejsciu w ekran sprawdzianow.
+inline void testsBuildTitleCache() {
+    _testsTitleCache.clear();
+    _testsCacheValid = true;   // nawet pusty cache = "valid" (znamy stan)
+    if (!_testsEnsureFs()) return;
+    if (!SPIFFS.exists(_TESTS_FILE)) return;
+    File f = SPIFFS.open(_TESTS_FILE, "r");
+    if (!f) return;
+    String body;
+    body.reserve(f.size() + 1);
+    while (f.available()) body += (char)f.read();
+    f.close();
+
+    // Iteruj po obiektach {...} (JSON-aware - pomija stringi)
+    int cursor = 0;
+    while (cursor < (int)body.length()) {
+        // Znajdz nastepny niezaszytowany {
+        while (cursor < (int)body.length()) {
+            char c = body[cursor];
+            if (c == '"') {
+                int e = _jsonSkipString(body, cursor);
+                if (e < 0) { cursor = body.length(); break; }
+                cursor = e + 1;
+                continue;
+            }
+            if (c == '{') break;
+            cursor++;
+        }
+        if (cursor >= (int)body.length()) break;
+
+        int objEnd = _jsonMatchBracket(body, cursor, '{', '}');
+        if (objEnd < 0) break;
+        String obj = body.substring(cursor, objEnd + 1);
+        String t = _jsonGetStringField(obj, "t");
+        // Dekoduj JSON escape \\n itd. tak jak w testsGet
+        t.replace("\\n", "\n");
+        t.replace("\\\"", "\"");
+        t.replace("\\\\", "\\");
+        _testsTitleCache.push_back(t);
+        cursor = objEnd + 1;
+    }
+}
+
+inline void testsInvalidateCache() {
+    _testsCacheValid = false;
+    _testsTitleCache.clear();
+}
+
 inline uint16_t testsCount() {
+    // Jesli mamy cache - uzyj go. Inaczej szybkie liczenie '{'.
+    if (_testsCacheValid) return _testsTitleCache.size();
     if (!_testsEnsureFs()) return 0;
     if (!SPIFFS.exists(_TESTS_FILE)) return 0;
     File f = SPIFFS.open(_TESTS_FILE, "r");
@@ -60,6 +121,17 @@ inline uint16_t testsCount() {
     }
     f.close();
     return count;
+}
+
+// Szybkie pobranie samego tytulu (z cache, bez parsowania pliku).
+inline String testsTitleAt(uint16_t idx) {
+    if (_testsCacheValid && idx < _testsTitleCache.size()) {
+        return _testsTitleCache[idx];
+    }
+    // Fallback: pelne testsGet (rzadkie - przed pierwszym build cache)
+    TestEntry t;
+    if (testsGet(idx, t)) return t.title;
+    return String();
 }
 
 inline bool testsGet(uint16_t idx, TestEntry &out) {

@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "0.6.4"
+#define FW_VERSION "0.6.5"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -629,6 +629,7 @@ void showDeviceIdQrScreen(U8G2 &d) {
 // =====================================================================
 static void showTestsScreen() {
     inputWaitRelease();
+    testsBuildTitleCache();   // raz na wejscie - eliminuje lagi listy
 
     auto drawList = [&](int cursor, int count) {
         u8g2.clearBuffer();
@@ -654,19 +655,18 @@ static void showTestsScreen() {
             for (int i = 0; i < 4 && (scroll + i) < count; i++) {
                 int idx = scroll + i;
                 int y = 25 + i * 10;
-                TestEntry t;
-                if (testsGet(idx, t)) {
-                    String title = t.title.length() == 0 ? String("(bez tytulu)") : t.title;
-                    if (title.length() > 38) title = title.substring(0, 36) + "..";
-                    if (idx == cursor) {
-                        u8g2.setDrawColor(1);
-                        u8g2.drawBox(0, y - 9, 256, 11);
-                        u8g2.setDrawColor(0);
-                        u8g2.drawStr(4, y, title.c_str());
-                        u8g2.setDrawColor(1);
-                    } else {
-                        u8g2.drawStr(4, y, title.c_str());
-                    }
+                // Cache tytulow - bez I/O na kazda ramke
+                String title = testsTitleAt(idx);
+                if (title.length() == 0) title = "(bez tytulu)";
+                if (title.length() > 38) title = title.substring(0, 36) + "..";
+                if (idx == cursor) {
+                    u8g2.setDrawColor(1);
+                    u8g2.drawBox(0, y - 9, 256, 11);
+                    u8g2.setDrawColor(0);
+                    u8g2.drawStr(4, y, title.c_str());
+                    u8g2.setDrawColor(1);
+                } else {
+                    u8g2.drawStr(4, y, title.c_str());
                 }
             }
             u8g2.setFont(u8g2_font_5x7_tf);
@@ -772,6 +772,8 @@ static void showTestsScreen() {
         char licKey[40];
         wifiLoadLicense(licKey, sizeof(licKey));
         int n = testsSync(licKey, KALK_API_KEY);
+        // Plik sie zmienil - przebuduj cache tytulow
+        testsBuildTitleCache();
         u8g2.clearBuffer();
         u8g2.setFont(u8g2_font_6x10_tf);
         if (n < 0) {

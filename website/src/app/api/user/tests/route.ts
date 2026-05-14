@@ -17,7 +17,11 @@ async function getUser() {
 export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Nie zalogowany" }, { status: 401 });
-  const tests = await prisma.test.findMany({
+
+  const testModel = (prisma as any).test;
+  if (!testModel) return NextResponse.json({ ok: true, tests: [] });
+
+  const tests = await testModel.findMany({
     where: { userId: user.id },
     orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
   });

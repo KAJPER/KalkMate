@@ -9,7 +9,7 @@ function ErrorContent() {
   const error = searchParams.get("error");
 
   const errorMessages: Record<string, string> = {
-    Configuration: "Wystąpił problem z konfiguracją serwera.",
+    Configuration: "Problem z konfiguracją serwera.",
     AccessDenied: "Dostęp został odrzucony.",
     Verification: "Link weryfikacyjny wygasł lub jest nieprawidłowy.",
     Default: "Wystąpił nieoczekiwany błąd podczas logowania.",
@@ -18,27 +18,42 @@ function ErrorContent() {
   const message = error && errorMessages[error] ? errorMessages[error] : errorMessages.Default;
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] dark:bg-[#313338] flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white dark:bg-[#2B2D31] rounded-2xl p-8 border border-gray-100 dark:border-[#3F4147] text-center">
-        <div className="w-16 h-16 bg-red-100 dark:bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600 dark:text-red-400">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="15" y1="9" x2="9" y2="15" />
-            <line x1="9" y1="9" x2="15" y2="15" />
-          </svg>
+    <div className="min-h-screen bg-[#0B0B0B] text-[#F2EDE3] km-grain flex items-center justify-center p-6">
+      <div className="w-full max-w-md relative">
+        <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-l border-t border-[#FF4D2E]" />
+        <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-r border-t border-[#FF4D2E]" />
+        <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-l border-b border-[#FF4D2E]" />
+        <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-r border-b border-[#FF4D2E]" />
+        <div className="border border-[rgba(242,237,227,0.18)] p-8 text-center">
+          <div className="flex items-center justify-between border-b border-[rgba(242,237,227,0.10)] pb-4">
+            <span className="km-mono-eyebrow text-[#FF4D2E] flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-[#FF4D2E] rounded-full km-blink" />
+              Błąd
+            </span>
+            <span className="km-mono-eyebrow text-[#F2EDE3]/40">
+              /AUTH · ERROR {error ? "· " + error.toUpperCase() : ""}
+            </span>
+          </div>
+          <h1 className="km-display text-4xl mt-6">
+            Coś <span className="italic text-[#FF4D2E]">poszło</span> nie tak.
+          </h1>
+          <p className="mt-4 text-[14.5px] text-[#F2EDE3]/65">{message}</p>
+          <div className="mt-8 flex flex-col gap-3">
+            <Link
+              href="/auth/signin"
+              className="inline-flex items-center justify-between px-5 py-3 km-mono-eyebrow bg-[#D8FF3D] text-[#0B0B0B] hover:bg-[#F2EDE3] transition-colors"
+            >
+              <span>Spróbuj ponownie</span>
+              <span>→</span>
+            </Link>
+            <Link
+              href="/"
+              className="km-mono-eyebrow text-[#F2EDE3]/45 hover:text-[#F2EDE3] transition-colors"
+            >
+              ← Strona główna
+            </Link>
+          </div>
         </div>
-        <h1 className="text-2xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-2">
-          Błąd logowania
-        </h1>
-        <p className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-6">
-          {message}
-        </p>
-        <Link
-          href="/auth/signin"
-          className="inline-block bg-gradient-to-r from-[#FF4D00] to-[#FF8000] text-white font-semibold py-3 px-6 rounded-lg hover:shadow-lg hover:shadow-[#FF4D00]/25 transition-all"
-        >
-          Spróbuj ponownie
-        </Link>
       </div>
     </div>
   );
@@ -46,11 +61,13 @@ function ErrorContent() {
 
 export default function ErrorPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#F5F5F5] dark:bg-[#313338] flex items-center justify-center p-4">
-        <div className="text-[#1a1a1a] dark:text-[#E0E0E0]">Ładowanie...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0B0B0B] flex items-center justify-center">
+          <span className="km-mono-eyebrow text-[#F2EDE3]/55">Ładowanie...</span>
+        </div>
+      }
+    >
       <ErrorContent />
     </Suspense>
   );

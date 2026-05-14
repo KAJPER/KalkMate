@@ -367,9 +367,24 @@ export default function PanelPage() {
     scrollToBottom();
   }, [messages]);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    // Można dodać toast notification
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const copyToClipboard = async (text: string, idx?: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch {}
+      document.body.removeChild(ta);
+    }
+    if (typeof idx === "number") {
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx((cur) => (cur === idx ? null : cur)), 1600);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -429,9 +444,12 @@ export default function PanelPage() {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to send message");
-
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || `Błąd serwera (${response.status})`);
+      }
+
       setMessages([...newMessages, { role: "assistant", content: data.response }]);
 
       // Update conversationId if backend created a new one
@@ -443,9 +461,10 @@ export default function PanelPage() {
       fetchConversations();
     } catch (error) {
       console.error("Chat error:", error);
+      const msg = error instanceof Error ? error.message : "Spróbuj ponownie.";
       setMessages([
         ...messages,
-        { role: "assistant", content: "Przepraszam, wystąpił błąd. Spróbuj ponownie." },
+        { role: "assistant", content: `⚠️ ${msg}` },
       ]);
     } finally {
       setIsSending(false);
@@ -525,10 +544,10 @@ export default function PanelPage() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen bg-[#F5F5F5] dark:bg-[#313338] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[#2563EB] dark:border-[#3B82F6] border-t-transparent rounded-full animate-spin" />
-          <p className="text-[#1a1a1a] dark:text-[#E0E0E0]">Ładowanie...</p>
+      <div className="min-h-screen bg-[#0B0B0B] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-[#D8FF3D] border-t-transparent rounded-full animate-spin" />
+          <p className="km-mono-eyebrow text-[#F2EDE3]/55">Ładowanie...</p>
         </div>
       </div>
     );
@@ -538,108 +557,86 @@ export default function PanelPage() {
     return null;
   }
 
+  const tabs = [
+    { id: "orders" as const, n: "01", label: "Zamówienia" },
+    { id: "chat" as const, n: "02", label: "AI Chat" },
+    { id: "subscription" as const, n: "03", label: "Subskrypcja" },
+    { id: "calculator" as const, n: "04", label: "Kalkulator" },
+    { id: "notes" as const, n: "05", label: "Notatki" },
+    { id: "tests" as const, n: "06", label: "Sprawdziany" },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#F5F5F5] dark:bg-[#313338]">
+    <div className="min-h-screen bg-[#0B0B0B] text-[#F2EDE3]">
       {/* Header */}
-      <header className="bg-white dark:bg-[#2B2D31] border-b border-gray-100 dark:border-[#3F4147] sticky top-0 z-50 backdrop-blur-sm bg-white/80 dark:bg-[#2B2D31]/80">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/kalkmate_icon.svg"
-              alt="KalkMate"
-              width={32}
-              height={32}
-              className="dark:invert"
-            />
-            <span className="text-xl font-bold text-[#2563EB] dark:text-[#3B82F6]">
-              KalkMate Panel
-            </span>
-          </Link>
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#F5F5F5] dark:bg-[#313338] rounded-full">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
-              <span className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+      <header className="sticky top-0 z-40 bg-[#0B0B0B]/85 backdrop-blur-md border-b border-[rgba(242,237,227,0.10)]">
+        <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/" className="flex items-baseline gap-3">
+              <span className="km-display text-[26px] tracking-tight leading-none text-[#F2EDE3]">
+                Kalk<span className="italic text-[#D8FF3D]">Mate</span>
+              </span>
+              <span className="km-mono-eyebrow text-[#F2EDE3]/40 hidden sm:inline">
+                /panel
+              </span>
+            </Link>
+            <div className="flex items-center gap-4">
+              <span className="hidden md:inline-flex items-center gap-2 km-mono-eyebrow text-[#F2EDE3]/55">
+                <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
                 {session.user?.email}
               </span>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="km-mono-eyebrow text-[#F2EDE3]/70 hover:text-[#FF4D2E] px-3 py-1.5 border border-[rgba(242,237,227,0.18)] hover:border-[#FF4D2E] transition-colors"
+              >
+                Wyloguj ↗
+              </button>
             </div>
-            <button
-              onClick={() => signOut({ callbackUrl: "/" })}
-              className="px-4 py-2 text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center gap-2"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-              Wyloguj
-            </button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Navigation Tabs */}
-        <div className="flex gap-2 mb-8 overflow-x-auto">
-          {[
-            { id: "orders" as const, label: "Moje zamówienia", icon: (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="1" y="3" width="15" height="13" />
-                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-                <circle cx="5.5" cy="18.5" r="2.5" />
-                <circle cx="18.5" cy="18.5" r="2.5" />
-              </svg>
-            ) },
-            { id: "chat" as const, label: "AI Chat", icon: (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            ) },
-            { id: "subscription" as const, label: "Subskrypcja", icon: (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-              </svg>
-            ) },
-            { id: "calculator" as const, label: "Kalkulator", icon: (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="4" y="2" width="16" height="20" rx="2" />
-                <line x1="8" y1="6" x2="16" y2="6" />
-                <line x1="8" y1="10" x2="16" y2="10" />
-                <line x1="8" y1="14" x2="10" y2="14" />
-                <line x1="13" y1="14" x2="16" y2="14" />
-                <line x1="8" y1="18" x2="16" y2="18" />
-              </svg>
-            ) },
-            { id: "notes" as const, label: "Notatki", icon: (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <line x1="16" y1="13" x2="8" y2="13" />
-                <line x1="16" y1="17" x2="8" y2="17" />
-                <polyline points="10 9 9 9 8 9" />
-              </svg>
-            ) },
-            { id: "tests" as const, label: "Sprawdziany", icon: (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 11l3 3L22 4" />
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-            ) },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 whitespace-nowrap ${
-                activeTab === tab.id
-                  ? "bg-[#2563EB] dark:bg-[#3B82F6] text-white shadow-lg shadow-[#2563EB]/30 dark:shadow-[#3B82F6]/30"
-                  : "bg-white dark:bg-[#2B2D31] text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 hover:text-[#1a1a1a] dark:hover:text-[#E0E0E0] border border-gray-100 dark:border-[#3F4147]"
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
+      <div className="mx-auto max-w-[1400px] px-5 lg:px-10 py-10 lg:py-14">
+        {/* Page heading */}
+        <div className="mb-10 lg:mb-14 grid lg:grid-cols-12 gap-8 items-end">
+          <div className="lg:col-span-8">
+            <p className="km-mono-eyebrow text-[#D8FF3D]">[ 00 ] · Twój panel</p>
+            <h1 className="km-display text-[clamp(40px,7vw,96px)] mt-3">
+              Witaj, <span className="italic text-[#D8FF3D]">{(session.user?.name || session.user?.email?.split("@")[0] || "user").toString()}</span>.
+            </h1>
           </div>
+          <div className="lg:col-span-4 km-mono-eyebrow text-[#F2EDE3]/45 lg:text-right">
+            <p>PANEL · v0.6.4</p>
+            <p className="mt-1 text-[#F2EDE3]/30">Sesja aktywna</p>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="mb-10 border-y border-[rgba(242,237,227,0.10)]">
+          <div className="flex overflow-x-auto km-no-scrollbar">
+            {tabs.map((tab, i) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative group flex items-baseline gap-2.5 px-5 py-4 whitespace-nowrap transition-colors ${
+                  i > 0 ? "border-l border-[rgba(242,237,227,0.10)]" : ""
+                } ${
+                  activeTab === tab.id
+                    ? "bg-[#0E0E0E] text-[#F2EDE3]"
+                    : "text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:bg-[#0E0E0E]/50"
+                }`}
+              >
+                <span className={`km-mono-eyebrow ${activeTab === tab.id ? "text-[#D8FF3D]" : "text-[#F2EDE3]/35"}`}>
+                  {tab.n}
+                </span>
+                <span className="text-[14.5px]">{tab.label}</span>
+                {activeTab === tab.id && (
+                  <span className="absolute left-0 right-0 -bottom-px h-px bg-[#D8FF3D]" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Tab Content */}
         <AnimatePresence mode="wait">
@@ -651,10 +648,10 @@ export default function PanelPage() {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3, ease: "easeOut" as const }}
             >
-              <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-8 border border-gray-100 dark:border-[#3F4147]">
+              <div className="bg-[#0E0E0E]  p-8 border border-[rgba(242,237,227,0.10)]">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-[#2563EB]/10 dark:bg-[#3B82F6]/10 flex items-center justify-center">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#2563EB] dark:text-[#3B82F6]">
+                  <div className="w-12 h-12  bg-[#D8FF3D]/10 bg-[#D8FF3D]/10 flex items-center justify-center">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#D8FF3D]">
                       <rect x="1" y="3" width="15" height="13" />
                       <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
                       <circle cx="5.5" cy="18.5" r="2.5" />
@@ -662,10 +659,10 @@ export default function PanelPage() {
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                    <h2 className="text-2xl font-bold text-[#F2EDE3]">
                       Historia zamówień
                     </h2>
-                    <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+                    <p className="text-sm text-[#F2EDE3]/60">
                       Twoje zamówienia i status wysyłek
                     </p>
                   </div>
@@ -673,23 +670,23 @@ export default function PanelPage() {
 
                 {ordersLoading ? (
                   <div className="flex items-center justify-center py-12">
-                    <div className="w-8 h-8 border-4 border-[#2563EB] dark:border-[#3B82F6] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-4 border-[#D8FF3D] border-t-transparent rounded-full animate-spin" />
                   </div>
                 ) : orders.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#F5F5F5] dark:bg-[#313338] flex items-center justify-center">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#1a1a1a]/20 dark:text-[#E0E0E0]/20">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#141414] flex items-center justify-center">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#F2EDE3]/20">
                         <circle cx="9" cy="21" r="1" />
                         <circle cx="20" cy="21" r="1" />
                         <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
                       </svg>
                     </div>
-                    <p className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-4">
+                    <p className="text-[#F2EDE3]/60 mb-4">
                       Nie masz jeszcze żadnych zamówień
                     </p>
                     <Link
                       href="/#kup-teraz"
-                      className="inline-flex items-center gap-2 px-6 py-3 bg-[#2563EB] dark:bg-[#3B82F6] text-white font-medium rounded-full hover:bg-[#1d4ed8] dark:hover:bg-[#2563EB] transition-colors"
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-[#D8FF3D] text-[#0B0B0B] font-medium rounded-full hover:bg-[#F2EDE3] transition-colors"
                     >
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 5v14M5 12h14" />
@@ -705,14 +702,14 @@ export default function PanelPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.1, ease: "easeOut" as const }}
-                        className="border border-gray-100 dark:border-[#3F4147] rounded-xl p-6 hover:shadow-lg transition-shadow duration-300"
+                        className="border border-[rgba(242,237,227,0.10)]  p-6  transition-shadow duration-300"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
                           <div>
-                            <p className="text-lg font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                            <p className="text-lg font-bold text-[#F2EDE3]">
                               Zamówienie #{order.orderNumber}
                             </p>
-                            <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1 flex items-center gap-2">
+                            <p className="text-sm text-[#F2EDE3]/60 mt-1 flex items-center gap-2">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="10" />
                                 <polyline points="12 6 12 12 16 14" />
@@ -738,35 +735,35 @@ export default function PanelPage() {
                         </div>
 
                         <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
-                          <div className="bg-[#F5F5F5] dark:bg-[#313338] rounded-lg p-4">
-                            <p className="text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40 mb-1">Kwota</p>
-                            <p className="text-lg font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                          <div className="bg-[#141414]  p-4">
+                            <p className="text-xs text-[#F2EDE3]/40 mb-1">Kwota</p>
+                            <p className="text-lg font-bold text-[#F2EDE3]">
                               {(order.amount / 100).toFixed(2)} {order.currency.toUpperCase()}
                             </p>
                           </div>
 
                           {order.pickupPoint && (
-                            <div className="bg-[#F5F5F5] dark:bg-[#313338] rounded-lg p-4">
-                              <p className="text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40 mb-1">Punkt odbioru</p>
-                              <p className="text-sm font-medium text-[#1a1a1a] dark:text-[#E0E0E0] truncate">
+                            <div className="bg-[#141414]  p-4">
+                              <p className="text-xs text-[#F2EDE3]/40 mb-1">Punkt odbioru</p>
+                              <p className="text-sm font-medium text-[#F2EDE3] truncate">
                                 {order.pickupPoint}
                               </p>
                             </div>
                           )}
 
                           {order.fulfillmentStatus && (
-                            <div className="bg-[#F5F5F5] dark:bg-[#313338] rounded-lg p-4">
-                              <p className="text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40 mb-1">Status wysyłki</p>
-                              <p className="text-sm font-medium text-[#1a1a1a] dark:text-[#E0E0E0]">
+                            <div className="bg-[#141414]  p-4">
+                              <p className="text-xs text-[#F2EDE3]/40 mb-1">Status wysyłki</p>
+                              <p className="text-sm font-medium text-[#F2EDE3]">
                                 {order.fulfillmentStatus === "fulfilled" ? "📦 Wysłane" : "⏰ Oczekuje"}
                               </p>
                             </div>
                           )}
 
                           {order.trackingNumber && (
-                            <div className="bg-[#F5F5F5] dark:bg-[#313338] rounded-lg p-4">
-                              <p className="text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40 mb-1">Numer przesyłki</p>
-                              <p className="text-sm font-medium text-[#2563EB] dark:text-[#3B82F6] font-mono">
+                            <div className="bg-[#141414]  p-4">
+                              <p className="text-xs text-[#F2EDE3]/40 mb-1">Numer przesyłki</p>
+                              <p className="text-sm font-medium text-[#D8FF3D] font-mono">
                                 {order.trackingNumber}
                               </p>
                             </div>
@@ -787,16 +784,16 @@ export default function PanelPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3, ease: "easeOut" as const }}
-              className="bg-white dark:bg-[#2B2D31] rounded-2xl border border-gray-100 dark:border-[#3F4147] overflow-hidden flex h-[700px]"
+              className="bg-[#0E0E0E]  border border-[rgba(242,237,227,0.10)] overflow-hidden flex h-[700px]"
             >
               {/* Sidebar with conversations */}
-              <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} border-r border-gray-100 dark:border-[#3F4147] flex flex-col transition-all duration-300 overflow-hidden`}>
+              <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} border-r border-[rgba(242,237,227,0.10)] flex flex-col transition-all duration-300 overflow-hidden`}>
                 {/* Sidebar header */}
-                <div className="p-4 border-b border-gray-100 dark:border-[#3F4147] flex items-center justify-between">
-                  <h3 className="font-semibold text-[#1a1a1a] dark:text-[#E0E0E0] text-sm">Historie</h3>
+                <div className="p-4 border-b border-[rgba(242,237,227,0.10)] flex items-center justify-between">
+                  <h3 className="font-semibold text-[#F2EDE3] text-sm">Historie</h3>
                   <button
                     onClick={createNewConversation}
-                    className="p-1.5 rounded-lg bg-[#2563EB] dark:bg-[#3B82F6] text-white hover:opacity-80 transition-opacity"
+                    className="p-1.5  bg-[#D8FF3D] text-[#0B0B0B] hover:opacity-80 transition-opacity"
                     title="Nowa konwersacja"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -811,17 +808,17 @@ export default function PanelPage() {
                   {conversations.map((conv) => (
                     <div
                       key={conv.id}
-                      className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
+                      className={`group relative p-3  cursor-pointer transition-colors ${
                         currentConversationId === conv.id
-                          ? 'bg-[#2563EB]/10 dark:bg-[#3B82F6]/10'
-                          : 'hover:bg-gray-100 dark:hover:bg-[#313338]'
+                          ? 'bg-[#D8FF3D]/10 bg-[#D8FF3D]/10'
+                          : 'hover:bg-gray-100 hover:bg-[#141414]'
                       }`}
                       onClick={() => loadConversation(conv.id)}
                     >
-                      <p className="text-sm font-medium text-[#1a1a1a] dark:text-[#E0E0E0] truncate pr-6">
+                      <p className="text-sm font-medium text-[#F2EDE3] truncate pr-6">
                         {conv.title}
                       </p>
-                      <p className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1">
+                      <p className="text-xs text-[#F2EDE3]/60 mt-1">
                         {conv._count?.messages || 0} wiadomości
                       </p>
                       <button
@@ -841,7 +838,7 @@ export default function PanelPage() {
                   ))}
                   {conversations.length === 0 && (
                     <div className="text-center py-8">
-                      <p className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+                      <p className="text-xs text-[#F2EDE3]/60">
                         Brak konwersacji
                       </p>
                     </div>
@@ -853,12 +850,12 @@ export default function PanelPage() {
               <div className="flex-1 flex flex-col"
             >
               {/* Chat header */}
-              <div className="p-6 border-b border-gray-100 dark:border-[#3F4147] bg-gradient-to-r from-[#2563EB]/5 to-[#3B82F6]/5 dark:from-[#2563EB]/10 dark:to-[#3B82F6]/10">
+              <div className="p-6 border-b border-[rgba(242,237,227,0.10)]  from-[#D8FF3D]/5 to-[#D8FF3D]/5 dark:from-[#D8FF3D]/10 dark:to-[#D8FF3D]/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                      className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-[#313338]/50 transition-colors"
+                      className="p-2  hover:bg-white/50 hover:bg-[#141414]/50 transition-colors"
                       title={isSidebarOpen ? "Ukryj historię" : "Pokaż historię"}
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -867,14 +864,14 @@ export default function PanelPage() {
                         <line x1="3" y1="18" x2="21" y2="18"/>
                       </svg>
                     </button>
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#3B82F6] flex items-center justify-center">
+                    <div className="w-12 h-12   from-[#D8FF3D] to-[#D8FF3D] flex items-center justify-center">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                       </svg>
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">AI Chat - Gemini Pro</h2>
-                      <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+                      <h2 className="text-xl font-bold text-[#F2EDE3]">AI Chat - KalkMate Pro</h2>
+                      <p className="text-sm text-[#F2EDE3]/60">
                         Rozwiązuj zadania z matematyki, fizyki, chemii i biologii
                       </p>
                     </div>
@@ -882,7 +879,7 @@ export default function PanelPage() {
                   {currentConversationId && (
                     <button
                       onClick={createNewConversation}
-                      className="px-4 py-2 rounded-lg bg-[#2563EB] dark:bg-[#3B82F6] text-white hover:opacity-80 transition-opacity text-sm font-medium"
+                      className="px-4 py-2  bg-[#D8FF3D] text-[#0B0B0B] hover:opacity-80 transition-opacity text-sm font-medium"
                     >
                       Nowy chat
                     </button>
@@ -891,40 +888,40 @@ export default function PanelPage() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#F5F5F5] dark:bg-[#313338]">
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#141414]">
                 {messages.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-full text-center">
-                    <div className="w-20 h-20 mb-4 rounded-2xl bg-white dark:bg-[#2B2D31] flex items-center justify-center">
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#2563EB] dark:text-[#3B82F6]">
+                    <div className="w-20 h-20 mb-4  bg-[#0E0E0E] flex items-center justify-center">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#D8FF3D]">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-2">
+                    <h3 className="text-lg font-bold text-[#F2EDE3] mb-2">
                       Rozpocznij rozmowę z AI
                     </h3>
-                    <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 max-w-md mb-4">
+                    <p className="text-sm text-[#F2EDE3]/60 max-w-md mb-4">
                       Wklej treść zadania z matematyki, fizyki, chemii lub biologii, a AI pomoże Ci je rozwiązać zgodnie z zasadami CKE
                     </p>
                     <div className="grid grid-cols-2 gap-3 max-w-lg">
-                      <div className="bg-white dark:bg-[#2B2D31] p-3 rounded-lg border border-gray-200 dark:border-[#3F4147]">
+                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
                         <div className="text-2xl mb-1">📐</div>
-                        <p className="text-xs font-semibold text-[#1a1a1a] dark:text-[#E0E0E0]">Matematyka</p>
-                        <p className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Podstawowy i rozszerzony</p>
+                        <p className="text-xs font-semibold text-[#F2EDE3]">Matematyka</p>
+                        <p className="text-xs text-[#F2EDE3]/60">Podstawowy i rozszerzony</p>
                       </div>
-                      <div className="bg-white dark:bg-[#2B2D31] p-3 rounded-lg border border-gray-200 dark:border-[#3F4147]">
+                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
                         <div className="text-2xl mb-1">⚡</div>
-                        <p className="text-xs font-semibold text-[#1a1a1a] dark:text-[#E0E0E0]">Fizyka</p>
-                        <p className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Poziom rozszerzony</p>
+                        <p className="text-xs font-semibold text-[#F2EDE3]">Fizyka</p>
+                        <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
                       </div>
-                      <div className="bg-white dark:bg-[#2B2D31] p-3 rounded-lg border border-gray-200 dark:border-[#3F4147]">
+                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
                         <div className="text-2xl mb-1">🧪</div>
-                        <p className="text-xs font-semibold text-[#1a1a1a] dark:text-[#E0E0E0]">Chemia</p>
-                        <p className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Poziom rozszerzony</p>
+                        <p className="text-xs font-semibold text-[#F2EDE3]">Chemia</p>
+                        <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
                       </div>
-                      <div className="bg-white dark:bg-[#2B2D31] p-3 rounded-lg border border-gray-200 dark:border-[#3F4147]">
+                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
                         <div className="text-2xl mb-1">🧬</div>
-                        <p className="text-xs font-semibold text-[#1a1a1a] dark:text-[#E0E0E0]">Biologia</p>
-                        <p className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Poziom rozszerzony</p>
+                        <p className="text-xs font-semibold text-[#F2EDE3]">Biologia</p>
+                        <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
                       </div>
                     </div>
                   </div>
@@ -938,24 +935,15 @@ export default function PanelPage() {
                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} group`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-2xl px-6 py-4 relative ${
+                      className={`max-w-[85%] flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+                    >
+                    <div
+                      className={`w-full px-5 py-3.5 ${
                         msg.role === "user"
-                          ? "bg-gradient-to-br from-[#2563EB] to-[#3B82F6] text-white shadow-lg shadow-[#2563EB]/30 dark:shadow-[#3B82F6]/30"
-                          : "bg-white dark:bg-[#2B2D31] text-[#1a1a1a] dark:text-[#E0E0E0] border border-gray-100 dark:border-[#3F4147] shadow-sm"
+                          ? "bg-[#D8FF3D] text-[#0B0B0B] border border-[#D8FF3D]"
+                          : "bg-[#0E0E0E] text-[#F2EDE3] border border-[rgba(242,237,227,0.10)]"
                       }`}
                     >
-                      {msg.role === "assistant" && (
-                        <button
-                          onClick={() => copyToClipboard(msg.content)}
-                          className="absolute top-2 right-2 p-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Kopiuj odpowiedź"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                          </svg>
-                        </button>
-                      )}
                       {msg.role === "user" ? (
                         <>
                           {msg.content && <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>}
@@ -967,7 +955,7 @@ export default function PanelPage() {
                                     <img
                                       src={att.data}
                                       alt={att.filename}
-                                      className="max-w-sm rounded-lg"
+                                      className="max-w-sm "
                                     />
                                   ) : (
                                     <div className="flex items-center gap-2 bg-white/20 px-3 py-2 rounded">
@@ -987,6 +975,31 @@ export default function PanelPage() {
                         <MessageRenderer content={msg.content} isUser={false} />
                       )}
                     </div>
+                    {msg.role === "assistant" && msg.content && (
+                      <button
+                        onClick={() => copyToClipboard(msg.content, i)}
+                        className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 km-mono-eyebrow border border-[rgba(242,237,227,0.15)] text-[#F2EDE3]/55 hover:text-[#D8FF3D] hover:border-[#D8FF3D] transition-colors"
+                        title="Kopiuj odpowiedź"
+                      >
+                        {copiedIdx === i ? (
+                          <>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Skopiowano
+                          </>
+                        ) : (
+                          <>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            Kopiuj
+                          </>
+                        )}
+                      </button>
+                    )}
+                    </div>
                   </motion.div>
                 ))}
                 <div ref={messagesEndRef} />
@@ -996,14 +1009,14 @@ export default function PanelPage() {
                     animate={{ opacity: 1, y: 0 }}
                     className="flex justify-start"
                   >
-                    <div className="bg-white dark:bg-[#2B2D31] border border-gray-100 dark:border-[#3F4147] rounded-2xl px-6 py-4">
+                    <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)]  px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className="flex gap-1">
-                          <div className="w-2 h-2 bg-[#2563EB] dark:bg-[#3B82F6] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                          <div className="w-2 h-2 bg-[#2563EB] dark:bg-[#3B82F6] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                          <div className="w-2 h-2 bg-[#2563EB] dark:bg-[#3B82F6] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                          <div className="w-2 h-2 bg-[#D8FF3D] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <div className="w-2 h-2 bg-[#D8FF3D] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <div className="w-2 h-2 bg-[#D8FF3D] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                         </div>
-                        <span className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Myślę...</span>
+                        <span className="text-sm text-[#F2EDE3]/60">Myślę...</span>
                       </div>
                     </div>
                   </motion.div>
@@ -1011,26 +1024,40 @@ export default function PanelPage() {
               </div>
 
               {/* Input */}
-              <div className="p-6 border-t border-gray-100 dark:border-[#3F4147] bg-white dark:bg-[#2B2D31]">
+              <div className="p-6 border-t border-[rgba(242,237,227,0.10)] bg-[#0E0E0E]">
                 {/* Selected files preview */}
                 {selectedFiles.length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-2">
-                    {selectedFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 bg-[#2563EB]/10 dark:bg-[#3B82F6]/10 px-3 py-2 rounded-lg">
-                        <span className="text-sm text-[#1a1a1a] dark:text-[#E0E0E0]">
-                          {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                        </span>
-                        <button
-                          onClick={() => removeFile(idx)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/>
-                            <line x1="6" y1="6" x2="18" y2="18"/>
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
+                    {selectedFiles.map((file, idx) => {
+                      const isImg = file.type.startsWith("image/");
+                      const thumb = isImg ? URL.createObjectURL(file) : null;
+                      return (
+                        <div key={idx} className="relative flex items-center gap-2 bg-[#D8FF3D]/10 border border-[#D8FF3D]/30 px-2 py-1.5">
+                          {thumb && (
+                            <img
+                              src={thumb}
+                              alt={file.name}
+                              className="w-10 h-10 object-cover border border-[#D8FF3D]/40"
+                              onLoad={() => URL.revokeObjectURL(thumb)}
+                            />
+                          )}
+                          <div className="flex flex-col leading-tight">
+                            <span className="text-xs text-[#F2EDE3] truncate max-w-[180px]">{file.name}</span>
+                            <span className="km-mono-eyebrow text-[#F2EDE3]/45">{(file.size / 1024).toFixed(1)} KB</span>
+                          </div>
+                          <button
+                            onClick={() => removeFile(idx)}
+                            className="text-[#F2EDE3]/50 hover:text-[#FF4D2E] transition-colors p-1"
+                            title="Usuń"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <line x1="18" y1="6" x2="6" y2="18"/>
+                              <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1045,8 +1072,29 @@ export default function PanelPage() {
                           handleSend();
                         }
                       }}
-                      placeholder="Wklej treść zadania lub dołącz zdjęcie..."
-                      className="flex-1 bg-[#F5F5F5] dark:bg-[#313338] border border-gray-100 dark:border-[#3F4147] rounded-xl px-4 py-3 text-sm text-[#1a1a1a] dark:text-[#E0E0E0] placeholder:text-[#1a1a1a]/40 dark:placeholder:text-[#E0E0E0]/40 focus:outline-none focus:ring-2 focus:ring-[#2563EB] dark:focus:ring-[#3B82F6] resize-none"
+                      onPaste={(e) => {
+                        const items = e.clipboardData?.items;
+                        if (!items) return;
+                        const pasted: File[] = [];
+                        for (let i = 0; i < items.length; i++) {
+                          const it = items[i];
+                          if (it.kind === "file" && it.type.startsWith("image/")) {
+                            const f = it.getAsFile();
+                            if (f && f.size <= 10 * 1024 * 1024) {
+                              const ext = (it.type.split("/")[1] || "png").split("+")[0];
+                              const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+                              const renamed = new File([f], f.name && f.name !== "image.png" ? f.name : `wklejone-${stamp}.${ext}`, { type: it.type });
+                              pasted.push(renamed);
+                            }
+                          }
+                        }
+                        if (pasted.length > 0) {
+                          e.preventDefault();
+                          setSelectedFiles((prev) => [...prev, ...pasted].slice(0, 5));
+                        }
+                      }}
+                      placeholder="Wklej treść zadania lub dołącz zdjęcie (Ctrl+V działa też dla obrazów)..."
+                      className="flex-1 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] px-4 py-3 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/35 focus:outline-none focus:border-[#D8FF3D] resize-none transition-colors"
                       rows={3}
                       disabled={isSending}
                     />
@@ -1063,7 +1111,7 @@ export default function PanelPage() {
                       <button
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isSending}
-                        className="flex items-center gap-2 px-3 py-1.5 text-sm text-[#2563EB] dark:text-[#3B82F6] hover:bg-[#2563EB]/10 dark:hover:bg-[#3B82F6]/10 rounded-lg transition-colors disabled:opacity-50"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 km-mono-eyebrow text-[#D8FF3D]/80 hover:text-[#D8FF3D] hover:bg-[#D8FF3D]/10 transition-colors disabled:opacity-40"
                       >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
@@ -1075,9 +1123,9 @@ export default function PanelPage() {
                   <button
                     onClick={handleSend}
                     disabled={(!userMessage.trim() && selectedFiles.length === 0) || isSending}
-                    className="self-end bg-gradient-to-br from-[#2563EB] to-[#3B82F6] text-white px-8 py-3 rounded-xl hover:shadow-lg hover:shadow-[#2563EB]/30 dark:hover:shadow-[#3B82F6]/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    className="self-end bg-[#D8FF3D] text-[#0B0B0B] px-7 py-3 km-mono-eyebrow hover:bg-[#F2EDE3] transition-colors disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-2"
                   >
-                    Wyślij
+                    Wyślij <span>→</span>
                   </button>
                 </div>
               </div>
@@ -1093,19 +1141,19 @@ export default function PanelPage() {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3, ease: "easeOut" as const }}
             >
-              <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-8 border border-gray-100 dark:border-[#3F4147]">
+              <div className="bg-[#0E0E0E]  p-8 border border-[rgba(242,237,227,0.10)]">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-[#2563EB]/10 dark:bg-[#3B82F6]/10 flex items-center justify-center">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#2563EB] dark:text-[#3B82F6]">
+                  <div className="w-12 h-12  bg-[#D8FF3D]/10 bg-[#D8FF3D]/10 flex items-center justify-center">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#D8FF3D]">
                       <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
                       <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                    <h2 className="text-2xl font-bold text-[#F2EDE3]">
                       Subskrypcja AI Chat
                     </h2>
-                    <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+                    <p className="text-sm text-[#F2EDE3]/60">
                       Zarządzaj dostępem do AI Chat
                     </p>
                   </div>
@@ -1113,24 +1161,24 @@ export default function PanelPage() {
 
                 {subscriptionStatus ? (
                   <div className="space-y-6">
-                    <div className="flex items-center gap-3 p-4 bg-[#F5F5F5] dark:bg-[#313338] rounded-xl">
+                    <div className="flex items-center gap-3 p-4 bg-[#141414] ">
                       <div className={`w-4 h-4 rounded-full ${subscriptionStatus.canUseChat ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
-                      <span className="text-lg font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                      <span className="text-lg font-bold text-[#F2EDE3]">
                         Status: {subscriptionStatus.status === "trial" ? "🎁 Okres próbny" : subscriptionStatus.status === "active" ? "✓ Aktywna" : "✗ Nieaktywna"}
                       </span>
                     </div>
 
                     {/* Aktualnie przypisana licencja */}
                     {calcInfo?.claimed && calcInfo?.license?.code && (
-                      <div className="flex items-center justify-between p-4 bg-[#F5F5F5] dark:bg-[#313338] rounded-xl">
+                      <div className="flex items-center justify-between p-4 bg-[#141414] ">
                         <div>
-                          <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-1">
+                          <div className="text-xs text-[#F2EDE3]/60 mb-1">
                             Przypisana licencja
                           </div>
-                          <div className="font-mono text-sm text-[#1a1a1a] dark:text-[#E0E0E0]">
+                          <div className="font-mono text-sm text-[#F2EDE3]">
                             {calcInfo.license.code}
                           </div>
-                          <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1">
+                          <div className="text-xs text-[#F2EDE3]/60 mt-1">
                             {calcInfo.license.durationDays} dni
                             {calcInfo.license.activatedAt
                               ? ` · aktywowana ${new Date(calcInfo.license.activatedAt).toLocaleDateString("pl-PL")}`
@@ -1140,7 +1188,7 @@ export default function PanelPage() {
                         <button
                           onClick={calcUnclaim}
                           disabled={unclaiming}
-                          className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg disabled:opacity-50"
+                          className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400  disabled:opacity-50"
                         >
                           {unclaiming ? "Odpinanie..." : "Odepnij"}
                         </button>
@@ -1148,19 +1196,19 @@ export default function PanelPage() {
                     )}
 
                     {/* License Redemption */}
-                    <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-500/10 dark:to-blue-500/10 border border-purple-200 dark:border-purple-500/20 rounded-xl p-6">
+                    <div className=" from-purple-50 to-blue-50 dark:from-purple-500/10 dark:to-blue-500/10 border border-purple-200 dark:border-purple-500/20  p-6">
                       <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                        <div className="w-10 h-10   from-purple-500 to-blue-500 flex items-center justify-center">
                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                           </svg>
                         </div>
                         <div>
-                          <h3 className="font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                          <h3 className="font-bold text-[#F2EDE3]">
                             Masz kod licencji?
                           </h3>
-                          <p className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+                          <p className="text-xs text-[#F2EDE3]/60">
                             Wprowadź kod, aby przedłużyć dostęp do AI Chat
                           </p>
                         </div>
@@ -1171,13 +1219,13 @@ export default function PanelPage() {
                           value={licenseCode}
                           onChange={(e) => setLicenseCode(e.target.value)}
                           placeholder="abcd123-+=%abcd"
-                          className="flex-1 bg-white dark:bg-[#2B2D31] border border-purple-200 dark:border-purple-500/20 rounded-xl px-4 py-3 text-sm text-[#1a1a1a] dark:text-[#E0E0E0] placeholder:text-[#1a1a1a]/40 dark:placeholder:text-[#E0E0E0]/40 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+                          className="flex-1 bg-[#0E0E0E] border border-purple-200 dark:border-purple-500/20  px-4 py-3 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/40 placeholder:text-[#F2EDE3]/40 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
                           disabled={redeemingLicense}
                         />
                         <button
                           onClick={handleRedeemLicense}
                           disabled={!licenseCode.trim() || redeemingLicense}
-                          className="px-6 py-3 bg-gradient-to-br from-purple-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-6 py-3  from-purple-500 to-blue-500 text-white font-medium   transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {redeemingLicense ? "Realizuję..." : "Realizuj"}
                         </button>
@@ -1185,9 +1233,9 @@ export default function PanelPage() {
                     </div>
 
                     {subscriptionStatus.isTrialActive && (
-                      <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-500/10 dark:to-blue-600/10 border border-blue-200 dark:border-blue-500/20 rounded-xl p-6">
+                      <div className=" from-blue-50 to-blue-100 dark:from-blue-500/10 dark:to-blue-600/10 border border-blue-200 dark:border-blue-500/20  p-6">
                         <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
+                          <div className="w-12 h-12  bg-blue-500 flex items-center justify-center shrink-0">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6M12 2v10M16 7l-4-4-4 4" />
                             </svg>
@@ -1215,7 +1263,7 @@ export default function PanelPage() {
 
                     {!subscriptionStatus.hasActiveSubscription && !subscriptionStatus.isTrialActive && (
                       <div>
-                        <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-6">
+                        <p className="text-sm text-[#F2EDE3]/60 mb-6">
                           {subscriptionStatus.hasPurchasedCalculator ? (
                             <>
                               Twój {subscriptionStatus.trialDays}-dniowy okres próbny wygasł.
@@ -1229,70 +1277,70 @@ export default function PanelPage() {
                         </p>
 
                         {/* Pricing Plans */}
-                        <div className="bg-gradient-to-br from-[#2563EB]/5 to-[#3B82F6]/5 dark:from-[#2563EB]/10 dark:to-[#3B82F6]/10 rounded-2xl p-6 mb-6">
-                          <h3 className="text-lg font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-4 text-center">
+                        <div className=" from-[#D8FF3D]/5 to-[#D8FF3D]/5 dark:from-[#D8FF3D]/10 dark:to-[#D8FF3D]/10  p-6 mb-6">
+                          <h3 className="text-lg font-bold text-[#F2EDE3] mb-4 text-center">
                             Wybierz plan subskrypcji
                           </h3>
 
                           <div className="grid md:grid-cols-2 gap-4 mb-4">
                             {/* Second Month Plan - 1 zł */}
-                            <div className="bg-white dark:bg-[#2B2D31] rounded-xl p-5 border-2 border-[#2563EB] dark:border-[#3B82F6] relative">
-                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-[#2563EB] to-[#3B82F6] text-white text-xs font-bold rounded-full">
+                            <div className="bg-[#0E0E0E]  p-5 border-2 border-[#D8FF3D] relative">
+                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1  from-[#D8FF3D] to-[#D8FF3D] text-[#0B0B0B] text-xs font-bold rounded-full">
                                 🔥 Promocja -98%
                               </div>
                               <div className="text-center mt-2 mb-4">
-                                <div className="text-3xl font-bold text-[#2563EB] dark:text-[#3B82F6] mb-1">
+                                <div className="text-3xl font-bold text-[#D8FF3D] mb-1">
                                   1 zł
                                 </div>
-                                <div className="text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40 line-through">
+                                <div className="text-xs text-[#F2EDE3]/40 line-through">
                                   44,99 zł
                                 </div>
-                                <div className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1">
+                                <div className="text-sm text-[#F2EDE3]/60 mt-1">
                                   Drugi miesiąc
                                 </div>
                               </div>
                               <button
                                 onClick={() => handleSubscribe("second_month")}
                                 disabled={isLoading}
-                                className="w-full bg-gradient-to-br from-[#2563EB] to-[#3B82F6] text-white px-4 py-3 rounded-xl hover:shadow-lg transition-all duration-300 disabled:opacity-50 font-bold text-sm"
+                                className="w-full  from-[#D8FF3D] to-[#D8FF3D] text-[#0B0B0B] px-4 py-3   transition-all duration-300 disabled:opacity-50 font-bold text-sm"
                               >
                                 {isLoading ? "Ładowanie..." : "Wybierz 1 zł"}
                               </button>
                             </div>
 
                             {/* Regular Plan - 15 zł */}
-                            <div className="bg-white dark:bg-[#2B2D31] rounded-xl p-5 border-2 border-gray-200 dark:border-[#3F4147]">
+                            <div className="bg-[#0E0E0E]  p-5 border-2 border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
                               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-purple-600 text-white text-xs font-bold rounded-full">
                                 💎 Stała cena
                               </div>
                               <div className="text-center mt-2 mb-4">
-                                <div className="text-3xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-1">
+                                <div className="text-3xl font-bold text-[#F2EDE3] mb-1">
                                   15 zł
                                 </div>
-                                <div className="text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40 line-through">
+                                <div className="text-xs text-[#F2EDE3]/40 line-through">
                                   44,99 zł
                                 </div>
-                                <div className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1">
+                                <div className="text-sm text-[#F2EDE3]/60 mt-1">
                                   Kolejne miesiące
                                 </div>
                               </div>
                               <button
                                 onClick={() => handleSubscribe("regular")}
                                 disabled={isLoading}
-                                className="w-full bg-[#2B2D31] dark:bg-[#313338] text-[#E0E0E0] px-4 py-3 rounded-xl hover:bg-[#313338] dark:hover:bg-[#3F4147] transition-all duration-300 disabled:opacity-50 font-bold text-sm border border-gray-200 dark:border-[#3F4147]"
+                                className="w-full bg-[#0E0E0E] bg-[#141414] text-[#F2EDE3] px-4 py-3  hover:bg-[#141414] hover:bg-[#1a1a1a] transition-all duration-300 disabled:opacity-50 font-bold text-sm border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]"
                               >
                                 {isLoading ? "Ładowanie..." : "Wybierz 15 zł"}
                               </button>
                             </div>
                           </div>
 
-                          <div className="text-center text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+                          <div className="text-center text-xs text-[#F2EDE3]/60">
                             💳 Bezpieczna płatność przez Stripe • Anuluj w każdej chwili
                           </div>
                         </div>
 
                         {subscriptionStatus.hasPurchasedCalculator && (
-                          <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-xl p-4">
+                          <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20  p-4">
                             <p className="text-sm text-green-800 dark:text-green-200">
                               💡 <strong>Jako właściciel kalkulatora</strong> możesz korzystać z AI Chat przez subskrypcję. To opcjonalne - kalkulator działa niezależnie.
                             </p>
@@ -1303,7 +1351,7 @@ export default function PanelPage() {
 
                     {subscriptionStatus.hasActiveSubscription && (
                       <div>
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-100 dark:from-green-500/10 dark:to-emerald-600/10 border border-green-200 dark:border-green-500/20 rounded-xl p-6 mb-4">
+                        <div className=" from-green-50 to-emerald-100 dark:from-green-500/10 dark:to-emerald-600/10 border border-green-200 dark:border-green-500/20  p-6 mb-4">
                           <p className="text-lg font-bold text-green-900 dark:text-green-200 mb-2">
                             ✓ Płatna subskrypcja aktywna
                           </p>
@@ -1328,7 +1376,7 @@ export default function PanelPage() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-center py-12">
-                    <div className="w-8 h-8 border-4 border-[#2563EB] dark:border-[#3B82F6] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-4 border-[#D8FF3D] border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
@@ -1345,123 +1393,136 @@ export default function PanelPage() {
               className="space-y-6"
             >
               {calcLoading && (
-                <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Ladowanie...</div>
+                <div className="text-[#F2EDE3]/60">Ladowanie...</div>
               )}
 
-              {!calcLoading && calcInfo && !calcInfo.claimed && (
-                <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
-                  <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-2">
-                    Najpierw przypisz licencje
-                  </h2>
-                  <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-4">
-                    Aby sparowac kalkulator z kontem, najpierw przypisz licencje
-                    do swojego konta w zakladce <strong>Subskrypcja</strong>.
-                  </p>
-                  <button
-                    onClick={() => setActiveTab("subscription")}
-                    className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded font-medium"
-                  >
-                    Przejdz do Subskrypcji
-                  </button>
-                </div>
-              )}
+              {!calcLoading && calcInfo && !calcInfo.device && (
+                <div className="relative bg-[#0E0E0E] border border-[rgba(242,237,227,0.18)]">
+                  <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-l border-t border-[#D8FF3D]" />
+                  <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-r border-t border-[#D8FF3D]" />
+                  <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-l border-b border-[#D8FF3D]" />
+                  <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-r border-b border-[#D8FF3D]" />
 
-              {!calcLoading && calcInfo && calcInfo.claimed && !calcInfo.device && (
-                <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
-                  <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-2">
-                    Sparuj kalkulator z kontem
-                  </h2>
-                  <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-4">
-                    Wpisz <strong>Device ID</strong> z kalkulatora (Settings → Device ID + QR)
-                    oraz <strong>kod odblokowania</strong> (Settings → Kod AI). Po sparowaniu
-                    zobaczysz tutaj historie rozwiazan, notatki i sprawdziany.
-                    <br /><br />
-                    <em className="text-xs">Uwaga: kalkulator musi byc polaczony z WiFi i zglosic
-                    sie do serwera, zanim sie sparuje.</em>
-                  </p>
-                  <div className="space-y-2">
-                    <div>
-                      <label className="block text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-1">
-                        Device ID (MAC)
-                      </label>
-                      <input
-                        type="text"
-                        value={pairDeviceId}
-                        onChange={(e) => setPairDeviceId(e.target.value.toUpperCase())}
-                        placeholder="np. 68FE71E43B94"
-                        className="w-full px-3 py-2 bg-white dark:bg-[#1A1B1E] border border-gray-200 dark:border-[#3F4147] rounded text-sm font-mono text-[#1a1a1a] dark:text-[#E0E0E0]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mb-1">
-                        Kod odblokowania
-                      </label>
-                      <input
-                        type="text"
-                        value={pairUnlockCode}
-                        onChange={(e) => setPairUnlockCode(e.target.value)}
-                        placeholder="np. 1111"
-                        className="w-full px-3 py-2 bg-white dark:bg-[#1A1B1E] border border-gray-200 dark:border-[#3F4147] rounded text-sm font-mono text-[#1a1a1a] dark:text-[#E0E0E0]"
-                      />
-                    </div>
-                    <button
-                      onClick={pairDevice}
-                      disabled={pairing || !pairDeviceId.trim() || !pairUnlockCode.trim()}
-                      className="w-full px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded disabled:opacity-50 font-medium"
-                    >
-                      {pairing ? "Paruje..." : "Sparuj urzadzenie"}
-                    </button>
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
+                    <span className="km-mono-eyebrow text-[#D8FF3D] flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
+                      Sparuj kalkulator
+                    </span>
+                    <span className="km-mono-eyebrow text-[#F2EDE3]/40">/PAIR</span>
                   </div>
-                  {pairError && <div className="mt-2 text-red-400 text-sm">{pairError}</div>}
-                  {pairOk && <div className="mt-2 text-green-400 text-sm">Sparowano!</div>}
+
+                  <div className="p-6 lg:p-8">
+                    <h2 className="km-display text-3xl text-[#F2EDE3]">
+                      Dodaj swoje <span className="italic text-[#D8FF3D]">urządzenie</span>.
+                    </h2>
+                    <p className="mt-3 text-[14px] text-[#F2EDE3]/65 leading-[1.6]">
+                      Wpisz <strong className="text-[#F2EDE3]">Device ID</strong> z kalkulatora
+                      (Settings → Device ID + QR) oraz <strong className="text-[#F2EDE3]">kod
+                      odblokowania</strong> (Settings → Kod AI).
+                    </p>
+                    <p className="mt-2 km-mono-eyebrow text-[#F2EDE3]/40">
+                      ⚠ Kalkulator musi być najpierw połączony z WiFi i zgłosić się do serwera.
+                    </p>
+
+                    <div className="mt-6 space-y-4">
+                      <div>
+                        <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
+                          Device ID (MAC)
+                        </label>
+                        <input
+                          type="text"
+                          value={pairDeviceId}
+                          onChange={(e) => setPairDeviceId(e.target.value.toUpperCase())}
+                          placeholder="68FE71E43B94"
+                          className="w-full px-4 py-3 bg-[#0B0B0B] border border-[rgba(242,237,227,0.18)] focus:outline-none focus:border-[#D8FF3D] text-[15px] font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/25 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
+                          Kod odblokowania
+                        </label>
+                        <input
+                          type="text"
+                          value={pairUnlockCode}
+                          onChange={(e) => setPairUnlockCode(e.target.value)}
+                          placeholder="1111"
+                          className="w-full px-4 py-3 bg-[#0B0B0B] border border-[rgba(242,237,227,0.18)] focus:outline-none focus:border-[#D8FF3D] text-[15px] font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/25 transition-colors"
+                        />
+                      </div>
+                      <button
+                        onClick={pairDevice}
+                        disabled={pairing || !pairDeviceId.trim() || !pairUnlockCode.trim()}
+                        className="w-full inline-flex items-center justify-between px-5 py-3.5 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow hover:bg-[#F2EDE3] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <span className="flex items-center gap-2">
+                          {!pairing && <span className="w-1.5 h-1.5 bg-[#0B0B0B] rounded-full km-blink" />}
+                          {pairing ? "Parowanie..." : "Sparuj urządzenie"}
+                        </span>
+                        {!pairing && <span>→</span>}
+                      </button>
+                    </div>
+
+                    {pairError && (
+                      <div className="mt-4 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
+                        <p className="km-mono-eyebrow text-[#FF4D2E]">/ ERROR</p>
+                        <p className="text-sm text-[#FF4D2E] mt-1">{pairError}</p>
+                      </div>
+                    )}
+                    {pairOk && (
+                      <div className="mt-4 border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.06] p-3">
+                        <p className="km-mono-eyebrow text-[#D8FF3D]">✓ Sparowano</p>
+                        <p className="text-sm text-[#F2EDE3]/80 mt-1">Urządzenie dodane do konta.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {!calcLoading && calcInfo && calcInfo.claimed && (
+              {!calcLoading && calcInfo && calcInfo.device && (
                 <>
                   {/* Info o urzadzeniu */}
-                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                  <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-start mb-3">
-                      <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
-                        Twoje urzadzenie
+                      <h2 className="km-display text-2xl text-[#F2EDE3]">
+                        Twoje <span className="italic text-[#D8FF3D]">urządzenie</span>
                       </h2>
                       <button
                         onClick={calcUnclaim}
                         disabled={unclaiming}
-                        className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg disabled:opacity-50"
+                        className="km-mono-eyebrow px-3 py-1.5 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 disabled:opacity-50 transition-colors"
                       >
-                        {unclaiming ? "Odpinanie..." : "Zmien licencje"}
+                        {unclaiming ? "Odpinanie..." : "Odepnij"}
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
-                        <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Licencja</div>
-                        <div className="font-mono text-[#1a1a1a] dark:text-[#E0E0E0]">{calcInfo.license?.code}</div>
+                        <div className="text-[#F2EDE3]/60">Licencja</div>
+                        <div className="font-mono text-[#F2EDE3]">{calcInfo.license?.code}</div>
                       </div>
                       {calcInfo.device && (
                         <>
                           <div>
-                            <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Device ID (MAC)</div>
-                            <div className="font-mono text-[#1a1a1a] dark:text-[#E0E0E0]">{calcInfo.device.deviceId}</div>
+                            <div className="text-[#F2EDE3]/60">Device ID (MAC)</div>
+                            <div className="font-mono text-[#F2EDE3]">{calcInfo.device.deviceId}</div>
                           </div>
                           <div>
-                            <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Firmware</div>
-                            <div className="font-mono text-[#1a1a1a] dark:text-[#E0E0E0]">{calcInfo.device.firmwareVersion || "—"}</div>
+                            <div className="text-[#F2EDE3]/60">Firmware</div>
+                            <div className="font-mono text-[#F2EDE3]">{calcInfo.device.firmwareVersion || "—"}</div>
                           </div>
                           <div>
-                            <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Zapytan</div>
-                            <div className="font-bold text-[#3B82F6]">{calcInfo.device.requestCount}</div>
+                            <div className="text-[#F2EDE3]/60">Zapytan</div>
+                            <div className="font-bold text-[#D8FF3D]">{calcInfo.device.requestCount}</div>
                           </div>
                         </>
                       )}
                     </div>
                   </div>{/* Historia rozmów */}
-                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
-                    <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-4">
+                  <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
+                    <h2 className="text-xl font-bold text-[#F2EDE3] mb-4">
                       Historia rozwiazan ({calcConvs.length})
                     </h2>
                     {calcConvs.length === 0 ? (
-                      <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 text-sm">
+                      <div className="text-[#F2EDE3]/60 text-sm">
                         Zadnych zadan jeszcze nie rozwiazano.
                       </div>
                     ) : (
@@ -1470,18 +1531,18 @@ export default function PanelPage() {
                           <button
                             key={it.id}
                             onClick={() => setCalcOpenedConv(it)}
-                            className="block w-full text-left bg-gray-50 dark:bg-[#1A1B1E] hover:bg-gray-100 dark:hover:bg-[#3F4147]/40 rounded p-3 border border-gray-100 dark:border-[#3F4147]"
+                            className="block w-full text-left bg-gray-50 bg-[#141414] hover:bg-gray-100 hover:bg-[#1a1a1a]/40 rounded p-3 border border-[rgba(242,237,227,0.10)]"
                           >
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-[#1a1a1a] dark:text-[#E0E0E0] truncate">
+                                <div className="font-medium text-[#F2EDE3] truncate">
                                   {it.mode === "image" ? "Zdjecie" : it.question}
                                 </div>
-                                <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1 line-clamp-2">
+                                <div className="text-xs text-[#F2EDE3]/60 mt-1 line-clamp-2">
                                   {it.answer.slice(0, 120)}...
                                 </div>
                               </div>
-                              <div className="text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40 ml-2 whitespace-nowrap">
+                              <div className="text-xs text-[#F2EDE3]/40 ml-2 whitespace-nowrap">
                                 {new Date(it.createdAt).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                               </div>
                             </div>
@@ -1496,21 +1557,21 @@ export default function PanelPage() {
               {/* Modal pelnego widoku konwersacji */}
               {calcOpenedConv && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setCalcOpenedConv(null)}>
-                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 border border-gray-100 dark:border-[#3F4147]" onClick={(e) => e.stopPropagation()}>
+                  <div className="bg-[#0E0E0E]  shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 border border-[rgba(242,237,227,0.10)]" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">{new Date(calcOpenedConv.createdAt).toLocaleString("pl-PL")}</div>
-                        <div className="text-xs font-mono text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40">{calcOpenedConv.deviceId}</div>
+                        <div className="text-xs text-[#F2EDE3]/60">{new Date(calcOpenedConv.createdAt).toLocaleString("pl-PL")}</div>
+                        <div className="text-xs font-mono text-[#F2EDE3]/40">{calcOpenedConv.deviceId}</div>
                       </div>
-                      <button onClick={() => setCalcOpenedConv(null)} className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 hover:text-[#1a1a1a] dark:hover:text-[#E0E0E0] text-2xl leading-none">×</button>
+                      <button onClick={() => setCalcOpenedConv(null)} className="text-[#F2EDE3]/60 hover:text-[#F2EDE3] text-2xl leading-none">×</button>
                     </div>
                     <div className="mb-4">
-                      <div className="text-sm font-bold mb-1 text-[#1a1a1a] dark:text-[#E0E0E0]">Zadanie:</div>
-                      <div className="bg-gray-50 dark:bg-[#1A1B1E] p-3 rounded text-sm whitespace-pre-wrap text-[#1a1a1a] dark:text-[#E0E0E0]">{calcOpenedConv.question}</div>
+                      <div className="text-sm font-bold mb-1 text-[#F2EDE3]">Zadanie:</div>
+                      <div className="bg-gray-50 bg-[#141414] p-3 rounded text-sm whitespace-pre-wrap text-[#F2EDE3]">{calcOpenedConv.question}</div>
                     </div>
                     <div>
-                      <div className="text-sm font-bold mb-1 text-[#1a1a1a] dark:text-[#E0E0E0]">Rozwiazanie:</div>
-                      <div className="bg-blue-50 dark:bg-[#1A1B1E] p-3 rounded text-sm whitespace-pre-wrap font-mono text-[#1a1a1a] dark:text-[#E0E0E0] border border-blue-100 dark:border-[#3B82F6]/30">{calcOpenedConv.answer}</div>
+                      <div className="text-sm font-bold mb-1 text-[#F2EDE3]">Rozwiazanie:</div>
+                      <div className="bg-blue-50 bg-[#141414] p-3 rounded text-sm whitespace-pre-wrap font-mono text-[#F2EDE3] border border-blue-100 border-[#D8FF3D]/30">{calcOpenedConv.answer}</div>
                     </div>
                   </div>
                 </div>
@@ -1528,25 +1589,25 @@ export default function PanelPage() {
               transition={{ duration: 0.3, ease: "easeOut" as const }}
             >
               {calcLoading && (
-                <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Ladowanie...</div>
+                <div className="text-[#F2EDE3]/60">Ladowanie...</div>
               )}
               {!calcLoading && calcInfo && !calcInfo.claimed && (
-                <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147] text-sm text-[#1a1a1a]/70 dark:text-[#E0E0E0]/70">
+                <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)] text-sm text-[#F2EDE3]/70">
                   Najpierw przypisz licencje w zakladce <strong>Kalkulator</strong>.
                 </div>
               )}
               {!calcLoading && calcInfo && calcInfo.claimed && (<>{/* Notatki */}
-                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                  <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                      <h2 className="text-xl font-bold text-[#F2EDE3]">
                         Notatki offline ({calcNotes.length}/50)
                       </h2>
-                      <span className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
+                      <span className="text-xs text-[#F2EDE3]/60">
                         Sync do urzadzenia przy WiFi
                       </span>
                     </div>
-                    <div className="bg-gray-50 dark:bg-[#1A1B1E] rounded p-4 mb-4 border border-gray-100 dark:border-[#3F4147]">
-                      <div className="font-semibold mb-2 text-sm text-[#1a1a1a] dark:text-[#E0E0E0]">
+                    <div className="bg-gray-50 bg-[#141414] rounded p-4 mb-4 border border-[rgba(242,237,227,0.10)]">
+                      <div className="font-semibold mb-2 text-sm text-[#F2EDE3]">
                         {editingNote ? "Edytuj notatke" : "Nowa notatka"}
                       </div>
                       <input
@@ -1555,7 +1616,7 @@ export default function PanelPage() {
                         onChange={(e) => setNoteTitle(e.target.value)}
                         placeholder="Tytul (max 60 znakow)"
                         maxLength={60}
-                        className="w-full px-3 py-2 bg-white dark:bg-[#2B2D31] border border-gray-200 dark:border-[#3F4147] rounded mb-2 text-sm text-[#1a1a1a] dark:text-[#E0E0E0]"
+                        className="w-full px-3 py-2 bg-[#0E0E0E] border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)] rounded mb-2 text-sm text-[#F2EDE3]"
                       />
                       <textarea
                         value={noteContent}
@@ -1563,41 +1624,41 @@ export default function PanelPage() {
                         placeholder="Tresc (max 4000 znakow - wzory, definicje)"
                         maxLength={4000}
                         rows={4}
-                        className="w-full px-3 py-2 bg-white dark:bg-[#2B2D31] border border-gray-200 dark:border-[#3F4147] rounded text-sm font-mono text-[#1a1a1a] dark:text-[#E0E0E0]"
+                        className="w-full px-3 py-2 bg-[#0E0E0E] border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)] rounded text-sm font-mono text-[#F2EDE3]"
                       />
                       <div className="flex justify-between items-center mt-2">
-                        <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">{noteContent.length}/4000</div>
+                        <div className="text-xs text-[#F2EDE3]/60">{noteContent.length}/4000</div>
                         <div className="flex gap-2">
                           {editingNote && (
                             <button
                               onClick={() => { setEditingNote(null); setNoteTitle(""); setNoteContent(""); }}
-                              className="px-3 py-1 text-sm bg-gray-200 dark:bg-[#3F4147] hover:bg-gray-300 dark:hover:bg-[#4A4D52] text-[#1a1a1a] dark:text-[#E0E0E0] rounded"
+                              className="px-3 py-1 text-sm bg-gray-200 bg-[#1a1a1a] hover:bg-gray-300 hover:bg-[#1a1a1a] text-[#F2EDE3] rounded"
                             >Anuluj</button>
                           )}
                           <button
                             onClick={calcSaveNote}
                             disabled={savingNote || (!noteTitle.trim() && !noteContent.trim())}
-                            className="px-3 py-1 text-sm bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded disabled:opacity-50"
+                            className="px-3 py-1 text-sm bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] rounded disabled:opacity-50"
                           >{savingNote ? "Zapisuje..." : editingNote ? "Zapisz" : "Dodaj"}</button>
                         </div>
                       </div>
                     </div>
                     {calcNotes.length === 0 ? (
-                      <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 text-sm text-center py-4">
+                      <div className="text-[#F2EDE3]/60 text-sm text-center py-4">
                         Brak notatek.
                       </div>
                     ) : (
                       <div className="space-y-2">
                         {calcNotes.map((n: any) => (
-                          <div key={n.id} className="border border-gray-100 dark:border-[#3F4147] rounded p-3 hover:bg-gray-50 dark:hover:bg-[#3F4147]/30">
+                          <div key={n.id} className="border border-[rgba(242,237,227,0.10)] rounded p-3 hover:bg-gray-50 hover:bg-[#1a1a1a]/30">
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-[#1a1a1a] dark:text-[#E0E0E0]">{n.title || "(bez tytulu)"}</div>
-                                <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1 line-clamp-2 whitespace-pre-wrap">{n.content || "(pusta)"}</div>
+                                <div className="font-medium text-[#F2EDE3]">{n.title || "(bez tytulu)"}</div>
+                                <div className="text-xs text-[#F2EDE3]/60 mt-1 line-clamp-2 whitespace-pre-wrap">{n.content || "(pusta)"}</div>
                               </div>
                               <div className="ml-2 flex gap-1">
                                 <button onClick={() => { setEditingNote(n); setNoteTitle(n.title); setNoteContent(n.content); }}
-                                  className="text-xs px-2 py-1 bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 text-[#3B82F6] rounded">Edytuj</button>
+                                  className="text-xs px-2 py-1 bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 text-[#D8FF3D] rounded">Edytuj</button>
                                 <button onClick={() => calcDelNote(n.id)}
                                   className="text-xs px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded">Usun</button>
                               </div>
@@ -1619,23 +1680,23 @@ export default function PanelPage() {
               transition={{ duration: 0.3, ease: "easeOut" as const }}
             >
               {calcLoading && (
-                <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Ladowanie...</div>
+                <div className="text-[#F2EDE3]/60">Ladowanie...</div>
               )}
               {!calcLoading && calcInfo && !calcInfo.claimed && (
-                <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147] text-sm text-[#1a1a1a]/70 dark:text-[#E0E0E0]/70">
+                <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)] text-sm text-[#F2EDE3]/70">
                   Najpierw przypisz licencje w zakladce <strong>Kalkulator</strong>.
                 </div>
               )}
               {!calcLoading && calcInfo && calcInfo.claimed && (<>{/* Sprawdziany */}
-                  <div className="bg-white dark:bg-[#2B2D31] rounded-2xl p-6 border border-gray-100 dark:border-[#3F4147]">
+                  <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-xl font-bold text-[#1a1a1a] dark:text-[#E0E0E0]">
+                      <h2 className="text-xl font-bold text-[#F2EDE3]">
                         Sprawdziany ({calcTests.length}/50)
                       </h2>
-                      <span className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">Markdown/LaTeX OK</span>
+                      <span className="text-xs text-[#F2EDE3]/60">Markdown/LaTeX OK</span>
                     </div>
-                    <div className="bg-gray-50 dark:bg-[#1A1B1E] rounded p-4 mb-4 border border-gray-100 dark:border-[#3F4147]">
-                      <div className="font-semibold mb-2 text-sm text-[#1a1a1a] dark:text-[#E0E0E0]">
+                    <div className="bg-gray-50 bg-[#141414] rounded p-4 mb-4 border border-[rgba(242,237,227,0.10)]">
+                      <div className="font-semibold mb-2 text-sm text-[#F2EDE3]">
                         {editingTest ? "Edytuj sprawdzian" : "Nowy sprawdzian"}
                       </div>
                       <input
@@ -1644,7 +1705,7 @@ export default function PanelPage() {
                         onChange={(e) => setTestTitle(e.target.value)}
                         placeholder="Tytul (np. Matma 2026 - probna 1)"
                         maxLength={100}
-                        className="w-full px-3 py-2 bg-white dark:bg-[#2B2D31] border border-gray-200 dark:border-[#3F4147] rounded mb-2 text-sm text-[#1a1a1a] dark:text-[#E0E0E0]"
+                        className="w-full px-3 py-2 bg-[#0E0E0E] border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)] rounded mb-2 text-sm text-[#F2EDE3]"
                       />
                       <textarea
                         value={testContent}
@@ -1652,15 +1713,15 @@ export default function PanelPage() {
                         placeholder="Wklej tutaj rozwiazanie (markdown, LaTeX, $..$, **bold**...)"
                         maxLength={30000}
                         rows={8}
-                        className="w-full px-3 py-2 bg-white dark:bg-[#2B2D31] border border-gray-200 dark:border-[#3F4147] rounded text-sm font-mono text-[#1a1a1a] dark:text-[#E0E0E0]"
+                        className="w-full px-3 py-2 bg-[#0E0E0E] border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)] rounded text-sm font-mono text-[#F2EDE3]"
                       />
                       <div className="flex justify-between items-center mt-2">
-                        <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">{testContent.length}/30000</div>
+                        <div className="text-xs text-[#F2EDE3]/60">{testContent.length}/30000</div>
                         <div className="flex gap-2">
                           {editingTest && (
                             <button
                               onClick={() => { setEditingTest(null); setTestTitle(""); setTestContent(""); }}
-                              className="px-3 py-1 text-sm bg-gray-200 dark:bg-[#3F4147] text-[#1a1a1a] dark:text-[#E0E0E0] rounded"
+                              className="px-3 py-1 text-sm bg-gray-200 bg-[#1a1a1a] text-[#F2EDE3] rounded"
                             >Anuluj</button>
                           )}
                           <button
@@ -1672,17 +1733,17 @@ export default function PanelPage() {
                       </div>
                     </div>
                     {calcTests.length === 0 ? (
-                      <div className="text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 text-sm text-center py-4">
+                      <div className="text-[#F2EDE3]/60 text-sm text-center py-4">
                         Brak sprawdzianow.
                       </div>
                     ) : (
                       <div className="space-y-2">
                         {calcTests.map((t: any) => (
-                          <div key={t.id} className="border border-gray-100 dark:border-[#3F4147] rounded p-3 hover:bg-gray-50 dark:hover:bg-[#3F4147]/30">
+                          <div key={t.id} className="border border-[rgba(242,237,227,0.10)] rounded p-3 hover:bg-gray-50 hover:bg-[#1a1a1a]/30">
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-[#1a1a1a] dark:text-[#E0E0E0]">{t.title || "(bez tytulu)"}</div>
-                                <div className="text-xs text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60 mt-1">{t.content.length} znakow</div>
+                                <div className="font-medium text-[#F2EDE3]">{t.title || "(bez tytulu)"}</div>
+                                <div className="text-xs text-[#F2EDE3]/60 mt-1">{t.content.length} znakow</div>
                               </div>
                               <div className="ml-2 flex gap-1">
                                 <button onClick={() => { setEditingTest(t); setTestTitle(t.title); setTestContent(t.content); }}

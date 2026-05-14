@@ -224,18 +224,18 @@ export default function KalkulatorPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-[#0B0B0B] text-[#F2EDE3] p-6">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">Mój kalkulator</h1>
-          <Link href="/panel" className="text-sm text-blue-600 hover:underline">
+          <Link href="/panel" className="text-sm text-[#D8FF3D] hover:underline">
             ← Powrót do panelu
           </Link>
         </div>
 
         {/* Sekcja claim licencji */}
         {!info?.claimed && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] rounded-lg shadow p-6 mb-6">
             <h2 className="text-xl font-bold mb-2">Przypisz licencję kalkulatora</h2>
             <p className="text-sm text-gray-600 mb-4">
               Wpisz kod licencji który masz w urządzeniu (Settings → Licencja). Po
@@ -255,7 +255,7 @@ export default function KalkulatorPage() {
               <button
                 onClick={handleClaim}
                 disabled={claiming || !code.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-[#D8FF3D] text-white rounded hover:bg-[#F2EDE3] disabled:opacity-50"
               >
                 {claiming ? "Zapisuję…" : "Przypisz"}
               </button>
@@ -266,7 +266,7 @@ export default function KalkulatorPage() {
 
         {/* Info o urzadzeniu */}
         {info?.claimed && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] rounded-lg shadow p-6 mb-6">
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold mb-2">Twoje urządzenie</h2>
@@ -305,7 +305,7 @@ export default function KalkulatorPage() {
 
         {/* Sekcja Notatek */}
         {info?.claimed && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] rounded-lg shadow p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">
                 Notatki offline ({notes.length}/50)
@@ -315,7 +315,7 @@ export default function KalkulatorPage() {
               </span>
             </div>
 
-            <div className="bg-gray-50 rounded p-4 mb-4">
+            <div className="bg-[#0B0B0B] text-[#F2EDE3] rounded p-4 mb-4">
               <div className="font-semibold mb-2 text-sm">
                 {editingNote ? "Edytuj notatkę" : "Nowa notatka"}
               </div>
@@ -355,7 +355,7 @@ export default function KalkulatorPage() {
                   <button
                     onClick={saveNote}
                     disabled={savingNote || (!newTitle.trim() && !newContent.trim())}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                    className="px-3 py-1 text-sm bg-[#D8FF3D] text-white rounded hover:bg-[#F2EDE3] disabled:opacity-50"
                   >
                     {savingNote ? "Zapisuję..." : editingNote ? "Zapisz zmiany" : "Dodaj"}
                   </button>
@@ -372,7 +372,7 @@ export default function KalkulatorPage() {
                 {notes.map((n) => (
                   <div
                     key={n.id}
-                    className="border rounded p-3 hover:bg-gray-50"
+                    className="border rounded p-3 hover:bg-[#0B0B0B] text-[#F2EDE3]"
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
@@ -407,7 +407,7 @@ export default function KalkulatorPage() {
 
         {/* Sekcja Sprawdziany */}
         {info?.claimed && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] rounded-lg shadow p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">
                 Sprawdziany ({tests.length}/50)
@@ -417,7 +417,7 @@ export default function KalkulatorPage() {
               </span>
             </div>
 
-            <div className="bg-gray-50 rounded p-4 mb-4">
+            <div className="bg-[#0B0B0B] text-[#F2EDE3] rounded p-4 mb-4">
               <div className="font-semibold mb-2 text-sm">
                 {editingTest ? "Edytuj sprawdzian" : "Nowy sprawdzian"}
               </div>
@@ -472,7 +472,7 @@ export default function KalkulatorPage() {
             ) : (
               <div className="space-y-2">
                 {tests.map((t) => (
-                  <div key={t.id} className="border rounded p-3 hover:bg-gray-50">
+                  <div key={t.id} className="border rounded p-3 hover:bg-[#0B0B0B] text-[#F2EDE3]">
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
                         <div className="font-medium">
@@ -506,7 +506,7 @@ export default function KalkulatorPage() {
 
         {/* Lista konwersacji */}
         {info?.claimed && (
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] rounded-lg shadow p-6">
             <h2 className="text-xl font-bold mb-4">
               Historia rozwiązań ({items.length})
             </h2>
@@ -520,7 +520,7 @@ export default function KalkulatorPage() {
                   <button
                     key={it.id}
                     onClick={() => setOpened(it)}
-                    className="block w-full text-left bg-gray-50 hover:bg-gray-100 rounded p-3 transition"
+                    className="block w-full text-left bg-[#0B0B0B] text-[#F2EDE3] hover:bg-gray-100 rounded p-3 transition"
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex-1 min-w-0">
@@ -549,7 +549,7 @@ export default function KalkulatorPage() {
             onClick={() => setOpened(null)}
           >
             <div
-              className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6"
+              className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-start mb-4">
@@ -568,7 +568,7 @@ export default function KalkulatorPage() {
               </div>
               <div className="mb-4">
                 <div className="text-sm font-bold mb-1">Zadanie:</div>
-                <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">
+                <div className="bg-[#0B0B0B] text-[#F2EDE3] p-3 rounded text-sm whitespace-pre-wrap">
                   {opened.question}
                 </div>
               </div>

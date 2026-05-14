@@ -55,30 +55,6 @@ export async function POST(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Nie zalogowany" }, { status: 401 });
 
-  // Sprawdz czy user ma aktywny dostep: licencja LUB aktywna sub LUB aktywny trial
-  const license = await prisma.license.findFirst({
-    where: { claimedByUserId: user.id },
-  });
-  const subscription = await prisma.subscription.findUnique({
-    where: { userId: user.id },
-  });
-  const now = new Date();
-  const trialActive =
-    subscription?.status === "trial" &&
-    subscription.trialEndsAt &&
-    new Date(subscription.trialEndsAt) > now;
-  const subActive = subscription?.status === "active";
-  if (!license && !trialActive && !subActive) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "Brak aktywnego dostepu. Przypisz licencje (Subskrypcja) lub aktywuj trial.",
-      },
-      { status: 400 }
-    );
-  }
-
   const body = await req.json();
   const deviceId = String(body?.deviceId || "").trim().toUpperCase();
   const unlockCode = String(body?.unlockCode || "").trim();

@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,25 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String?
-  name          String?
-  emailVerified DateTime?
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  accounts      Account[]
-  sessions      Session[]
-  orders        Order[]
-  subscription  Subscription?
-  conversations Conversation[]
-}
-
 model Account {
-  id                String  @id @default(cuid())
+  id                String  @id
   userId            String
   type              String
   provider          String
@@ -40,18 +20,202 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  User              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
 
+model Attachment {
+  id          String      @id
+  messageId   String
+  filename    String
+  mimeType    String
+  fileSize    Int
+  fileData    String
+  storageType String      @default("base64")
+  createdAt   DateTime    @default(now())
+  ChatMessage ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model ChatMessage {
+  id             String       @id
+  conversationId String
+  role           String
+  content        String
+  createdAt      DateTime     @default(now())
+  Attachment     Attachment[]
+  Conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model Conversation {
+  id          String        @id
+  userId      String
+  title       String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime
+  ChatMessage ChatMessage[]
+  User        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+}
+
+model License {
+  id              String    @id
+  code            String    @unique
+  durationDays    Int       @default(30)
+  isUsed          Boolean   @default(false)
+  usedBy          String?
+  usedAt          DateTime?
+  createdBy       String?
+  description     String?
+  createdAt       DateTime  @default(now())
+  claimedByUserId String?
+
+  @@index([claimedByUserId])
+  @@index([isUsed])
+  @@index([code])
+}
+
+model Order {
+  id                    String    @id
+  userId                String?
+  orderNumber           String    @unique
+  status                String    @default("pending")
+  customerName          String
+  customerEmail         String
+  customerPhone         String
+  pickupPoint           String
+  pickupPointAddress    String
+  stripePaymentIntentId String?   @unique
+  amount                Int
+  currency              String    @default("pln")
+  trackingNumber        String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime
+  paidAt                DateTime?
+  shippedAt             DateTime?
+  deliveredAt           DateTime?
+  User                  User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([customerEmail])
+  @@index([orderNumber])
+  @@index([userId])
+}
+
 model Session {
-  id           String   @id @default(cuid())
+  id           String   @id
   sessionToken String   @unique
   userId       String
   expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id                     String    @id
+  userId                 String    @unique
+  status                 String    @default("trial")
+  trialEndsAt            DateTime
+  trialDays              Int       @default(1)
+  stripeCustomerId       String?   @unique
+  stripeSubscriptionId   String?   @unique
+  stripePriceId          String?
+  stripeCurrentPeriodEnd DateTime?
+  plan                   String    @default("ai_chat")
+  pricePerMonth          Int       @default(2900)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime
+  cancelledAt            DateTime?
+  User                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([stripeSubscriptionId])
+  @@index([stripeCustomerId])
+  @@index([userId])
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String?
+  name          String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  Account       Account[]
+  Conversation  Conversation[]
+  Order         Order[]
+  Session       Session[]
+  Subscription  Subscription?
+  Device        Device[]
+  DeviceSolve   DeviceSolve[]
+  Note          Note[]
+  Test          Test[]
+}
+
+model Device {
+  id              String        @id @default(cuid())
+  deviceId        String        @unique
+  userId          String?
+  User            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  licenseCode     String?
+  unlockCode      String?
+  firstSeen       DateTime      @default(now())
+  lastSeen        DateTime      @default(now())
+  requestCount    Int           @default(0)
+  firmwareVersion String?
+  lastIp          String?
+  Solves          DeviceSolve[]
+
+  @@index([deviceId])
+  @@index([userId])
+  @@index([licenseCode])
+}
+
+model DeviceSolve {
+  id          String   @id @default(cuid())
+  deviceId    String
+  Device      Device   @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  licenseCode String?
+  userId      String?
+  User        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  mode        String?
+  question    String
+  answer      String
+  createdAt   DateTime @default(now())
+
+  @@index([deviceId, createdAt])
+  @@index([licenseCode])
+  @@index([userId, createdAt])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String   @default("")
+  content   String   @default("")
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, position])
+}
+
+model Test {
+  id        String   @id @default(cuid())
+  userId    String
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String   @default("")
+  content   String   @default("")
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, position])
 }
 
 model VerificationToken {
@@ -62,156 +226,14 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-model Order {
-  id                    String   @id @default(cuid())
-  userId                String?
-  user                  User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Order details
-  orderNumber           String   @unique
-  status                String   @default("pending") // pending, paid, shipped, delivered, cancelled
-
-  // Customer info
-  customerName          String
-  customerEmail         String
-  customerPhone         String
-
-  // Shipping
-  pickupPoint           String
-  pickupPointAddress    String
-
-  // Payment
-  stripePaymentIntentId String?  @unique
-  amount                Int      // in grosz (cents)
-  currency              String   @default("pln")
-
-  // Tracking
-  trackingNumber        String?
-
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  paidAt                DateTime?
-  shippedAt             DateTime?
-  deliveredAt           DateTime?
-
-  @@index([userId])
-  @@index([orderNumber])
-  @@index([customerEmail])
-}
-
-model Subscription {
-  id                String   @id @default(cuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Subscription status
-  status            String   @default("trial") // trial, active, cancelled, expired
-
-  // Trial information
-  trialEndsAt       DateTime
-  trialDays         Int      @default(1) // 1 day for new users, 30 days for calculator buyers
-
-  // Stripe subscription
-  stripeCustomerId       String?  @unique
-  stripeSubscriptionId   String?  @unique
-  stripePriceId          String?
-  stripeCurrentPeriodEnd DateTime?
-
-  // Subscription details
-  plan              String   @default("ai_chat") // ai_chat
-  pricePerMonth     Int      @default(2900) // 29 zł in grosz
-
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  cancelledAt       DateTime?
-
-  @@index([userId])
-  @@index([stripeCustomerId])
-  @@index([stripeSubscriptionId])
-}
-
-model Conversation {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  title     String   // First user message (truncated)
-  messages  ChatMessage[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId, updatedAt])
-}
-
-model ChatMessage {
-  id             String       @id @default(cuid())
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  role      String   // user or assistant
-  content   String
-
-  // Attachments support
-  attachments Attachment[]
-
-  createdAt DateTime @default(now())
-
-  @@index([conversationId, createdAt])
-}
-
-model Attachment {
-  id        String   @id @default(cuid())
-  messageId String
-  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  // File metadata
-  filename     String
-  mimeType     String
-  fileSize     Int      // in bytes
-  fileData     String   // base64 encoded file data (for small files) or file path
-  storageType  String   @default("base64") // "base64" or "filesystem"
-
-  createdAt DateTime @default(now())
-
-  @@index([messageId])
-}
-
 model Visit {
-  id        String   @id @default(cuid())
-
-  // Tracking info
-  ipHash    String   // Hashed IP for privacy
+  id        String   @id
+  ipHash    String
   userAgent String?
   referer   String?
-
-  // Page info
   page      String   @default("/")
-
   createdAt DateTime @default(now())
 
-  @@index([createdAt])
   @@index([ipHash])
-}
-
-model License {
-  id          String   @id @default(cuid())
-  code        String   @unique // 16-character license code
-
-  // Duration
-  durationDays Int     @default(30) // How many days of subscription
-
-  // Usage
-  isUsed       Boolean  @default(false)
-  usedBy       String?  // userId who used it
-  usedAt       DateTime?
-
-  // Metadata
-  createdBy    String?  // Admin who created it
-  description  String?  // Optional note
-
-  createdAt    DateTime @default(now())
-
-  @@index([code])
-  @@index([isUsed])
+  @@index([createdAt])
 }

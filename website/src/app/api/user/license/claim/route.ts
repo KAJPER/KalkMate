@@ -69,22 +69,57 @@ export async function POST(request: NextRequest) {
     }
 
     // Claim
+    const now = new Date();
     await prisma.license.update({
       where: { id: license.id },
-      data: { claimedByUserId: user.id },
+      data: {
+        claimedByUserId: user.id,
+        isUsed: true,
+        usedBy: user.id,
+        usedAt: license.usedAt ?? now,
+      },
+    });
+
+    // Aktywuj subskrypcje na podstawie czasu z licencji.
+    // Jesli user juz ma aktywna subskrypcje konczaca sie pozniej — zachowaj te dluzsza.
+    const licenseEndsAt = new Date(now.getTime() + license.durationDays * 24 * 60 * 60 * 1000);
+    const existingSub = await prisma.subscription.findUnique({ where: { userId: user.id } });
+    const currentEnd = existingSub ? new Date(existingSub.trialEndsAt) : new Date(0);
+    const newEnd = licenseEndsAt > currentEnd ? licenseEndsAt : currentEnd;
+
+    await prisma.subscription.upsert({
+      where: { userId: user.id },
+      update: {
+        status: "active",
+        trialEndsAt: newEnd,
+        trialDays: license.durationDays,
+      },
+      create: {
+        userId: user.id,
+        status: "active",
+        trialEndsAt: newEnd,
+        trialDays: license.durationDays,
+      },
     });
 
     // Linkuj wszystkie poprzednie DeviceSolve z tej licencji do user'a
-    await prisma.deviceSolve.updateMany({
-      where: { licenseCode: code, userId: null },
-      data: { userId: user.id },
-    });
+    // (model moze nie byc jeszcze w schemie — pomin gracefully)
+    try {
+      const ds = (prisma as any).deviceSolve;
+      if (ds) {
+        await ds.updateMany({
+          where: { licenseCode: code, userId: null },
+          data: { userId: user.id },
+        });
+      }
+    } catch {}
 
     return NextResponse.json({
       ok: true,
       code: license.code,
       durationDays: license.durationDays,
-      activatedAt: license.usedAt,
+      activatedAt: license.usedAt ?? now,
+      subscriptionEndsAt: newEnd,
     });
   } catch (e) {
     console.error("[user/license/claim]", e);
@@ -107,43 +142,64 @@ export async function GET() {
     }
 
     const license = await prisma.license.findFirst({
-      where: { claimedByUserId: user.id },
+      where: {
+        OR: [
+          { claimedByUserId: user.id },
+          { usedBy: user.id },
+        ],
+      },
     });
-    const subscription = await prisma.subscription.findUnique({
+    // Self-heal claimedByUserId jesli ustawiony jest tylko usedBy
+    if (license && !license.claimedByUserId) {
+      await prisma.license.update({
+        where: { id: license.id },
+        data: { claimedByUserId: user.id },
+      });
+    }
+    let subscription = await prisma.subscription.findUnique({
       where: { userId: user.id },
     });
 
-    // canPair = user moze sparowac kalkulator. Wystarczy jeden z:
-    //  - claimed License,
-    //  - aktywny trial (Subscription.status='trial' AND trialEndsAt > now),
-    //  - aktywna platna (status='active')
-    const now = new Date();
-    let canPair = false;
-    if (license) canPair = true;
-    if (subscription) {
-      if (subscription.status === "active") canPair = true;
-      if (
-        subscription.status === "trial" &&
-        new Date(subscription.trialEndsAt) > now
-      ) {
-        canPair = true;
-      }
+    // Self-heal: jesli user ma claimed licencje ale subscription jest na trial,
+    // upgrade do active z czasem z licencji (dla userow ktorzy claimowali przed
+    // wprowadzeniem auto-aktywacji)
+    if (license && subscription && subscription.status === "trial") {
+      const nowH = new Date();
+      const licenseEndsAt = new Date(nowH.getTime() + license.durationDays * 24 * 60 * 60 * 1000);
+      const currentEnd = new Date(subscription.trialEndsAt);
+      const newEnd = licenseEndsAt > currentEnd ? licenseEndsAt : currentEnd;
+      subscription = await prisma.subscription.update({
+        where: { userId: user.id },
+        data: {
+          status: "active",
+          trialEndsAt: newEnd,
+          trialDays: license.durationDays,
+        },
+      });
     }
 
-    if (!canPair) {
-      return NextResponse.json({ ok: true, claimed: false });
-    }
+    // Parowanie kalkulatora jest niezalezne od licencji — kazdy zalogowany user
+    // moze sparowac urzadzenie. Licencja/sub kontroluje tylko AI Chat w panelu.
 
     // Znajdz device sparowane z tym kontem (nowy model: Device.userId).
-    let device = await prisma.device.findFirst({
-      where: { userId: user.id },
-      orderBy: { lastSeen: "desc" },
-    });
-    if (!device && license) {
-      device = await prisma.device.findFirst({
-        where: { licenseCode: license.code },
-        orderBy: { lastSeen: "desc" },
-      });
+    // Model Device moze nie byc jeszcze w schemie — gracefully fallback do null.
+    let device: any = null;
+    try {
+      const deviceModel = (prisma as any).device;
+      if (deviceModel) {
+        device = await deviceModel.findFirst({
+          where: { userId: user.id },
+          orderBy: { lastSeen: "desc" },
+        });
+        if (!device && license) {
+          device = await deviceModel.findFirst({
+            where: { licenseCode: license.code },
+            orderBy: { lastSeen: "desc" },
+          });
+        }
+      }
+    } catch {
+      device = null;
     }
 
     return NextResponse.json({

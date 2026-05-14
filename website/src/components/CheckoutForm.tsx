@@ -128,7 +128,7 @@ export default function CheckoutForm({ onSuccess, onError }: CheckoutFormProps) 
               Przetwarzanie...
             </span>
           ) : (
-            "Zapłać 499 zł"
+            "Zapłać 699 zł"
           )}
         </motion.button>
       </form>

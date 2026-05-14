@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user's subscription
-    const subscription = await prisma.subscription.findUnique({
+    let subscription = await prisma.subscription.findUnique({
       where: { userId: user.id },
     })
 
@@ -36,6 +36,33 @@ export async function GET(request: NextRequest) {
         { error: "Subscription not found" },
         { status: 404 }
       )
+    }
+
+    // Self-heal: jesli user ma claimed licencje (lub zrealizowal kod) ale
+    // subscription jest na trial, upgrade do active z czasem z licencji
+    if (subscription.status === "trial") {
+      const claimedLicense = await prisma.license.findFirst({
+        where: {
+          OR: [
+            { claimedByUserId: user.id },
+            { usedBy: user.id },
+          ],
+        },
+      })
+      if (claimedLicense) {
+        const nowH = new Date()
+        const licenseEndsAt = new Date(nowH.getTime() + claimedLicense.durationDays * 24 * 60 * 60 * 1000)
+        const currentEnd = new Date(subscription.trialEndsAt)
+        const newEnd = licenseEndsAt > currentEnd ? licenseEndsAt : currentEnd
+        subscription = await prisma.subscription.update({
+          where: { userId: user.id },
+          data: {
+            status: "active",
+            trialEndsAt: newEnd,
+            trialDays: claimedLicense.durationDays,
+          },
+        })
+      }
     }
 
     // Check if user has purchased calculator

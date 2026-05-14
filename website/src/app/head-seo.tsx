@@ -24,7 +24,7 @@ export default function HeadSEO() {
         name: "Ile kosztuje kalkulator AI na maturę?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "KalkMate kosztuje 499 zł (cena promocyjna, wcześniej 2199 zł). W cenie otrzymujesz kalkulator z AI, kabel USB-C, instrukcję obsługi i darmową wysyłkę InPost.",
+          text: "KalkMate kosztuje 699 zł (cena promocyjna, wcześniej 2199 zł). W cenie otrzymujesz kalkulator z AI, kabel USB-C, instrukcję obsługi i darmową wysyłkę InPost.",
         },
       },
       {
