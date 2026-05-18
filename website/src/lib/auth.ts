@@ -26,6 +26,7 @@ export const authOptions: NextAuthOptions = {
             email: true,
             name: true,
             password: true,
+            emailVerified: true,
           },
         })
 
@@ -37,6 +38,11 @@ export const authOptions: NextAuthOptions = {
 
         if (!isValid) {
           throw new Error("Nieprawidłowy email lub hasło")
+        }
+
+        // Wymagaj zweryfikowanego emaila przed logowaniem
+        if (!user.emailVerified) {
+          throw new Error("Email niezweryfikowany. Sprawdź skrzynkę lub poproś o nowy link.")
         }
 
         return {

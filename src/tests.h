@@ -53,6 +53,25 @@ inline bool _testsEnsureFs() {
 // Forward decl - testsGet zdefiniowane nizej
 inline bool testsGet(uint16_t idx, TestEntry &out);
 
+// UTF-8 polskie/typograficzne znaki -> ASCII (dla tytulow, ekran 6x10 ASCII-only)
+inline String _testsTitleToAscii(String s) {
+    s.replace("ą", "a"); s.replace("Ą", "A");
+    s.replace("ć", "c"); s.replace("Ć", "C");
+    s.replace("ę", "e"); s.replace("Ę", "E");
+    s.replace("ł", "l"); s.replace("Ł", "L");
+    s.replace("ń", "n"); s.replace("Ń", "N");
+    s.replace("ó", "o"); s.replace("Ó", "O");
+    s.replace("ś", "s"); s.replace("Ś", "S");
+    s.replace("ż", "z"); s.replace("Ż", "Z");
+    s.replace("ź", "z"); s.replace("Ź", "Z");
+    s.replace("–", "-"); s.replace("—", "-"); s.replace("−", "-");
+    s.replace("„", "\""); s.replace("”", "\""); s.replace("“", "\"");
+    s.replace("‘", "'"); s.replace("’", "'");
+    s.replace("…", "...");
+    s.replace("\xC2\xA0", " ");
+    return s;
+}
+
 // Zbuduj cache tytulow (czyta plik raz). Wywolaj przy wejsciu w ekran sprawdzianow.
 inline void testsBuildTitleCache() {
     _testsTitleCache.clear();
@@ -91,6 +110,8 @@ inline void testsBuildTitleCache() {
         t.replace("\\n", "\n");
         t.replace("\\\"", "\"");
         t.replace("\\\\", "\\");
+        // UTF-8 polskie -> ASCII (ekran nie rysuje polskich glyphow)
+        t = _testsTitleToAscii(t);
         _testsTitleCache.push_back(t);
         cursor = objEnd + 1;
     }
@@ -230,82 +251,158 @@ inline int testsSync(const char* licenseCode, const char* apiKey) {
         return -1;
     }
 
-    String body = http.getString();
+    // STREAMING z PSRAM (8 MB) zamiast getString() do regular heap.
+    // Powod: getString() przy 85+ KB response moze zwrocic truncated body
+    // przez heap fragmentation. PSRAM mamy ogrom, alokujemy 250 KB.
+    const size_t bufSize = 260000;
+    char* buf = (char*)ps_malloc(bufSize);
+    bool usingPsram = (buf != nullptr);
+    if (!buf) {
+        // Fallback: regular heap
+        buf = (char*)malloc(bufSize);
+    }
+    if (!buf) {
+        Serial.println("[TESTS] malloc failed");
+        http.end();
+        return -1;
+    }
+    Serial.printf("[TESTS] buf alloc OK (%u B, psram=%d, freeheap=%u, freepsram=%u)\n",
+                  bufSize, usingPsram, ESP.getFreeHeap(), ESP.getFreePsram());
+
+    // Czytaj stream do buf
+    WiFiClient* stream = http.getStreamPtr();
+    int total = 0;
+    uint32_t deadline = millis() + 30000;
+    while (millis() < deadline && total < (int)bufSize - 1) {
+        if (stream->available() > 0) {
+            int n = stream->readBytes(buf + total, (int)bufSize - 1 - total);
+            if (n > 0) { total += n; deadline = millis() + 5000; }
+        } else if (!stream->connected()) {
+            break;
+        } else {
+            delay(5);
+        }
+    }
+    buf[total] = '\0';
     http.end();
+    Serial.printf("[TESTS] streamed %d bytes\n", total);
 
-    Serial.printf("[TESTS] body length=%d\n", body.length());
-
-    int testsIdx = body.indexOf("\"tests\":");
-    if (testsIdx < 0) {
+    // Parsuj char* bez Stringa dla body. JSON-aware (pomija stringi).
+    char* end = buf + total;
+    char* p = (char*)memmem(buf, total, "\"tests\":", 8);
+    if (!p) {
         Serial.println("[TESTS] no tests field");
+        if (usingPsram) free(buf); else free(buf);
         return 0;
     }
-    int arrStart = body.indexOf('[', testsIdx);
-    if (arrStart < 0) return 0;
+    // Find '[' after p
+    char* arrStartP = nullptr;
+    for (char* q = p; q < end; q++) { if (*q == '[') { arrStartP = q; break; } }
+    if (!arrStartP) { free(buf); return 0; }
 
-    int arrEnd = _jsonMatchBracket(body, arrStart, '[', ']');
-    if (arrEnd < 0) {
-        Serial.println("[TESTS] cannot find array end");
+    // Helpery lokalne (char* JSON-aware)
+    auto skipStr = [&](char* s) -> char* {
+        // s wskazuje na otwierajacy "
+        if (s >= end || *s != '"') return nullptr;
+        s++;
+        while (s < end) {
+            if (*s == '\\') s += 2;
+            else if (*s == '"') return s;
+            else s++;
+        }
+        return nullptr;
+    };
+    auto matchBrace = [&](char* s) -> char* {
+        // s wskazuje na otwierajacy {
+        int depth = 0;
+        while (s < end) {
+            char c = *s;
+            if (c == '"') {
+                char* q = skipStr(s);
+                if (!q) return nullptr;
+                s = q + 1;
+            } else if (c == '{') { depth++; s++; }
+            else if (c == '}') { depth--; if (depth == 0) return s; s++; }
+            else s++;
+        }
+        return nullptr;
+    };
+    auto extractField = [&](char* objS, char* objE, const char* fieldName,
+                            char** outStart, int* outLen) -> bool {
+        // Szukaj "fieldName":" wewnatrz [objS, objE]
+        char pat[32];
+        snprintf(pat, sizeof(pat), "\"%s\":\"", fieldName);
+        int patLen = strlen(pat);
+        char* q = objS;
+        while (q < objE) {
+            if (*q == '"') {
+                // Sprawdz czy to start pola
+                if (q + patLen <= objE && memcmp(q, pat, patLen) == 0) {
+                    char* valStart = q + patLen;
+                    char* valEnd = valStart;
+                    while (valEnd < objE) {
+                        if (*valEnd == '\\') valEnd += 2;
+                        else if (*valEnd == '"') {
+                            *outStart = valStart;
+                            *outLen = valEnd - valStart;
+                            return true;
+                        }
+                        else valEnd++;
+                    }
+                    return false;
+                }
+                // Skip string (bo to inne pole/value)
+                char* qe = skipStr(q);
+                if (!qe) return false;
+                q = qe + 1;
+            } else q++;
+        }
+        return false;
+    };
+
+    // Zapisuj do SPIFFS na biezaco
+    File f = SPIFFS.open(_TESTS_FILE, "w");
+    if (!f) {
+        Serial.println("[TESTS] cannot open tests file");
+        free(buf);
         return -1;
     }
-
-    String arr = body.substring(arrStart, arrEnd + 1);
-    if (arr.length() > _TESTS_MAX_BYTES) {
-        Serial.printf("[TESTS] dump too large: %d B\n", arr.length());
-        return -1;
-    }
-    Serial.printf("[TESTS] arr length=%d\n", arr.length());
-
-    // Iteruj po obiektach w arr (JSON-aware)
-    String compact = "[";
-    compact.reserve(arr.length() + 64);
+    f.print("[");
     bool first = true;
-    int cursor = 1;  // skip opening [
     int testCount = 0;
-    while (cursor < (int)arr.length() - 1) {
-        // skip whitespace + przecinki
-        while (cursor < (int)arr.length() &&
-               (arr[cursor] == ' ' || arr[cursor] == '\t' || arr[cursor] == '\n' ||
-                arr[cursor] == '\r' || arr[cursor] == ',')) {
-            cursor++;
-        }
-        if (cursor >= (int)arr.length() - 1 || arr[cursor] != '{') break;
+    char* cur = arrStartP + 1;
+    while (cur < end) {
+        while (cur < end && (*cur == ' ' || *cur == '\t' || *cur == '\n' ||
+                             *cur == '\r' || *cur == ',')) cur++;
+        if (cur >= end || *cur == ']') break;
+        if (*cur != '{') break;
 
-        int objEnd = _jsonMatchBracket(arr, cursor, '{', '}');
-        if (objEnd < 0) {
-            Serial.printf("[TESTS] obj parse fail at %d\n", cursor);
-            break;
-        }
-        String obj = arr.substring(cursor, objEnd + 1);
-        String t  = _jsonGetStringField(obj, "title");
-        String co = _jsonGetStringField(obj, "content");
+        char* objE = matchBrace(cur);
+        if (!objE) break;
 
-        if (!first) compact += ",";
-        compact += "{\"t\":\"";
-        compact += t;
-        compact += "\",\"c\":\"";
-        compact += co;
-        compact += "\"}";
+        char* tStart = nullptr; int tLen = 0;
+        char* cStart = nullptr; int cLen = 0;
+        extractField(cur, objE + 1, "title", &tStart, &tLen);
+        extractField(cur, objE + 1, "content", &cStart, &cLen);
+
+        if (!first) f.print(",");
+        f.print("{\"t\":\"");
+        if (tStart && tLen > 0) f.write((const uint8_t*)tStart, tLen);
+        f.print("\",\"c\":\"");
+        if (cStart && cLen > 0) f.write((const uint8_t*)cStart, cLen);
+        f.print("\"}");
         first = false;
         testCount++;
 
-        cursor = objEnd + 1;
+        cur = objE + 1;
     }
-    compact += "]";
-
-    Serial.printf("[TESTS] parsed %d tests, compact=%d B\n",
-                  testCount, compact.length());
-
-    File f = SPIFFS.open(_TESTS_FILE, "w");
-    if (!f) {
-        Serial.println("[TESTS] cannot open tests file for write");
-        return -1;
-    }
-    size_t written = f.print(compact);
+    f.print("]");
     f.close();
-    Serial.printf("[TESTS] saved %u bytes\n", (unsigned)written);
 
-    return testsCount();
+    free(buf);
+    Serial.printf("[TESTS] parsed %d tests, freeheap=%u\n",
+                  testCount, ESP.getFreeHeap());
+    return testCount;
 }
 
 inline void testsClear() {

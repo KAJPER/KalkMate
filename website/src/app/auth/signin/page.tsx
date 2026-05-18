@@ -16,17 +16,27 @@ function SignInForm() {
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setVerificationSent(false);
+    setShowResend(false);
     setIsLoading(true);
 
     try {
       if (isLogin) {
         const result = await signIn("credentials", { email, password, redirect: false });
-        if (result?.error) setError(result.error);
-        else if (result?.ok) { router.push(callbackUrl); router.refresh(); }
+        if (result?.error) {
+          setError(result.error);
+          if (result.error.toLowerCase().includes("niezweryfikowany")) setShowResend(true);
+        } else if (result?.ok) {
+          // Hard navigation - upewniamy sie ze cookie sesji jest widoczne w SSR
+          window.location.href = callbackUrl;
+        }
       } else {
         const res = await fetch("/api/auth/register", {
           method: "POST",
@@ -36,14 +46,30 @@ function SignInForm() {
         const data = await res.json();
         if (!res.ok) setError(data.error || "Błąd rejestracji");
         else {
-          const result = await signIn("credentials", { email, password, redirect: false });
-          if (result?.ok) { router.push(callbackUrl); router.refresh(); }
+          // Konto utworzone — NIE logujemy automatycznie. User musi zweryfikowac email.
+          setVerificationSent(true);
         }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Wystąpił błąd");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResending(true);
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setVerificationSent(true);
+      setShowResend(false);
+      setError("");
+    } finally {
+      setResending(false);
     }
   };
 
@@ -139,6 +165,26 @@ function SignInForm() {
               <div className="mt-6 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
                 <p className="km-mono-eyebrow text-[#FF4D2E]">/ ERROR</p>
                 <p className="text-sm text-[#FF4D2E] mt-1">{error}</p>
+                {showResend && (
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={resending || !email}
+                    className="mt-3 km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] disabled:opacity-50 transition-colors"
+                  >
+                    {resending ? "WYSYŁAM..." : "WYŚLIJ NOWY LINK WERYFIKACYJNY →"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {verificationSent && (
+              <div className="mt-6 border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.05] p-4">
+                <p className="km-mono-eyebrow text-[#D8FF3D]">/ SPRAWDŹ SKRZYNKĘ</p>
+                <p className="text-sm text-[#F2EDE3]/80 mt-2 leading-relaxed">
+                  Wysłaliśmy link aktywacyjny na <strong className="text-[#F2EDE3]">{email}</strong>.
+                  Kliknij go żeby aktywować konto (link wygasa za 24h). Sprawdź też SPAM.
+                </p>
               </div>
             )}
 
@@ -192,6 +238,16 @@ function SignInForm() {
                   <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-2">
                     Min. 6 znaków
                   </p>
+                )}
+                {isLogin && (
+                  <div className="mt-2 text-right">
+                    <a
+                      href="/auth/forgot-password"
+                      className="km-mono-eyebrow text-[#F2EDE3]/55 hover:text-[#D8FF3D] transition-colors"
+                    >
+                      Zapomniałem hasła
+                    </a>
+                  </div>
                 )}
               </div>
 

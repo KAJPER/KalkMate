@@ -11,6 +11,8 @@
 
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include <Preferences.h>
+#include <SPIFFS.h>
 #include "input.h"
 #include "wifi_persist.h"
 #include "ota_update.h"
@@ -73,7 +75,7 @@ static const char* T(const char* pl, const char* en) {
 //   System:         Aktualizacje
 //   Diagnostyka:    Test ekranu, Test kamery, Test klawiatury, Skaner, Pin Driver
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        15
+#define _SET_ITEMS        16
 // --- Preferencje ---
 #define _SET_BRIGHTNESS   0
 #define _SET_LANGUAGE     1
@@ -87,15 +89,16 @@ static const char* T(const char* pl, const char* en) {
 #define _SET_DEVICEID     8
 // --- System ---
 #define _SET_UPDATE       9
+#define _SET_FACTORY      10
 // --- Diagnostyka ---
-#define _SET_SCREENTEST   10
-#define _SET_CAMTEST      11
-#define _SET_KEYTEST      12
-#define _SET_KEYSCAN      13
-#define _SET_PINDRIVER    14
+#define _SET_SCREENTEST   11
+#define _SET_CAMTEST      12
+#define _SET_KEYTEST      13
+#define _SET_KEYSCAN      14
+#define _SET_PINDRIVER    15
 
 // Wspolrzedne Y - 4 widoczne, scrollowanie
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -254,6 +257,12 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         prefix[0] = (cursor == _SET_UPDATE) ? '>' : ' ';
         snprintf(lines[_SET_UPDATE], sizeof(lines[0]), "%s%s [v%-8s]", prefix,
                  T("Aktual.:  ", "Updates:  "), FW_VERSION);
+    }
+    // 10: Reset fabryczny
+    {
+        prefix[0] = (cursor == _SET_FACTORY) ? '>' : ' ';
+        snprintf(lines[_SET_FACTORY], sizeof(lines[0]), "%s%s",
+                 prefix, T("Reset fabryczny", "Factory reset"));
     }
 
     // === DIAGNOSTYKA ===
@@ -1103,6 +1112,96 @@ static void _editKeyScan(U8G2 &d) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Reset fabryczny — kasuje wszystkie zapisane dane i restartuje kalkulator.
+// Co znika:
+//   - NVS namespace "kalkmate" (WiFi SSID/haslo, licencja, kod AI, panic key)
+//   - NVS namespace "kalkhist" (historia AI requestow)
+//   - NVS namespace "kalkmap"  (custom keymap)
+//   - SPIFFS: /notes.json, /tests.json
+//   - kalkSettings -> defaulty
+// Po: ESP.restart()
+// ---------------------------------------------------------------------------
+static void _editFactoryReset(U8G2 &d) {
+    _setWaitRelease();
+
+    // 1. Ekran potwierdzenia
+    bool confirmed = false;
+    while (!confirmed) {
+        if (_panicRequested) return;
+
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, "=== Reset fabryczny ===");
+        d.drawHLine(0, 12, 256);
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 24, "Czy na pewno chcesz przywrocic");
+        d.drawStr(2, 33, "ustawienia fabryczne?");
+        d.drawStr(2, 45, "Zniknie: WiFi, kod AI, historia,");
+        d.drawStr(2, 53, "notatki, sprawdziany, konto.");
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 63, "OK = TAK   < = anuluj");
+        d.sendBuffer();
+
+        if (_setBtn(BTN_OK)) { confirmed = true; break; }
+        if (_setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) {
+            _setWaitRelease();
+            return;
+        }
+        delay(20);
+    }
+    _setWaitRelease();
+
+    // 2. Pokaz progress
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 14, "Reset fabryczny...");
+    d.drawHLine(0, 16, 256);
+    d.drawStr(2, 32, "Kasuje dane, prosze czekac...");
+    d.sendBuffer();
+
+    Serial.println("[FACTORY] start");
+
+    // 3. NVS - skasuj 3 znane namespacy
+    {
+        Preferences p;
+        if (p.begin("kalkmate", false)) { p.clear(); p.end(); Serial.println("[FACTORY] NVS kalkmate cleared"); }
+        if (p.begin("kalkhist", false)) { p.clear(); p.end(); Serial.println("[FACTORY] NVS kalkhist cleared"); }
+        if (p.begin("kalkmap",  false)) { p.clear(); p.end(); Serial.println("[FACTORY] NVS kalkmap cleared"); }
+    }
+
+    // 4. SPIFFS - format calej partycji (wymaze /notes.json, /tests.json, wszystko)
+    if (SPIFFS.begin(true)) {
+        if (SPIFFS.exists("/notes.json")) SPIFFS.remove("/notes.json");
+        if (SPIFFS.exists("/tests.json")) SPIFFS.remove("/tests.json");
+        Serial.println("[FACTORY] SPIFFS files removed");
+    }
+
+    // 5. Reset kalkSettings w RAM (zostana wpisane defaulty przy nastepnym boot
+    // i tak, ale dla porzadku)
+    kalkSettings.brightness   = 8;
+    kalkSettings.language     = 0;
+    kalkSettings.solveMode    = 0;
+    kalkSettings.autoSleep    = true;
+    kalkSettings.sleepMinutes = 4;
+    strcpy(kalkSettings.aiUnlockCode, "1111");
+    kalkSettings.panicKey     = 27;
+
+    Serial.println("[FACTORY] done - restart za 1.5s");
+
+    // 6. Pokaz info i restart
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 14, "=== Gotowe! ===");
+    d.drawHLine(0, 16, 256);
+    d.drawStr(2, 32, "Restartuje kalkulator...");
+    d.sendBuffer();
+    delay(1500);
+    ESP.restart();
+    // niedosiegniete
+    while (true) delay(1000);
+}
+
 // Placeholder dla testu kamery (kamera nie jest jeszcze podpieta na PCB)
 static void _editCamTest(U8G2 &d) {
     _setWaitRelease();
@@ -1161,6 +1260,7 @@ void showSettings(U8G2 &display) {
                 case _SET_AICODE:     _editAiCode(display);     break;
                 case _SET_PANICKEY:   _editPanicKey(display);   break;
                 case _SET_UPDATE:     _editUpdate(display);     break;
+                case _SET_FACTORY:    _editFactoryReset(display); break;
                 case _SET_DEVICEID:   showDeviceIdQrScreen(display); break;
                 case _SET_WIFI:       showWifiSettings(display); break;
                 case _SET_SCREENTEST: showScreenTest(display);  break;

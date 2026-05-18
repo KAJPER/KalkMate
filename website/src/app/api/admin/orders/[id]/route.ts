@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { resend, FROM_EMAIL } from "@/lib/resend";
+import { sendMail } from "@/lib/mailer";
 import {
   statusInProgressEmail,
   statusShippedEmail,
@@ -102,8 +102,7 @@ export async function PATCH(
 
       if (html) {
         try {
-          await resend.emails.send({
-            from: FROM_EMAIL,
+          await sendMail({
             to: pi.metadata.customer_email,
             subject: statusSubjects[fulfillment_status] || "Aktualizacja zamówienia",
             html,

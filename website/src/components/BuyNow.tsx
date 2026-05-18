@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Elements, PaymentMethodMessagingElement } from "@stripe/react-stripe-js";
 import type { StripeElementsOptions } from "@stripe/stripe-js";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import StripeProvider from "@/components/StripeProvider";
 import CheckoutForm from "@/components/CheckoutForm";
 import getStripe from "@/lib/getStripe";
@@ -28,6 +30,8 @@ const inputClass =
   "w-full px-4 py-3 bg-[#0B0B0B] border border-[rgba(242,237,227,0.18)] text-[#F2EDE3] text-sm focus:outline-none focus:border-[#D8FF3D] placeholder:text-[#F2EDE3]/30 transition-colors";
 
 export default function BuyNow() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [stage, setStage] = useState<Stage>("form");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -36,6 +40,13 @@ export default function BuyNow() {
   const [formData, setFormData] = useState({ name: "", email: "", phone: "", consent: false });
   const [selectedPoint, setSelectedPoint] = useState<InPostPoint | null>(null);
   const [stockLeft, setStockLeft] = useState(9);
+
+  // Pre-fill email z sesji (zalogowany user)
+  useEffect(() => {
+    if (session?.user?.email && !formData.email) {
+      setFormData((d) => ({ ...d, email: session.user!.email!, name: session.user!.name || d.name }));
+    }
+  }, [session, formData.email]);
 
   // Day-seeded stock
   useEffect(() => {
@@ -72,10 +83,17 @@ export default function BuyNow() {
   }, [isModalOpen]);
 
   const openModal = useCallback(() => {
+    // Wymagamy zalogowania zeby kupic
+    if (status === "loading") return;
+    if (status !== "authenticated") {
+      const cb = typeof window !== "undefined" ? window.location.pathname : "/";
+      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(cb)}`);
+      return;
+    }
     setIsModalOpen(true);
     setStage("form");
     setErrorMessage("");
-  }, []);
+  }, [status, router]);
   const closeModal = useCallback(() => setIsModalOpen(false), []);
   const handlePointSelect = useCallback((point: InPostPoint) => {
     setSelectedPoint(point);

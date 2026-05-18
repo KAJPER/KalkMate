@@ -97,10 +97,10 @@ export default function FAQ() {
               odpowiadam w ciągu 24h.
             </p>
             <a
-              href="mailto:kacper@kajpa.pl"
+              href="mailto:kontakt@kalkmate.pl"
               className="km-mono-eyebrow text-[#D8FF3D] mt-3 inline-flex items-center gap-2"
             >
-              kacper@kajpa.pl <span>↗</span>
+              kontakt@kalkmate.pl <span>↗</span>
             </a>
           </div>
         </div>

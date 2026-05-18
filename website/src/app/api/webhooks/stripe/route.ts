@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
-import { resend, FROM_EMAIL } from "@/lib/resend";
+import { sendMail } from "@/lib/mailer";
 import { purchaseConfirmationEmail } from "@/lib/email-templates";
 import { prisma } from "@/lib/db";
 
@@ -100,18 +100,23 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 
   console.log(`[WEBHOOK] Processing order for email: ${email}`);
 
-  // Sprawdź czy użytkownik już istnieje (ma konto)
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-  });
+  // Preferuj user_id z metadata (ustawione w create-payment-intent gdy user zalogowany).
+  // Fallback: szukaj po emailu (legacy / kupno gosciem - juz nieuzywane).
+  let existingUser = null;
+  if (meta.user_id) {
+    existingUser = await prisma.user.findUnique({ where: { id: meta.user_id } });
+  }
+  if (!existingUser) {
+    existingUser = await prisma.user.findUnique({ where: { email } });
+  }
 
   // Generate order number (e.g., KM-20260220-1234)
   const orderNumber = `KM-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // Zapisz zamówienie (z userId jeśli użytkownik istnieje, bez userId jeśli nie)
+  // Zapisz zamowienie z userId
   await prisma.order.create({
     data: {
-      userId: existingUser?.id, // Może być undefined - wtedy NULL w bazie
+      userId: existingUser?.id,
       orderNumber,
       status: "paid",
       customerName: name,
@@ -151,8 +156,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 
   // Send confirmation email
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
+    await sendMail({
       to: email,
       subject: `Potwierdzenie zamówienia ${orderNumber} - KalkMate`,
       html: purchaseConfirmationEmail({
@@ -234,8 +238,7 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
 
   // Send confirmation email
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
+    await sendMail({
       to: email,
       subject: `Potwierdzenie zamówienia ${orderNumber} - KalkMate`,
       html: purchaseConfirmationEmail({

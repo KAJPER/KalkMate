@@ -255,56 +255,52 @@ inline int notesSync(const char* licenseCode, const char* apiKey) {
         return -1;
     }
 
-    String arr = body.substring(arrStart, arrEnd + 1);
-    if (arr.length() > _NOTES_MAX_BYTES) {
-        Serial.printf("[NOTES] dump too large: %d B\n", arr.length());
-        return -1;
-    }
-
-    // Konwertuj do compact format. JSON-aware: pomija { } w stringach.
-    String compact = "[";
-    compact.reserve(arr.length() + 64);
-    bool first = true;
-    int cursor = 1;  // skip [
-    while (cursor < (int)arr.length() - 1) {
-        while (cursor < (int)arr.length() &&
-               (arr[cursor] == ' ' || arr[cursor] == '\t' || arr[cursor] == '\n' ||
-                arr[cursor] == '\r' || arr[cursor] == ',')) {
-            cursor++;
-        }
-        if (cursor >= (int)arr.length() - 1 || arr[cursor] != '{') break;
-
-        int objEnd = _jsonMatchBracket(arr, cursor, '{', '}');
-        if (objEnd < 0) {
-            Serial.printf("[NOTES] obj parse fail at %d\n", cursor);
-            break;
-        }
-        String obj = arr.substring(cursor, objEnd + 1);
-        String t  = _jsonGetStringField(obj, "title");
-        String co = _jsonGetStringField(obj, "content");
-
-        if (!first) compact += ",";
-        compact += "{\"t\":\"";
-        compact += t;
-        compact += "\",\"c\":\"";
-        compact += co;
-        compact += "\"}";
-        first = false;
-
-        cursor = objEnd + 1;
-    }
-    compact += "]";
-
+    // Iteruj bezposrednio po body (zero kopii arr substring/compact w RAM).
     File f = SPIFFS.open(_NOTES_FILE, "w");
     if (!f) {
         Serial.println("[NOTES] cannot open notes file for write");
         return -1;
     }
-    size_t written = f.print(compact);
-    f.close();
-    Serial.printf("[NOTES] saved %u bytes\n", (unsigned)written);
+    f.print("[");
+    bool first = true;
+    int cursor = arrStart + 1;
+    int noteCount = 0;
+    while (cursor < arrEnd) {
+        while (cursor < arrEnd &&
+               (body[cursor] == ' ' || body[cursor] == '\t' || body[cursor] == '\n' ||
+                body[cursor] == '\r' || body[cursor] == ',')) {
+            cursor++;
+        }
+        if (cursor >= arrEnd || body[cursor] != '{') break;
 
-    return notesCount();
+        int objEnd = _jsonMatchBracket(body, cursor, '{', '}');
+        if (objEnd < 0 || objEnd > arrEnd) {
+            Serial.printf("[NOTES] obj parse fail at %d\n", cursor);
+            break;
+        }
+        {
+            String obj = body.substring(cursor, objEnd + 1);
+            String t  = _jsonGetStringField(obj, "title");
+            String co = _jsonGetStringField(obj, "content");
+            obj = "";
+
+            if (!first) f.print(",");
+            f.print("{\"t\":\"");
+            f.print(t);
+            f.print("\",\"c\":\"");
+            f.print(co);
+            f.print("\"}");
+            first = false;
+            noteCount++;
+        }
+        cursor = objEnd + 1;
+    }
+    f.print("]");
+    f.close();
+    body = "";
+
+    Serial.printf("[NOTES] parsed %d notes\n", noteCount);
+    return noteCount;
 }
 
 inline void notesClear() {

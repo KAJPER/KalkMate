@@ -131,14 +131,20 @@ export default function PanelPage() {
   }, [session, activeTab]);
 
   const calcUnclaim = async () => {
-    if (!confirm("Odepnij licencje? Notatki, sprawdziany i historia zostana — mozesz potem przypisac inna licencje.")) return;
+    const deviceId = calcInfo?.device?.deviceId;
+    if (!deviceId) {
+      alert("Brak urzadzenia do odpiecia.");
+      return;
+    }
+    if (!confirm(`Odepnac urzadzenie ${deviceId}? Bedziesz mogl je sparowac ponownie.`)) return;
     setUnclaiming(true);
     try {
-      const r = await fetch("/api/user/license/claim", { method: "DELETE" });
+      const r = await fetch(`/api/user/devices?deviceId=${encodeURIComponent(deviceId)}`, {
+        method: "DELETE",
+      });
       const j = await r.json();
       if (j.ok) {
         setShowChangeLicense(false);
-        // Odswiez calcInfo
         const r2 = await fetch("/api/user/license/claim", { cache: "no-store" });
         setCalcInfo(await r2.json());
       } else {
@@ -811,7 +817,7 @@ export default function PanelPage() {
                       className={`group relative p-3  cursor-pointer transition-colors ${
                         currentConversationId === conv.id
                           ? 'bg-[#D8FF3D]/10 bg-[#D8FF3D]/10'
-                          : 'hover:bg-gray-100 hover:bg-[#141414]'
+                          : 'hover:bg-[#141414]'
                       }`}
                       onClick={() => loadConversation(conv.id)}
                     >
@@ -855,7 +861,7 @@ export default function PanelPage() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                      className="p-2  hover:bg-white/50 hover:bg-[#141414]/50 transition-colors"
+                      className="p-2  hover:bg-[#141414]/50 transition-colors"
                       title={isSidebarOpen ? "Ukryj historię" : "Pokaż historię"}
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -903,22 +909,22 @@ export default function PanelPage() {
                       Wklej treść zadania z matematyki, fizyki, chemii lub biologii, a AI pomoże Ci je rozwiązać zgodnie z zasadami CKE
                     </p>
                     <div className="grid grid-cols-2 gap-3 max-w-lg">
-                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
+                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)]">
                         <div className="text-2xl mb-1">📐</div>
                         <p className="text-xs font-semibold text-[#F2EDE3]">Matematyka</p>
                         <p className="text-xs text-[#F2EDE3]/60">Podstawowy i rozszerzony</p>
                       </div>
-                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
+                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)]">
                         <div className="text-2xl mb-1">⚡</div>
                         <p className="text-xs font-semibold text-[#F2EDE3]">Fizyka</p>
                         <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
                       </div>
-                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
+                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)]">
                         <div className="text-2xl mb-1">🧪</div>
                         <p className="text-xs font-semibold text-[#F2EDE3]">Chemia</p>
                         <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
                       </div>
-                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
+                      <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)]">
                         <div className="text-2xl mb-1">🧬</div>
                         <p className="text-xs font-semibold text-[#F2EDE3]">Biologia</p>
                         <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
@@ -1310,7 +1316,7 @@ export default function PanelPage() {
 
                             {/* Regular Plan - 15 zł */}
                             <div className="bg-[#0E0E0E]  p-5 border-2 border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
-                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-purple-600 text-white text-xs font-bold rounded-full">
+                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow">
                                 💎 Stała cena
                               </div>
                               <div className="text-center mt-2 mb-4">
@@ -1327,7 +1333,7 @@ export default function PanelPage() {
                               <button
                                 onClick={() => handleSubscribe("regular")}
                                 disabled={isLoading}
-                                className="w-full bg-[#0E0E0E] bg-[#141414] text-[#F2EDE3] px-4 py-3  hover:bg-[#141414] hover:bg-[#1a1a1a] transition-all duration-300 disabled:opacity-50 font-bold text-sm border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]"
+                                className="w-full bg-[#0E0E0E] bg-[#141414] text-[#F2EDE3] px-4 py-3  hover:bg-[#141414] hover:bg-[#1a1a1a] transition-all duration-300 disabled:opacity-50 font-bold text-sm border border-[rgba(242,237,227,0.15)]"
                               >
                                 {isLoading ? "Ładowanie..." : "Wybierz 15 zł"}
                               </button>
@@ -1516,35 +1522,43 @@ export default function PanelPage() {
                         </>
                       )}
                     </div>
-                  </div>{/* Historia rozmów */}
-                  <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
-                    <h2 className="text-xl font-bold text-[#F2EDE3] mb-4">
-                      Historia rozwiazan ({calcConvs.length})
-                    </h2>
+                  </div>
+
+                  {/* Historia rozmów */}
+                  <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)]">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
+                      <span className="km-mono-eyebrow text-[#D8FF3D]">/ Historia rozwiązań</span>
+                      <span className="km-mono-eyebrow text-[#F2EDE3]/45">
+                        {String(calcConvs.length).padStart(2, "0")} REKORDÓW
+                      </span>
+                    </div>
                     {calcConvs.length === 0 ? (
-                      <div className="text-[#F2EDE3]/60 text-sm">
-                        Zadnych zadan jeszcze nie rozwiazano.
+                      <div className="px-6 py-10 text-center km-mono-eyebrow text-[#F2EDE3]/45">
+                        Żadnych zadań jeszcze nie rozwiązano.
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        {calcConvs.map((it: any) => (
+                      <div className="divide-y divide-[rgba(242,237,227,0.08)]">
+                        {calcConvs.map((it: any, idx: number) => (
                           <button
                             key={it.id}
                             onClick={() => setCalcOpenedConv(it)}
-                            className="block w-full text-left bg-gray-50 bg-[#141414] hover:bg-gray-100 hover:bg-[#1a1a1a]/40 rounded p-3 border border-[rgba(242,237,227,0.10)]"
+                            className="block w-full text-left px-6 py-4 hover:bg-[#141414] transition-colors group"
                           >
-                            <div className="flex justify-between items-start">
+                            <div className="flex items-start gap-4">
+                              <span className="km-mono-eyebrow text-[#F2EDE3]/30 pt-1 group-hover:text-[#D8FF3D] transition-colors">
+                                {String(idx + 1).padStart(2, "0")}
+                              </span>
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-[#F2EDE3] truncate">
-                                  {it.mode === "image" ? "Zdjecie" : it.question}
+                                <div className="text-[15px] text-[#F2EDE3] truncate">
+                                  {it.mode === "image" ? "📷 Zdjęcie" : it.question}
                                 </div>
-                                <div className="text-xs text-[#F2EDE3]/60 mt-1 line-clamp-2">
-                                  {it.answer.slice(0, 120)}...
+                                <div className="text-[13px] text-[#F2EDE3]/55 mt-1 line-clamp-1">
+                                  {it.answer.slice(0, 140)}…
                                 </div>
                               </div>
-                              <div className="text-xs text-[#F2EDE3]/40 ml-2 whitespace-nowrap">
+                              <span className="km-mono-eyebrow text-[#F2EDE3]/40 whitespace-nowrap tabular-nums">
                                 {new Date(it.createdAt).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                              </div>
+                              </span>
                             </div>
                           </button>
                         ))}
@@ -1556,22 +1570,41 @@ export default function PanelPage() {
 
               {/* Modal pelnego widoku konwersacji */}
               {calcOpenedConv && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={() => setCalcOpenedConv(null)}>
-                  <div className="bg-[#0E0E0E]  shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 border border-[rgba(242,237,227,0.10)]" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <div className="text-xs text-[#F2EDE3]/60">{new Date(calcOpenedConv.createdAt).toLocaleString("pl-PL")}</div>
-                        <div className="text-xs font-mono text-[#F2EDE3]/40">{calcOpenedConv.deviceId}</div>
+                <div className="fixed inset-0 bg-[#0B0B0B]/80 backdrop-blur-md flex items-center justify-center p-4 z-50" onClick={() => setCalcOpenedConv(null)}>
+                  <div className="relative bg-[#0B0B0B] max-w-2xl w-full max-h-[85vh] overflow-y-auto border border-[rgba(242,237,227,0.18)]" onClick={(e) => e.stopPropagation()}>
+                    <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-l border-t border-[#D8FF3D]" />
+                    <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-r border-t border-[#D8FF3D]" />
+                    <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-l border-b border-[#D8FF3D]" />
+                    <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-r border-b border-[#D8FF3D]" />
+
+                    <div className="flex justify-between items-center px-6 py-4 border-b border-[rgba(242,237,227,0.10)] sticky top-0 bg-[#0B0B0B] z-10">
+                      <div className="flex flex-col">
+                        <span className="km-mono-eyebrow text-[#D8FF3D]">/ Rozwiązanie</span>
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/45 mt-1">
+                          {new Date(calcOpenedConv.createdAt).toLocaleString("pl-PL")} · {calcOpenedConv.deviceId}
+                        </span>
                       </div>
-                      <button onClick={() => setCalcOpenedConv(null)} className="text-[#F2EDE3]/60 hover:text-[#F2EDE3] text-2xl leading-none">×</button>
+                      <button
+                        onClick={() => setCalcOpenedConv(null)}
+                        className="w-8 h-8 border border-[rgba(242,237,227,0.20)] flex items-center justify-center text-[#F2EDE3] hover:bg-[#F2EDE3] hover:text-[#0B0B0B] transition-colors"
+                      >
+                        ✕
+                      </button>
                     </div>
-                    <div className="mb-4">
-                      <div className="text-sm font-bold mb-1 text-[#F2EDE3]">Zadanie:</div>
-                      <div className="bg-gray-50 bg-[#141414] p-3 rounded text-sm whitespace-pre-wrap text-[#F2EDE3]">{calcOpenedConv.question}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold mb-1 text-[#F2EDE3]">Rozwiazanie:</div>
-                      <div className="bg-blue-50 bg-[#141414] p-3 rounded text-sm whitespace-pre-wrap font-mono text-[#F2EDE3] border border-blue-100 border-[#D8FF3D]/30">{calcOpenedConv.answer}</div>
+
+                    <div className="p-6 lg:p-8 space-y-5">
+                      <div>
+                        <p className="km-mono-eyebrow text-[#F2EDE3]/55 mb-2">Zadanie</p>
+                        <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] p-4 text-[14.5px] text-[#F2EDE3] whitespace-pre-wrap leading-relaxed">
+                          {calcOpenedConv.question}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="km-mono-eyebrow text-[#D8FF3D] mb-2">Rozwiązanie</p>
+                        <div className="bg-[#0E0E0E] border border-[#D8FF3D]/30 border-l-2 p-4 text-[14px] text-[#F2EDE3] whitespace-pre-wrap font-mono leading-relaxed">
+                          {calcOpenedConv.answer}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1591,12 +1624,15 @@ export default function PanelPage() {
               {calcLoading && (
                 <div className="text-[#F2EDE3]/60">Ladowanie...</div>
               )}
-              {!calcLoading && calcInfo && !calcInfo.claimed && (
-                <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)] text-sm text-[#F2EDE3]/70">
-                  Najpierw przypisz licencje w zakladce <strong>Kalkulator</strong>.
+              {!calcLoading && calcInfo && !calcInfo.device && (
+                <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <p className="km-mono-eyebrow text-[#D8FF3D]">/ wymagany kalkulator</p>
+                  <p className="text-sm text-[#F2EDE3]/70 mt-2">
+                    Najpierw sparuj kalkulator w zakładce <strong className="text-[#F2EDE3]">Kalkulator</strong>.
+                  </p>
                 </div>
               )}
-              {!calcLoading && calcInfo && calcInfo.claimed && (<>{/* Notatki */}
+              {!calcLoading && calcInfo && calcInfo.device && (<>{/* Notatki */}
                   <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-xl font-bold text-[#F2EDE3]">
@@ -1606,8 +1642,9 @@ export default function PanelPage() {
                         Sync do urzadzenia przy WiFi
                       </span>
                     </div>
-                    <div className="bg-gray-50 bg-[#141414] rounded p-4 mb-4 border border-[rgba(242,237,227,0.10)]">
-                      <div className="font-semibold mb-2 text-sm text-[#F2EDE3]">
+                    <div className="bg-[#141414] p-5 mb-5 border border-[rgba(242,237,227,0.10)]">
+                      <div className="km-mono-eyebrow text-[#D8FF3D] mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
                         {editingNote ? "Edytuj notatke" : "Nowa notatka"}
                       </div>
                       <input
@@ -1616,7 +1653,7 @@ export default function PanelPage() {
                         onChange={(e) => setNoteTitle(e.target.value)}
                         placeholder="Tytul (max 60 znakow)"
                         maxLength={60}
-                        className="w-full px-3 py-2 bg-[#0E0E0E] border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)] rounded mb-2 text-sm text-[#F2EDE3]"
+                        className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] mb-2 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors"
                       />
                       <textarea
                         value={noteContent}
@@ -1624,7 +1661,7 @@ export default function PanelPage() {
                         placeholder="Tresc (max 4000 znakow - wzory, definicje)"
                         maxLength={4000}
                         rows={4}
-                        className="w-full px-3 py-2 bg-[#0E0E0E] border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)] rounded text-sm font-mono text-[#F2EDE3]"
+                        className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors resize-none"
                       />
                       <div className="flex justify-between items-center mt-2">
                         <div className="text-xs text-[#F2EDE3]/60">{noteContent.length}/4000</div>
@@ -1632,13 +1669,13 @@ export default function PanelPage() {
                           {editingNote && (
                             <button
                               onClick={() => { setEditingNote(null); setNoteTitle(""); setNoteContent(""); }}
-                              className="px-3 py-1 text-sm bg-gray-200 bg-[#1a1a1a] hover:bg-gray-300 hover:bg-[#1a1a1a] text-[#F2EDE3] rounded"
+                              className="px-3 py-1.5 km-mono-eyebrow bg-[#1a1a1a] border border-[rgba(242,237,227,0.20)] hover:border-[#F2EDE3] text-[#F2EDE3]/80 hover:text-[#F2EDE3] transition-colors"
                             >Anuluj</button>
                           )}
                           <button
                             onClick={calcSaveNote}
                             disabled={savingNote || (!noteTitle.trim() && !noteContent.trim())}
-                            className="px-3 py-1 text-sm bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] rounded disabled:opacity-50"
+                            className="px-4 py-1.5 km-mono-eyebrow bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] disabled:opacity-30 transition-colors"
                           >{savingNote ? "Zapisuje..." : editingNote ? "Zapisz" : "Dodaj"}</button>
                         </div>
                       </div>
@@ -1650,7 +1687,7 @@ export default function PanelPage() {
                     ) : (
                       <div className="space-y-2">
                         {calcNotes.map((n: any) => (
-                          <div key={n.id} className="border border-[rgba(242,237,227,0.10)] rounded p-3 hover:bg-gray-50 hover:bg-[#1a1a1a]/30">
+                          <div key={n.id} className="border border-[rgba(242,237,227,0.10)] p-4 hover:bg-[#141414] hover:border-[rgba(242,237,227,0.20)] transition-colors">
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-[#F2EDE3]">{n.title || "(bez tytulu)"}</div>
@@ -1658,9 +1695,9 @@ export default function PanelPage() {
                               </div>
                               <div className="ml-2 flex gap-1">
                                 <button onClick={() => { setEditingNote(n); setNoteTitle(n.title); setNoteContent(n.content); }}
-                                  className="text-xs px-2 py-1 bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 text-[#D8FF3D] rounded">Edytuj</button>
+                                  className="text-xs px-2 py-1 border border-[#D8FF3D]/40 text-[#D8FF3D] hover:bg-[#D8FF3D]/10 km-mono-eyebrow">Edytuj</button>
                                 <button onClick={() => calcDelNote(n.id)}
-                                  className="text-xs px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded">Usun</button>
+                                  className="text-xs px-2 py-1 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 km-mono-eyebrow">Usun</button>
                               </div>
                             </div>
                           </div>
@@ -1682,12 +1719,15 @@ export default function PanelPage() {
               {calcLoading && (
                 <div className="text-[#F2EDE3]/60">Ladowanie...</div>
               )}
-              {!calcLoading && calcInfo && !calcInfo.claimed && (
-                <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)] text-sm text-[#F2EDE3]/70">
-                  Najpierw przypisz licencje w zakladce <strong>Kalkulator</strong>.
+              {!calcLoading && calcInfo && !calcInfo.device && (
+                <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <p className="km-mono-eyebrow text-[#D8FF3D]">/ wymagany kalkulator</p>
+                  <p className="text-sm text-[#F2EDE3]/70 mt-2">
+                    Najpierw sparuj kalkulator w zakładce <strong className="text-[#F2EDE3]">Kalkulator</strong>.
+                  </p>
                 </div>
               )}
-              {!calcLoading && calcInfo && calcInfo.claimed && (<>{/* Sprawdziany */}
+              {!calcLoading && calcInfo && calcInfo.device && (<>{/* Sprawdziany */}
                   <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-xl font-bold text-[#F2EDE3]">
@@ -1695,8 +1735,9 @@ export default function PanelPage() {
                       </h2>
                       <span className="text-xs text-[#F2EDE3]/60">Markdown/LaTeX OK</span>
                     </div>
-                    <div className="bg-gray-50 bg-[#141414] rounded p-4 mb-4 border border-[rgba(242,237,227,0.10)]">
-                      <div className="font-semibold mb-2 text-sm text-[#F2EDE3]">
+                    <div className="bg-[#141414] p-5 mb-5 border border-[rgba(242,237,227,0.10)]">
+                      <div className="km-mono-eyebrow text-[#D8FF3D] mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
                         {editingTest ? "Edytuj sprawdzian" : "Nowy sprawdzian"}
                       </div>
                       <input
@@ -1705,7 +1746,7 @@ export default function PanelPage() {
                         onChange={(e) => setTestTitle(e.target.value)}
                         placeholder="Tytul (np. Matma 2026 - probna 1)"
                         maxLength={100}
-                        className="w-full px-3 py-2 bg-[#0E0E0E] border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)] rounded mb-2 text-sm text-[#F2EDE3]"
+                        className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] mb-2 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors"
                       />
                       <textarea
                         value={testContent}
@@ -1713,7 +1754,7 @@ export default function PanelPage() {
                         placeholder="Wklej tutaj rozwiazanie (markdown, LaTeX, $..$, **bold**...)"
                         maxLength={30000}
                         rows={8}
-                        className="w-full px-3 py-2 bg-[#0E0E0E] border border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)] rounded text-sm font-mono text-[#F2EDE3]"
+                        className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors resize-none"
                       />
                       <div className="flex justify-between items-center mt-2">
                         <div className="text-xs text-[#F2EDE3]/60">{testContent.length}/30000</div>
@@ -1721,13 +1762,13 @@ export default function PanelPage() {
                           {editingTest && (
                             <button
                               onClick={() => { setEditingTest(null); setTestTitle(""); setTestContent(""); }}
-                              className="px-3 py-1 text-sm bg-gray-200 bg-[#1a1a1a] text-[#F2EDE3] rounded"
+                              className="px-3 py-1.5 km-mono-eyebrow bg-[#1a1a1a] border border-[rgba(242,237,227,0.20)] hover:border-[#F2EDE3] text-[#F2EDE3]/80 hover:text-[#F2EDE3] transition-colors"
                             >Anuluj</button>
                           )}
                           <button
                             onClick={calcSaveTest}
                             disabled={savingTest || (!testTitle.trim() && !testContent.trim())}
-                            className="px-3 py-1 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded disabled:opacity-50"
+                            className="px-3 py-1 text-sm bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50"
                           >{savingTest ? "Zapisuje..." : editingTest ? "Zapisz" : "Dodaj"}</button>
                         </div>
                       </div>
@@ -1739,7 +1780,7 @@ export default function PanelPage() {
                     ) : (
                       <div className="space-y-2">
                         {calcTests.map((t: any) => (
-                          <div key={t.id} className="border border-[rgba(242,237,227,0.10)] rounded p-3 hover:bg-gray-50 hover:bg-[#1a1a1a]/30">
+                          <div key={t.id} className="border border-[rgba(242,237,227,0.10)] p-4 hover:bg-[#141414] hover:border-[rgba(242,237,227,0.20)] transition-colors">
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-[#F2EDE3]">{t.title || "(bez tytulu)"}</div>
@@ -1747,9 +1788,9 @@ export default function PanelPage() {
                               </div>
                               <div className="ml-2 flex gap-1">
                                 <button onClick={() => { setEditingTest(t); setTestTitle(t.title); setTestContent(t.content); }}
-                                  className="text-xs px-2 py-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 rounded">Edytuj</button>
+                                  className="text-xs px-2 py-1 border border-[#D8FF3D]/40 text-[#D8FF3D] hover:bg-[#D8FF3D]/10 km-mono-eyebrow">Edytuj</button>
                                 <button onClick={() => calcDelTest(t.id)}
-                                  className="text-xs px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded">Usun</button>
+                                  className="text-xs px-2 py-1 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 km-mono-eyebrow">Usun</button>
                               </div>
                             </div>
                           </div>

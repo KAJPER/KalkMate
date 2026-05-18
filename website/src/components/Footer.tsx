@@ -38,8 +38,8 @@ export default function Footer() {
               <li><a href="/regulamin" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">Regulamin</a></li>
               <li><a href="/polityka-prywatnosci" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">Polityka prywatności</a></li>
               <li>
-                <a href="mailto:kacper@kajpa.pl" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">
-                  kacper@kajpa.pl
+                <a href="mailto:kontakt@kalkmate.pl" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">
+                  kontakt@kalkmate.pl
                 </a>
               </li>
             </ul>
