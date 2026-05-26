@@ -109,11 +109,21 @@ inline void inputActivityReset() { _inputLastActivity = millis(); }
 inline uint32_t inputLastActivity() { return _inputLastActivity; }
 
 // === I2C / MCP23017 ===
+// Legacy (WROVER):  SDA=21, SCL=22
+// v4 (ESP32-S3):    SDA=40, SCL=39
 #ifndef I2C_SDA
-#define I2C_SDA   21
+  #ifdef KALK_HW_LEGACY
+    #define I2C_SDA   21
+  #else
+    #define I2C_SDA   40
+  #endif
 #endif
 #ifndef I2C_SCL
-#define I2C_SCL   22
+  #ifdef KALK_HW_LEGACY
+    #define I2C_SCL   22
+  #else
+    #define I2C_SCL   39
+  #endif
 #endif
 #ifndef MCP_ADDR
 #define MCP_ADDR  0x20
@@ -261,11 +271,15 @@ inline bool inputBegin() {
         _inMcp.pinMode(_IN_KB_PINS[i], INPUT_PULLUP);
     }
 
-    // GPA7 = MT3608 boost EN (HIGH = 12V ON dla OLED).
+#ifdef KALK_HW_LEGACY
+    // === Legacy PCB v3 (WROVER): GPA7 = MT3608 boost EN ===
     // BEZ tego pin floatuje, palec wzbudza go pojemnosciowo i ekran
     // odpala sie tylko po dotknieciu.
     _inMcp.pinMode(7, OUTPUT);
     _inMcp.digitalWrite(7, HIGH);
+#endif
+    // PCB v4 (ESP32-S3): boost EN przeniesiony na GPIO47, sterowany
+    // bezposrednio w main.cpp setup(). GPA7 nieuzywane.
 
     for (uint16_t k = 0; k < 100; k++) {
         _inStatePair[k] = false;

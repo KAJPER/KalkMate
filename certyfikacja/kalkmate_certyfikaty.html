@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>KalkMate — Certyfikaty i zgodność prawna</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+  --black:#0a0a0a;
+  --g1:#1a1a1a;
+  --g2:#333;
+  --g3:#555;
+  --g4:#888;
+  --g5:#bbb;
+  --g6:#e4e4e4;
+  --g7:#f5f5f5;
+}
+body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px;line-height:1.55}
+.page{width:210mm;min-height:297mm;padding:14mm 16mm 12mm 16mm;position:relative;page-break-after:always}
+
+/* HEADER */
+.hdr{display:flex;align-items:flex-end;justify-content:space-between;border-bottom:3px solid var(--black);padding-bottom:8px;margin-bottom:20px}
+.hdr-title{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:-0.5px;line-height:1}
+.hdr-title span{display:block;font-size:9px;font-weight:400;color:var(--g3);letter-spacing:1px;text-transform:uppercase;margin-top:3px;font-family:var(--sans)}
+.hdr-date{font-family:var(--mono);font-size:8px;color:var(--g4);text-align:right;line-height:1.6}
+
+/* OVERVIEW TABLE */
+.overview{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:9px}
+.overview thead th{background:var(--black);color:#fff;padding:5px 8px;font-family:var(--mono);font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;text-align:left}
+.overview td{padding:5px 8px;border-bottom:1px solid var(--g6);vertical-align:top;line-height:1.5}
+.overview tr:nth-child(even) td{background:var(--g7)}
+.tag{display:inline-block;font-family:var(--mono);font-size:7px;font-weight:700;padding:1px 4px;border-radius:2px;border:1px solid;white-space:nowrap}
+.tag.req{border-color:#b00;color:#b00;background:#fff5f5}
+.tag.opt{border-color:#555;color:#555;background:var(--g7)}
+.tag.done{border-color:#080;color:#080;background:#f0fff4}
+
+/* SECTION */
+.sec{margin-bottom:22px}
+.sec-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.sec-num{font-family:var(--mono);font-size:13px;font-weight:700;background:var(--black);color:#fff;width:26px;height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sec-title{font-family:var(--mono);font-size:12px;font-weight:700}
+.sec-sub{font-size:8.5px;color:var(--g3);margin-left:36px;margin-top:-6px;margin-bottom:8px}
+
+/* STEPS */
+.steps{margin-left:36px}
+.step{display:flex;gap:8px;align-items:flex-start;margin-bottom:7px;padding-bottom:7px;border-bottom:1px dashed var(--g6)}
+.step:last-child{border:none;margin-bottom:0;padding-bottom:0}
+.step-num{font-family:var(--mono);font-size:8px;font-weight:700;background:var(--g1);color:#fff;min-width:18px;height:18px;border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.step-body{font-size:9px;line-height:1.55;color:var(--g1)}
+.step-body strong{font-weight:700;color:var(--black)}
+.step-body a{color:var(--black);font-family:var(--mono);font-size:8.5px}
+.step-body code{font-family:var(--mono);font-size:8px;background:var(--g6);padding:0 3px;border-radius:2px}
+.step-body ul{margin:4px 0 0 14px}
+.step-body ul li{margin-bottom:2px}
+
+/* NOTE / WARNING BOX */
+.note{border-left:3px solid var(--black);padding:6px 10px;background:var(--g7);margin:6px 0 6px 36px;font-size:8.5px;line-height:1.55;color:var(--g2)}
+.note strong{color:var(--black);font-weight:700}
+.warn{border-left:3px solid #b00;padding:6px 10px;background:#fff5f5;margin:6px 0 6px 36px;font-size:8.5px;line-height:1.55;color:#700}
+.warn strong{color:#b00}
+
+/* TEMPLATE BLOCK */
+.tpl{background:var(--g7);border:1.5px solid var(--g5);border-radius:4px;padding:10px 12px;margin:6px 0 6px 36px;font-family:var(--mono);font-size:8px;line-height:1.7;color:var(--g1)}
+.tpl .tpl-title{font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--g4);margin-bottom:6px;border-bottom:1px solid var(--g5);padding-bottom:3px}
+.tpl .fill{color:#b00;font-style:italic}
+
+/* TWO COL */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* NORM TABLE */
+.nt{width:100%;border-collapse:collapse;font-size:8.5px;margin:4px 0 4px 0}
+.nt th{background:var(--g1);color:#fff;padding:3px 6px;font-family:var(--mono);font-size:7px;font-weight:700;text-transform:uppercase;text-align:left;letter-spacing:0.3px}
+.nt td{padding:3px 6px;border-bottom:1px solid var(--g6);vertical-align:top;line-height:1.4}
+.nt tr:nth-child(even) td{background:var(--g7)}
+
+/* COST TABLE */
+.ct{width:100%;border-collapse:collapse;font-size:9px;margin-bottom:4px}
+.ct th{background:var(--black);color:#fff;padding:4px 8px;font-family:var(--mono);font-size:7.5px;font-weight:700;text-transform:uppercase;text-align:left}
+.ct td{padding:4px 8px;border-bottom:1px solid var(--g6);vertical-align:top}
+.ct tr:nth-child(even) td{background:var(--g7)}
+.ct .total td{background:var(--g1);color:#fff;font-weight:700}
+
+/* CHECKLIST */
+.cl{margin:4px 0 4px 36px;list-style:none}
+.cl li{display:flex;gap:6px;align-items:flex-start;font-size:9px;margin-bottom:4px;line-height:1.4}
+.cl li::before{content:'[ ]';font-family:var(--mono);font-size:8px;color:var(--g4);flex-shrink:0;margin-top:1px}
+.cl li strong{font-weight:700}
+
+/* FOOTER */
+.pfooter{position:absolute;bottom:10mm;left:16mm;right:16mm;display:flex;justify-content:space-between;font-family:var(--mono);font-size:7px;color:var(--g4);border-top:1px solid var(--g6);padding-top:4px}
+
+@media print{
+  body{background:white}
+  @page{margin:0;size:A4}
+}
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 -->
+<div class="page">
+
+<div class="hdr">
+  <div class="hdr-title">
+    KalkMate — Certyfikaty i zgodnosc prawna
+    <span>Przewodnik krok po kroku dla producenta · Polska / UE</span>
+  </div>
+  <div class="hdr-date">
+    Opracowanie: maj 2026<br>
+    Dotyczy: KalkMate v1.0<br>
+    ESP32-S3 + WiFi 2.4 GHz + Li-Po
+  </div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num" style="font-size:8px;width:auto;padding:0 6px">PODSUMOWANIE</div><div class="sec-title">Co jest wymagane</div></div>
+  <table class="overview">
+    <thead><tr><th>Wymog</th><th>Dyrektywa / rejestr</th><th>Status</th><th>Koszt szacunkowy</th><th>Deadline</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Znak CE</strong> — deklaracja zgodnosci RED</td><td>RED 2014/53/EU (WiFi)</td><td><span class="tag req">WYMAGANE</span></td><td>0 zl (self-decl.) lub 2–5k zl (lab)</td><td>Przed pierwsza sprzedaza</td></tr>
+      <tr><td><strong>Dokumentacja techniczna</strong> (Technical File)</td><td>RED + LVD</td><td><span class="tag req">WYMAGANE</span></td><td>Czas wlasny (~2–4 h)</td><td>Przed pierwsza sprzedaza</td></tr>
+      <tr><td><strong>RoHS</strong> — oswiadczenie o braku substancji niebezpiecznych</td><td>RoHS II 2011/65/UE</td><td><span class="tag req">WYMAGANE</span></td><td>0 zl (zbior deklaracji od dostawcow)</td><td>Przed pierwsza sprzedaza</td></tr>
+      <tr><td><strong>Rejestracja BDO</strong> — sprzet elektroniczny (WEEE)</td><td>Ustawa o ZSEE, Polska</td><td><span class="tag req">WYMAGANE</span></td><td>100 zl/rok (mikroprzedsiebiorca)</td><td>Przed pierwsza sprzedaza</td></tr>
+      <tr><td><strong>Rejestracja BDO</strong> — baterie i akumulatory</td><td>Ustawa o bateriach, Polska</td><td><span class="tag req">WYMAGANE</span></td><td>W ramach BDO (j.w.)</td><td>Przed pierwsza sprzedaza</td></tr>
+      <tr><td><strong>Testy EMC / radiowe w laboratorium</strong></td><td>EN 300 328, EN 62368</td><td><span class="tag opt">ZALECANE</span></td><td>2 000–5 000 zl (jednorazowo)</td><td>Przed wieksza skala sprzedazy</td></tr>
+      <tr><td><strong>Cyberbezpieczenstwo RED Art. 3(3)</strong></td><td>RED + EN 18031 (od 2025)</td><td><span class="tag req">WYMAGANE</span></td><td>Dokumentacja wlasna</td><td>Przed pierwsza sprzedaza</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><strong>Uwaga prawna:</strong> Ten dokument ma charakter informacyjny i nie stanowi porad prawnych. Przed komercjalna sprzedaza warto skonsultowac sie ze specjalista CE/EMC lub firma doradcza (np. OBAC Gliwice, Certios Wroclaw).</div>
+</div>
+
+<!-- SECTION 1: CE RED -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">1</div><div class="sec-title">Oznakowanie CE — Dyrektywa RED 2014/53/EU</div></div>
+  <div class="sec-sub">Obowiazkowe dla kazdego urzadzenia z WiFi / Bluetooth sprzedawanego w UE</div>
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num">1.1</div>
+      <div class="step-body">
+        <strong>Sprawdz, ze modul ESP32-S3-WROOM-1 ma wlasny certyfikat CE/RED</strong><br>
+        Espressif posiada certyfikat RED dla modulow WROOM. Pobierz deklaracje zgodnosci ESP32-S3-WROOM-1 ze strony:
+        <a href="https://www.espressif.com/en/certificates">espressif.com/en/certificates</a><br>
+        <strong>To nie zwalnia cie z obowiazku wystawienia wlasnej deklaracji</strong> — ale jest kluczowym dowodem w Twojej dokumentacji technicznej.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">1.2</div>
+      <div class="step-body">
+        <strong>Zbierz dokumentacje techniczna (Technical File)</strong><br>
+        Kompletna teczka techniczna musi zawierac:
+        <ul>
+          <li>Opis urzadzenia i jego przeznaczenie</li>
+          <li>Schemat elektryczny (eksport z Fusion 360)</li>
+          <li>BOM (lista komponentow z numerami katalogowymi)</li>
+          <li>Certyfikaty CE komponentow radiowych — ESP32-S3-WROOM-1 (RED), CH340C (EMC)</li>
+          <li>Deklaracje RoHS od JLCPCB / LCSC dla wszystkich komponentow</li>
+          <li>Opis oprogramowania i protokolow komunikacyjnych (WiFi WPA2, HTTPS do serwera)</li>
+          <li>Informacje o cyberbezpieczenstwie (patrz punkt 4)</li>
+          <li>Fotografie urzadzenia</li>
+          <li>Wyniki testow (wlasne lub laboratoryjne)</li>
+        </ul>
+        <strong>Przechowuj dokumentacje min. 10 lat od daty wprowadzenia produktu na rynek.</strong>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">1.3</div>
+      <div class="step-body">
+        <strong>Testy — sciezka A: samodzielna (dopuszczalna przy malej skali)</strong><br>
+        Mozesz powolac sie na certyfikat modulu ESP32 i wykonac wlasne testy funkcjonalne. Udokumentuj:
+        <ul>
+          <li>Ze urzadzenie nie modyfikuje ukladu antenowego modulu (antena zintegrowana WROOM)</li>
+          <li>Pomiary napiecia zasilania, test stabilnosci WiFi, brak interferencji z innymi pasmami</li>
+          <li>Test z oscyloskopem (DHO804) — brak sygnalow przekraczajacych ograniczenia EMC</li>
+        </ul>
+        <strong>Ryzyko:</strong> przy kontroli UOKiK moze byc wymagane przedstawienie badan z akredytowanego laboratorium.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">1.4</div>
+      <div class="step-body">
+        <strong>Testy — sciezka B: laboratorium akredytowane (zalecane)</strong><br>
+        Jednorazowy koszt ~2 000–5 000 zl. Laboratorium wystawia raport z testow zgodnie z normami:
+        <ul>
+          <li><code>EN 300 328 v2.2.2</code> — WiFi 2.4 GHz, transmisja szerokopasmowa</li>
+          <li><code>EN 301 489-1 / -17</code> — kompatybilnosc elektromagnetyczna (EMC)</li>
+          <li><code>EN 62368-1</code> — bezpieczenstwo elektryczne urządzeń AV/IT</li>
+          <li><code>EN 62311</code> — ekspozycja na promieniowanie elektromagnetyczne (SAR)</li>
+        </ul>
+        Polecane laboratoria: <strong>OBAC</strong> (Gliwice), <strong>Certios</strong> (Wroclaw), <strong>TUV Rheinland</strong> (Warszawa), <strong>SGS Polska</strong>.
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">1.5</div>
+      <div class="step-body">
+        <strong>Wystaw EU Declaration of Conformity (DoC)</strong><br>
+        Plik PDF, podpisany przez Ciebie jako producenta. Szablon ponizej (strona 2). Musisz go:
+        <ul>
+          <li>Dolaczac do kazdego sprzedanego urzadzenia (moze byc jako PDF do pobrania z kalkmate.pl)</li>
+          <li>Miec dostepny na zadanie organow kontrolnych przez 10 lat</li>
+          <li>Aktualizowac przy kazdej znaczacej zmianie sprzetu lub oprogramowania</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">1.6</div>
+      <div class="step-body">
+        <strong>Umieszcz znak CE na urzadzeniu i opakowaniu</strong><br>
+        Minimalna wysokosc znaku CE: <strong>5 mm</strong>. Musi byc trwaly i czytelny.
+        Umieszczenie: na tylnej/spodniej czesci urzadzenia (grawerowanie, nadruk, naklejka) + na pudelku.<br>
+        Wzor znaku CE: oficjalny dostepny na stronie Komisji Europejskiej (wektorowy, bezplatny).
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 1 / 3</span><span>Dokument wewnetrzny producenta</span></div>
+</div>
+
+<!-- PAGE 2: DoC TEMPLATE + ROHS + BDO -->
+<div class="page">
+
+<div class="hdr">
+  <div class="hdr-title">Deklaracja Zgodnosci UE — szablon<span>EU Declaration of Conformity · RED 2014/53/EU</span></div>
+  <div class="hdr-date">Wypelnij i wydrukuj / zapisz jako PDF<br>Podpisz odreczenie lub podpisem kwalifikowanym</div>
+</div>
+
+<div class="sec">
+  <div class="tpl" style="margin-left:0">
+    <div class="tpl-title">DEKLARACJA ZGODNOSCI UE / EU DECLARATION OF CONFORMITY</div>
+    <p><strong>1. Producent / Manufacturer:</strong><br>
+    <span class="fill">[Twoje imie i nazwisko / nazwa firmy]</span><br>
+    <span class="fill">[Adres: ulica, kod, miasto, Polska]</span><br>
+    <span class="fill">[E-mail: kontakt@kalkmate.pl]</span></p>
+    <br>
+    <p><strong>2. Opis produktu / Product description:</strong><br>
+    Nazwa: <strong>KalkMate v1.0</strong> — kalkulator z asystentem AI<br>
+    Model: <strong>KalkMate-ESP32S3-v1</strong><br>
+    Przeznaczenie: urzadzenie edukacyjne z wbudowanym modelem jezyka (LLM) dostepnym przez WiFi 2.4 GHz</p>
+    <br>
+    <p><strong>3. Oswiadczenie / Statement:</strong><br>
+    Niniejsza deklaracja zgodnosci wydana zostaje na wylaczna odpowiedzialnosc producenta.<br>
+    Opisany powyzej produkt jest zgodny z odpowiednim unijnym prawodawstwem harmonizacyjnym:</p>
+    <br>
+    <p><strong>4. Zastosowane dyrektywy / Applicable directives:</strong><br>
+    — Dyrektywa dotyczaca urzadzen radiowych (RED) 2014/53/UE<br>
+    — Dyrektywa RoHS II 2011/65/UE<br>
+    — Dyrektywa niskonapieciowa (LVD) 2014/35/UE</p>
+    <br>
+    <p><strong>5. Normy zharmonizowane / Harmonised standards:</strong><br>
+    — EN 300 328 v2.2.2 — transmisja szerokopasmowa 2.4 GHz<br>
+    — EN 301 489-1 v2.2.3 / EN 301 489-17 v3.2.4 — kompatybilnosc elektromagnetyczna<br>
+    — EN 62368-1:2020 — bezpieczenstwo elektryczne<br>
+    — EN 62311:2020 — ekspozycja na pole elektromagnetyczne<br>
+    <span class="fill">[Opcjonalnie: dodaj numer raportu laboratoryjnego jesli masz]</span></p>
+    <br>
+    <p><strong>6. Jednostka notyfikowana / Notified Body:</strong><br>
+    Nie dotyczy — zastosowano Modul A (wewnetrzna kontrola produkcji) zgodnie z Aneksem II dyrektywy RED.</p>
+    <br>
+    <p><strong>7. Podpisano / Signed:</strong><br>
+    Miejsce: <span class="fill">[miasto]</span> &nbsp;&nbsp; Data: <span class="fill">[DD.MM.RRRR]</span><br><br>
+    _____________________________________<br>
+    <span class="fill">[Imie i nazwisko, stanowisko: Wlasciciel / Producent]</span></p>
+  </div>
+  <div class="note" style="margin-left:0"><strong>Gdzie przechowac:</strong> Oryginal podpisany w teczkce technicznej. Kopia PDF dostepna do pobrania na kalkmate.pl/doc/ce-declaration.pdf. Dolaczaj link lub druk do kazdej przesylki.</div>
+</div>
+
+<!-- SECTION 2: ROHS -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">2</div><div class="sec-title">RoHS II — substancje niebezpieczne</div></div>
+  <div class="sec-sub">Dyrektywa 2011/65/UE — ograniczenie olowiu, kadmu, rteci, chromu VI, PBB, PBDE, DEHP, BBP, DBP, DIBP</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">2.1</div>
+      <div class="step-body">
+        <strong>Zbierz deklaracje RoHS od wszystkich dostawcow</strong><br>
+        <ul>
+          <li><strong>JLCPCB</strong> — pobierz certyfikat RoHS dla plytki drukowanej (dostepny w panelu zamowien)</li>
+          <li><strong>LCSC / JLCPCB SMT</strong> — kazdy komponent ma karte danych z deklaracja RoHS; eksportuj z BOM</li>
+          <li><strong>ESP32-S3-WROOM-1</strong> — deklaracja RoHS dostepna na espressif.com/en/certificates</li>
+          <li><strong>Bateria Li-Po</strong> — certyfikat od dostawcy (wymagaj przy zamawianiu)</li>
+          <li><strong>Kabel USB-C / obudowa / opakowanie</strong> — oswiadczenie od producenta</li>
+        </ul>
+        Wloz wszystkie do teczki technicznej jako zalaczniki.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2.2</div>
+      <div class="step-body">
+        <strong>Umieszczenie oznaczenia RoHS</strong><br>
+        Nie ma obowiazkowego symbolu graficznego RoHS na produkcie (w odroznieniu od WEEE). Wystarczy wzmianka w dokumentacji i na stronie produktu: <code>"Zgodny z RoHS II 2011/65/UE"</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: BDO WEEE -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">3</div><div class="sec-title">Rejestracja BDO — WEEE i baterie</div></div>
+  <div class="sec-sub">Obowiazkowa rejestracja w rejestrze BDO (bdo.mos.gov.pl) przed pierwsza sprzedaza</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">3.1</div>
+      <div class="step-body">
+        <strong>Zaloz konto w systemie BDO</strong><br>
+        Adres: <a href="https://rejestr.bdo.mos.gov.pl">rejestr.bdo.mos.gov.pl</a><br>
+        Logowanie przez login.gov.pl (profil zaufany lub e-dowod). Potrzebne: NIP, REGON, numer KRS lub wpis do CEIDG.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3.2</div>
+      <div class="step-body">
+        <strong>Zloz wniosek o wpis do rejestru — dwa zakresy rownoczesnie</strong><br>
+        <ul>
+          <li><strong>Dzial VI</strong> — Wprowadzajacy sprzet elektryczny i elektroniczny (WEEE)<br>
+          Kategoria KalkMate: <em>Kategoria 6 — Male urzadzenia informatyczne i telekomunikacyjne (wymiary &lt; 50 cm)</em></li>
+          <li><strong>Dzial V</strong> — Wprowadzajacy baterie lub akumulatory<br>
+          Typ: bateria przenosna (Li-Po wbudowana)</li>
+        </ul>
+        Wniosek skladasz elektronicznie przez panel BDO. Zalaczniki: kopia wpisu do CEIDG / KRS, ewentualnie pelnomocnictwo.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3.3</div>
+      <div class="step-body">
+        <strong>Oplata rejestracyjna</strong><br>
+        Mikroprzedsiebiorca (do 10 pracownikow i obrot &lt; 2 mln EUR): <strong>100 zl rocznie</strong><br>
+        Przelew na konto Urzedu Marszalkowskiego wlasciwego dla siedziby firmy. Numer konta wskazany we wniosku BDO.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3.4</div>
+      <div class="step-body">
+        <strong>Po rejestracji — obowiazki ciagle</strong><br>
+        <ul>
+          <li>Przekazanie do zorganizowanego systemu zbiórki/recyklingu lub umowa z organizacja odzysku (np. Biosystem, ElektroEko, Recal) — ok. kilkadziesiat groszy/sztuke</li>
+          <li>Roczne sprawozdanie do BDO (do 15 marca za rok poprzedni) — ilosc wprowadzonego sprzetu w kg</li>
+          <li>Symbol WEEE (przekreślony kosz na smieci) na urzadzeniu lub opakowaniu — obowiazkowy</li>
+          <li>Poinformowanie klientow o mozliwosci zwrotu zuzyty sprzet (np. adnotacja na stronie i w opakowaniu)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3.5</div>
+      <div class="step-body">
+        <strong>Umieszczenie numeru rejestracji BDO</strong><br>
+        Po otrzymaniu wpisu dostaniesz numer BDO (9-cyfrowy). Musisz go umiescic na:
+        <ul>
+          <li>Fakturach sprzedazy</li>
+          <li>Stronie internetowej sklepu</li>
+          <li>Opakowaniu produktu (moze byc mala czcionka)</li>
+        </ul>
+        Format: <code>Nr rejestrowy BDO: 000XXXXXX</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 2 / 3</span><span>Dokument wewnetrzny producenta</span></div>
+</div>
+
+<!-- PAGE 3: CYBERSEC + COSTS + CHECKLIST + LINKS -->
+<div class="page">
+
+<div class="hdr">
+  <div class="hdr-title">Cyberbezpieczenstwo, koszty i lista kontrolna<span>RED Art. 3(3) · Podsumowanie finansowe · Checklist przed sprzedaza</span></div>
+  <div class="hdr-date">Maj 2026</div>
+</div>
+
+<!-- SECTION 4: CYBERSEC -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">4</div><div class="sec-title">Cyberbezpieczenstwo RED Art. 3(3) — od 2025 obowiazkowe</div></div>
+  <div class="sec-sub">Nowe wymaganie dla wszystkich urzadzen WiFi/BT wprowadzanych na rynek UE po sierpniu 2025</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">4.1</div>
+      <div class="step-body">
+        <strong>Co musisz udokumentowac dla KalkMate</strong><br>
+        Norma EN 18031 wprowadza trzy obszary. Dla urzadzenia takiego jak KalkMate (brak przechowywania danych osobowych lokalnie, komunikacja tylko z wlasnym serwerem):
+        <ul>
+          <li><strong>Art. 3.3(d) — Ochrona sieci:</strong> Urzadzenie nie moze uszkadzac sieci. Dokumentacja: WiFi ESP32 dziala w standardowym trybie klienta WPA2, brak mozliwosci dzialania jako AP bez jawnej konfiguracji uzytkownika.</li>
+          <li><strong>Art. 3.3(e) — Ochrona danych osobowych:</strong> KalkMate nie przechowuje danych osobowych na urzadzeniu — historyjki AI sa lokalne (NVS), nie zawieraja danych identyfikacyjnych. WiFi password przechowywane zaszyfrowane w NVS ESP32.</li>
+          <li><strong>Art. 3.3(f) — Ochrona przed oszustwami finansowymi:</strong> KalkMate nie przetwarza platnosci. Nie dotyczy.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4.2</div>
+      <div class="step-body">
+        <strong>Minimalne srodki techniczne do udokumentowania</strong><br>
+        <ul>
+          <li>Komunikacja z serwerem przez <strong>HTTPS (TLS 1.2+)</strong> — zweryfikuj w kodzie OTA i API</li>
+          <li>OTA aktualizacje podpisane cyfrowo lub weryfikowane przez hash — opisz mechanizm w dokumentacji</li>
+          <li>Brak domyslnych hasel (Kod AI ustawiany przez uzytkownika, nie predefiniowany)</li>
+          <li>Mozliwosc resetu do ustawien fabrycznych usuwajacego dane — Settings → Reset fabryczny</li>
+          <li>Brak nieuzywanych otwartych portow sieciowych</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4.3</div>
+      <div class="step-body">
+        <strong>Gdzie to zapisac</strong><br>
+        Dodaj rozdzial "Cybersecurity Assessment" do teczki technicznej. Wystarczy dokument 1–2 strony opisujacy powyzsze punkty. Nie trzeba zewnetrznego audytu przy Module A dla prostych urzadzen IoT bez przetwarzania danych osobowych.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 5: MARKING -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">5</div><div class="sec-title">Oznaczenia na urzadzeniu i opakowaniu</div></div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">5.1</div>
+      <div class="step-body">
+        <strong>Co musi byc na URZADZENIU (grawerowanie / naklejka na spodzie)</strong><br>
+        <ul>
+          <li>Znak <strong>CE</strong> (min. 5 mm wysokosci)</li>
+          <li>Nazwa producenta lub znak towarowy</li>
+          <li>Numer modelu: <code>KalkMate v1.0</code></li>
+          <li>Numer seryjny lub partii (moze byc na naklejce)</li>
+          <li>Zakres napiecia: <code>USB-C 5V DC</code></li>
+          <li>Symbol WEEE (przekreślony kosz)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5.2</div>
+      <div class="step-body">
+        <strong>Co musi byc na OPAKOWANIU</strong><br>
+        <ul>
+          <li>Znak CE, symbol WEEE, symbol baterii (jesli wymienna — tutaj niewymienna wiec tylko WEEE)</li>
+          <li>Numer rejestrowy BDO: <code>Nr rej. BDO: 000XXXXXX</code></li>
+          <li>Dane producenta (nazwa, adres, kraj)</li>
+          <li>Krotki opis produktu, zawartosc opakowania</li>
+          <li>Informacja o selektywnej zbiorce: <em>"Nie wyrzucaj do smieci komunalnych"</em></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- COSTS TABLE -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">6</div><div class="sec-title">Zestawienie kosztow certyfikacji</div></div>
+  <table class="ct">
+    <thead><tr><th>Pozycja</th><th>Wariant minimalny</th><th>Wariant pelny (lab)</th><th>Czestotliwosc</th></tr></thead>
+    <tbody>
+      <tr><td>Rejestracja BDO</td><td>100 zl</td><td>100 zl</td><td>Raz rocznie</td></tr>
+      <tr><td>Deklaracja zgodnosci CE (DoC)</td><td>0 zl (wlasna)</td><td>0 zl</td><td>Raz (aktualizacja przy zmianach)</td></tr>
+      <tr><td>Testy EMC / radiowe (EN 300 328 itp.)</td><td>0 zl (samodzielne)</td><td>2 000–5 000 zl</td><td>Jednorazowo per wersja HW</td></tr>
+      <tr><td>Organizacja odzysku WEEE (baterie + sprzet)</td><td>~0,50–1,00 zl/szt.</td><td>~0,50–1,00 zl/szt.</td><td>Per sztuka sprzedana</td></tr>
+      <tr><td>Konsultacja prawna / doradztwo CE</td><td>0 zl (samodzielnie)</td><td>500–2 000 zl</td><td>Raz</td></tr>
+      <tr><td>Nadruk CE + WEEE na opakowaniu</td><td>w koszcie druku pudelka</td><td>w koszcie druku pudelka</td><td>Per partia</td></tr>
+    </tbody>
+    <tfoot>
+      <tr class="total"><td>LACZNIE (pierwsza partia)</td><td>~200–500 zl</td><td>~3 000–8 000 zl</td><td></td></tr>
+    </tfoot>
+  </table>
+</div>
+
+<!-- CHECKLIST -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">7</div><div class="sec-title">Lista kontrolna przed pierwsza sprzedaza</div></div>
+  <div class="two">
+    <div>
+      <ul class="cl">
+        <li><strong>Rejestracja BDO</strong> zlożona i oplata 100 zl uiszczona</li>
+        <li><strong>Numer BDO</strong> otrzymany i wpisany na fakturze, stronie, opakowaniu</li>
+        <li><strong>Umowa z organizacja odzysku</strong> WEEE podpisana (np. ElektroEko, Biosystem)</li>
+        <li><strong>Teczka techniczna</strong> skompletowana — schemat, BOM, certyfikaty ESP32, RoHS</li>
+        <li><strong>Deklaracje RoHS</strong> od JLCPCB, LCSC, dostawcy baterii — zebrane</li>
+        <li><strong>Cybersecurity assessment</strong> napisany (1-2 strony w teczce)</li>
+        <li><strong>Testy EMC</strong> — wlasne lub laboratoryjne — udokumentowane</li>
+      </ul>
+    </div>
+    <div>
+      <ul class="cl">
+        <li><strong>Deklaracja zgodnosci DoC</strong> wystawiona, podpisana, zapisana jako PDF</li>
+        <li><strong>Znak CE</strong> na urzadzeniu (min. 5 mm) i opakowaniu</li>
+        <li><strong>Symbol WEEE</strong> na urzadzeniu i opakowaniu</li>
+        <li><strong>Napiecie USB-C 5V DC</strong> podane na urzadzeniu lub opakowaniu</li>
+        <li><strong>DoC dostepna do pobrania</strong> na kalkmate.pl/doc/ce-declaration.pdf</li>
+        <li><strong>Informacja o WEEE</strong> na stronie sklepu (mozliwosc zwrotu zuzyty sprzet)</li>
+        <li><strong>Sprawozdanie BDO</strong> — termin: 15 marca za rok poprzedni</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- LINKS -->
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">8</div><div class="sec-title">Przydatne linki i zasoby</div></div>
+  <table class="nt" style="margin-left:0">
+    <tr><th>Zasob</th><th>Adres</th><th>Do czego</th></tr>
+    <tr><td>Rejestr BDO</td><td><code>rejestr.bdo.mos.gov.pl</code></td><td>Rejestracja WEEE i baterie, sprawozdania</td></tr>
+    <tr><td>Certyfikaty Espressif (ESP32)</td><td><code>espressif.com/en/certificates</code></td><td>DoC i certyfikaty RED / FCC dla modulow</td></tr>
+    <tr><td>Wzor znaku CE (wektorowy)</td><td><code>ec.europa.eu/growth/single-market/ce-marking</code></td><td>Oficjalny plik SVG/EPS znaku CE</td></tr>
+    <tr><td>Wzor DoC (szablon Komisji EU)</td><td><code>ec.europa.eu/docsroom/documents/40301</code></td><td>Oficjalny wzor deklaracji zgodnosci</td></tr>
+    <tr><td>Dyrektywa RED 2014/53/UE</td><td><code>eur-lex.europa.eu</code> (szukaj: 32014L0053)</td><td>Pelny tekst dyrektywy</td></tr>
+    <tr><td>Normy EN 300 328 (WiFi)</td><td><code>etsi.org/standards</code> — bezplatne PDF</td><td>Wymagania techniczne WiFi 2.4 GHz</td></tr>
+    <tr><td>OBAC — laboratorium CE</td><td><code>obac.com.pl</code></td><td>Testy EMC, doradztwo CE — Gliwice</td></tr>
+    <tr><td>ElektroEko — organizacja odzysku</td><td><code>elektroeko.pl</code></td><td>Umowa WEEE dla producentow elektroniki</td></tr>
+    <tr><td>Certify & Comply — przewodnik RED (EN)</td><td><code>certifycomply.com</code></td><td>Bardzo dobry przewodnik po RED po angielsku</td></tr>
+  </table>
+  <div class="warn" style="margin-left:0;margin-top:12px"><strong>Ważne:</strong> Przepisy zmieniaja sie. Ten dokument odzwierciedla stan na maj 2026. Sprawdz aktualne wymagania przed sprzedaza, szczegolnie w zakresie EN 18031 (cyberbezpieczenstwo RED), ktorego wdrozenie bylo stopniowe w 2025–2026.</div>
+</div>
+
+<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 3 / 3</span><span>Dokument wewnetrzny producenta · nie jest porada prawna</span></div>
+</div>
+
+</body>
+</html>

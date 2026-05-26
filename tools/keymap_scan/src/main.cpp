@@ -2,7 +2,7 @@
 //  keymap_scan — standalone narzedzie do mapowania klawiatury KalkMate.
 //
 //  Co robi:
-//    1. Inicjalizuje MCP23017 @ 0x20 (I2C SDA=21, SCL=22)
+//    1. Inicjalizuje MCP23017 @ 0x20 (I2C SDA=40, SCL=39 — PCB v4 ESP32-S3)
 //    2. Skanuje matryce 10 pinow (GPA0..GPA4 + GPB0..GPB4) parami
 //    3. Pyta przez Serial: "Nacisnij: 7"
 //    4. Czeka az nacisnieta zostanie jedna stabilna para pinow
@@ -22,8 +22,9 @@
 #include <Adafruit_MCP23X17.h>
 
 // === I2C / MCP23017 ===
-#define I2C_SDA   21
-#define I2C_SCL   22
+// PCB v4 (ESP32-S3): SDA=GPIO40, SCL=GPIO39 (zweryfikowane przez i2c_scan)
+#define I2C_SDA   40
+#define I2C_SCL   39
 #define MCP_ADDR  0x20
 
 // 10 pinow MCP23017 podpiętych do FFC klawiatury

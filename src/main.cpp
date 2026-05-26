@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "0.6.8"
+#define FW_VERSION "1.0.0"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -54,20 +54,41 @@
 #include "power.h"             // Auto-sleep OLED — globalny dla wszystkich ekranow
 #include "notes.h"             // Offline notatki uzytkownika
 #include "tests.h"             // Sprawdziany (dev mode)
+#include "battery.h"           // Pomiar baterii LiPo (PCB v4)
 #include <qrcode.h>            // QR generator dla device ID (lib ricmoo/QRCode)
 
 // Implementacja helpera z device_account.h (potrzebuje pelnej def kalkSettings).
 const char* _accGetUnlockCode() { return kalkSettings.aiUnlockCode; }
 
-// === OLED — finalne piny PCB v3 ===
-//   SCK  = GPIO18 (VSPI)
-//   MOSI = GPIO23 (VSPI)
-//   CS   = GPIO15
-//   DC   = GPIO2
-//   RST  = GPIO4
+// === OLED — piny PCB v4 (ESP32-S3) ===
+//   Legacy (WROVER):  SCK=18, MOSI=23, CS=15, DC=2, RST=4
+//   S3 (nowy PCB):    SCK=18, MOSI=11, CS=15, DC=2, RST=4
+// U8g2 hardware SPI uzywa domyslnego SPI peripheral. Na ESP32-S3 musimy
+// zmusic SPI.begin() do wlasciwych pinow PRZED u8g2.begin() — patrz setup().
+#ifdef KALK_HW_LEGACY
+  // Stary PCB: MOSI=23
+  #define OLED_PIN_MOSI 23
+#else
+  // Nowy PCB v4: MOSI=11
+  #define OLED_PIN_MOSI 11
+#endif
+#define OLED_PIN_SCK   18
+#define OLED_PIN_CS    15
+#define OLED_PIN_DC     2
+#define OLED_PIN_RST    4
+
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(
-    U8G2_R2, /*cs=*/15, /*dc=*/2, /*reset=*/4
+    U8G2_R2, /*cs=*/OLED_PIN_CS, /*dc=*/OLED_PIN_DC, /*reset=*/OLED_PIN_RST
 );
+
+// === Boost MT3608 EN ===
+//   Legacy: MCP23017 GPA7 (przez ekspander)
+//   v4:     GPIO47 ESP32-S3 (bezposrednio)
+#ifdef KALK_HW_LEGACY
+  #define KALK_BOOST_EN_PIN -1   // sterowane przez MCP (input.h)
+#else
+  #define KALK_BOOST_EN_PIN 47
+#endif
 
 // === Menu ===
 const char* menuItemsPL[] = {
@@ -847,7 +868,20 @@ void setup() {
     // 3.3V na wyjsciu LDO.
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
 
+#if KALK_BOOST_EN_PIN >= 0
+    // === Boost EN przez bezposredni GPIO ESP32-S3 ===
+    // Wlaczamy NAJPIERW, bo OLED VCC (14.5V) musi byc obecne zanim
+    // u8g2.begin() wyslalo komendy. Bez tego ekran nie zareaguje.
+    pinMode(KALK_BOOST_EN_PIN, OUTPUT);
+    digitalWrite(KALK_BOOST_EN_PIN, HIGH);
+    delay(20);  // MT3608 startup ~10ms, zapas
+#endif
+
     // === FAZA 1: tylko to co trzeba zeby pokazac "0" na ekranie ===
+    // ESP32-S3: musimy zainicjalizowac SPI z konkretnymi pinami przed u8g2.begin()
+    // bo U8G2 _4W_HW_SPI uzywa globalnego SPI bez kontroli pinow.
+    SPI.begin(OLED_PIN_SCK, /*MISO=*/-1, OLED_PIN_MOSI, OLED_PIN_CS);
+
     // OLED najpierw — to jedyne co user widzi w pierwszej chwili.
     u8g2.setBusClock(8000000);
     u8g2.begin();
