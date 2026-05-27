@@ -8,9 +8,9 @@
 //   ---------+-----------+----------------
 //   3        | SIO_D     | GPIO40 (I2C SDA)
 //   5        | SIO_C     | GPIO39 (I2C SCL)
-//   6        | RESET     | MCP23017 GPA6
+//   6        | RESET     | MCP23017 GPA5
 //   7        | VSYNC     | GPIO5
-//   8        | PWDN      | MCP23017 GPA5
+//   8        | PWDN      | MCP23017 GPA6
 //   9        | HREF      | GPIO6
 //   12       | Y9 (D7)   | GPIO16
 //   13       | XCLK      | GPIO7
@@ -66,9 +66,9 @@
   #define CAM_PIN_SIOC      39   // SCL
 #endif
 
-// PWDN i RESET — przez ekspander MCP23017 (GPA5 i GPA6)
-#define CAM_MCP_PWDN       5    // MCP GPA5
-#define CAM_MCP_RESET      6    // MCP GPA6
+// PWDN i RESET — przez ekspander MCP23017 (wg schematu PCB v4)
+#define CAM_MCP_PWDN       6    // MCP GPA6 (pin 8 FFC)
+#define CAM_MCP_RESET      5    // MCP GPA5 (pin 6 FFC)
 
 static bool _camReady = false;
 

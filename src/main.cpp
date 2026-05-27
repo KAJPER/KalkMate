@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.2.0"
+#define FW_VERSION "1.3.0"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -992,13 +992,25 @@ void setup() {
         Serial.println("[FATAL] MCP23017 brak — klawiatura nie dziala");
     }
 
-    // Wczytaj zapisany unlock code i panic key
+    // Wczytaj wszystkie zapisane ustawienia z NVS
     {
         char buf[12];
         loadAiCode(buf, sizeof(buf), "1111");
         strncpy(kalkSettings.aiUnlockCode, buf, sizeof(kalkSettings.aiUnlockCode) - 1);
         kalkSettings.aiUnlockCode[sizeof(kalkSettings.aiUnlockCode) - 1] = '\0';
         kalkSettings.panicKey = loadPanicKey(KEY_MU);
+        // Brightness / language / solveMode / autoSleep / sleepMinutes
+        kalkLoadSettings();
+        // Aplikuj wczytaną jasność do OLED.
+        // Na PCB v4 (boost ssie z VBAT) cap przy ~100 - powyzej widzimy
+        // brownout pod WiFi peakiem. Skalowanie: 0-15 -> 0-100 (zamiast 0-255).
+        uint16_t c = (uint16_t)kalkSettings.brightness * 7;  // max 15*7=105
+        if (c < 25) c = 25;   // minimum zeby ekran byl widoczny
+        u8g2.setContrast((uint8_t)c);
+        Serial.printf("[CFG] bright=%u lang=%u solveMode=%u sleep=%d/%u\n",
+                      kalkSettings.brightness, kalkSettings.language,
+                      kalkSettings.solveMode, (int)kalkSettings.autoSleep,
+                      kalkSettings.sleepMinutes);
     }
 
     // === FAZA 3: pelen kalkulator (przejmuje renderowanie) ===

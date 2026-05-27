@@ -17,6 +17,7 @@
 #include "wifi_persist.h"
 #include "ota_update.h"
 #include "battery.h"
+#include "camera.h"
 
 // Forward declaration panic flag (definicja w main.cpp). Nie includujemy
 // panic.h zeby uniknac circular include z power.h.
@@ -55,6 +56,35 @@ struct KalkMateSettings {
 // Domyslne: jasnosc 8, polski, szczegolowy, autoSleep ON, 4 min,
 //           kod "1111", panic = KEY_MU (27)
 static KalkMateSettings kalkSettings = {8, 0, 0, true, 4, "1111", /*KEY_MU*/27};
+
+// Zapis/odczyt ustawien w NVS (wszystkie razem). Definicje TUTAJ bo
+// musza byc po definicji kalkSettings - wifi_persist.h jest include'owany
+// wczesniej z settings_screen.h:17 wiec ma forward dec'a.
+static void kalkSaveSettings() {
+    Preferences prefs;
+    prefs.begin("kalkmate", false);
+    prefs.putUChar("bright",    kalkSettings.brightness);
+    prefs.putUChar("lang",      kalkSettings.language);
+    prefs.putUChar("solveMode", kalkSettings.solveMode);
+    prefs.putBool ("autoSleep", kalkSettings.autoSleep);
+    prefs.putUChar("sleepMin",  kalkSettings.sleepMinutes);
+    prefs.end();
+}
+
+static void kalkLoadSettings() {
+    Preferences prefs;
+    prefs.begin("kalkmate", true);
+    kalkSettings.brightness   = prefs.getUChar("bright",    8);
+    kalkSettings.language     = prefs.getUChar("lang",      0);
+    kalkSettings.solveMode    = prefs.getUChar("solveMode", 0);
+    kalkSettings.autoSleep    = prefs.getBool ("autoSleep", true);
+    kalkSettings.sleepMinutes = prefs.getUChar("sleepMin",  4);
+    if (kalkSettings.brightness > 15)   kalkSettings.brightness = 8;
+    if (kalkSettings.language > 1)      kalkSettings.language = 0;
+    if (kalkSettings.solveMode > 2)     kalkSettings.solveMode = 0;
+    if (kalkSettings.sleepMinutes > 10) kalkSettings.sleepMinutes = 4;
+    prefs.end();
+}
 
 // Tablica wartosci czasu uśpienia (indeks 0-10)
 static const char* _SET_SLEEP_LABELS[11] = {
@@ -362,15 +392,17 @@ static void _editBrightness(U8G2 &d) {
         d.drawStr(2, 63, T("< -   OK: zatwierdz   + >", "< -   OK: confirm   + >"));
         d.sendBuffer();
 
+        // PCB v4 cap 0-105 (anty-brownout), nie 0-255
         if (_setBtn(BTN_LEFT)) {
             if (val > 0) val--;
-            d.setContrast(val * 17); // podglad na zywo
+            d.setContrast(val * 7); // podglad na zywo (cap S3)
         } else if (_setBtn(BTN_RIGHT)) {
             if (val < 15) val++;
-            d.setContrast(val * 17); // podglad na zywo
+            d.setContrast(val * 7);
         } else if (_setBtn(BTN_OK)) {
             kalkSettings.brightness = val;
-            d.setContrast(val * 17);
+            d.setContrast(val * 7);
+            kalkSaveSettings();   // persist
             _setWaitRelease();
             return;
         }
@@ -416,6 +448,7 @@ static void _editLanguage(U8G2 &d) {
                 pressed = true;
             } else if (_setBtn(BTN_OK)) {
                 kalkSettings.language = val;
+                kalkSaveSettings();   // persist
                 _setWaitRelease();
                 return;
             }
@@ -458,6 +491,7 @@ static void _editSolveMode(U8G2 &d) {
             val = (val == 2) ? 0 : val + 1;
         } else if (_setBtn(BTN_OK)) {
             kalkSettings.solveMode = val;
+            kalkSaveSettings();   // persist
             _setWaitRelease();
             return;
         }
@@ -509,6 +543,7 @@ static void _editAutoSleep(U8G2 &d) {
                 // Zatwierdz
                 kalkSettings.autoSleep    = onOff;
                 kalkSettings.sleepMinutes = idx;
+                kalkSaveSettings();   // persist
                 _setWaitRelease();
                 return;
             }
@@ -1211,24 +1246,98 @@ static void _editFactoryReset(U8G2 &d) {
     while (true) delay(1000);
 }
 
-// Placeholder dla testu kamery (kamera nie jest jeszcze podpieta na PCB)
+// Test kamery — inicjalizuje OV2640, robi zdjecie, pokazuje info na OLED.
+// OK = nowe zdjecie, < = wyjscie (z deinit + power off).
 static void _editCamTest(U8G2 &d) {
     _setWaitRelease();
-    while (true) {
-        if (_panicRequested) return;
+
+    // Komunikat "Inicjalizacja..."
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 14, T("=== Test kamery ===", "=== Camera test ==="));
+    d.drawHLine(0, 16, 256);
+    d.drawStr(2, 32, T("Init OV2640...", "Initializing OV2640..."));
+    d.sendBuffer();
+
+    bool ok = camBegin();
+
+    uint32_t lastShot = 0;
+    uint32_t shotCount = 0;
+    uint32_t lastSize = 0;
+    int lastW = 0, lastH = 0;
+    char errBuf[40] = "";
+
+    auto draw = [&]() {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 14, T("=== Test kamery ===", "=== Camera test ==="));
-        d.drawHLine(0, 16, 256);
-        d.drawStr(2, 30, T("Kamera niezaimplementowana", "Camera not yet wired"));
-        d.drawStr(2, 42, T("(PCB v3 — fly-wires TODO)", "(PCB v3 — fly-wires TODO)"));
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, T("OK / < = wyjscie", "OK / < = exit"));
+        d.drawStr(2, 10, T("=== Test kamery ===", "=== Camera test ==="));
+        d.drawHLine(0, 12, 256);
+
+        if (!ok) {
+            d.drawStr(2, 28, T("Init NIEUDANY", "Init FAILED"));
+            d.drawStr(2, 40, errBuf);
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, T("< = wyjscie", "< = exit"));
+        } else {
+            char buf[48];
+            snprintf(buf, sizeof(buf), "Zdjec: %lu", (unsigned long)shotCount);
+            d.drawStr(2, 26, buf);
+            if (shotCount > 0) {
+                snprintf(buf, sizeof(buf), "Rozdz: %dx%d", lastW, lastH);
+                d.drawStr(2, 38, buf);
+                snprintf(buf, sizeof(buf), "JPEG: %lu B (%lu KB)",
+                         (unsigned long)lastSize, (unsigned long)(lastSize/1024));
+                d.drawStr(2, 50, buf);
+            } else {
+                d.drawStr(2, 38, T("Nacisnij OK aby zrobic zdjecie",
+                                   "Press OK to capture"));
+            }
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, T("OK = zdjecie    < = wyjscie",
+                              "OK = capture    < = exit"));
+        }
         d.sendBuffer();
-        if (_setBtn(BTN_OK) || _setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) {
+    };
+
+    draw();
+
+    while (true) {
+        if (_panicRequested) {
+            camEnd();
+            return;
+        }
+
+        if (_setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) {
+            camEnd();
             _setWaitRelease();
             return;
         }
+
+        if (ok && _setBtn(BTN_OK)) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 30, T("Robie zdjecie...", "Capturing..."));
+            d.sendBuffer();
+
+            camera_fb_t* fb = camCapture();
+            if (fb) {
+                shotCount++;
+                lastSize = fb->len;
+                lastW = fb->width;
+                lastH = fb->height;
+                Serial.printf("[CAM] frame %lu: %dx%d, %lu B\n",
+                              (unsigned long)shotCount, lastW, lastH,
+                              (unsigned long)lastSize);
+                esp_camera_fb_return(fb);
+            } else {
+                Serial.println("[CAM] capture FAILED");
+                snprintf(errBuf, sizeof(errBuf), "Capture failed");
+                ok = false;
+            }
+            draw();
+            _setWaitRelease();
+        }
+
         delay(20);
     }
 }

@@ -94,3 +94,6 @@ static uint8_t loadPanicKey(uint8_t defaultKey) {
     return k;
 }
 
+// kalkSaveSettings / kalkLoadSettings zdefiniowane w settings_screen.h
+// (musza byc po definicji struct kalkSettings)
+
