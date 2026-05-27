@@ -1,54 +1,55 @@
 # Graph Report - .  (2026-05-27)
 
 ## Corpus Check
-- Large corpus: 233 files · ~2,557,719 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder.
+- 233 files · ~2,557,719 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1178 nodes · 1866 edges · 132 communities (78 shown, 54 thin omitted)
-- Extraction: 88% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 193 edges (avg confidence: 0.84)
+- 1164 nodes · 1775 edges · 134 communities (80 shown, 54 thin omitted)
+- Extraction: 89% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 158 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Firmware UI & History|Firmware UI & History]]
-- [[_COMMUNITY_Public Status API|Public Status API]]
-- [[_COMMUNITY_Device-Web API Bridge|Device-Web API Bridge]]
-- [[_COMMUNITY_Admin Dashboard UI|Admin Dashboard UI]]
-- [[_COMMUNITY_Device Account Pairing|Device Account Pairing]]
-- [[_COMMUNITY_Website Build Config|Website Build Config]]
-- [[_COMMUNITY_Firmware OTA & Input|Firmware OTA & Input]]
-- [[_COMMUNITY_Firmware Bring-up Tools|Firmware Bring-up Tools]]
-- [[_COMMUNITY_Hardware BOM & Regulatory|Hardware BOM & Regulatory]]
-- [[_COMMUNITY_Stripe Payments|Stripe Payments]]
-- [[_COMMUNITY_Solve Screen & NVS Storage|Solve Screen & NVS Storage]]
-- [[_COMMUNITY_PCB Manufacturing Certs|PCB Manufacturing Certs]]
-- [[_COMMUNITY_Misc API Handlers|Misc API Handlers]]
-- [[_COMMUNITY_Power Management Chips|Power Management Chips]]
-- [[_COMMUNITY_User Authentication API|User Authentication API]]
-- [[_COMMUNITY_Admin Orders Management|Admin Orders Management]]
-- [[_COMMUNITY_Battery Driver|Battery Driver]]
-- [[_COMMUNITY_TypeScript Config|TypeScript Config]]
-- [[_COMMUNITY_Admin Pages|Admin Pages]]
-- [[_COMMUNITY_User Account API|User Account API]]
-- [[_COMMUNITY_WiFi Setup UI|WiFi Setup UI]]
-- [[_COMMUNITY_Backend Architecture|Backend Architecture]]
-- [[_COMMUNITY_License Validation API|License Validation API]]
-- [[_COMMUNITY_Marketing AI Section|Marketing AI Section]]
-- [[_COMMUNITY_I2C Bit-bang Driver|I2C Bit-bang Driver]]
-- [[_COMMUNITY_Marketing Landing Components|Marketing Landing Components]]
-- [[_COMMUNITY_NextAuth Integration|NextAuth Integration]]
-- [[_COMMUNITY_Root Layout & Fonts|Root Layout & Fonts]]
-- [[_COMMUNITY_Device-Server API|Device-Server API]]
-- [[_COMMUNITY_Help & Documentation|Help & Documentation]]
-- [[_COMMUNITY_Conversations API|Conversations API]]
-- [[_COMMUNITY_Landing Page Sections|Landing Page Sections]]
-- [[_COMMUNITY_Database Schema Migrations|Database Schema Migrations]]
-- [[_COMMUNITY_Purchase Funnel UI|Purchase Funnel UI]]
-- [[_COMMUNITY_Footer & Legal Pages|Footer & Legal Pages]]
-- [[_COMMUNITY_ESP32 Regulatory Certs|ESP32 Regulatory Certs]]
-- [[_COMMUNITY_Stripe Checkout Flow|Stripe Checkout Flow]]
-- [[_COMMUNITY_AI Chat & Solve Endpoints|AI Chat & Solve Endpoints]]
-- [[_COMMUNITY_Admin Authentication|Admin Authentication]]
-- [[_COMMUNITY_Image Optimization|Image Optimization]]
+- [[_COMMUNITY_Community 0|Community 0]]
+- [[_COMMUNITY_Community 1|Community 1]]
+- [[_COMMUNITY_Community 2|Community 2]]
+- [[_COMMUNITY_Community 3|Community 3]]
+- [[_COMMUNITY_Community 4|Community 4]]
+- [[_COMMUNITY_Community 5|Community 5]]
+- [[_COMMUNITY_Community 6|Community 6]]
+- [[_COMMUNITY_Community 7|Community 7]]
+- [[_COMMUNITY_Community 8|Community 8]]
+- [[_COMMUNITY_Community 9|Community 9]]
+- [[_COMMUNITY_Community 10|Community 10]]
+- [[_COMMUNITY_Community 11|Community 11]]
+- [[_COMMUNITY_Community 12|Community 12]]
+- [[_COMMUNITY_Community 13|Community 13]]
+- [[_COMMUNITY_Community 14|Community 14]]
+- [[_COMMUNITY_Community 15|Community 15]]
+- [[_COMMUNITY_Community 16|Community 16]]
+- [[_COMMUNITY_Community 17|Community 17]]
+- [[_COMMUNITY_Community 18|Community 18]]
+- [[_COMMUNITY_Community 19|Community 19]]
+- [[_COMMUNITY_Community 20|Community 20]]
+- [[_COMMUNITY_Community 21|Community 21]]
+- [[_COMMUNITY_Community 22|Community 22]]
+- [[_COMMUNITY_Community 23|Community 23]]
+- [[_COMMUNITY_Community 24|Community 24]]
+- [[_COMMUNITY_Community 25|Community 25]]
+- [[_COMMUNITY_Community 26|Community 26]]
+- [[_COMMUNITY_Community 27|Community 27]]
+- [[_COMMUNITY_Community 28|Community 28]]
+- [[_COMMUNITY_Community 29|Community 29]]
+- [[_COMMUNITY_Community 30|Community 30]]
+- [[_COMMUNITY_Community 31|Community 31]]
+- [[_COMMUNITY_Community 32|Community 32]]
+- [[_COMMUNITY_Community 33|Community 33]]
+- [[_COMMUNITY_Community 34|Community 34]]
+- [[_COMMUNITY_Community 35|Community 35]]
+- [[_COMMUNITY_Community 36|Community 36]]
+- [[_COMMUNITY_Community 37|Community 37]]
+- [[_COMMUNITY_Community 38|Community 38]]
+- [[_COMMUNITY_Community 39|Community 39]]
 - [[_COMMUNITY_Community 40|Community 40]]
 - [[_COMMUNITY_Community 41|Community 41]]
 - [[_COMMUNITY_Community 42|Community 42]]
@@ -65,29 +66,28 @@
 - [[_COMMUNITY_Community 53|Community 53]]
 - [[_COMMUNITY_Community 54|Community 54]]
 - [[_COMMUNITY_Community 55|Community 55]]
-- [[_COMMUNITY_Community 56|Community 56]]
+- [[_COMMUNITY_Community 57|Community 57]]
 - [[_COMMUNITY_Community 58|Community 58]]
 - [[_COMMUNITY_Community 59|Community 59]]
 - [[_COMMUNITY_Community 60|Community 60]]
 - [[_COMMUNITY_Community 61|Community 61]]
 - [[_COMMUNITY_Community 62|Community 62]]
-- [[_COMMUNITY_Community 63|Community 63]]
 - [[_COMMUNITY_Community 64|Community 64]]
 - [[_COMMUNITY_Community 65|Community 65]]
 - [[_COMMUNITY_Community 66|Community 66]]
 - [[_COMMUNITY_Community 67|Community 67]]
-- [[_COMMUNITY_Community 70|Community 70]]
-- [[_COMMUNITY_Community 71|Community 71]]
 - [[_COMMUNITY_Community 72|Community 72]]
+- [[_COMMUNITY_Community 73|Community 73]]
+- [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 75|Community 75]]
 - [[_COMMUNITY_Community 76|Community 76]]
 - [[_COMMUNITY_Community 79|Community 79]]
+- [[_COMMUNITY_Community 82|Community 82]]
 - [[_COMMUNITY_Community 84|Community 84]]
-- [[_COMMUNITY_Community 85|Community 85]]
 - [[_COMMUNITY_Community 86|Community 86]]
 - [[_COMMUNITY_Community 87|Community 87]]
 - [[_COMMUNITY_Community 88|Community 88]]
 - [[_COMMUNITY_Community 89|Community 89]]
-- [[_COMMUNITY_Community 96|Community 96]]
 - [[_COMMUNITY_Community 97|Community 97]]
 - [[_COMMUNITY_Community 98|Community 98]]
 - [[_COMMUNITY_Community 99|Community 99]]
@@ -123,18 +123,20 @@
 - [[_COMMUNITY_Community 129|Community 129]]
 - [[_COMMUNITY_Community 130|Community 130]]
 - [[_COMMUNITY_Community 131|Community 131]]
+- [[_COMMUNITY_Community 132|Community 132]]
+- [[_COMMUNITY_Community 133|Community 133]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `lib/db Prisma client` - 62 edges
-2. `showSettings()` - 18 edges
-3. `authOptions` - 17 edges
-4. `_setWaitRelease()` - 16 edges
-5. `compilerOptions` - 16 edges
+2. `authOptions` - 17 edges
+3. `showSettings()` - 17 edges
+4. `compilerOptions` - 16 edges
+5. `_setWaitRelease()` - 16 edges
 6. `purchaseConfirmationEmail()` - 15 edges
 7. `sendMail()` - 15 edges
 8. `authOptions (NextAuth)` - 15 edges
 9. `runCalculator()` - 14 edges
-10. `_setBtn()` - 14 edges
+10. `statusInProgressEmail()` - 14 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Device Solve API Route` --semantically_similar_to--> `Polish Matura AI System Prompt (ASCII-only)`  [INFERRED] [semantically similar]
@@ -177,267 +179,271 @@
 - **Camera subsystem: OV2640 socket + 2.8V/1.3V rails + I2C SCCB + ESP32 parallel bus** —  [1.0]
 - **HMI subsystem: SSD1322 OLED (12V + VSPI) + keyboard matrix via MCP23017 + buzzer** —  [1.0]
 
-## Communities (132 total, 54 thin omitted)
+## Communities (134 total, 54 thin omitted)
 
-### Community 0 - "Firmware UI & History"
-Cohesion: 0.06
-Nodes (52): showAboutScreen(), historyCount(), historyGet(), historySave(), _infoBtn(), _infoDrawPage(), _infoDrawServerPage(), _infoDrawStaticPage() (+44 more)
-
-### Community 1 - "Public Status API"
+### Community 0 - "Community 0"
 Cohesion: 0.08
 Nodes (52): escapeHtml(), lastByIp, POST(), POST(), statusSubjects, body(), brandHtml(), C (+44 more)
 
-### Community 2 - "Device-Web API Bridge"
-Cohesion: 0.05
-Nodes (60): src/about_screen.h - About Screen UI, /api/user/conversations, /api/user/license/claim, /api/user/notes, /api/user/tests, src/battery.h - LiPo Battery ADC Reader, src/calculator.h - Calculator Mode + Unlock Code, src/camera.h - OV2640 Camera Driver (+52 more)
+### Community 1 - "Community 1"
+Cohesion: 0.06
+Nodes (57): Admin Order Detail Page, Admin Orders Page, API: Admin Analytics (Stripe), API: Admin Order [id], API: Admin Orders, NextAuth [...nextauth] handler, API: GET /api/subscription/status, API: /api/sync/messages (POST+GET) (+49 more)
 
-### Community 3 - "Admin Dashboard UI"
+### Community 2 - "Community 2"
 Cohesion: 0.05
 Nodes (23): navItems, DailyChartProps, DailyData, fulfillmentColors, fulfillmentLabels, OrderStatusBadgeProps, paymentColors, paymentLabels (+15 more)
 
-### Community 4 - "Device Account Pairing"
-Cohesion: 0.09
-Nodes (33): _accDeviceId(), accountFetchStatus(), accountRegister(), accountRegisterOnce(), btnPressed(), loop(), setup(), drawMenu() (+25 more)
-
-### Community 5 - "Website Build Config"
+### Community 3 - "Community 3"
 Cohesion: 0.05
 Nodes (42): website/eslint.config.mjs, website/next.config.ts, dependencies, @auth/prisma-adapter, bcryptjs, dotenv, framer-motion, katex (+34 more)
 
-### Community 6 - "Firmware OTA & Input"
-Cohesion: 0.15
-Nodes (33): inputKeyConsume(), kalkKeyLabel(), otaCheck(), _otaDrawProgress(), otaInstall(), _otaJsonField(), _otaVerCmp(), _drawSettingsList() (+25 more)
+### Community 4 - "Community 4"
+Cohesion: 0.06
+Nodes (39): src/about_screen.h - About Screen UI, src/battery.h - LiPo Battery ADC Reader, src/calculator.h - Calculator Mode + Unlock Code, src/camera.h - OV2640 Camera Driver, include/config.h - Hardware Pin Configuration, probeAddr, scanAll (full bus scan), i2cStart (+31 more)
 
-### Community 7 - "Firmware Bring-up Tools"
+### Community 5 - "Community 5"
+Cohesion: 0.07
+Nodes (38): POST /api/chat, DELETE /api/conversations/[id], GET /api/conversations/[id], PATCH /api/conversations/[id], GET /api/conversations, POST /api/conversations, GET /api/device/account-status, GET /api/device/conversations (+30 more)
+
+### Community 6 - "Community 6"
+Cohesion: 0.17
+Nodes (26): _drawSettingsList(), _editAiCode(), _editAutoSleep(), _editBattery(), _editBrightness(), _editCamTest(), _editFactoryReset(), _editKeyScan() (+18 more)
+
+### Community 7 - "Community 7"
+Cohesion: 0.08
+Nodes (6): Admin Users Page, API: Admin User [id], API: Admin Users, globalForPrisma, lib/db Prisma client, ResetRow
+
+### Community 8 - "Community 8"
 Cohesion: 0.09
 Nodes (23): Adafruit_MCP23X17 library, i2c_scan/main.cpp (bit-bang I2C diag), keymap_scan/main.cpp (keyboard mapper wizard), loop(), patternAllOff(), patternAllOn(), patternBorderCross(), patternCounter() (+15 more)
 
-### Community 8 - "Hardware BOM & Regulatory"
-Cohesion: 0.10
-Nodes (29): ESP32-S3-WROOM-1-N16R8 Module, MCP23017 I2C GPIO Expander, MT3608 Step-up Boost 14.5V, OmniVision OV2640 Camera, SSD1322 OLED 256x64, BDO Registry WEEE / Batteries, EN 18031 Cybersecurity (RED Art 3.3), EU Declaration of Conformity (DoC) (+21 more)
+### Community 9 - "Community 9"
+Cohesion: 0.12
+Nodes (20): showAboutScreen(), _inPinIdx(), inputActivityReset(), inputAnyKeyConsume(), inputBegin(), inputDebugRawScan(), inputKeyConsume(), inputKeyDown() (+12 more)
 
-### Community 9 - "Stripe Payments"
+### Community 10 - "Community 10"
 Cohesion: 0.12
 Nodes (6): ADMIN_SESSION_TOKEN auth, stripe, authOptions, next-auth (withAuth), handler, Next middleware (auth gate)
 
-### Community 10 - "Solve Screen & NVS Storage"
-Cohesion: 0.08
-Nodes (25): _editLicense, /api/device/solve endpoint, ESP32 Preferences (NVS), saveAiCode/loadAiCode, savePanicKey/loadPanicKey, showSolveScreen(), showWifiSettings(), _solEnsureWifi (+17 more)
+### Community 11 - "Community 11"
+Cohesion: 0.10
+Nodes (29): ESP32-S3-WROOM-1-N16R8 Module, MCP23017 I2C GPIO Expander, MT3608 Step-up Boost 14.5V, OmniVision OV2640 Camera, SSD1322 OLED 256x64, BDO Registry WEEE / Batteries, EN 18031 Cybersecurity (RED Art 3.3), EU Declaration of Conformity (DoC) (+21 more)
 
-### Community 11 - "PCB Manufacturing Certs"
+### Community 12 - "Community 12"
 Cohesion: 0.11
 Nodes (27): DoC No. S251120003001-2 (Lead-free HASL PCB), DoC No. S251120003002-2 (ENIG PCB), RoHS Declaration of Conformity (JLCPCB), UL/ULC Authorization Notice (JLCPCB), Soar Testing Certification (GuangDong) Co., Ltd., UL LLC (Underwriters Laboratories), Underwriters Laboratories of Canada Inc. (ULC), PCB Laminate Type JLC-1 (+19 more)
 
-### Community 13 - "Power Management Chips"
+### Community 13 - "Community 13"
 Cohesion: 0.14
 Nodes (24): AP2112K-2.8 LDO (camera AVDD/DOVDD 2.8V), AP2112K-3.3 LDO (3.3V main logic rail), LiPo battery 3.7V input (BATERIA), Piezo buzzer driven via 2N7002 N-MOSFET, CH340C USB-UART bridge (programming), DW01A + FS8205A battery protection, ESP32-WROVER-E module (main MCU), I2C bus (SDA=GPIO21, SCL=GPIO22) - shared MCP23017 + OV2640 SCCB (+16 more)
 
-### Community 14 - "User Authentication API"
+### Community 14 - "Community 14"
 Cohesion: 0.11
 Nodes (21): POST /api/auth/forgot-password, createVerification(), POST /api/auth/register, sendVerification(), POST /api/auth/resend-verification, GET /api/auth/reset-password, POST /api/auth/reset-password, GET /api/auth/verify-email (+13 more)
 
-### Community 15 - "Admin Orders Management"
-Cohesion: 0.16
-Nodes (21): Admin Order Detail Page, Admin Orders Page, API: Admin Analytics (Stripe), API: Admin Order [id], API: Admin Orders, API: GET /api/user/orders, API: POST /api/webhooks/stripe, Concept: 30-day trial granted on calculator purchase (+13 more)
+### Community 15 - "Community 15"
+Cohesion: 0.17
+Nodes (18): _jsonGetStringField(), _jsonMatchBracket(), _jsonSkipString(), notesClear(), notesCount(), _notesEnsureFs(), notesGet(), notesSync() (+10 more)
 
-### Community 16 - "Battery Driver"
+### Community 16 - "Community 16"
+Cohesion: 0.11
+Nodes (21): Admin Dashboard Page, Admin Devices Page, Admin Gemini Stats Page, Admin Layout (noindex), Admin Licenses Page, Admin Login Page, API: Admin Auth (cookie), API: Admin Devices (+13 more)
+
+### Community 17 - "Community 17"
 Cohesion: 0.22
 Nodes (19): batteryDrawIcon(), batteryIsAvailable(), batteryIsCharging(), batteryIsCritical(), batteryIsLow(), batteryReadMillivolts(), batteryReadMillivoltsRaw(), batteryReadPercent() (+11 more)
 
-### Community 17 - "TypeScript Config"
+### Community 18 - "Community 18"
+Cohesion: 0.26
+Nodes (18): historyCount(), historyGet(), historySave(), panicTriggered(), showSolveScreen(), _solBtn(), _solDeviceId(), _solDisplaySolution() (+10 more)
+
+### Community 19 - "Community 19"
 Cohesion: 0.10
 Nodes (19): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+11 more)
 
-### Community 18 - "Admin Pages"
-Cohesion: 0.14
-Nodes (17): Admin Dashboard Page, Admin Gemini Stats Page, Admin Layout (noindex), Admin Licenses Page, Admin Users Page, API: Admin Gemini Stats, API: Admin Licenses (generator), API: Admin Licenses List (+9 more)
-
-### Community 19 - "User Account API"
-Cohesion: 0.16
-Nodes (18): API: GET /api/subscription/status, API: GET /api/user/conversations, API: /api/user/devices (GET/POST/DELETE), API: /api/user/license/claim (POST/GET/DELETE), Layout: /claim, Page: /claim (Pair calculator via QR), Concept: Device pairing via deviceId + unlockCode, Concept: One license per account constraint (+10 more)
-
-### Community 20 - "WiFi Setup UI"
+### Community 20 - "Community 20"
 Cohesion: 0.25
 Nodes (14): _doConnect(), _drawConnectError(), _drawConnecting(), _drawConnectOk(), _drawNetworkList(), _drawScanning(), _drawWifiStatus(), _runNetworkList() (+6 more)
 
-### Community 21 - "Backend Architecture"
-Cohesion: 0.31
-Nodes (17): Customer Panel /panel, Device Sync API, Gemini Pro 2.0 AI Chat, NextAuth Magic Link Auth, PM2 + Nginx + Lets Encrypt deployment, Prisma Schema (9 models), Resend Email System, SQLite (dev) -> PostgreSQL (prod) migration (+9 more)
-
-### Community 22 - "License Validation API"
+### Community 21 - "Community 21"
 Cohesion: 0.14
 Nodes (4): POST(), validatePassword(), generateLicenseCode(), POST()
 
-### Community 23 - "Marketing AI Section"
+### Community 22 - "Community 22"
+Cohesion: 0.31
+Nodes (17): Customer Panel /panel, Device Sync API, Gemini Pro 2.0 AI Chat, NextAuth Magic Link Auth, PM2 + Nginx + Lets Encrypt deployment, Prisma Schema (9 models), Resend Email System, SQLite (dev) -> PostgreSQL (prod) migration (+9 more)
+
+### Community 23 - "Community 23"
 Cohesion: 0.15
 Nodes (7): containerVariants, features, itemVariants, stripe, PRICING_PLANS, SUBSCRIPTION_PRICING, stripe
 
-### Community 24 - "I2C Bit-bang Driver"
+### Community 24 - "Community 24"
 Cohesion: 0.35
 Nodes (15): checkLines(), i2cInit(), i2cStart(), i2cStop(), i2cWriteByte(), probeAddr(), scanAll(), sclHigh() (+7 more)
 
-### Community 25 - "Marketing Landing Components"
+### Community 25 - "Community 25"
 Cohesion: 0.15
 Nodes (15): AIModel Component, CameraReveal Component, ExamBenefits Component, FAQ Component, Features Component, Gallery Component, Hero Component, HowItWorks Component (+7 more)
 
-### Community 26 - "NextAuth Integration"
+### Community 26 - "Community 26"
 Cohesion: 0.20
 Nodes (15): Website Auth Guide (NextAuth), src/lib/auth.ts (NextAuth config), src/middleware.ts (route protection), src/app/panel/page.tsx, src/app/auth/signin/page.tsx, Next.js Build Output Routes, Prisma License findFirst SyntaxError, PM2 Server Action Errors Log (+7 more)
 
-### Community 27 - "Root Layout & Fonts"
+### Community 27 - "Community 27"
+Cohesion: 0.18
+Nodes (5): showScreenTest(), _stBtn(), _stShowInfo(), _stT(), _stWaitBtn()
+
+### Community 28 - "Community 28"
+Cohesion: 0.28
+Nodes (12): btnPressed(), drawMenu(), handlePanicIfRequested(), loop(), _mainDeviceMac(), resetActivity(), setup(), showDeviceIdQrScreen() (+4 more)
+
+### Community 29 - "Community 29"
 Cohesion: 0.13
 Nodes (5): geist, instrument, jetbrains, metadata, inter
 
-### Community 28 - "Device-Server API"
-Cohesion: 0.21
-Nodes (14): GET /api/device/account-status, GET /api/device/conversations, GET /api/device/firmware/check, GET /api/device/notes, POST /api/device/register, GET /api/device/tests, POST /api/subscription/redeem, Calculator API Key (x-api-key) (+6 more)
-
-### Community 29 - "Help & Documentation"
+### Community 30 - "Community 30"
 Cohesion: 0.14
 Nodes (3): changelog, faqs, sections
 
-### Community 30 - "Conversations API"
-Cohesion: 0.18
-Nodes (13): NextAuth [...nextauth] handler, DELETE /api/conversations/[id], PATCH /api/conversations/[id], GET /api/conversations, POST /api/conversations, API: /api/user/notes (CRUD), API: /api/user/tests (CRUD), Concept: Notes quota 50 items / 50KB total (+5 more)
-
-### Community 31 - "Landing Page Sections"
-Cohesion: 0.15
-Nodes (3): subjects, steps, groups
-
-### Community 32 - "Database Schema Migrations"
+### Community 31 - "Community 31"
 Cohesion: 0.23
 Nodes (13): Migration: add attachments, Migration: add conversations (initial schema), Account table (OAuth), Attachment table, ChatMessage table, Conversation table, License table, Order table (+5 more)
 
-### Community 33 - "Purchase Funnel UI"
+### Community 32 - "Community 32"
+Cohesion: 0.15
+Nodes (3): subjects, steps, groups
+
+### Community 33 - "Community 33"
 Cohesion: 0.20
 Nodes (11): BuyNow Component, CheckoutForm Component, FlashSale Component, InPostGeowidget Component, PriceComparison Component, SocialProof Component, StickyBanner Component, StripeProvider Component (external) (+3 more)
 
-### Community 34 - "Footer & Legal Pages"
+### Community 34 - "Community 34"
+Cohesion: 0.24
+Nodes (9): /api/user/conversations, /api/user/license/claim, /api/user/notes, /api/user/tests, src/device_account.h - Device Registration/Status, Device License Claim Workflow, src/notes.h - Offline Notes Sync, src/ota_update.h - OTA Firmware Update (+1 more)
+
+### Community 35 - "Community 35"
+Cohesion: 0.18
+Nodes (11): showScreenTest(), _stAnimation, _stCheckerboard, _stFonts, _stFullBlack, _stFullWhite (full white test), _stGeometry, _stHorizontalBands (+3 more)
+
+### Community 36 - "Community 36"
 Cohesion: 0.20
 Nodes (3): links, metadata, metadata
 
-### Community 35 - "ESP32 Regulatory Certs"
+### Community 37 - "Community 37"
 Cohesion: 0.22
 Nodes (10): ESP32-S3-WROOM-1 Anatel Cert (Brazil), ESP32-S3-WROOM-1 CE Cert (EU), ESP32-S3-WROOM-1 FCC Cert (USA), ESP32-S3-WROOM-1 IC Cert (Canada), ESP32-S3-WROOM-1 MIC Cert (Japan), ESP32-S3-WROOM-1 NCC Cert (Taiwan), ESP32-S3-WROOM-1 SRRC Cert (China, valid to 2028-12-31), ESP32-S3-WROOM-1 Vietnam MIC Cert (+2 more)
 
-### Community 36 - "Stripe Checkout Flow"
+### Community 38 - "Community 38"
+Cohesion: 0.40
+Nodes (9): _infoBtn(), _infoDrawPage(), _infoDrawServerPage(), _infoDrawStaticPage(), _infoT(), _infoWaitRelease(), showInfo(), inputBtn() (+1 more)
+
+### Community 39 - "Community 39"
 Cohesion: 0.27
 Nodes (7): BuyNow(), included, InPostGeowidget, Stage, StripeProvider(), StripeProviderProps, getStripe()
 
-### Community 37 - "AI Chat & Solve Endpoints"
-Cohesion: 0.36
-Nodes (8): POST /api/chat, GET /api/conversations/[id], POST /api/device/solve, Device Solve System Prompt (short), Google Gemini API (gemini-3.1-pro-preview), Matura System Prompt (CKE), Prisma Attachment model, Prisma ChatMessage model
-
-### Community 38 - "Admin Authentication"
-Cohesion: 0.32
-Nodes (8): Admin Devices Page, Admin Login Page, API: Admin Auth (cookie), API: Admin Devices, AdminShell component, Cookie-based Admin Session Auth, ESP32 Device Telemetry & Tracking, lib/admin-auth (COOKIE_NAME, validatePassword)
-
-### Community 39 - "Image Optimization"
+### Community 40 - "Community 40"
 Cohesion: 0.33
 Nodes (6): fs, imagesToOptimize, optimizeImages(), path, publicDir, sharp
 
-### Community 40 - "Community 40"
+### Community 41 - "Community 41"
 Cohesion: 0.33
 Nodes (6): ClaimInfo, fmt(), KalkulatorPage(), Note, SolveItem, Test
 
-### Community 41 - "Community 41"
-Cohesion: 0.60
-Nodes (5): DELETE(), getUser(), POST(), PUT(), GET()
-
 ### Community 42 - "Community 42"
-Cohesion: 0.60
-Nodes (5): DELETE(), getUser(), POST(), PUT(), GET()
-
-### Community 43 - "Community 43"
-Cohesion: 0.53
-Nodes (4): camBegin(), camEnd(), _camPowerOff(), _camPowerOn()
-
-### Community 44 - "Community 44"
 Cohesion: 0.33
 Nodes (4): aliCons, kalkmateProps, phoneCons, tiktokCons
 
+### Community 43 - "Community 43"
+Cohesion: 0.60
+Nodes (5): DELETE(), getUser(), POST(), PUT(), GET()
+
+### Community 44 - "Community 44"
+Cohesion: 0.60
+Nodes (5): DELETE(), getUser(), POST(), PUT(), GET()
+
+### Community 45 - "Community 45"
+Cohesion: 0.53
+Nodes (4): camBegin(), camEnd(), _camPowerOff(), _camPowerOn()
+
 ### Community 46 - "Community 46"
-Cohesion: 0.40
-Nodes (3): comparison, containerVariants, rowVariants
+Cohesion: 0.53
+Nodes (5): otaCheck(), _otaDrawProgress(), otaInstall(), _otaJsonField(), _otaVerCmp()
 
 ### Community 47 - "Community 47"
-Cohesion: 0.50
-Nodes (5): JLCPCB IATF 16949:2016 Cert (Automotive QMS), JLCPCB ISO 14001:2015 Cert (Environmental), JLCPCB ISO 9001:2015 Cert (Quality), JLCPCB REACH SVHC Compliance, JLCPCB PCB Manufacturer
+Cohesion: 0.33
+Nodes (6): showWifiSettings(), _doConnect, _drawWifiStatus, _runKeyboard (on-screen keyboard), _runNetworkList, _wifiScanFresh
 
 ### Community 48 - "Community 48"
 Cohesion: 0.40
-Nodes (5): Page: /auth/error, Page: /auth/forgot-password, Page: /auth/reset-password, Page: /auth/signin, Page: /auth/verify
+Nodes (3): containerVariants, itemVariants, timeline
 
 ### Community 49 - "Community 49"
-Cohesion: 0.50
-Nodes (4): Device Solve API Route, src/history.h - Local NVS History, Polish Matura AI System Prompt (ASCII-only), Legacy /device/solve Route (nieuzywane)
-
-### Community 50 - "Community 50"
-Cohesion: 0.60
-Nodes (5): POST /api/subscription/cancel, POST /api/subscription/create, POST /api/subscription/purchase, SUBSCRIPTION_PRICING, Prisma Subscription model
-
-### Community 51 - "Community 51"
-Cohesion: 0.40
-Nodes (5): API: /api/sync/messages (POST+GET), API: GET /api/sync/subscription, Concept: CALCULATOR_API_KEY x-api-key header auth, Prisma model: ChatMessage, Prisma model: Conversation
-
-### Community 52 - "Community 52"
 Cohesion: 0.70
 Nodes (4): DELETE(), getUser(), POST(), GET()
 
+### Community 50 - "Community 50"
+Cohesion: 0.50
+Nodes (5): JLCPCB IATF 16949:2016 Cert (Automotive QMS), JLCPCB ISO 14001:2015 Cert (Environmental), JLCPCB ISO 9001:2015 Cert (Quality), JLCPCB REACH SVHC Compliance, JLCPCB PCB Manufacturer
+
+### Community 52 - "Community 52"
+Cohesion: 0.70
+Nodes (4): _accDeviceId(), accountFetchStatus(), accountRegister(), accountRegisterOnce()
+
 ### Community 53 - "Community 53"
 Cohesion: 0.40
-Nodes (3): containerVariants, itemVariants, timeline
+Nodes (3): comparison, containerVariants, rowVariants
 
 ### Community 54 - "Community 54"
 Cohesion: 0.40
 Nodes (3): Notification, notifications, NotificationType
 
 ### Community 55 - "Community 55"
+Cohesion: 0.50
+Nodes (3): containerVariants, features, itemVariants
+
+### Community 58 - "Community 58"
 Cohesion: 0.67
 Nodes (4): HeadSEO (JSON-LD FAQ/Breadcrumb), Product JSON-LD schema (KalkMate 699 zł), RootLayout (Next app), SessionProvider component
 
-### Community 56 - "Community 56"
+### Community 59 - "Community 59"
 Cohesion: 0.50
 Nodes (4): printFinalTable (_IN_KALK_MAP), rawScan (pair-scan matrix), runWizard, waitForPress
-
-### Community 61 - "Community 61"
-Cohesion: 0.50
-Nodes (3): containerVariants, features, itemVariants
 
 ### Community 62 - "Community 62"
 Cohesion: 1.00
 Nodes (3): Footer Component, Navigation Component, Regulamin Page (TermsOfService)
 
-### Community 63 - "Community 63"
+### Community 64 - "Community 64"
 Cohesion: 0.67
 Nodes (3): VisitTracker component, Landing page components (Hero/HowItWorks/Specs/FAQ/etc.), Home Page (Landing)
 
-### Community 64 - "Community 64"
-Cohesion: 0.67
-Nodes (3): email-templates (purchase, status emails), resend / FROM_EMAIL, website/test-emails.ts
-
-### Community 70 - "Community 70"
+### Community 65 - "Community 65"
 Cohesion: 0.67
 Nodes (3): _solDisplaySolution, _solDrawMathLine, _solFormatMath
 
+### Community 76 - "Community 76"
+Cohesion: 0.67
+Nodes (3): email-templates (purchase, status emails), resend / FROM_EMAIL, website/test-emails.ts
+
 ## Knowledge Gaps
-- **274 isolated node(s):** `recommendations`, `unwantedRecommendations`, `enumName`, `label`, `pinA` (+269 more)
+- **271 isolated node(s):** `recommendations`, `unwantedRecommendations`, `enumName`, `label`, `pinA` (+266 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **54 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `lib/db Prisma client` connect `Admin Pages` to `Public Status API`, `AI Chat & Solve Endpoints`, `Admin Authentication`, `Stripe Payments`, `Community 41`, `Community 42`, `Misc API Handlers`, `User Authentication API`, `Admin Orders Management`, `User Account API`, `Community 52`, `Community 51`, `License Validation API`, `Marketing AI Section`, `Community 57`, `Community 58`, `Conversations API`?**
-  _High betweenness centrality (0.241) - this node is a cross-community bridge._
-- **Why does `POST /api/chat` connect `AI Chat & Solve Endpoints` to `Admin Pages`, `Community 50`, `Conversations API`?**
-  _High betweenness centrality (0.203) - this node is a cross-community bridge._
-- **Are the 6 inferred relationships involving `lib/db Prisma client` (e.g. with `API: Admin Licenses List` and `API: Admin Stats (users/subs/licenses)`) actually correct?**
+- **Why does `lib/db Prisma client` connect `Community 7` to `Community 0`, `Community 1`, `Community 5`, `Community 10`, `Community 43`, `Community 44`, `Community 14`, `Community 16`, `Community 49`, `Community 21`, `Community 23`, `Community 56`, `Community 57`?**
+  _High betweenness centrality (0.074) - this node is a cross-community bridge._
+- **Why does `next-auth (withAuth)` connect `Community 10` to `Community 3`, `Community 23`?**
+  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Are the 6 inferred relationships involving `lib/db Prisma client` (e.g. with `API: Admin Gemini Stats` and `API: Admin Licenses List`) actually correct?**
   _`lib/db Prisma client` has 6 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 2 inferred relationships involving `showSettings()` (e.g. with `showWifiSettings()` and `showScreenTest()`) actually correct?**
-  _`showSettings()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `recommendations`, `unwantedRecommendations`, `enumName` to the rest of the system?**
-  _294 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Firmware UI & History` be split into smaller, more focused modules?**
-  _Cohesion score 0.060718252499074414 - nodes in this community are weakly interconnected._
-- **Should `Public Status API` be split into smaller, more focused modules?**
+  _291 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.07672634271099744 - nodes in this community are weakly interconnected._
+- **Should `Community 1` be split into smaller, more focused modules?**
+  _Cohesion score 0.056866303690260134 - nodes in this community are weakly interconnected._
+- **Should `Community 2` be split into smaller, more focused modules?**
+  _Cohesion score 0.046464646464646465 - nodes in this community are weakly interconnected._

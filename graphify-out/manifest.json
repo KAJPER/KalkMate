@@ -85,9 +85,9 @@
     "semantic_hash": "aab0b33ab4d317fb1449f921c4cfe86a"
   },
   "C:\\Users\\Kacper\\Desktop\\kalkmate\\KalkMate\\src\\main.cpp": {
-    "mtime": 1779897629.4350834,
-    "ast_hash": "c9ef27b82e65db8071542d241383d005",
-    "semantic_hash": "c9ef27b82e65db8071542d241383d005"
+    "mtime": 1779897663.2152452,
+    "ast_hash": "0e064723906f0d87dd6d0d4520db3b9e",
+    "semantic_hash": "0e064723906f0d87dd6d0d4520db3b9e"
   },
   "C:\\Users\\Kacper\\Desktop\\kalkmate\\KalkMate\\src\\notes.h": {
     "mtime": 1778792712.6905823,
@@ -115,9 +115,9 @@
     "semantic_hash": "848497b716c3b6963d2e379b2e1b3d2e"
   },
   "C:\\Users\\Kacper\\Desktop\\kalkmate\\KalkMate\\src\\settings_screen.h": {
-    "mtime": 1779897608.3714736,
-    "ast_hash": "6faeb3048300694f584f5a8587ce5759",
-    "semantic_hash": "6faeb3048300694f584f5a8587ce5759"
+    "mtime": 1779897709.5729704,
+    "ast_hash": "68d7bd9f52528b6206452d0e4f38acb4",
+    "semantic_hash": "68d7bd9f52528b6206452d0e4f38acb4"
   },
   "C:\\Users\\Kacper\\Desktop\\kalkmate\\KalkMate\\src\\solve_screen.h": {
     "mtime": 1778255384.7580006,
@@ -135,9 +135,9 @@
     "semantic_hash": "c1696b4f3b7d31ee3156c00fc9802e4c"
   },
   "C:\\Users\\Kacper\\Desktop\\kalkmate\\KalkMate\\src\\wifi_persist.h": {
-    "mtime": 1779897562.3458264,
-    "ast_hash": "27727f0ba5d09a754fd1034bb8240d7c",
-    "semantic_hash": "27727f0ba5d09a754fd1034bb8240d7c"
+    "mtime": 1779897695.3257442,
+    "ast_hash": "a50730d1ee799e96015b777640cb697c",
+    "semantic_hash": "a50730d1ee799e96015b777640cb697c"
   },
   "C:\\Users\\Kacper\\Desktop\\kalkmate\\KalkMate\\src\\wifi_settings.h": {
     "mtime": 1778449705.7646298,
