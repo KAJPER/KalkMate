@@ -16,6 +16,7 @@
 #include "input.h"
 #include "wifi_persist.h"
 #include "ota_update.h"
+#include "battery.h"
 
 // Forward declaration panic flag (definicja w main.cpp). Nie includujemy
 // panic.h zeby uniknac circular include z power.h.
@@ -75,7 +76,7 @@ static const char* T(const char* pl, const char* en) {
 //   System:         Aktualizacje
 //   Diagnostyka:    Test ekranu, Test kamery, Test klawiatury, Skaner, Pin Driver
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        16
+#define _SET_ITEMS        17
 // --- Preferencje ---
 #define _SET_BRIGHTNESS   0
 #define _SET_LANGUAGE     1
@@ -96,9 +97,10 @@ static const char* T(const char* pl, const char* en) {
 #define _SET_KEYTEST      13
 #define _SET_KEYSCAN      14
 #define _SET_PINDRIVER    15
+#define _SET_BATTERY      16
 
 // Wspolrzedne Y - 4 widoczne, scrollowanie
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -295,6 +297,13 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         prefix[0] = (cursor == _SET_PINDRIVER) ? '>' : ' ';
         snprintf(lines[_SET_PINDRIVER], sizeof(lines[0]), "%s%s",
                  prefix, T("Pin Driver Test", "Pin Driver Test"));
+    }
+    // 16: Bateria — bez czytania ADC z listy menu (cache w battery.h trzyma
+    // stara wartosc; szczegoly i charging detect dopiero po wejsciu w pozycje)
+    {
+        prefix[0] = (cursor == _SET_BATTERY) ? '>' : ' ';
+        snprintf(lines[_SET_BATTERY], sizeof(lines[0]), "%s%s", prefix,
+                 T("Bateria...", "Battery..."));
     }
 
     // Rysuj widoczne pozycje
@@ -1225,6 +1234,72 @@ static void _editCamTest(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
+// Ekran szczegolow baterii: napiecie, procent, status ladowania.
+// Odswiezany ~co 500ms (ADC cache w battery.h przepuszcza tylko raz na 5s).
+// ---------------------------------------------------------------------------
+static void _editBattery(U8G2 &d) {
+    _setWaitRelease();
+    while (true) {
+        if (_panicRequested) return;
+
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, T("=== Bateria ===", "=== Battery ==="));
+        d.drawHLine(0, 12, 256);
+
+        if (!batteryIsAvailable()) {
+            d.drawStr(2, 30, T("Brak czujnika (legacy HW)", "No sensor (legacy HW)"));
+        } else {
+            uint16_t mv  = batteryReadMillivolts();
+            uint8_t  pct = batteryReadPercent();
+            bool     chg = batteryIsCharging();
+
+            char buf[48];
+            snprintf(buf, sizeof(buf), "%s %u.%03u V", T("Napiecie:", "Voltage: "),
+                     mv / 1000, mv % 1000);
+            d.drawStr(2, 26, buf);
+
+            snprintf(buf, sizeof(buf), "%s %u %%", T("Procent: ", "Percent: "), pct);
+            d.drawStr(2, 38, buf);
+
+            snprintf(buf, sizeof(buf), "%s %s", T("Status:  ", "Status:  "),
+                     chg ? T("LADOWANIE", "CHARGING")
+                         : (batteryIsLow() ? T("NISKI", "LOW") : T("OK", "OK")));
+            d.drawStr(2, 50, buf);
+
+            // Duza ikonka baterii po prawej (32x14)
+            const int X = 200, Y = 22, W = 40, H = 18;
+            d.drawFrame(X, Y, W, H);
+            d.drawBox(X + W, Y + 4, 3, H - 8);
+            int fillW = ((W - 2) * pct) / 100;
+            if (fillW > 0) d.drawBox(X + 1, Y + 1, fillW, H - 2);
+            if (chg) {
+                d.setFont(u8g2_font_5x7_tf);
+                d.setDrawColor(0);
+                d.drawStr(X + W/2 - 6, Y + H/2 + 4, "CHG");
+                d.setDrawColor(1);
+                d.setFont(u8g2_font_6x10_tf);
+            }
+        }
+
+        d.drawHLine(0, 57, 256);
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 63, T("OK / < = wyjscie", "OK / < = exit"));
+        d.sendBuffer();
+
+        // Wyjscie
+        uint32_t t0 = millis();
+        while (millis() - t0 < 500) {
+            if (_setBtn(BTN_OK) || _setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) {
+                _setWaitRelease();
+                return;
+            }
+            delay(20);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Publiczna funkcja — glowny punkt wejscia
 // ---------------------------------------------------------------------------
 void showSettings(U8G2 &display) {
@@ -1269,6 +1344,7 @@ void showSettings(U8G2 &display) {
                 case _SET_KEYSCAN:    _editKeyScan(display);    break;
                 case _SET_PINDRIVER:  _editPinDriver(display);  break;
                 case _SET_ACCOUNT:    showAccountStatusScreen(display); break;
+                case _SET_BATTERY:    _editBattery(display);    break;
             }
         }
 

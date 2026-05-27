@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {
+      "id": "image:website/public/galeria/inteligentny-kalkulator-produkt-finalny.png",
+      "label": "inteligentny-kalkulator-produkt-finalny.png",
+      "file_type": "image",
+      "path": "website/public/galeria/inteligentny-kalkulator-produkt-finalny.png",
+      "description": "Marketing/gallery photo showing the final KalkMate product staged as a desktop study scene. A silver-and-black Esperanza electronic calculator (12 digits, branded 'KalkMate' on its dot-matrix display) sits at center on a white marble surface. Around it: an open chemistry textbook with equations (top-left), a white mug of black coffee (top-right), four pastel Stabilo-style highlighters in pink/yellow/green/blue (right), white wired earphones coiled below the calculator, a black smartphone (bottom-right), and three pastel sticky notes (pink, yellow, mint) with handwritten study labels 'MOLAR MASS', 'STOICHIOMETRY TEST', and 'REVIEW CH. 4'. Flat-lay top-down composition suggesting a student exam-prep / chemistry study aesthetic."
+    }
+  ],
+  "edges": []
+}

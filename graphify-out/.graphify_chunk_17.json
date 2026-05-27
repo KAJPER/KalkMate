@@ -1,0 +1,31 @@
+{
+  "summary": "KalkMate.png — main product hero image showing an Esperanza electronic calculator with 'KalkMate' branding displayed on its dot-matrix LCD; used as the primary marketing visual for the KalkMate product on the website.",
+  "nodes": [
+    {
+      "id": "website/public/KalkMate.png",
+      "label": "KalkMate.png",
+      "type": "asset",
+      "file_type": "image",
+      "path": "website/public/KalkMate.png",
+      "description": "Main product hero image for KalkMate. Photograph (studio shot on white background) of an Esperanza-branded silver/black 12-digit electronic desktop calculator with solar cell, MC/MR/M-/M+ memory keys, arithmetic keys and a dot-matrix LCD screen displaying the word 'KalkMate' in pixel font. Serves as the primary product photo / marketing hero visual presenting the KalkMate AI-assisted calculator concept on the project website's public assets."
+    }
+  ],
+  "edges": [
+    {
+      "source": "website/public/KalkMate.png",
+      "target": "website/public/kalkmate-logo.png",
+      "type": "semantically_similar_to",
+      "confidence": 0.85,
+      "inference": "INFERRED",
+      "reason": "Both are KalkMate brand marketing/product imagery in the website public assets directory."
+    },
+    {
+      "source": "website/public/KalkMate.png",
+      "target": "website/public/kalkmate-hero.png",
+      "type": "semantically_similar_to",
+      "confidence": 0.85,
+      "inference": "INFERRED",
+      "reason": "Both are KalkMate product hero marketing images sharing the same product subject."
+    }
+  ]
+}

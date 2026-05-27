@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/KalkMate2.png",
+      "type": "image",
+      "file_type": "image",
+      "path": "website/public/KalkMate2.png",
+      "summary": "Marketing/product photograph of the KalkMate device — a hand holding an Esperanza-branded 12-digit electronic calculator whose OLED display shows the 'KalkMate' wordmark, against an electronics workbench background featuring an oscilloscope displaying a sine wave, a soldering iron station, a multimeter, a spool of solder, breadboards, prototype PCBs, and component bins under a desk lamp. Conveys the product's identity as a DIY/hardware-hacked educational calculator and is used as a hero/showcase image on the KalkMate website.",
+      "tags": ["marketing", "product-photo", "hero-image", "calculator", "oled", "electronics-workbench", "branding", "website-asset"]
+    }
+  ],
+  "edges": [
+    {
+      "source": "website/public/KalkMate2.png",
+      "target": "website/public/KalkMate1.png",
+      "type": "semantically_similar_to",
+      "confidence": 0.85,
+      "inferred": true,
+      "reason": "Both are KalkMate product photographs in the website's public asset directory, likely part of the same marketing image series showing the calculator hardware."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/galeria/inteligentny-kalkulator-rozwiazywanie-zadan.jpg",
+      "label": "inteligentny-kalkulator-rozwiazywanie-zadan.jpg",
+      "file_type": "image",
+      "path": "website/public/galeria/inteligentny-kalkulator-rozwiazywanie-zadan.jpg",
+      "description": "Marketing/gallery photo for KalkMate website showing a user holding the KalkMate calculator (white desktop-style calculator with 'KalkMate' branding on its OLED display) on their lap while riding a tram. Next to the calculator is an open formula sheet (Polish matura 'Wzory' reference card) with physics/math formulas visible. Through the tram window one can see urban apartment buildings, tram tracks, overhead power lines, and a yellow STOP request button. Tram seats and another passenger's bag are visible. The photo conveys the product's use case: a portable AI-powered calculator helping a Polish student solve exam problems on the go, as an alternative to expensive tutoring.",
+      "summary": "Lifestyle/marketing photo of KalkMate calculator in use on a tram with a Polish matura formula sheet."
+    }
+  ],
+  "edges": []
+}

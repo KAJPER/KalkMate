@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/web-app-manifest-192x192.png",
+      "type": "asset",
+      "file_type": "image",
+      "path": "website/public/web-app-manifest-192x192.png",
+      "label": "web-app-manifest-192x192.png",
+      "description": "PWA web app manifest icon (192x192 PNG) displaying the KalkMate logo: a stylized black-and-white calculator with a graph/chart waveform on its screen. Used by the Progressive Web App manifest for installable app icon at standard 192px resolution on Android home screens and app launchers.",
+      "tags": ["pwa", "icon", "manifest", "image", "branding", "logo", "static-asset"],
+      "size": "192x192",
+      "format": "png"
+    }
+  ],
+  "edges": []
+}

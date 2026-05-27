@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/KalkMate4.png",
+      "label": "KalkMate4.png",
+      "file_type": "image",
+      "path": "website/public/KalkMate4.png",
+      "summary": "Photograph of a hand holding the KalkMate prototype PCB in a home electronics workbench. The green PCB shows a 5x5 keypad matrix of through-hole tactile switches populated on the lower portion, with surface-mount components and an OLED display module mounted at the top displaying the text 'KalkMate' in white pixels. Wires (yellow, red, black) connect from the board to a small breadboard resting on the desk. Background shows a lit Rigol digital oscilloscope displaying square waveforms on its screen, a yellow Fluke multimeter, a soldering station with sponge holder on the left, a spool of solder wire, scattered electronic components (transistors, resistors), and tools on a wooden desk surface. Warm overhead lighting from a desk lamp illuminates the scene. The photo documents the bring-up / debugging phase of the first assembled KalkMate prototype board.",
+      "tags": ["image", "photo", "prototype", "hardware", "pcb", "oled", "keypad", "workbench", "kalkmate"]
+    }
+  ],
+  "edges": []
+}

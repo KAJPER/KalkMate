@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/favicon-96x96.png",
+      "path": "website/public/favicon-96x96.png",
+      "file_type": "image",
+      "summary": "96x96 PNG favicon for browser tab displaying the KalkMate calculator logo.",
+      "description": "Favicon image (96x96 PNG) showing a stylized black-and-white KalkMate calculator icon with a display and keypad. Used as the browser tab icon for the KalkMate marketing/product website."
+    }
+  ],
+  "edges": []
+}

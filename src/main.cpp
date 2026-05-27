@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.2.0"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -859,16 +859,92 @@ static void showTestsScreen() {
 }
 
 void setup() {
-    // Wylacz brownout detector — zapobiega resetowaniu chipu gdy bateria
-    // chwilowo spada (np. peak pradu przy WiFi.begin). Trade-off: jesli
-    // napiecie naprawde spadnie zbyt nisko, chip moze sie zawiesic w
-    // nieokreslonym stanie. Praktyka pokazuje ze w projektach na LiPo z
-    // ladowarka MCP73831 to bezpieczne — bateria nie spadnie nizej 3.0V
-    // dzieki zabezpieczeniu DW01A, a 3.0V przez AP2112K-3.3 dalej daje
-    // 3.3V na wyjsciu LDO.
+    // Wylacz brownout detector
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
 
+    // Serial wcześniej (przed cokolwiek co może crashnac) — żeby zlapac log
+    // jeszcze przed init OLED/boost
+    Serial.begin(115200);
+    delay(150);  // pozwol USB-CDC enumeracji u hosta
+    Serial.println("\n=== KalkMate startup ===");
+    Serial.printf("[FW] v%s build %s %s\n", FW_VERSION, __DATE__, __TIME__);
+    {
+        esp_reset_reason_t r = esp_reset_reason();
+        const char* rname = "?";
+        switch (r) {
+            case ESP_RST_POWERON:  rname = "POWERON";  break;
+            case ESP_RST_BROWNOUT: rname = "BROWNOUT"; break;
+            case ESP_RST_SW:       rname = "SW";       break;
+            case ESP_RST_PANIC:    rname = "PANIC";    break;
+            case ESP_RST_DEEPSLEEP:rname = "DEEPSLEEP"; break;
+            default: break;
+        }
+        Serial.printf("[BOOT] reset=%s\n", rname);
+        Serial.flush();
+    }
+
 #if KALK_BOOST_EN_PIN >= 0
+    // === EARLY BATTERY CHECK — przed włączeniem boost (12V/~150mA) ===
+    // Boost ssie spory pradu i razem z reszta moze przyciagnac LiPo
+    // ponizej progu pracy chipu => brownout/POWERON loop.
+    // Stąd: czytamy VBAT bez boost, i jezeli za niskie -> pokazujemy
+    // splash "NISKA BATERIA" przez 3s i wchodzimy w deep sleep.
+    //
+    // Threshold:
+    //   < 500 mV   -> najprawdopodobniej brak baterii (USB-only), idz dalej
+    //   < 3300 mV  -> LiPo zbyt nisko zeby bezpiecznie odpalic boost+WiFi
+    //   >= 3300 mV -> OK, normalny boot
+    {
+        uint32_t adcSum = 0;
+        for (int i = 0; i < 8; i++) {
+            adcSum += analogReadMilliVolts(3);
+        }
+        uint16_t vbatMv = (uint16_t)((adcSum / 8) * 2);  // *2 = dzielnik 1:2
+        Serial.printf("[EARLY] VBAT = %u mV\n", vbatMv);
+        Serial.flush();
+
+        if (vbatMv >= 500 && vbatMv < 3300) {
+            Serial.println("[EARLY] LOW BATTERY -> splash + deep sleep");
+            Serial.flush();
+
+            // Wlacz boost krotko zeby OLED dzialal
+            pinMode(KALK_BOOST_EN_PIN, OUTPUT);
+            digitalWrite(KALK_BOOST_EN_PIN, HIGH);
+            delay(30);
+
+            // Init OLED minimalnie
+            SPI.begin(OLED_PIN_SCK, -1, OLED_PIN_MOSI, OLED_PIN_CS);
+            u8g2.setBusClock(8000000);
+            u8g2.begin();
+            u8g2.setContrast(40);   // zmniejsz jasność -> mniej pradu OLED
+
+            u8g2.clearBuffer();
+            u8g2.setFont(u8g2_font_10x20_tf);
+            u8g2.drawStr(35, 22, "NISKA BATERIA");
+            u8g2.setFont(u8g2_font_6x10_tf);
+            char buf[40];
+            snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", vbatMv/1000, (vbatMv%1000)/10);
+            u8g2.drawStr(80, 40, buf);
+            u8g2.drawStr(40, 55, "Podlacz ladowarke USB-C");
+            u8g2.sendBuffer();
+
+            delay(3000);
+
+            // OLED off + boost off zeby zaoszczedzic LiPo
+            u8g2.sleepOn();
+            delay(20);
+            digitalWrite(KALK_BOOST_EN_PIN, LOW);
+            delay(20);
+
+            // Deep sleep — chip wybudzi się dopiero po resecie (lub podlaczeniu USB
+            // jezeli host enumeruje, ale to nie jest configured wakeup)
+            Serial.println("[EARLY] deep sleep");
+            Serial.flush();
+            esp_deep_sleep_start();
+        }
+        // else: bateria OK albo brak (USB-only) -> idź dalej
+    }
+
     // === Boost EN przez bezposredni GPIO ESP32-S3 ===
     // Wlaczamy NAJPIERW, bo OLED VCC (14.5V) musi byc obecne zanim
     // u8g2.begin() wyslalo komendy. Bez tego ekran nie zareaguje.
@@ -885,6 +961,11 @@ void setup() {
     // OLED najpierw — to jedyne co user widzi w pierwszej chwili.
     u8g2.setBusClock(8000000);
     u8g2.begin();
+    // PCB v4: OLED przez MT3608 ssie bezposrednio z VBAT. Kontrast 60 to
+    // sprawdzony "sweet spot" — wystarczajaco jasny do czytania, jednoczesnie
+    // pobor pradu boost mieści się w peakowym budżecie LiPo razem z WiFi.
+    // Wyzej (>=100) widzielismy brownouty przy WiFi.begin nawet na pelnej baterii.
+    u8g2.setContrast(60);
     powerSetU8g2(&u8g2);  // power.h dostaje pointer do auto-sleep
 
     // Pierwsza klatka kalkulatora: "0" wyrownane do prawej.
@@ -897,22 +978,7 @@ void setup() {
     u8g2.sendBuffer();
 
     // === FAZA 2: reszta init w tle (user juz widzi "0") ===
-    Serial.begin(115200);
-    Serial.println("\n=== KalkMate startup ===");
-
-    // Reset reason (diagnostyka — gdyby cos sie znowu resetowalo)
-    {
-        esp_reset_reason_t r = esp_reset_reason();
-        const char* rname = "?";
-        switch (r) {
-            case ESP_RST_POWERON:  rname = "POWERON";  break;
-            case ESP_RST_BROWNOUT: rname = "BROWNOUT"; break;
-            case ESP_RST_SW:       rname = "SW";       break;
-            case ESP_RST_PANIC:    rname = "PANIC";    break;
-            default: break;
-        }
-        Serial.printf("[BOOT] reset=%s\n", rname);
-    }
+    // (Serial.begin + reset reason zrobione na początku setup, przed boost EN)
 
     esp_log_level_set("nvs", ESP_LOG_NONE);
 
@@ -938,24 +1004,12 @@ void setup() {
     // === FAZA 3: pelen kalkulator (przejmuje renderowanie) ===
     runCalculator(u8g2);
 
-    // === Tryb AI === (bez splash, od razu menu)
-
-    // Auto-reconnect WiFi w tle — z obnizeniem mocy nadawczej zeby
-    // zmniejszyc peak pradu (z ~280 mA na ~150 mA). Domyslna moc 19.5dBm
-    // potrafi powodowac brownout na slabym zasilaniu (bateria + cienkie
-    // sciezki). 11 dBm dalej daje przyzwoity zasieg.
-    {
-        char ssid[33] = "";
-        char pass[64] = "";
-        if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
-            Serial.printf("Auto-WiFi: lacze z %s\n", ssid);
-            WiFi.mode(WIFI_STA);
-            WiFi.setTxPower(WIFI_POWER_11dBm);
-            delay(50);  // pozwol zasilaniu ustabilizowac sie
-            WiFi.begin(ssid, pass);
-        }
-    }
-
+    // === Tryb AI ===
+    // WiFi NIE laczy sie automatycznie - na PCB v4 (boost ssie z VBAT)
+    // peak pradu WiFi.begin podczas wlaczania ekranu menu daje
+    // brownout. WiFi laczy sie dopiero gdy user wejdzie w funkcje
+    // wymagajaca sieci (Rozwiaz zadanie / Settings -> WiFi).
+    delay(50);  // chwila zeby OLED dokonczyl ostatni refresh po splash AI
     resetActivity();
     drawMenu();
 }
@@ -976,10 +1030,51 @@ static void handlePanicIfRequested() {
     }
 }
 
+// v1.1.5: VBAT watchdog w loop — co 2s sprawdza czy LiPo nie ssie sie
+// pod boost. Jezeli pada ponizej 3.2V to grafully wylacza boost +
+// pokazuje komunikat + deep sleep, zeby nie uszkodzic OLED przez
+// niestabilne 12V (i nie spalic VDD ESP).
+static uint32_t _vbatWatchdogLast = 0;
+static void _vbatWatchdogLoop() {
+#ifndef KALK_HW_LEGACY
+    if (millis() - _vbatWatchdogLast < 2000) return;
+    _vbatWatchdogLast = millis();
+
+    uint32_t sum = 0;
+    for (int i = 0; i < 4; i++) sum += analogReadMilliVolts(3);
+    uint16_t vbatMv = (uint16_t)((sum / 4) * 2);
+
+    if (vbatMv >= 500 && vbatMv < 3200) {
+        Serial.printf("[VBAT-WD] VBAT=%u mV - CRITICAL, shutdown\n", vbatMv);
+        Serial.flush();
+
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_10x20_tf);
+        u8g2.drawStr(35, 22, "NISKA BATERIA");
+        u8g2.setFont(u8g2_font_6x10_tf);
+        char buf[40];
+        snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", vbatMv/1000, (vbatMv%1000)/10);
+        u8g2.drawStr(80, 40, buf);
+        u8g2.drawStr(40, 55, "Podlacz ladowarke USB-C");
+        u8g2.sendBuffer();
+        delay(3000);
+
+        u8g2.sleepOn();
+        delay(20);
+#if KALK_BOOST_EN_PIN >= 0
+        digitalWrite(KALK_BOOST_EN_PIN, LOW);
+#endif
+        delay(20);
+        esp_deep_sleep_start();
+    }
+#endif
+}
+
 void loop() {
     inputScan();        // skanuj matrycę co iterację (max raz na 30 ms)
     panicCheck();       // sprawdz panic key, ustaw flagę gdy nacisnięty
     handlePanicIfRequested();  // jesli flaga -> kalkulator
+    _vbatWatchdogLoop();    // anti-brownout: shutdown przy VBAT<3.2V
     if (powerCheckSleep()) {
         // Po wybudzeniu — przerysuj menu
         drawMenu();

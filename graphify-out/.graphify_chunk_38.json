@@ -1,0 +1,45 @@
+{
+  "nodes": [
+    {
+      "id": "image:kalkulator-kalkmate-platforma-pcb-elektronika",
+      "label": "kalkulator-kalkmate-platforma-pcb-elektronika.png",
+      "file_type": "image",
+      "path": "website/public/galeria/kalkulator-kalkmate-platforma-pcb-elektronika.png",
+      "description": "Marketing/branding photograph (not an actual PCB view despite the filename). Close-up of a black Esperanza 'ELECTRONIC CALCULATOR' device with the KalkMate brand name displayed on a segmented/dot-matrix-style LCD/OLED display. Visible keypad buttons in the lower portion include MU, %, divide, square root, M+, MR, and digit 9, characteristic of a consumer calculator interface. The image represents the KalkMate product/platform identity rather than exposing PCB traces or electronic components.",
+      "visible_elements": [
+        "Esperanza brand logo",
+        "ELECTRONIC CALCULATOR label",
+        "KalkMate text on display (dot-matrix/segmented style)",
+        "Keypad buttons: MU, %, divide, square root, M+, MR, 9",
+        "Calculator housing (black plastic)"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "image:kalkulator-kalkmate-platforma-pcb-elektronika",
+      "target": "concept:OLED_SSD1322_display",
+      "type": "semantically_similar_to",
+      "confidence": 0.75,
+      "inferred": true,
+      "rationale": "The dot-matrix/segmented 'KalkMate' text rendered on the device display visually corresponds to the SSD1322 256x64 OLED display planned in the KalkMate hardware spec."
+    },
+    {
+      "source": "image:kalkulator-kalkmate-platforma-pcb-elektronika",
+      "target": "concept:keypad_matrix_5x5",
+      "type": "semantically_similar_to",
+      "confidence": 0.75,
+      "inferred": true,
+      "rationale": "Visible membrane-style keypad buttons (digits and function keys) correspond to the 5x5 keypad matrix driven by MCP23017 described in CLAUDE.md."
+    },
+    {
+      "source": "image:kalkulator-kalkmate-platforma-pcb-elektronika",
+      "target": "concept:KalkMate_product",
+      "type": "semantically_similar_to",
+      "confidence": 0.75,
+      "inferred": true,
+      "rationale": "Image displays KalkMate branding on the device screen, representing the overall product identity of the AI-assisted educational calculator."
+    }
+  ],
+  "summary": "Image is a KalkMate product branding photo showing 'KalkMate' on a calculator display with a visible keypad, semantically tied to the OLED display, 5x5 keypad matrix, and overall product concept."
+}

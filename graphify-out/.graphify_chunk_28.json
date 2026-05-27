@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/vercel.svg",
+      "path": "C:\\Users\\Kacper\\Desktop\\kalkmate\\KalkMate\\website\\public\\vercel.svg",
+      "type": "asset",
+      "file_type": "image",
+      "label": "vercel.svg",
+      "summary": "Vercel logo SVG, default Next.js boilerplate asset."
+    }
+  ],
+  "edges": []
+}

@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {
+      "id": "image:website/public/galeria/kalkulator-graficzny-kalkmate-technologia-ai.png",
+      "label": "kalkulator-graficzny-kalkmate-technologia-ai.png",
+      "file_type": "image",
+      "path": "website/public/galeria/kalkulator-graficzny-kalkmate-technologia-ai.png",
+      "description": "Outdoor lifestyle marketing photo for KalkMate website gallery. Scene shows a weathered green-painted wooden park bench in a sunlit park with trees and another bench visible in the background. On the bench sits a KalkMate calculator (branded 'KalkMate' on its black upper case, white body, grey numeric keypad) next to an open spiral notebook filled with handwritten math/chemistry notes including molecular structures and equations. Also on the bench: a pair of sunglasses, a sandwich on parchment paper, and a bottle of mineral water. Promotes KalkMate as a study companion for outdoor/student use, tying the AI calculator product to a real-world learning context."
+    }
+  ],
+  "edges": [],
+  "summary": "Marketing lifestyle photo of KalkMate calculator on a park bench with study notebook, sandwich, sunglasses and water bottle."
+}

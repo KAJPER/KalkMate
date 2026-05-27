@@ -23,6 +23,7 @@
 #include "input.h"
 #include "settings_screen.h"
 #include "power.h"
+#include "battery.h"
 
 // Stan kalkulatora
 struct _CalcState {
@@ -215,6 +216,9 @@ static void _calcDraw(U8G2& u8g2) {
     int y = 60;
     u8g2.drawStr(x, y, _calc.display);
 
+    // v1.1.4: ikonka baterii calkowicie wylaczona w kalkulatorze (zero ADC
+    // w czasie wpisywania). Bateria dostepna w Settings -> Bateria.
+
     u8g2.sendBuffer();
 }
 
@@ -234,6 +238,10 @@ static void runCalculator(U8G2& u8g2) {
         inputScan();
         if (powerCheckSleep()) _calcDraw(u8g2);
 
+        // v1.1.4: auto-shutdown wylaczony (early-battery-check w setup ten
+        // sam efekt daje dla niskiej baterii — ten check w petli kalkulatora
+        // mogl falszywie ssac ADC i powodowac glitche).
+
         // --- Sprawdź unlock code ---
         // Jeśli unlock buffer kończy się dokładnie tą samą sekwencją co
         // aiUnlockCode → wyjdź z kalkulatora
@@ -242,7 +250,6 @@ static void runCalculator(U8G2& u8g2) {
         if (clen > 0 && ulen >= clen) {
             const char* tail = _calc.unlockBuf + (ulen - clen);
             if (strcmp(tail, kalkSettings.aiUnlockCode) == 0) {
-                // Krótka informacja na ekranie
                 u8g2.clearBuffer();
                 u8g2.setFont(u8g2_font_logisoso22_tn);
                 u8g2.drawStr(60, 40, "AI");

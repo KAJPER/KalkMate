@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/kalkulator-kalkmate-kamera-odkryta.png",
+      "label": "kalkulator-kalkmate-kamera-odkryta.png",
+      "file_type": "image",
+      "path": "website/public/kalkulator-kalkmate-kamera-odkryta.png",
+      "description": "Product photograph showing the back side of the KalkMate calculator enclosure on a white background. The black plastic housing is visible with two screws at the top corners, two rubber feet at the bottom corners, and a recessed rectangular cutout in the lower-center area exposing the camera module aperture (small circular camera lens visible inside the cutout). Top of the device shows the tapered upper section of the case."
+    }
+  ],
+  "edges": []
+}

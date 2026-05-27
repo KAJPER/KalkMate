@@ -102,7 +102,58 @@ inline bool batteryIsAvailable() {
     return true;
 }
 
+// ---------------------------------------------------------------------
+// Charging detection BEZ STAT pinu — slope detection + threshold.
+//
+// Idea: MCP73831 podnosi VBAT o ~0.05-0.15V powyzej napiecia spoczynkowego
+// (po dzielniku 1:2 widac tylko polowe roznicy, ale to wciaz ~25-75mV).
+// ADC ESP32-S3 ma ~15mV szumu po kalibracji, wiec uzywamy 60s okna —
+// porownuje VBAT_now z VBAT_60s_ago.
+//
+// Dwa progi:
+//   1) CV phase: VBAT > 4.18V => prawie zawsze ladowanie (MCP73831 trzyma 4.20V)
+//   2) slope: wzrost o > 20mV w 60s => ladowanie
+//   3) spadek o > 20mV w 60s => rozladowanie
+//   4) flat => zostaw poprzedni stan (debounce, zeby nie skakalo)
+// ---------------------------------------------------------------------
+#define BATTERY_CHARGE_THRESH_MV  20
+#define BATTERY_CV_PHASE_MV       4180
+
+static uint16_t _batSlopeMv[5] = {0, 0, 0, 0, 0};
+static uint8_t  _batSlopeIdx = 0;
+static uint32_t _batSlopeLast = 0;
+static bool     _batCharging = false;
+
+inline bool batteryIsCharging() {
+    uint32_t now = millis();
+    uint16_t mv = batteryReadMillivolts();
+
+    // Sampluj raz na 12s (5 sampli x 12s = 60s okno)
+    if (_batSlopeLast == 0 || now - _batSlopeLast > 12000) {
+        _batSlopeLast = now;
+        _batSlopeMv[_batSlopeIdx] = mv;
+        _batSlopeIdx = (_batSlopeIdx + 1) % 5;
+
+        // Najstarsza probka = ta na ktora wlasnie wskazuje idx
+        uint16_t oldest = _batSlopeMv[_batSlopeIdx];
+
+        if (mv >= BATTERY_CV_PHASE_MV) {
+            _batCharging = true;
+        } else if (oldest > 0 && (int32_t)mv - (int32_t)oldest > BATTERY_CHARGE_THRESH_MV) {
+            _batCharging = true;
+        } else if (oldest > 0 && (int32_t)oldest - (int32_t)mv > BATTERY_CHARGE_THRESH_MV) {
+            _batCharging = false;
+        }
+        // else flat -> debounce: zostaw _batCharging
+    }
+    return _batCharging;
+}
+
 #endif // !KALK_HW_LEGACY
+
+#ifdef KALK_HW_LEGACY
+inline bool batteryIsCharging() { return false; }
+#endif
 
 // ---------------------------------------------------------------------
 // Rysowanie ikonki baterii na ekranie OLED.
@@ -130,6 +181,15 @@ inline void batteryDrawIcon(class U8G2 &d) {
     int fillW = ((W - 2) * pct) / 100;
     if (fillW > 0) {
         d.drawBox(X + 1, Y + 1, fillW, H - 2);
+    }
+
+    // Mala "blyskawica" w srodku gdy ladowanie
+    if (batteryIsCharging()) {
+        // Wyczysc wypelnienie i narysuj zygzak (inwersja)
+        d.setDrawColor(0);
+        d.drawVLine(X + 7, Y + 1, 3);
+        d.drawVLine(X + 8, Y + 4, 3);
+        d.setDrawColor(1);
     }
 
     // Migajacy "low" indykator jezeli <15%

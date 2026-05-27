@@ -1,0 +1,15 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/favicon.svg",
+      "type": "file",
+      "file_type": "image",
+      "format": "svg",
+      "path": "website/public/favicon.svg",
+      "summary": "SVG favicon (600x780) for KalkMate website with nested svg elements containing vector path data depicting a stylized calculator/device icon; includes embedded CSS media-query style block that inverts colors in dark color-scheme.",
+      "notes": "Triple-nested <svg> tags; viewBox 700 480 600 780; transform translate(0,2000) scale(0.1,-0.1); fill #000000; multiple <path> elements forming calculator silhouette with keypad cells; embedded <style> uses prefers-color-scheme media queries (light: filter none; dark: filter invert(100%))."
+    }
+  ],
+  "edges": [],
+  "summary": "Chunk 14: KalkMate website favicon.svg — vector calculator icon with dark-mode inversion via prefers-color-scheme CSS."
+}

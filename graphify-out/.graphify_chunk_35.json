@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/galeria/kalkulator-ai-pomocy-edukacyjne.jpg",
+      "label": "kalkulator-ai-pomocy-edukacyjne.jpg",
+      "file_type": "image",
+      "path": "website/public/galeria/kalkulator-ai-pomocy-edukacyjne.jpg",
+      "description": "Marketing/gallery photo for KalkMate showing the KalkMate calculator in a real school context. A student's hand (wearing colorful friendship bracelets) is pulling/placing the silver KalkMate calculator out of an open dark blue backpack. The calculator's LCD display clearly shows the 'KalkMate' branding text. Inside the open backpack are visible school items: a pencil case, notebooks with grid/squared paper, and tangled black headphones. The scene is set in a school hallway with blue lockers along the left wall, a red fire extinguisher mounted on the wall, ceiling lights, and a light-colored tiled floor. Other students' legs (in jeans) are visible in the background. The image conveys the product as an everyday educational AI helper for students in a school environment — emphasizing portability, daily school use, and integration into typical student life."
+    }
+  ],
+  "edges": []
+}

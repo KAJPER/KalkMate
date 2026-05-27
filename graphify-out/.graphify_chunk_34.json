@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {
+      "id": "image:website/public/galeria/kalkulator-ai-interfejs-uzytkownika.png",
+      "label": "kalkulator-ai-interfejs-uzytkownika.png",
+      "file_type": "image",
+      "path": "website/public/galeria/kalkulator-ai-interfejs-uzytkownika.png",
+      "description": "Marketing/gallery photograph for the KalkMate website showing the KalkMate AI calculator device held in a hand in a school corridor setting. The calculator has a classic desktop-calculator form factor in white/grey plastic with a dark display area prominently showing the 'KalkMate' brand name/logo on screen. Visible keypad includes standard calculator keys (MC, MR, M-, M+, digits 0-9, operators +, -, x, division, =, %, square root, decimal point, AC/ON, OFF) plus what appears to be a play/action button. The background is an out-of-focus school hallway with blue lockers, fluorescent ceiling lights, and students, emphasizing the product's target context: Polish high school students preparing for the matura exam. Used as a hero/gallery image showcasing the user interface and real-world usage scenario of the AI-powered educational calculator."
+    }
+  ],
+  "edges": []
+}

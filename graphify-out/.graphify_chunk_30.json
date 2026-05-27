@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {
+      "id": "website/public/web-app-manifest-512x512.png",
+      "type": "asset",
+      "file_type": "image",
+      "path": "website/public/web-app-manifest-512x512.png",
+      "name": "web-app-manifest-512x512.png",
+      "summary": "PWA manifest icon (512x512 PNG) depicting the KalkMate logo: a stylized calculator outline with a brain and EKG/waveform on the display and number-key buttons below, used as the high-resolution app icon referenced by the web app manifest for installable PWA on Android/desktop."
+    }
+  ],
+  "edges": []
+}
