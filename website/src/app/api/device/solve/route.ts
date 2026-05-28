@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { writeFile, mkdir } from "fs/promises";
+import path from "path";
 
 // Endpoint dla kalkulatora ESP32 — rozwiązywanie zadań przez AI
 // POST /api/device/solve
@@ -12,6 +14,36 @@ import { prisma } from "@/lib/db";
 //   { ok: false, error: "..." }
 
 const CALCULATOR_API_KEY = process.env.CALCULATOR_API_KEY;
+// Katalog zapisu zdjec z kalkulator'ow. POZA public/ zeby nie byly dostepne
+// po HTTP bez autoryzacji. Domyslnie /home/ubuntu/kalkulator/captures/
+const CAPTURES_DIR = process.env.CALCULATOR_CAPTURES_DIR ||
+  path.join(process.cwd(), "..", "captures");
+
+// Zapisz JPEG z zadania na dysk. Nie rzuca - log error jak fail.
+// Nazwa: YYYY-MM-DD_HH-MM-SS_<deviceId>_<licenseTail>.jpg
+async function saveCapture(
+  base64Data: string,
+  deviceId: string | null,
+  licenseKey: string,
+  fwVersion: string | null
+): Promise<string | null> {
+  try {
+    await mkdir(CAPTURES_DIR, { recursive: true });
+    const now = new Date();
+    const stamp = now.toISOString().replace(/[:T]/g, "-").slice(0, 19);  // 2026-05-28_14-33-12
+    const devTag = (deviceId || "unknown").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16);
+    const licTag = licenseKey.replace(/[^A-Za-z0-9_-]/g, "").slice(-8);
+    const filename = `${stamp}_${devTag}_${licTag}.jpg`;
+    const filepath = path.join(CAPTURES_DIR, filename);
+    const buffer = Buffer.from(base64Data, "base64");
+    await writeFile(filepath, buffer);
+    console.log(`[capture] saved: ${filename} (${buffer.length} B, fw=${fwVersion || "?"})`);
+    return filename;
+  } catch (err) {
+    console.error("[capture] save error:", err);
+    return null;
+  }
+}
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
 // Hostname mozna nadpisac przez env (np. proxy Cloudflare Workers gdy
@@ -57,23 +89,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!license.isUsed) {
-      // Licencja nieaktywowana — ale pozwól na użycie (jednorazowe urządzenie)
-      // Aktywuj ją teraz, wiążąc z device (usedBy = "device")
+    // Weryfikacja wlasciwosci licencji:
+    // Jezeli licencja jest "claimed" przez konto webowe (claimedByUserId),
+    // to urzadzenie wysylajace ja MUSI byc sparowane z TYM SAMYM kontem.
+    // Inaczej kazdy z dostepem do kodu mogłby ja uzywac na obcym device.
+    // Jezeli licencja nie jest claimed - dopuszczamy "device-only" usage
+    // (legacy mode: licencja przypisana do urzadzenia bez konta).
+    const deviceIdHeader = request.headers.get("x-device-id");
+    if (license.claimedByUserId) {
+      if (!deviceIdHeader) {
+        return NextResponse.json(
+          { ok: false, error: "Brak x-device-id" },
+          { status: 403 }
+        );
+      }
+      const device = await prisma.device.findUnique({
+        where: { deviceId: deviceIdHeader },
+      });
+      if (!device || device.userId !== license.claimedByUserId) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Urzadzenie nie sparowane z kontem wlasciciela licencji",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Pierwsza aktywacja licencji — ustaw timer wygasania
+    if (!license.isUsed || !license.usedAt) {
       await prisma.license.update({
         where: { id: license.id },
         data: {
           isUsed: true,
-          usedBy: "device",
-          usedAt: new Date(),
+          usedBy: license.usedBy || (license.claimedByUserId ? "user" : "device"),
+          usedAt: license.usedAt || new Date(),
         },
       });
-    } else if (license.usedBy !== "device" && license.usedBy !== null) {
-      // Licencja użyta przez innego użytkownika (konto webowe) — zablokuj
-      return NextResponse.json(
-        { ok: false, error: "Licencja juz uzyta przez inne konto" },
-        { status: 403 }
-      );
     }
 
     // Sprawdź czy licencja nie wygasła (na podstawie durationDays od daty aktywacji)
@@ -130,6 +183,13 @@ export async function POST(request: NextRequest) {
       const imgMime = mimeType || "image/jpeg";
       // Usuń ewentualny prefiks data:image/...;base64,
       const base64Data = image.includes(",") ? image.split(",")[1] : image;
+
+      // Zapis na dysku PRZED wyslaniem do AI — gdyby Gemini sie wywalil,
+      // wciaz mamy oryginalne zdjecie do debugu/audytu.
+      const deviceId  = request.headers.get("x-device-id");
+      const fwVersion = request.headers.get("x-fw-version");
+      await saveCapture(base64Data, deviceId, licenseKey, fwVersion);
+
       userParts.push({
         inlineData: {
           mimeType: imgMime,
@@ -205,6 +265,35 @@ export async function POST(request: NextRequest) {
         { ok: false, error: "Brak odpowiedzi od AI" },
         { status: 502 }
       );
+    }
+
+    // Zlicz zapytanie + log do DeviceSolve (fire-and-forget, nie blokuje odpowiedzi)
+    if (deviceIdHeader) {
+      const fwVer = request.headers.get("x-fw-version");
+      prisma.device
+        .update({
+          where: { deviceId: deviceIdHeader },
+          data: {
+            requestCount: { increment: 1 },
+            lastSeen: new Date(),
+            firmwareVersion: fwVer || undefined,
+            licenseCode: license.code,
+          },
+        })
+        .catch((e) => console.error("[solve] device.update fail:", e));
+
+      prisma.deviceSolve
+        .create({
+          data: {
+            deviceId: deviceIdHeader,
+            licenseCode: license.code,
+            userId: license.claimedByUserId,
+            mode,
+            question: mode === "text" ? (text || "") : "[zdjecie kamery]",
+            answer: solution,
+          },
+        })
+        .catch((e) => console.error("[solve] deviceSolve.create fail:", e));
     }
 
     return NextResponse.json({ ok: true, solution });

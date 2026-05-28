@@ -12,6 +12,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include "wifi_persist.h"   // wifiSaveLicense — auto-sync licencji do NVS
 
 // Forward decl struktury kalkSettings — definicja w settings_screen.h, ale
 // nie includujemy go zeby uniknac cyklu. Wymagamy tylko pola aiUnlockCode.
@@ -152,19 +153,36 @@ inline bool accountFetchStatus(AccountStatus& out) {
     out.userEmail     = extract("userEmail");
     out.licenseCode   = extract("code");
     out.licenseStatus = extract("status");
-    if (out.licenseCode.length() > 0) out.hasLicense = true;
+    if (out.licenseCode.length() > 0) {
+        out.hasLicense = true;
+        // AUTO-SYNC do NVS — serwer wie jaka jest licencja, urzadzenie
+        // od teraz tez. Bez tego solve_screen wysyla pusty x-license-key
+        // i serwer odrzuca jako "nieprawidlowy klucz".
+        char saved[40] = "";
+        wifiLoadLicense(saved, sizeof(saved));
+        if (strcmp(saved, out.licenseCode.c_str()) != 0) {
+            wifiSaveLicense(out.licenseCode.c_str());
+            Serial.printf("[account] licencja zapisana w NVS: %s\n",
+                          out.licenseCode.c_str());
+        }
+    }
     out.daysLeft = extractInt("daysLeft", -1);
 
     return true;
 }
 
-// Wygodny helper: rejestruj raz na power-up (nie spamuj serwera). Wolac
-// zewszad gdzie WiFi jest aktywne.
+// Wygodny helper: rejestruj raz na power-up + pobierz licencje z serwera
+// do NVS, zeby solve_screen mogl ja wyslac w x-license-key headerze.
+// Wolac zewszad gdzie WiFi jest aktywne.
 inline bool accountRegisterOnce() {
     static bool _accDone = false;
     if (_accDone) return true;
     if (accountRegister()) {
         _accDone = true;
+        // Po rejestracji - pobierz licencje z serwera. accountFetchStatus
+        // robi wifiSaveLicense() automatycznie jezeli nie ma w NVS.
+        AccountStatus st;
+        accountFetchStatus(st);
         return true;
     }
     return false;

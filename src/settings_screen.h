@@ -1261,6 +1261,18 @@ static void _editCamTest(U8G2 &d) {
 
     bool ok = camBegin();
 
+    if (ok) {
+        // Warm-up: 2 pierwsze klatki sa zwykle przeswiecone. Wyrzuc je
+        // teraz zeby _setBtn nie czekal na nie podczas user-initiated capture.
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 14, T("=== Test kamery ===", "=== Camera test ==="));
+        d.drawHLine(0, 16, 256);
+        d.drawStr(2, 32, T("Rozgrzewam sensor...", "Warming sensor..."));
+        d.sendBuffer();
+        camWarmup(2);
+    }
+
     uint32_t lastShot = 0;
     uint32_t shotCount = 0;
     uint32_t lastSize = 0;

@@ -17,6 +17,24 @@ const sections = [
 ];
 
 const changelog = [
+  { v: "1.3.9", date: "2026-05-28", notes: "Kamera: test rotacji — tylko vflip + Serial log z aktualną konfiguracją" },
+  { v: "1.3.8", date: "2026-05-28", notes: "Kamera: hmirror+vflip dla rotacji 180° (sensor zamontowany do góry nogami)" },
+  { v: "1.3.7", date: "2026-05-28", notes: "Kamera OV2640: AEC/AGC/AWB włączone + gamma/lens correction + 5-klatkowy warm-up (fix prześwietlenia + zielonego tintu)" },
+  { v: "1.3.6", date: "2026-05-28", notes: "Polskie znaki UTF-8 → ASCII w odpowiedziach AI + błędach (wzorzec z tests.h)" },
+  { v: "1.3.5", date: "2026-05-28", notes: "Auto-sync licencji z serwera do NVS (fix dla x-license-key 403)" },
+  { v: "1.3.4", date: "2026-05-28", notes: "Kamera UXGA 1600×1200 (max sensora 2MP) + auto-WiFi po AI menu z 3s delay" },
+  { v: "1.3.3", date: "2026-05-28", notes: "Solve_screen: camBegin → capture → camEnd przed WiFi (anty-XCLK interference)" },
+  { v: "1.3.2", date: "2026-05-28", notes: "Wspólny bus I2C dla MCP23017 + OV2640 SCCB (fix Error 263)" },
+  { v: "1.3.1", date: "2026-05-28", notes: "Kamera: CAMERA_GRAB_WHEN_EMPTY + fb_count=1 (fix freeze ekranu testu)" },
+  { v: "1.3.0", date: "2026-05-28", notes: "Kamera OV2640 — realny test w Settings + pełna persistencja ustawień w NVS" },
+  { v: "1.2.0", date: "2026-05-27", notes: "Production release PCB v4: kontrast 60, VBAT watchdog, early-battery splash" },
+  { v: "1.1.5", date: "2026-05-27", notes: "Niski kontrast OLED (anty-brownout na batery LiPo) + VBAT watchdog co 2s" },
+  { v: "1.1.4", date: "2026-05-27", notes: "Diagnostic markery wokół powrotu z runCalculator dla logowania crashy" },
+  { v: "1.1.3", date: "2026-05-27", notes: "Wyłączenie auto-WiFi przy boot (peak prądu psuł LiPo)" },
+  { v: "1.1.2", date: "2026-05-27", notes: "Early battery check + splash NISKA BATERIA przed boost EN" },
+  { v: "1.1.1", date: "2026-05-27", notes: "Lazy WiFi init z 2s opóźnieniem po menu (anty-brownout)" },
+  { v: "1.1.0", date: "2026-05-27", notes: "Pomiar baterii LiPo + ikonka + auto-shutdown + ekran w Ustawieniach + charging detect" },
+  { v: "1.0.0", date: "2026-05-26", notes: "Migracja na PCB v4 (ESP32-S3-WROOM-1-N16R8 + native USB-C)" },
   { v: "0.6.8", date: "2026-05-18", notes: "Reset fabryczny w Settings (NVS + SPIFFS + restart)" },
   { v: "0.6.7", date: "2026-05-15", notes: "Streaming HTTP do PSRAM — fix przy 28+ sprawdzianach" },
   { v: "0.6.6", date: "2026-05-15", notes: "Streaming JSON do SPIFFS + polskie znaki w tytułach" },
@@ -147,7 +165,7 @@ export default function PomocPage() {
           </h1>
           <p className="mt-6 text-[17px] leading-[1.6] text-[#F2EDE3]/65 max-w-2xl">
             Wszystko czego potrzebujesz żeby zacząć: instrukcja, wideo, FAQ
-            i kontakt do nas. Materiały zaktualizowane dla firmware v0.6.8.
+            i kontakt do nas. Materiały zaktualizowane dla firmware v1.3.9.
           </p>
         </div>
       </section>
@@ -303,7 +321,7 @@ export default function PomocPage() {
           <Section id="ota" eyebrow="06 · Aktualizacje" title="OTA — aktualizacje firmware." accent="aktualizacje">
             <Step n={1} title="Sprawdź dostępność">
               Ustawienia → Aktualizacje → OK. Kalkulator pyta serwer, czy jest
-              nowsza wersja niż twoja aktualna (widoczna jako <code className="text-[#D8FF3D]">v0.6.8</code> itp.).
+              nowsza wersja niż twoja aktualna (widoczna jako <code className="text-[#D8FF3D]">v1.3.9</code> itp.).
             </Step>
             <Step n={2} title="Zainstaluj">
               Jeśli jest nowa — pokazuje notes do zmian + przycisk Zainstaluj.
@@ -317,7 +335,7 @@ export default function PomocPage() {
 
             <div className="mt-8">
               <p className="km-mono-eyebrow text-[#F2EDE3]/55 mb-3">/ AKTUALNA WERSJA SERWERA:</p>
-              <p className="km-display text-3xl text-[#D8FF3D]">v0.6.8</p>
+              <p className="km-display text-3xl text-[#D8FF3D]">v1.3.9</p>
               <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">Sprawdź swoją wersję w Ustawienia → Aktualizacje</p>
             </div>
           </Section>

@@ -123,16 +123,27 @@ inline bool camBegin() {
     config.pin_pclk     = CAM_PIN_PCLK;
     config.pin_vsync    = CAM_PIN_VSYNC;
     config.pin_href     = CAM_PIN_HREF;
-    config.pin_sccb_sda = CAM_PIN_SIOD;
-    config.pin_sccb_scl = CAM_PIN_SIOC;
-    config.pin_pwdn     = -1;     // przez MCP, nie GPIO
-    config.pin_reset    = -1;     // przez MCP, nie GPIO
+    // I2C kamery WSPOLDZIELONY z MCP23017 (oba na GPIO40+GPIO39).
+    // pin_sccb_sda=-1 + sccb_i2c_port=0 mowi driver'owi: "nie inicjalizuj
+    // swojego I2C, uzyj istniejacego Wire (I2C_NUM_0)". Bez tego kamera
+    // przejmuje peripheral i Wire.requestFrom() na MCP23017 zwraca
+    // Error 263 (ESP_FAIL) -> klawiatura przestaje dzialac.
+    config.pin_sccb_sda  = -1;
+    config.pin_sccb_scl  = -1;
+    config.sccb_i2c_port = 0;     // I2C_NUM_0 = Arduino Wire
+    config.pin_pwdn      = -1;    // przez MCP, nie GPIO
+    config.pin_reset     = -1;    // przez MCP, nie GPIO
     config.xclk_freq_hz = 10000000;            // 10 MHz - stabilniej z WiFi (vs 20MHz)
     config.pixel_format = PIXFORMAT_JPEG;
-    config.frame_size   = FRAMESIZE_SVGA;      // 800x600 - dobry balans dla matury
-    config.jpeg_quality = 12;                  // 0-63, mniej = lepiej
-    config.fb_count     = 2;
-    config.grab_mode    = CAMERA_GRAB_LATEST;
+    // UXGA 1600x1200 - max rozdzielczosc OV2640 (2MP). Dla matury wazne
+    // zeby drobny druk i ulamki byly czytelne dla AI. JPEG ~150-250KB w PSRAM.
+    config.frame_size   = FRAMESIZE_UXGA;
+    config.jpeg_quality = 10;                  // 0-63, mniej = lepiej (10 = wysoka jakosc)
+    // fb_count=1 + GRAB_WHEN_EMPTY => brak background task ssacy CPU.
+    // Wczesniej (fb_count=2 + GRAB_LATEST) klatki ciagle laczyly sie w tle
+    // przez co OLED i debounce klawiszy lagowaly i ekran zamarzal.
+    config.fb_count     = 1;
+    config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
     config.fb_location  = CAMERA_FB_IN_PSRAM;  // PSRAM (8MB) dla JPEG buffers
 
     esp_err_t err = esp_camera_init(&config);
@@ -142,8 +153,41 @@ inline bool camBegin() {
         return false;
     }
 
+    // === Konfiguracja sensora ===
+    // Domyslnie po esp_camera_init AEC/AGC/AWB sa wylaczone, stad jedna klatka
+    // byla totalnie przepalona, druga prawie czarna. Wlaczamy automatyke +
+    // standardowe parametry ktore daja dobra ekspozycje dla rozne oswietlenia.
+    sensor_t* s = esp_camera_sensor_get();
+    if (s) {
+        s->set_brightness(s,    0);   // -2..2
+        s->set_contrast(s,      0);   // -2..2
+        s->set_saturation(s,    0);   // -2..2
+        s->set_special_effect(s, 0);  // 0=none, 1=negative, 2=grayscale...
+        s->set_whitebal(s,      1);   // AWB on - elimnuje zielony tint
+        s->set_awb_gain(s,      1);
+        s->set_wb_mode(s,       0);   // 0=auto
+        s->set_exposure_ctrl(s, 1);   // AEC on - auto-ekspozycja
+        s->set_aec2(s,          1);   // AEC algorithm v2 (lepszy)
+        s->set_ae_level(s,      0);   // -2..2
+        s->set_aec_value(s,     300); // 0..1200, "target brightness"
+        s->set_gain_ctrl(s,     1);   // AGC on - auto-wzmocnienie
+        s->set_agc_gain(s,      0);
+        s->set_gainceiling(s, (gainceiling_t)2);  // max gain 4x (mniej szumu)
+        s->set_bpc(s,           1);   // black pixel correction
+        s->set_wpc(s,           1);   // white pixel correction
+        s->set_raw_gma(s,       1);   // gamma correction
+        s->set_lenc(s,          1);   // lens correction (winietowanie)
+        // PCB v4: probujemy rozne kombinacje flips. v1.3.9: tylko vflip=1.
+        // Jezeli to mirror face -> trzeba dodac hmirror=1. Jezeli 180° -> obie 0.
+        s->set_hmirror(s,       0);
+        s->set_vflip(s,         1);
+        Serial.println("[CAM] flips: hmirror=0 vflip=1 (v1.3.9 test)");
+        s->set_dcw(s,           1);   // downsize crop window
+        s->set_colorbar(s,      0);   // 1 = test pattern (tylko debug)
+    }
+
     _camReady = true;
-    Serial.println("[CAM] OK");
+    Serial.println("[CAM] OK (AEC/AGC/AWB enabled)");
     return true;
 #endif
 }
@@ -157,18 +201,20 @@ inline void camEnd() {
     Serial.println("[CAM] deinit");
 }
 
+// Warm-up — wyrzuc N klatek. AEC/AGC potrzebuje ~3-5 klatek zeby zbiec
+// na docelowa ekspozycje, inaczej pierwsze zdjecie jest przepalone lub czarne.
+// 5 klatek przy 15fps UXGA = ~333ms.
+inline void camWarmup(int frames = 5) {
+    if (!_camReady) return;
+    for (int i = 0; i < frames; i++) {
+        camera_fb_t* fb = esp_camera_fb_get();
+        if (fb) esp_camera_fb_return(fb);
+    }
+}
+
 // Zrob zdjecie. Zwraca pointer do JPEG buffer (lub nullptr przy bledzie).
 // WAZNE: po uzyciu wywolaj esp_camera_fb_return(fb).
 inline camera_fb_t* camCapture() {
     if (!_camReady) return nullptr;
-    // Wyrzuc 2 klatki — pierwsze sa zwykle przeswiecone/niedoskonale po power-on
-    static bool _firstCapture = true;
-    if (_firstCapture) {
-        camera_fb_t* warm = esp_camera_fb_get();
-        if (warm) esp_camera_fb_return(warm);
-        warm = esp_camera_fb_get();
-        if (warm) esp_camera_fb_return(warm);
-        _firstCapture = false;
-    }
     return esp_camera_fb_get();
 }

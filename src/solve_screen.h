@@ -23,6 +23,11 @@
 #include "panic.h"
 #include "power.h"
 #include "history.h"
+#include "camera.h"         // camBegin / camCapture / camEnd
+
+#ifndef KALK_CAMERA_ENABLED
+#define KALK_CAMERA_ENABLED 1
+#endif
 
 // Device ID = MAC ESP32 (12 hex znakow, np. "68FE71E43B94"). Stabilny —
 // kazdy ESP32 ma fabrycznie inny MAC, niezmienny przez calos zycia chipu.
@@ -47,6 +52,29 @@ static String _solDeviceId() {
 
 #define _SOL_SOLVE_ENDPOINT  KALK_SERVER_URL "/api/device/solve"
 #define _SOL_TEXT_MAX        2048   // max znakow zadania (input)
+
+// UTF-8 polskie + typograficzne znaki -> ASCII (font 6x10 nie ma polskich glyphow).
+// Sygnatura jak _testsTitleToAscii w tests.h.
+inline String _solUtf8ToAscii(String s) {
+    s.replace("ą", "a"); s.replace("Ą", "A");
+    s.replace("ć", "c"); s.replace("Ć", "C");
+    s.replace("ę", "e"); s.replace("Ę", "E");
+    s.replace("ł", "l"); s.replace("Ł", "L");
+    s.replace("ń", "n"); s.replace("Ń", "N");
+    s.replace("ó", "o"); s.replace("Ó", "O");
+    s.replace("ś", "s"); s.replace("Ś", "S");
+    s.replace("ż", "z"); s.replace("Ż", "Z");
+    s.replace("ź", "z"); s.replace("Ź", "Z");
+    s.replace("–", "-"); s.replace("—", "-"); s.replace("−", "-");
+    s.replace("„", "\""); s.replace("”", "\""); s.replace("“", "\"");
+    s.replace("‘", "'"); s.replace("’", "'");
+    s.replace("…", "...");
+    s.replace("\xC2\xA0", " ");  // non-breaking space
+    s.replace("°", "deg");
+    s.replace("×", "x");  s.replace("·", "*");
+    s.replace("÷", "/");
+    return s;
+}
 #define _SOL_SOLUTION_MAX    16384  // max znakow odpowiedzi AI (16 KB)
 #define _SOL_HTTP_TIMEOUT_MS 45000  // 45s timeout HTTP
 
@@ -124,8 +152,11 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
     d.setFont(u8g2_font_6x10_tf);
     d.drawStr(2, 16, _solT("! Blad !", "! Error !"));
     d.drawHLine(0, 18, 256);
-    d.drawStr(2, 32, line1);
-    if (line2 && line2[0]) d.drawStr(2, 46, line2);
+    // Polskie znaki w komunikatach z serwera -> ASCII (bo font nie ma glyphow)
+    String l1 = _solUtf8ToAscii(String(line1 ? line1 : ""));
+    String l2 = _solUtf8ToAscii(String(line2 ? line2 : ""));
+    d.drawStr(2, 32, l1.c_str());
+    if (l2.length() > 0) d.drawStr(2, 46, l2.c_str());
     d.setFont(u8g2_font_5x7_tf);
     d.drawStr(2, 62, _solT("OK = powrot", "OK = back"));
     d.sendBuffer();
@@ -344,9 +375,14 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
     // Maks znakow na linie przy foncie 6px: (256-4)/6 = 42
     const int LINE_CHARS = 41;
 
+    // UTF-8 polskie -> ASCII (font 6x10 nie ma polskich glyphow).
+    // Robione PRZED _solFormatMath bo math format moze dorzucic znaki ktore
+    // by zlapaly UTF-8 multi-byte (lepiej wyczyscic na wejsciu).
+    String asciiSol = _solUtf8ToAscii(String(solution));
+
     // Przetworz tekst przez konwerter matematyki
     static char _solConverted[_SOL_SOLUTION_MAX + 1];
-    _solFormatMath(solution, _solConverted, sizeof(_solConverted));
+    _solFormatMath(asciiSol.c_str(), _solConverted, sizeof(_solConverted));
 
     // Podziel na linie
     static char _lines[_SOL_LINES_MAX][_SOL_LINE_LEN + 1];
@@ -671,24 +707,30 @@ static void _solRunPhotoMode(U8G2 &d) {
     }
     _solWaitRelease();
 
-    // Inicjalizacja kamery (esp_camera)
-    // Zakladamy ze kamera nie jest jeszcze zainicjalizowana
-    // (w pelnym projekcie uzyj esp_camera_init z config.h)
-#ifdef KALK_CAMERA_ENABLED
-    // Zrob zdjecie
+    // === Init kamery przez nasz wrapper ===
+    // camBegin: PWDN low, RESET pulse (przez MCP23017), esp_camera_init().
+    // I2C dzielony z MCP23017 (sccb_i2c_port=0 w camera.h).
+    _solDrawLoading(d, _solT("Wlaczam kamere...", "Powering camera..."), 0);
+
+    if (!camBegin()) {
+        _solDrawError(d, _solT("Init kamery!", "Camera init!"), "esp_camera_init");
+        return;
+    }
+
+    // Warm-up - wyrzuc 2 pierwsze klatki (zwykle przeswiecone po power-on)
+    camWarmup(2);
+
     _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo..."), 0);
-
-    camera_fb_t* fb = esp_camera_fb_get();
+    camera_fb_t* fb = camCapture();
     if (!fb) {
-        _solDrawError(d, _solT("Blad kamery!", "Camera error!"), "");
+        camEnd();
+        _solDrawError(d, _solT("Blad zdjecia!", "Capture error!"), "");
         return;
     }
+    // Buffer fb wazny — najpierw zakoduj base64, potem zwolnij + wylacz kamere
+    // PRZED WiFi (XCLK 10MHz kamery zaklocaja 2.4GHz radio).
 
-    // Upewnij sie ze jest WiFi
-    if (!_solEnsureWifi(d)) {
-        esp_camera_fb_return(fb);
-        return;
-    }
+    _solDrawLoading(d, _solT("Koduje obraz...", "Encoding image..."), 0);
 
     // Zakoduj obraz jako base64
     // Base64 potrzebuje ok 4/3 rozmiaru wejscia
@@ -696,6 +738,7 @@ static void _solRunPhotoMode(U8G2 &d) {
     char* b64buf = (char*)ps_malloc(b64len);  // PSRAM
     if (!b64buf) {
         esp_camera_fb_return(fb);
+        camEnd();
         _solDrawError(d, _solT("Brak pamieci!", "Out of memory!"), "PSRAM");
         return;
     }
@@ -716,6 +759,13 @@ static void _solRunPhotoMode(U8G2 &d) {
     }
     b64buf[bpos] = '\0';
     esp_camera_fb_return(fb);
+    camEnd();   // OFF kamery PRZED WiFi (anty-interference)
+
+    // Teraz mozemy bezpiecznie wlaczyc WiFi
+    if (!_solEnsureWifi(d)) {
+        free(b64buf);
+        return;
+    }
 
     char licKey[40];
     wifiLoadLicense(licKey, sizeof(licKey));
@@ -807,13 +857,6 @@ static void _solRunPhotoMode(U8G2 &d) {
     historySave(String("[Zdjecie kamery]"), String(solution));
 
     _solDisplaySolution(d, solution);
-
-#else
-    // Kamera niedostepna w tym trybie kompilacji
-    _solDrawError(d,
-        _solT("Kamera wylaczona", "Camera disabled"),
-        _solT("Uzyj trybu tekstu", "Use text mode"));
-#endif
 }
 
 // ---------------------------------------------------------------------------

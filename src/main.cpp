@@ -32,7 +32,7 @@
 #define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.3.0"
+#define FW_VERSION "1.3.9"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -119,6 +119,11 @@ unsigned long lastPress = 0;
 
 // Forward declaration
 void drawMenu();
+
+// === Lazy WiFi auto-connect — state (definicje pozniej) ===
+static uint32_t _wifiAutoStart = 0;
+static bool     _wifiAutoTried = false;
+static void _wifiAutoConnectLazy();
 
 // Aktywnosc trzymana w input.h (auto-reset przy kazdym klawiszu).
 // Te helpery zostawione jako kompat alias.
@@ -1017,13 +1022,38 @@ void setup() {
     runCalculator(u8g2);
 
     // === Tryb AI ===
-    // WiFi NIE laczy sie automatycznie - na PCB v4 (boost ssie z VBAT)
-    // peak pradu WiFi.begin podczas wlaczania ekranu menu daje
-    // brownout. WiFi laczy sie dopiero gdy user wejdzie w funkcje
-    // wymagajaca sieci (Rozwiaz zadanie / Settings -> WiFi).
+    // Auto-WiFi: laczy sie do zapisanej sieci z 3-sekundowym opoznieniem
+    // PO drawMenu (delay daje OLED + boost czas na ustabilizowanie,
+    // co eliminuje brownout). Sama proba laczenia w _wifiAutoConnectLazy
+    // robi WiFi.setTxPower(8.5dBm) zeby zmniejszyc peak pradu radia.
     delay(50);  // chwila zeby OLED dokonczyl ostatni refresh po splash AI
     resetActivity();
     drawMenu();
+    _wifiAutoStart = millis();  // odpalamy lazy auto-connect w loop()
+}
+
+// === Lazy WiFi auto-connect ===
+// Probuje raz polaczyc sie do zapisanej sieci po wejsciu w AI menu.
+// Throttle 3s zeby OLED/boost ustabilizowal sie po dlugim splash + menu draw.
+// Zmienne stanu zadeklarowane wczesniej (forward).
+static void _wifiAutoConnectLazy() {
+    if (_wifiAutoTried || _wifiAutoStart == 0) return;
+    if (millis() - _wifiAutoStart < 3000) return;
+    _wifiAutoTried = true;
+
+    char ssid[33] = "", pass[64] = "";
+    if (!wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
+        Serial.println("[WiFi-auto] brak zapisanych credentials, pomijam");
+        return;
+    }
+    Serial.printf("[WiFi-auto] lacze: %s\n", ssid);
+    Serial.flush();
+    WiFi.mode(WIFI_STA);
+    WiFi.setTxPower(WIFI_POWER_8_5dBm);  // anty-brownout
+    delay(50);
+    WiFi.begin(ssid, pass);
+    // Nie blokujemy - async connect w tle. _solEnsureWifi w solve_screen
+    // sprawdzi status przed POST.
 }
 
 // Definicja globalnej flagi panic (extern w panic.h)
@@ -1087,6 +1117,7 @@ void loop() {
     panicCheck();       // sprawdz panic key, ustaw flagę gdy nacisnięty
     handlePanicIfRequested();  // jesli flaga -> kalkulator
     _vbatWatchdogLoop();    // anti-brownout: shutdown przy VBAT<3.2V
+    _wifiAutoConnectLazy(); // auto-WiFi 3s po wejsciu w AI menu
     if (powerCheckSleep()) {
         // Po wybudzeniu — przerysuj menu
         drawMenu();
