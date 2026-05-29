@@ -933,8 +933,8 @@ static void _editUpdate(U8G2 &d) {
                     state = ST_NO_UPDATE;
                 }
             } else if (state == ST_AVAILABLE) {
-                // Zainstaluj
-                otaInstall(d, info.url);
+                // Zainstaluj - przekaz sig dla weryfikacji ECDSA
+                otaInstall(d, info.url, info.sig);
                 // Po sukcesie restart, w przeciwnym wypadku zwraca false
                 state = ST_ERROR;
                 info.error = "Install failed";

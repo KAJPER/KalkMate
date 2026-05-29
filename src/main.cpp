@@ -29,10 +29,13 @@
 
 // Konfiguracja serwera AI — ustaw przed kompilacja
 #define KALK_SERVER_URL "https://kalkmate.pl"
-#define KALK_API_KEY    "<CALCULATOR_API_KEY-REDACTED>"
+// API key NIE jest w plaintexcie binarki - dekoduje sie z XOR runtime.
+// Patrz key_obfuscate.h dla mechanizmu.
+#include "key_obfuscate.h"
+#define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.3.9"
+#define FW_VERSION "1.4.1"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID

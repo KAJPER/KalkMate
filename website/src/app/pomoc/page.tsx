@@ -17,6 +17,8 @@ const sections = [
 ];
 
 const changelog = [
+  { v: "1.4.1", date: "2026-05-28", notes: "Bezpieczeństwo: Signed OTA (ECDSA P-256) + obfuskacja API key w binarce — chronione przed wstrzyknięciem firmware i strings extraction" },
+  { v: "1.4.0", date: "2026-05-28", notes: "Bezpieczeństwo: OTA wymaga autoryzacji (x-api-key + zarejestrowany device-id), pliki .bin poza public/" },
   { v: "1.3.9", date: "2026-05-28", notes: "Kamera: test rotacji — tylko vflip + Serial log z aktualną konfiguracją" },
   { v: "1.3.8", date: "2026-05-28", notes: "Kamera: hmirror+vflip dla rotacji 180° (sensor zamontowany do góry nogami)" },
   { v: "1.3.7", date: "2026-05-28", notes: "Kamera OV2640: AEC/AGC/AWB włączone + gamma/lens correction + 5-klatkowy warm-up (fix prześwietlenia + zielonego tintu)" },
@@ -165,7 +167,7 @@ export default function PomocPage() {
           </h1>
           <p className="mt-6 text-[17px] leading-[1.6] text-[#F2EDE3]/65 max-w-2xl">
             Wszystko czego potrzebujesz żeby zacząć: instrukcja, wideo, FAQ
-            i kontakt do nas. Materiały zaktualizowane dla firmware v1.3.9.
+            i kontakt do nas. Materiały zaktualizowane dla firmware v1.4.1.
           </p>
         </div>
       </section>
@@ -321,7 +323,7 @@ export default function PomocPage() {
           <Section id="ota" eyebrow="06 · Aktualizacje" title="OTA — aktualizacje firmware." accent="aktualizacje">
             <Step n={1} title="Sprawdź dostępność">
               Ustawienia → Aktualizacje → OK. Kalkulator pyta serwer, czy jest
-              nowsza wersja niż twoja aktualna (widoczna jako <code className="text-[#D8FF3D]">v1.3.9</code> itp.).
+              nowsza wersja niż twoja aktualna (widoczna jako <code className="text-[#D8FF3D]">v1.4.1</code> itp.).
             </Step>
             <Step n={2} title="Zainstaluj">
               Jeśli jest nowa — pokazuje notes do zmian + przycisk Zainstaluj.
@@ -335,7 +337,7 @@ export default function PomocPage() {
 
             <div className="mt-8">
               <p className="km-mono-eyebrow text-[#F2EDE3]/55 mb-3">/ AKTUALNA WERSJA SERWERA:</p>
-              <p className="km-display text-3xl text-[#D8FF3D]">v1.3.9</p>
+              <p className="km-display text-3xl text-[#D8FF3D]">v1.4.1</p>
               <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">Sprawdź swoją wersję w Ustawienia → Aktualizacje</p>
             </div>
           </Section>

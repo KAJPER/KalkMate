@@ -20,6 +20,10 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include <U8g2lib.h>
+// Signed OTA: weryfikacja ECDSA P-256 podpisu firmware przez mbedtls
+// (mbedtls jest juz w ESP-IDF, nie wymaga external lib).
+#include <mbedtls/pk.h>
+#include <mbedtls/sha256.h>
 
 #ifndef KALK_SERVER_URL
 #error "ota_update.h wymaga zdefiniowania KALK_SERVER_URL przed include"
@@ -36,6 +40,7 @@ struct OtaInfo {
     String latestVersion; // wersja zwrocona przez serwer (lub pusta)
     String url;           // URL do .bin
     String notes;         // changelog / opis
+    String sig;           // ECDSA P-256 base64 podpis SHA256(bin) (od v1.4.1)
     String error;         // pusty gdy OK, inaczej komunikat bledu
 };
 
@@ -123,6 +128,7 @@ inline OtaInfo otaCheck() {
     info.latestVersion = _otaJsonField(body, "version");
     info.url           = _otaJsonField(body, "url");
     info.notes         = _otaJsonField(body, "notes");
+    info.sig           = _otaJsonField(body, "sig");   // ECDSA P-256 base64, opcjonalne
 
     if (info.latestVersion.isEmpty()) {
         info.error = "Brak wersji w odp.";
@@ -160,11 +166,51 @@ static void _otaDrawProgress(U8G2 &d, const char* line1, int percent) {
     d.sendBuffer();
 }
 
+// === ECDSA P-256 signing public key ===
+// Wygenerowany na serwerze (kalkmate.pl), parny klucz prywatny w
+// /home/ubuntu/kalkulator/keys/firmware_signing.pem. Tylko ten klucz moze
+// podpisac firmware - jezeli ktos podmieni serwer ale nie ma klucza, weryfikacja
+// na urzadzeniu zawiedzie i OTA nie zainstaluje sie.
+static const char _OTA_PUBLIC_KEY_PEM[] =
+    "-----BEGIN PUBLIC KEY-----\n"
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQxvaN+MwX/l1QMbnXkqbkLk/17sY\n"
+    "Nk6P0+wqp94IGa2xucxLevcoEfa9QhG5SXXTjICEnnZY4gpfjjxwFWProQ==\n"
+    "-----END PUBLIC KEY-----\n";
+
+// Dekoder base64 -> bytes. Zwraca rozmiar wynikowy.
+inline size_t _otaBase64Decode(const String& in, uint8_t* out, size_t outMax) {
+    auto val = [](char c) -> int {
+        if (c >= 'A' && c <= 'Z') return c - 'A';
+        if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+        if (c >= '0' && c <= '9') return c - '0' + 52;
+        if (c == '+') return 62;
+        if (c == '/') return 63;
+        return -1;
+    };
+    size_t outLen = 0;
+    int buf = 0, bits = 0;
+    for (size_t i = 0; i < in.length(); i++) {
+        char c = in[i];
+        if (c == '=' || c == '\n' || c == '\r' || c == ' ') continue;
+        int v = val(c);
+        if (v < 0) continue;
+        buf = (buf << 6) | v;
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            if (outLen >= outMax) return outLen;
+            out[outLen++] = (uint8_t)((buf >> bits) & 0xFF);
+        }
+    }
+    return outLen;
+}
+
 // ---------------------------------------------------------------------
 //  otaInstall — pobiera .bin i wpisuje przez Update API
+//  Streaming SHA-256 + ECDSA verify przed commit (od v1.4.1).
 //  Pokazuje postep na OLED. Po sukcesie wywoluje ESP.restart().
 // ---------------------------------------------------------------------
-inline bool otaInstall(U8G2 &d, const String& binUrl) {
+inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "") {
     Serial.printf("[OTA] install: %s\n", binUrl.c_str());
 
     if (WiFi.status() != WL_CONNECTED) {
@@ -181,6 +227,19 @@ inline bool otaInstall(U8G2 &d, const String& binUrl) {
     HTTPClient http;
     http.begin(client, binUrl);
     http.setTimeout(60000);
+
+    // Auth headers - serwer wymaga API key + device-id sparowanego w bazie
+    // zeby zwrocic binarke (zamiast public URL z /public/firmware/).
+    http.addHeader("x-api-key", KALK_API_KEY);
+    {
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        char did[16];
+        snprintf(did, sizeof(did), "%02X%02X%02X%02X%02X%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        http.addHeader("x-device-id", did);
+    }
+    http.addHeader("x-fw-version", FW_VERSION);
 
     int code = http.GET();
     if (code != 200) {
@@ -212,6 +271,17 @@ inline bool otaInstall(U8G2 &d, const String& binUrl) {
 
     _otaDrawProgress(d, "Pobieranie firmware...", 0);
 
+    // Streaming SHA-256 zeby zweryfikowac podpis po pobraniu
+    bool verifySignature = (sigB64.length() > 0);
+    mbedtls_sha256_context shaCtx;
+    if (verifySignature) {
+        mbedtls_sha256_init(&shaCtx);
+        mbedtls_sha256_starts(&shaCtx, 0);  // 0 = SHA-256 (1 = SHA-224)
+        Serial.println("[OTA] signed mode — bedzie weryfikacja ECDSA");
+    } else {
+        Serial.println("[OTA] UWAGA: brak podpisu z serwera, install bez weryfikacji");
+    }
+
     WiFiClient* stream = http.getStreamPtr();
     uint8_t buf[1024];
     int written = 0;
@@ -225,10 +295,15 @@ inline bool otaInstall(U8G2 &d, const String& binUrl) {
             if (Update.write(buf, n) != (size_t)n) {
                 Serial.printf("[OTA] Update.write failed: %s\n", Update.errorString());
                 Update.abort();
+                if (verifySignature) mbedtls_sha256_free(&shaCtx);
                 _otaDrawProgress(d, "Blad zapisu", written * 100 / total);
                 delay(3000);
                 http.end();
                 return false;
+            }
+            // Aktualizuj hash dla weryfikacji
+            if (verifySignature) {
+                mbedtls_sha256_update(&shaCtx, buf, n);
             }
             written += n;
 
@@ -244,6 +319,52 @@ inline bool otaInstall(U8G2 &d, const String& binUrl) {
     }
 
     http.end();
+
+    // === WERYFIKACJA PODPISU ECDSA P-256 ===
+    if (verifySignature) {
+        uint8_t hash[32];
+        mbedtls_sha256_finish(&shaCtx, hash);
+        mbedtls_sha256_free(&shaCtx);
+
+        Serial.printf("[OTA] SHA256 firmware: ");
+        for (int i = 0; i < 8; i++) Serial.printf("%02x", hash[i]);
+        Serial.printf("... (%d bajtow)\n", written);
+
+        // Zdekoduj base64 podpis
+        uint8_t sigBuf[128];
+        size_t sigLen = _otaBase64Decode(sigB64, sigBuf, sizeof(sigBuf));
+        Serial.printf("[OTA] podpis ECDSA: %u bajtow DER\n", sigLen);
+
+        mbedtls_pk_context pk;
+        mbedtls_pk_init(&pk);
+        int ret = mbedtls_pk_parse_public_key(
+            &pk,
+            (const uint8_t*)_OTA_PUBLIC_KEY_PEM,
+            strlen(_OTA_PUBLIC_KEY_PEM) + 1);
+        if (ret != 0) {
+            Serial.printf("[OTA] parse_public_key fail: -0x%x\n", -ret);
+            mbedtls_pk_free(&pk);
+            Update.abort();
+            _otaDrawProgress(d, "Blad parsowania key", 100);
+            delay(3000);
+            return false;
+        }
+
+        ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256,
+                                hash, sizeof(hash),
+                                sigBuf, sigLen);
+        mbedtls_pk_free(&pk);
+
+        if (ret != 0) {
+            Serial.printf("[OTA] WERYFIKACJA PODPISU NIEUDANA: -0x%x\n", -ret);
+            Update.abort();
+            _otaDrawProgress(d, "PODPIS NIEPOPRAWNY!", 100);
+            delay(5000);
+            return false;
+        }
+        Serial.println("[OTA] podpis OK - firmware zaufany");
+        _otaDrawProgress(d, "Podpis OK, zapisuje...", 100);
+    }
 
     if (written != total) {
         Serial.printf("[OTA] incomplete: %d / %d\n", written, total);
