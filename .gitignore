@@ -7,3 +7,17 @@
 # Deploy scripts — zawieraja haslo SSH, nie commitowac
 deploy.ps1
 deploy.bat
+
+# Production flasher — klucze szyfrowania i logi NIE NA GIT
+tools/flasher/keys/
+tools/flasher/production_log.csv
+tools/flasher/config.json
+
+# Obfuskowany API key (zawiera XOR-encoded bytes — wciaz secret)
+src/key_obfuscate.h
+
+# Cache analizatora kodu
+src/graphify-out/
+
+# Captured photos z urzadzen (debug, mogą być pełne)
+website/captures/
