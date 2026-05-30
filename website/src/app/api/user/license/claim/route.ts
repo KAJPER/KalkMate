@@ -196,6 +196,16 @@ export async function GET() {
             where: { licenseCode: license.code },
             orderBy: { lastSeen: "desc" },
           });
+          // Self-heal: jesli kalkulator rozwiazywal na licencji usera (Device.licenseCode pasuje)
+          // ale nie jest sparowany z tym kontem (userId null lub stary wlasciciel licencji),
+          // przejmij go. Licencja = zrodlo prawdy o wlascicielu.
+          // Bez tego DELETE /api/user/devices zwraca 404 (sprawdza userId === user.id).
+          if (device && device.userId !== user.id) {
+            device = await deviceModel.update({
+              where: { id: device.id },
+              data: { userId: user.id },
+            });
+          }
         }
       }
     } catch {

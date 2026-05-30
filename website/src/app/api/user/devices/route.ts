@@ -127,13 +127,28 @@ export async function DELETE(req: NextRequest) {
   if (!deviceId) return NextResponse.json({ ok: false, error: "Brak deviceId" }, { status: 400 });
 
   const device = await prisma.device.findUnique({ where: { deviceId } });
-  if (!device || device.userId !== user.id) {
+  if (!device) {
+    return NextResponse.json({ ok: false, error: "Nie znaleziono" }, { status: 404 });
+  }
+
+  // Wlasciciel: bezposrednio przez Device.userId, albo posrednio przez licencje
+  // (Device.licenseCode pasuje do licencji aktualnie zaclaimowanej przez usera).
+  // To drugie pokrywa device'y wyswietlane w panelu przez fallback po licenseCode
+  // (urzadzenie rozwiazywalo na licencji usera, ale nie bylo formalnie sparowane).
+  let owned = device.userId === user.id;
+  if (!owned && device.licenseCode) {
+    const license = await prisma.license.findFirst({
+      where: { claimedByUserId: user.id, code: device.licenseCode },
+    });
+    if (license) owned = true;
+  }
+  if (!owned) {
     return NextResponse.json({ ok: false, error: "Nie znaleziono" }, { status: 404 });
   }
 
   await prisma.device.update({
     where: { id: device.id },
-    data: { userId: null },
+    data: { userId: null, licenseCode: null },
   });
 
   return NextResponse.json({ ok: true });

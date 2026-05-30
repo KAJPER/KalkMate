@@ -45,7 +45,7 @@ async function saveCapture(
   }
 }
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro";
 // Hostname mozna nadpisac przez env (np. proxy Cloudflare Workers gdy
 // IP serwera jest blokowany przez geo-restrykcje Gemini API)
 const GEMINI_HOST = process.env.GEMINI_HOST || "generativelanguage.googleapis.com";

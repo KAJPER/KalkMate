@@ -21,6 +21,11 @@ const navItems = [
     icon: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
   },
   {
+    href: "/admin/devices",
+    label: "Urządzenia",
+    icon: "M12 2a4 4 0 014 4v12a4 4 0 01-8 0V6a4 4 0 014-4zm0 14a1 1 0 100 2 1 1 0 000-2z"
+  },
+  {
     href: "/admin/users",
     label: "Użytkownicy",
     icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm14 14v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
