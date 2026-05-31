@@ -6,7 +6,28 @@ import { prisma } from "@/lib/db";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_HOST = process.env.GEMINI_HOST || "generativelanguage.googleapis.com";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro";
-const GEMINI_API_URL = `https://${GEMINI_HOST}/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_MODEL_FALLBACK = process.env.GEMINI_MODEL_FALLBACK || "gemini-2.5-flash";
+const buildGeminiUrl = (model: string) =>
+  `https://${GEMINI_HOST}/v1beta/models/${model}:generateContent`;
+
+// Retry na 5xx (overload Gemini) + automatyczny fallback na lzejszy model.
+async function callGeminiWithRetry(body: unknown): Promise<Response> {
+  const attempts = [GEMINI_MODEL, GEMINI_MODEL, GEMINI_MODEL_FALLBACK];
+  let last: Response | null = null;
+  for (let i = 0; i < attempts.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, i === 1 ? 800 : 200));
+    const res = await fetch(`${buildGeminiUrl(attempts[i])}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    last = res;
+    if (res.ok) return res;
+    if (res.status < 500) return res;
+    console.warn(`[chat] Gemini ${res.status} on ${attempts[i]} (attempt ${i + 1}/${attempts.length})`);
+  }
+  return last as Response;
+}
 
 // System prompt załadowany z pliku system_prompt_matura_all.md
 const SYSTEM_PROMPT = `# Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki (poziom podstawowy i rozszerzony), fizyki (poziom rozszerzony), biologii (poziom rozszerzony) i chemii (poziom rozszerzony).
@@ -1317,38 +1338,20 @@ export async function POST(request: NextRequest) {
       ...geminiMessages,
     ];
 
-    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const response = await callGeminiWithRetry({
+      contents: allMessages,
+      generationConfig: {
+        temperature: 0.3,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 4096,
       },
-      body: JSON.stringify({
-        contents: allMessages,
-        generationConfig: {
-          temperature: 0.3, // Niższa temperatura dla bardziej precyzyjnych odpowiedzi matematycznych
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 4096, // Zwiększony limit dla bardziej szczegółowych rozwiązań
-        },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_NONE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_NONE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_NONE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_NONE",
-          },
-        ],
-      }),
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+      ],
     });
 
     if (!response.ok) {

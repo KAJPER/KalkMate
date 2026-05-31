@@ -46,11 +46,45 @@ async function saveCapture(
 }
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro";
+// Gdy glowny model padnie na 5xx (overload), sprobuj fallbacka. Flash jest
+// szybszy i znacznie rzadziej przeciazony niz Pro.
+const GEMINI_MODEL_FALLBACK = process.env.GEMINI_MODEL_FALLBACK || "gemini-2.5-flash";
 // Hostname mozna nadpisac przez env (np. proxy Cloudflare Workers gdy
 // IP serwera jest blokowany przez geo-restrykcje Gemini API)
 const GEMINI_HOST = process.env.GEMINI_HOST || "generativelanguage.googleapis.com";
-const GEMINI_API_URL =
-  `https://${GEMINI_HOST}/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const buildGeminiUrl = (model: string) =>
+  `https://${GEMINI_HOST}/v1beta/models/${model}:generateContent`;
+const GEMINI_API_URL = buildGeminiUrl(GEMINI_MODEL);
+
+// Pojedyncze wywolanie Gemini z retry na 5xx (overload). Zwraca finalna
+// odpowiedz (moze byc nie-ok jesli wszystkie proby padly) + uzyty model.
+async function callGeminiWithRetry(
+  body: unknown,
+  apiKey: string,
+): Promise<{ res: Response; modelUsed: string }> {
+  const attempts: { model: string; url: string }[] = [
+    { model: GEMINI_MODEL, url: GEMINI_API_URL },
+    { model: GEMINI_MODEL, url: GEMINI_API_URL }, // retry tego samego po krotkim sleep
+    { model: GEMINI_MODEL_FALLBACK, url: buildGeminiUrl(GEMINI_MODEL_FALLBACK) },
+  ];
+  let last: Response | null = null;
+  let lastModel = GEMINI_MODEL;
+  for (let i = 0; i < attempts.length; i++) {
+    const { model, url } = attempts[i];
+    if (i > 0) await new Promise((r) => setTimeout(r, i === 1 ? 800 : 200));
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(body),
+    });
+    last = res;
+    lastModel = model;
+    if (res.ok) return { res, modelUsed: model };
+    if (res.status < 500) return { res, modelUsed: model }; // 4xx nie ma sensu retrowac
+    console.warn(`[solve] Gemini ${res.status} on ${model} (attempt ${i + 1}/${attempts.length})`);
+  }
+  return { res: last as Response, modelUsed: lastModel };
+}
 
 const SYSTEM_PROMPT = `Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii.
 Odpowiadaj KRÓTKO i ZWIĘŹLE — ekran kalkulatora ma ograniczoną przestrzeń.
@@ -226,20 +260,15 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Nowy format Gemini API: klucz w headerze "x-goog-api-key"
-    // (zamiast w URL parameter "?key=" - to nadal dziala ale jest legacy)
-    const geminiRes = await fetch(GEMINI_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY!,
-      },
-      body: JSON.stringify(geminiBody),
-    });
+    // Wywolanie z retry na 5xx + automatyczny fallback na lzejszy model
+    const { res: geminiRes, modelUsed } = await callGeminiWithRetry(
+      geminiBody,
+      GEMINI_API_KEY!,
+    );
 
     if (!geminiRes.ok) {
       const errText = await geminiRes.text();
-      console.error(`Gemini error ${geminiRes.status} (model=${GEMINI_MODEL}):`, errText);
+      console.error(`Gemini error ${geminiRes.status} (model=${modelUsed}):`, errText);
       // Wyciagnij krotki opis bledu z JSON (jesli jest)
       let detail = errText.slice(0, 200);
       try {
@@ -250,7 +279,7 @@ export async function POST(request: NextRequest) {
         {
           ok: false,
           error: `AI ${geminiRes.status}: ${detail}`,
-          model: GEMINI_MODEL,
+          model: modelUsed,
         },
         { status: 502 }
       );
