@@ -15,6 +15,7 @@ interface ClaimInfo {
     lastSeen: string;
     requestCount: number;
     firmwareVersion: string | null;
+    promptMode: string | null;
   } | null;
 }
 
@@ -61,6 +62,32 @@ export default function KalkulatorPage() {
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [opened, setOpened] = useState<SolveItem | null>(null);
+  const [savingMode, setSavingMode] = useState(false);
+
+  const setPromptMode = async (mode: "matura" | "raw") => {
+    if (!info?.device?.deviceId) return;
+    setSavingMode(true);
+    try {
+      const r = await fetch(
+        `/api/user/devices?deviceId=${encodeURIComponent(info.device.deviceId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ promptMode: mode }),
+        }
+      );
+      const j = await r.json();
+      if (!j.ok) {
+        alert(j.error || "Nie udalo sie zapisac trybu");
+      } else {
+        setInfo((prev) =>
+          prev?.device ? { ...prev, device: { ...prev.device, promptMode: mode === "raw" ? "raw" : null } } : prev
+        );
+      }
+    } finally {
+      setSavingMode(false);
+    }
+  };
 
   // Notatki
   const [notes, setNotes] = useState<Note[]>([]);
@@ -294,6 +321,40 @@ export default function KalkulatorPage() {
                       <div>
                         <span className="text-gray-500">Ostatni kontakt:</span>{" "}
                         {fmt(info.device.lastSeen)}
+                      </div>
+                      <div className="pt-3 mt-3 border-t border-[rgba(242,237,227,0.10)]">
+                        <div className="text-gray-500 mb-2">Tryb AI:</div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setPromptMode("matura")}
+                            disabled={savingMode}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all border ${
+                              info.device.promptMode !== "raw"
+                                ? "bg-[#3B82F6] border-[#3B82F6] text-white"
+                                : "bg-transparent border-[rgba(242,237,227,0.20)] text-gray-400 hover:text-gray-200"
+                            } disabled:opacity-50`}
+                            title="Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)"
+                          >
+                            Matura (CKE)
+                          </button>
+                          <button
+                            onClick={() => setPromptMode("raw")}
+                            disabled={savingMode}
+                            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all border ${
+                              info.device.promptMode === "raw"
+                                ? "bg-[#3B82F6] border-[#3B82F6] text-white"
+                                : "bg-transparent border-[rgba(242,237,227,0.20)] text-gray-400 hover:text-gray-200"
+                            } disabled:opacity-50`}
+                            title="Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)"
+                          >
+                            Czysty AI
+                          </button>
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-2">
+                          {info.device.promptMode === "raw"
+                            ? "Tryb uniwersalny — AI nie zaklada matury. Dziala dla elektroniki, informatyki, jezykow itp."
+                            : "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia)."}
+                        </div>
                       </div>
                     </>
                   )}

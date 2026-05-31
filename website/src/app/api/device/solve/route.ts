@@ -118,12 +118,19 @@ async function callGeminiWithRetry(
   return { res: last as Response, modelUsed: lastModel, solution: lastSolution };
 }
 
-const SYSTEM_PROMPT = `Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii.
+const SYSTEM_PROMPT_MATURA = `Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii.
 Odpowiadaj KRÓTKO i ZWIĘŹLE — ekran kalkulatora ma ograniczoną przestrzeń.
 Format odpowiedzi:
 1. Dane/Szukane (1-2 linijki)
 2. Rozwiązanie krok po kroku (maksymalnie 6 kroków)
 3. Odpowiedź: [wynik z jednostkami]
+Nie używaj markdown, gwiazdek, nagłówków. Tylko czysty tekst. Maksymalnie 800 znaków.`;
+
+// Tryb "raw" — bez ograniczenia do maturalnych przedmiotow. Tylko hint o
+// formacie pod maly ekran OLED. User wybiera ten tryb gdy robi zdjecia spoza
+// matury (elektronika, informatyka, jezyki obce itp.).
+const SYSTEM_PROMPT_RAW = `Odpowiadaj po polsku, KRÓTKO i ZWIĘŹLE — ekran kalkulatora jest mały.
+Maksymalnie 6 krótkich kroków. Wyróżnij końcową odpowiedź.
 Nie używaj markdown, gwiazdek, nagłówków. Tylko czysty tekst. Maksymalnie 800 znaków.`;
 
 export async function POST(request: NextRequest) {
@@ -255,6 +262,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Wybor system prompta na podstawie Device.promptMode (kolumna nie jest w
+    // Prisma schemie wiec raw SQL). Default = matura.
+    let systemPrompt = SYSTEM_PROMPT_MATURA;
+    if (deviceIdHeader) {
+      const rows = await prisma.$queryRaw<{ promptMode: string | null }[]>`
+        SELECT "promptMode" FROM "Device" WHERE "deviceId" = ${deviceIdHeader} LIMIT 1
+      `;
+      if (rows?.[0]?.promptMode === "raw") {
+        systemPrompt = SYSTEM_PROMPT_RAW;
+      }
+    }
+
     // Parsuj body
     const body = await request.json();
     const { mode, text, image, mimeType } = body;
@@ -308,7 +327,7 @@ export async function POST(request: NextRequest) {
       contents: [
         {
           role: "user",
-          parts: [{ text: SYSTEM_PROMPT }],
+          parts: [{ text: systemPrompt }],
         },
         {
           role: "model",

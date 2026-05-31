@@ -52,6 +52,35 @@ export default function PanelPage() {
   const [calcOpenedConv, setCalcOpenedConv] = useState<any>(null);
   const [showChangeLicense, setShowChangeLicense] = useState(false);
   const [unclaiming, setUnclaiming] = useState(false);
+  const [savingPromptMode, setSavingPromptMode] = useState(false);
+
+  const setPromptMode = async (mode: "matura" | "raw") => {
+    const deviceId = calcInfo?.device?.deviceId;
+    if (!deviceId) return;
+    setSavingPromptMode(true);
+    try {
+      const r = await fetch(
+        `/api/user/devices?deviceId=${encodeURIComponent(deviceId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ promptMode: mode }),
+        }
+      );
+      const j = await r.json();
+      if (!j.ok) {
+        alert(j.error || "Nie udalo sie zapisac trybu");
+      } else {
+        setCalcInfo((prev: any) =>
+          prev?.device
+            ? { ...prev, device: { ...prev.device, promptMode: mode === "raw" ? "raw" : null } }
+            : prev
+        );
+      }
+    } finally {
+      setSavingPromptMode(false);
+    }
+  };
 
   // === Pair device (deviceId + unlockCode) ===
   const [pairDeviceId, setPairDeviceId] = useState("");
@@ -1521,6 +1550,42 @@ export default function PanelPage() {
                           </div>
                         </>
                       )}
+                    </div>
+
+                    {/* Tryb AI */}
+                    <div className="mt-5 pt-5 border-t border-[rgba(242,237,227,0.10)]">
+                      <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Tryb AI</div>
+                      <div className="flex gap-2 mb-2">
+                        <button
+                          onClick={() => setPromptMode("matura")}
+                          disabled={savingPromptMode}
+                          className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
+                            calcInfo.device.promptMode !== "raw"
+                              ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
+                              : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
+                          }`}
+                          title="Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)"
+                        >
+                          Matura (CKE)
+                        </button>
+                        <button
+                          onClick={() => setPromptMode("raw")}
+                          disabled={savingPromptMode}
+                          className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
+                            calcInfo.device.promptMode === "raw"
+                              ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
+                              : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
+                          }`}
+                          title="Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)"
+                        >
+                          Czysty AI
+                        </button>
+                      </div>
+                      <div className="text-xs text-[#F2EDE3]/45">
+                        {calcInfo.device.promptMode === "raw"
+                          ? "Tryb uniwersalny — AI nie zakłada matury. Działa dla elektroniki, informatyki, języków itp."
+                          : "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia)."}
+                      </div>
                     </div>
                   </div>
 

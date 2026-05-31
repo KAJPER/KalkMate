@@ -212,6 +212,18 @@ export async function GET() {
       device = null;
     }
 
+    // Doczytaj promptMode (kolumna nie istnieje w Prisma schemie)
+    if (device?.id) {
+      try {
+        const rows = await prisma.$queryRaw<{ promptMode: string | null }[]>`
+          SELECT "promptMode" FROM "Device" WHERE "id" = ${device.id} LIMIT 1
+        `;
+        device.promptMode = rows?.[0]?.promptMode ?? null;
+      } catch {
+        device.promptMode = null;
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       claimed: true, // historyczna nazwa = "ma aktywny dostep"
@@ -236,6 +248,8 @@ export async function GET() {
             lastSeen: device.lastSeen,
             requestCount: device.requestCount,
             firmwareVersion: device.firmwareVersion,
+            // promptMode nie ma w Prisma schemie wiec raw SQL nizej go dolacza
+            promptMode: (device as any).promptMode ?? null,
           }
         : null,
     });

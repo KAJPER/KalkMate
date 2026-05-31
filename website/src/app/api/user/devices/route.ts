@@ -117,6 +117,54 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, device: updated, action: "paired" });
 }
 
+// PATCH /api/user/devices?deviceId=... — zmien ustawienia urzadzenia
+// Body: { promptMode: "matura" | "raw" }
+// "matura" (default) — system prompt pod zadania CKE
+// "raw" — bez ograniczenia do przedmiotow maturalnych (np. elektronika)
+export async function PATCH(req: NextRequest) {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ ok: false, error: "Nie zalogowany" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const deviceId = (url.searchParams.get("deviceId") || "").trim().toUpperCase();
+  if (!deviceId) return NextResponse.json({ ok: false, error: "Brak deviceId" }, { status: 400 });
+
+  const body = await req.json().catch(() => ({}));
+  const promptMode = String(body?.promptMode || "").trim().toLowerCase();
+  if (promptMode !== "matura" && promptMode !== "raw") {
+    return NextResponse.json(
+      { ok: false, error: "Nieprawidlowy promptMode (matura/raw)" },
+      { status: 400 }
+    );
+  }
+
+  const device = await prisma.device.findUnique({ where: { deviceId } });
+  if (!device) {
+    return NextResponse.json({ ok: false, error: "Nie znaleziono" }, { status: 404 });
+  }
+
+  // Wlasciciel (jak w DELETE)
+  let owned = device.userId === user.id;
+  if (!owned && device.licenseCode) {
+    const license = await prisma.license.findFirst({
+      where: { claimedByUserId: user.id, code: device.licenseCode },
+    });
+    if (license) owned = true;
+  }
+  if (!owned) {
+    return NextResponse.json({ ok: false, error: "Nie znaleziono" }, { status: 404 });
+  }
+
+  // promptMode nie ma w Prisma schemie wiec raw SQL. "matura" zapisujemy
+  // jako NULL zeby pozbyc sie szumu (NULL = default).
+  const stored = promptMode === "raw" ? "raw" : null;
+  await prisma.$executeRaw`
+    UPDATE "Device" SET "promptMode" = ${stored} WHERE "id" = ${device.id}
+  `;
+
+  return NextResponse.json({ ok: true, promptMode });
+}
+
 // DELETE /api/user/devices?deviceId=... — odepnij urzadzenie
 export async function DELETE(req: NextRequest) {
   const user = await getUser();
