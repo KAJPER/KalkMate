@@ -3,6 +3,7 @@ import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import HeadSEO from "./head-seo";
 import SessionProvider from "@/components/SessionProvider";
+import CookieBanner from "@/components/CookieBanner";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -121,6 +122,7 @@ export default function RootLayout({
         className={`${geist.variable} ${instrument.variable} ${jetbrains.variable} antialiased km-grain bg-[#0B0B0B] text-[#F2EDE3]`}
       >
         <SessionProvider>{children}</SessionProvider>
+        <CookieBanner />
       </body>
     </html>
   );

@@ -35,6 +35,11 @@ const navItems = [
     label: "Zamówienia",
     icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
   },
+  {
+    href: "/admin/inventory",
+    label: "Magazyn",
+    icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+  },
 ];
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
