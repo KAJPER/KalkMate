@@ -56,12 +56,27 @@ const buildGeminiUrl = (model: string) =>
   `https://${GEMINI_HOST}/v1beta/models/${model}:generateContent`;
 const GEMINI_API_URL = buildGeminiUrl(GEMINI_MODEL);
 
-// Pojedyncze wywolanie Gemini z retry na 5xx (overload). Zwraca finalna
-// odpowiedz (moze byc nie-ok jesli wszystkie proby padly) + uzyty model.
+// Wyciagnij text ze wszystkich parts (Gemini moze zwrocic multi-part response,
+// szczegolnie z thinking). Zwraca null gdy nic sensownego nie ma.
+function extractText(geminiData: any): string | null {
+  const parts = geminiData?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return null;
+  const text = parts
+    .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  return text || null;
+}
+
+// Pojedyncze wywolanie Gemini z retry na:
+//  - 5xx (overload Google)
+//  - pusty wynik (MAX_TOKENS / SAFETY / inny finishReason bez tekstu)
+// Zwraca ostatnia odpowiedz, uzyty model i wyciagniety solution (moze byc null).
 async function callGeminiWithRetry(
   body: unknown,
   apiKey: string,
-): Promise<{ res: Response; modelUsed: string }> {
+): Promise<{ res: Response; modelUsed: string; solution: string | null }> {
   const attempts: { model: string; url: string }[] = [
     { model: GEMINI_MODEL, url: GEMINI_API_URL },
     { model: GEMINI_MODEL, url: GEMINI_API_URL }, // retry tego samego po krotkim sleep
@@ -69,6 +84,7 @@ async function callGeminiWithRetry(
   ];
   let last: Response | null = null;
   let lastModel = GEMINI_MODEL;
+  let lastSolution: string | null = null;
   for (let i = 0; i < attempts.length; i++) {
     const { model, url } = attempts[i];
     if (i > 0) await new Promise((r) => setTimeout(r, i === 1 ? 800 : 200));
@@ -79,11 +95,27 @@ async function callGeminiWithRetry(
     });
     last = res;
     lastModel = model;
-    if (res.ok) return { res, modelUsed: model };
-    if (res.status < 500) return { res, modelUsed: model }; // 4xx nie ma sensu retrowac
-    console.warn(`[solve] Gemini ${res.status} on ${model} (attempt ${i + 1}/${attempts.length})`);
+    if (!res.ok) {
+      if (res.status < 500) return { res, modelUsed: model, solution: null }; // 4xx — nie retrowac
+      console.warn(`[solve] Gemini ${res.status} on ${model} (attempt ${i + 1}/${attempts.length})`);
+      continue;
+    }
+    // 200 OK — sprawdz czy faktycznie jest text. Klon zeby moc czytac body
+    // jeszcze raz w callerze gdyby trzeba bylo (np. error reporting).
+    const data = await res.clone().json().catch(() => null);
+    const text = extractText(data);
+    if (text) return { res, modelUsed: model, solution: text };
+    lastSolution = null;
+    const finishReason = data?.candidates?.[0]?.finishReason || "?";
+    const usage = data?.usageMetadata
+      ? `prompt=${data.usageMetadata.promptTokenCount} thoughts=${data.usageMetadata.thoughtsTokenCount ?? 0} candidates=${data.usageMetadata.candidatesTokenCount ?? 0}`
+      : "?";
+    console.warn(
+      `[solve] Gemini 200 but empty text on ${model} (attempt ${i + 1}/${attempts.length}) — finishReason=${finishReason} usage=${usage}`,
+    );
+    // Pusty wynik: kontynuuj petle (retry tego samego, potem fallback)
   }
-  return { res: last as Response, modelUsed: lastModel };
+  return { res: last as Response, modelUsed: lastModel, solution: lastSolution };
 }
 
 const SYSTEM_PROMPT = `Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii.
@@ -112,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Sprawdź licencję w bazie
-    const license = await prisma.license.findUnique({
+    let license = await prisma.license.findUnique({
       where: { code: licenseKey.trim().toLowerCase() },
     });
 
@@ -130,6 +162,7 @@ export async function POST(request: NextRequest) {
     // Jezeli licencja nie jest claimed - dopuszczamy "device-only" usage
     // (legacy mode: licencja przypisana do urzadzenia bez konta).
     const deviceIdHeader = request.headers.get("x-device-id");
+    let pairedDevice: { id: string; userId: string | null } | null = null;
     if (license.claimedByUserId) {
       if (!deviceIdHeader) {
         return NextResponse.json(
@@ -149,6 +182,14 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
+      pairedDevice = { id: device.id, userId: device.userId };
+    } else if (deviceIdHeader) {
+      // license-only mode — i tak chcemy znac device.userId zeby ew. zrobic
+      // auto-upgrade na nowsza licencje usera.
+      const device = await prisma.device.findUnique({
+        where: { deviceId: deviceIdHeader },
+      });
+      if (device) pairedDevice = { id: device.id, userId: device.userId };
     }
 
     // Pierwsza aktywacja licencji — ustaw timer wygasania
@@ -163,13 +204,43 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Sprawdź czy licencja nie wygasła (na podstawie durationDays od daty aktywacji)
-    if (license.usedAt) {
-      const activatedAt = new Date(license.usedAt);
+    // Czy licencja z headera wygasla?
+    const isExpired = (l: NonNullable<typeof license>) => {
+      if (!l.usedAt) return false;
+      const activatedAt = new Date(l.usedAt);
       const expiresAt = new Date(
-        activatedAt.getTime() + license.durationDays * 24 * 60 * 60 * 1000
+        activatedAt.getTime() + l.durationDays * 24 * 60 * 60 * 1000,
       );
-      if (new Date() > expiresAt) {
+      return new Date() > expiresAt;
+    };
+
+    if (isExpired(license)) {
+      // Auto-upgrade: jezeli device jest sparowane z userem, ktory ma INNA
+      // aktywna licencje (zaclaim'owana w panelu), uzyj jej zamiast tej z
+      // headera. Pokrywa przypadek: firmware ma na flashu stary kod, user
+      // zclaim'owal nowy w panelu — chcemy zeby kalkulator dzialal bez
+      // koniecznosci recznego przepisywania kodu.
+      if (pairedDevice?.userId) {
+        const candidates = await prisma.license.findMany({
+          where: { claimedByUserId: pairedDevice.userId },
+        });
+        const active = candidates.find((c) => !isExpired(c));
+        if (active) {
+          console.log(
+            `[solve] auto-upgrade license ${license.code} (expired) -> ${active.code} for device ${deviceIdHeader}`,
+          );
+          license = active;
+          // Zaktualizuj Device.licenseCode zeby panel admin widzial wlasciwa
+          await prisma.device
+            .update({
+              where: { id: pairedDevice.id },
+              data: { licenseCode: active.code },
+            })
+            .catch((e) => console.error("[solve] licenseCode upgrade fail:", e));
+        }
+      }
+      // Jezeli po fallbacku dalej expired → odrzuc
+      if (isExpired(license)) {
         return NextResponse.json(
           { ok: false, error: "Licencja wygasla" },
           { status: 403 }
@@ -256,12 +327,14 @@ export async function POST(request: NextRequest) {
         temperature: 0.2,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 1024,
+        // 8192 daje Pro 2.5 zapas na thinking + wynik. Wczesniej 1024 czesto
+        // konczylo sie MAX_TOKENS po samym thinking i pustym parts[].
+        maxOutputTokens: 8192,
       },
     };
 
-    // Wywolanie z retry na 5xx + automatyczny fallback na lzejszy model
-    const { res: geminiRes, modelUsed } = await callGeminiWithRetry(
+    // Wywolanie z retry na 5xx + fallback na flash + retry gdy pusty wynik
+    const { res: geminiRes, modelUsed, solution } = await callGeminiWithRetry(
       geminiBody,
       GEMINI_API_KEY!,
     );
@@ -285,13 +358,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const geminiData = await geminiRes.json();
-    const solution =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
     if (!solution) {
+      // Zaloguj pelny JSON ostatniej odpowiedzi do diagnozy (raz na zapytanie)
+      const finalData = await geminiRes.clone().json().catch(() => null);
+      const finishReason = finalData?.candidates?.[0]?.finishReason || "UNKNOWN";
+      const promptFeedback = finalData?.promptFeedback?.blockReason || null;
+      console.error(
+        `[solve] empty response (model=${modelUsed}) finishReason=${finishReason} blockReason=${promptFeedback || "-"} usage=${JSON.stringify(finalData?.usageMetadata || {})}`,
+      );
+      const hint = promptFeedback
+        ? `zablokowane (${promptFeedback})`
+        : finishReason === "MAX_TOKENS"
+          ? "przekroczono limit"
+          : finishReason === "SAFETY"
+            ? "blokada bezpieczenstwa"
+            : finishReason;
       return NextResponse.json(
-        { ok: false, error: "Brak odpowiedzi od AI" },
+        { ok: false, error: `Brak odpowiedzi AI: ${hint}`, model: modelUsed },
         { status: 502 }
       );
     }
