@@ -177,11 +177,12 @@ inline bool camBegin() {
         s->set_wpc(s,           1);   // white pixel correction
         s->set_raw_gma(s,       1);   // gamma correction
         s->set_lenc(s,          1);   // lens correction (winietowanie)
-        // PCB v4: probujemy rozne kombinacje flips. v1.3.9: tylko vflip=1.
-        // Jezeli to mirror face -> trzeba dodac hmirror=1. Jezeli 180° -> obie 0.
-        s->set_hmirror(s,       0);
+        // Sensor zamontowany w obudowie do gory nogami → wymaga obrotu 180°
+        // czyli hmirror=1 + vflip=1 (mirror w pionie + odbicie poziome razem
+        // = obrot 180° w stosunku do natywnej orientacji sensora).
+        s->set_hmirror(s,       1);
         s->set_vflip(s,         1);
-        Serial.println("[CAM] flips: hmirror=0 vflip=1 (v1.3.9 test)");
+        Serial.println("[CAM] flips: hmirror=1 vflip=1 (rot 180°)");
         s->set_dcw(s,           1);   // downsize crop window
         s->set_colorbar(s,      0);   // 1 = test pattern (tylko debug)
     }

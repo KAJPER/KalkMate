@@ -20,6 +20,7 @@
   inline uint16_t batteryReadMillivolts() { return 0; }
   inline uint8_t  batteryReadPercent()    { return 100; }   // bez pomiaru => "OK"
   inline bool     batteryIsCritical()     { return false; }
+  inline bool     batteryIsLow()          { return false; }
   inline bool     batteryIsAvailable()    { return false; }
 #else
 
