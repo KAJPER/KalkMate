@@ -2,9 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
+
+// Ujednolicony komunikat dla wszystkich "nieudanych" przypadkow zeby nie
+// dawac sygnalu czy kod istnieje czy juz uzyty (anty-enumeracja).
+const INVALID_CODE_MSG = "Nieprawidlowy lub juz wykorzystany kod licencji";
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit per IP: 5 prob/min — chroni przed brute-force genratora kodow
+    const ip = clientIp(request);
+    const rl = rateLimit(`redeem:${ip}`, 5, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Za duzo prob. Sprobuj za ${Math.ceil(rl.resetMs / 1000)}s.` },
+        { status: 429 }
+      );
+    }
+
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {
@@ -44,17 +59,12 @@ export async function POST(request: NextRequest) {
     });
 
     if (!license) {
-      return NextResponse.json(
-        { error: "Nieprawidłowy kod licencji" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: INVALID_CODE_MSG }, { status: 400 });
     }
 
     if (license.isUsed) {
-      return NextResponse.json(
-        { error: "Ten kod licencji został już wykorzystany" },
-        { status: 400 }
-      );
+      // Ten sam komunikat co dla "nieprawidlowy" — anty-enumeracja
+      return NextResponse.json({ error: INVALID_CODE_MSG }, { status: 400 });
     }
 
     // Get or create subscription

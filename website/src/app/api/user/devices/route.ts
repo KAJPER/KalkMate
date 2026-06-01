@@ -81,11 +81,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Walidacja unlockCode (raw SQL bo schema nie ma tej kolumny)
-  const rows = await prisma.$queryRaw<{ unlockCode: string | null }[]>`
-    SELECT "unlockCode" FROM "Device" WHERE "deviceId" = ${deviceId} LIMIT 1
+  // Anty brute-force: pobierz unlockCode + failedPairs + lockedUntil (raw SQL,
+  // kolumn nie ma w Prisma schemie).
+  const rows = await prisma.$queryRaw<
+    { unlockCode: string | null; failedPairs: number | null; lockedUntil: string | null }[]
+  >`
+    SELECT "unlockCode", "failedPairs", "lockedUntil"
+    FROM "Device" WHERE "deviceId" = ${deviceId} LIMIT 1
   `;
-  const storedUnlock = rows?.[0]?.unlockCode || null;
+  const row = rows?.[0];
+  const storedUnlock = row?.unlockCode || null;
+
+  // Czy device jest zablokowany po 5 nieudanych probach?
+  if (row?.lockedUntil) {
+    const lockedUntilTs = new Date(row.lockedUntil).getTime();
+    if (lockedUntilTs > Date.now()) {
+      const minsLeft = Math.ceil((lockedUntilTs - Date.now()) / 60_000);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Za duzo nieudanych prob. Sprobuj ponownie za ${minsLeft} min.`,
+        },
+        { status: 429 }
+      );
+    }
+  }
+
   if (!storedUnlock) {
     return NextResponse.json(
       {
@@ -97,8 +118,31 @@ export async function POST(req: NextRequest) {
     );
   }
   if (storedUnlock !== unlockCode) {
+    // Inkrementuj failedPairs, przy 5 zablokuj na 15 minut
+    const newFails = (row?.failedPairs || 0) + 1;
+    const LOCK_THRESHOLD = 5;
+    const LOCK_DURATION_MS = 15 * 60 * 1000;
+    if (newFails >= LOCK_THRESHOLD) {
+      const lockedUntil = new Date(Date.now() + LOCK_DURATION_MS).toISOString();
+      await prisma.$executeRaw`
+        UPDATE "Device"
+        SET "failedPairs" = ${newFails}, "lockedUntil" = ${lockedUntil}
+        WHERE "deviceId" = ${deviceId}
+      `;
+      console.warn(`[devices/pair] lockout deviceId=${deviceId} after ${newFails} fails`);
+      return NextResponse.json(
+        { ok: false, error: "Za duzo nieudanych prob. Konto urzadzenia zablokowane na 15 minut." },
+        { status: 429 }
+      );
+    }
+    await prisma.$executeRaw`
+      UPDATE "Device" SET "failedPairs" = ${newFails} WHERE "deviceId" = ${deviceId}
+    `;
     return NextResponse.json(
-      { ok: false, error: "Nieprawidlowy kod odblokowania" },
+      {
+        ok: false,
+        error: `Nieprawidlowy kod odblokowania (proba ${newFails}/${LOCK_THRESHOLD})`,
+      },
       { status: 403 }
     );
   }
@@ -110,6 +154,10 @@ export async function POST(req: NextRequest) {
       { status: 409 }
     );
   }
+  // Sukces — wyczysc licznik failedPairs i lockedUntil
+  await prisma.$executeRaw`
+    UPDATE "Device" SET "failedPairs" = 0, "lockedUntil" = NULL WHERE "id" = ${existing.id}
+  `;
   const updated = await prisma.device.update({
     where: { id: existing.id },
     data: { userId: user.id },

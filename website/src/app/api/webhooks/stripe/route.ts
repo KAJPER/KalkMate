@@ -29,6 +29,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  // Idempotency: Stripe potrafi powtarzac eventy (retry przy 5xx/timeout).
+  // Zapis do ProcessedStripeEvent z UNIQUE id — jezeli juz przetwarzane, skip.
+  // Tabela utworzona raw SQL bo nie ma jej w Prisma schemie.
+  try {
+    const inserted = await prisma.$executeRaw`
+      INSERT OR IGNORE INTO ProcessedStripeEvent (id, type) VALUES (${event.id}, ${event.type})
+    `;
+    if (inserted === 0) {
+      console.log(`[WEBHOOK] Duplicate event ${event.id} (${event.type}) — skip`);
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+  } catch (e) {
+    // Jezeli idempotency tabela padla — log ale nie blokuj webhooka
+    // (gorzej miec duplikat niz zgubic event)
+    console.error("[WEBHOOK] idempotency check failed:", e);
+  }
+
   // Handle different event types
   console.log(`[WEBHOOK] Processing event: ${event.type}`);
   switch (event.type) {

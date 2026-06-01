@@ -26,6 +26,11 @@ const navItems = [
     icon: "M12 2a4 4 0 014 4v12a4 4 0 01-8 0V6a4 4 0 014-4zm0 14a1 1 0 100 2 1 1 0 000-2z"
   },
   {
+    href: "/admin/captures",
+    label: "Galeria zdjęć",
+    icon: "M3 7a2 2 0 012-2h3l2-2h4l2 2h3a2 2 0 012 2v11a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm9 3a4 4 0 100 8 4 4 0 000-8z"
+  },
+  {
     href: "/admin/users",
     label: "Użytkownicy",
     icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm14 14v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"

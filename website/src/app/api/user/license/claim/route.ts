@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
+
+// Ujednolicony komunikat — anty-enumeracja (czy kod istnieje czy nie).
+const INVALID_CODE_MSG = "Nieprawidlowy lub niedostepny kod licencji";
 
 // POST /api/user/license/claim
 // Body: { code: string }
@@ -11,6 +15,16 @@ import { authOptions } from "@/lib/auth";
 // (po claimcie) beda widoczne w panelu.
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit per IP: 5 prob/min — chroni przed brute-force kodow
+    const ip = clientIp(request);
+    const rl = rateLimit(`claim:${ip}`, 5, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { ok: false, error: `Za duzo prob. Sprobuj za ${Math.ceil(rl.resetMs / 1000)}s.` },
+        { status: 429 }
+      );
+    }
+
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -39,18 +53,13 @@ export async function POST(request: NextRequest) {
 
     const license = await prisma.license.findUnique({ where: { code } });
     if (!license) {
-      return NextResponse.json(
-        { ok: false, error: "Nieprawidlowy kod licencji" },
-        { status: 404 }
-      );
+      // Anty-enumeracja: ten sam komunikat jak dla "zaclaimowana przez kogos"
+      return NextResponse.json({ ok: false, error: INVALID_CODE_MSG }, { status: 400 });
     }
 
-    // Jesli juz zaclaimowana przez kogos innego — odrzuc
+    // Jesli juz zaclaimowana przez kogos innego — ten sam komunikat
     if (license.claimedByUserId && license.claimedByUserId !== user.id) {
-      return NextResponse.json(
-        { ok: false, error: "Licencja juz przypisana do innego konta" },
-        { status: 409 }
-      );
+      return NextResponse.json({ ok: false, error: INVALID_CODE_MSG }, { status: 400 });
     }
 
     // Sprawdz czy ten user nie ma juz zaclaimowanej innej licencji

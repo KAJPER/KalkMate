@@ -285,6 +285,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Limity rozmiarow — anty-DoS (atakujacy z API key moglby spamowac OOM).
+    // OV2640 UXGA jpeg @ Q12 = ~150-200kB raw → ~270kB base64. 8MB base64 ≈ 6MB raw
+    // (z duzym zapasem). Text → 50kB to dlugie zadania matematyczne.
+    const MAX_IMAGE_B64 = 8_000_000;
+    const MAX_TEXT_LEN = 50_000;
+    if (mode === "image" && typeof image === "string" && image.length > MAX_IMAGE_B64) {
+      return NextResponse.json(
+        { ok: false, error: "Obraz za duzy (max 8MB base64)" },
+        { status: 413 }
+      );
+    }
+    if (mode === "text" && typeof text === "string" && text.length > MAX_TEXT_LEN) {
+      return NextResponse.json(
+        { ok: false, error: "Tekst za dlugi (max 50kB)" },
+        { status: 413 }
+      );
+    }
+
     // Zbuduj wiadomość dla Gemini
     const userParts: any[] = [];
 

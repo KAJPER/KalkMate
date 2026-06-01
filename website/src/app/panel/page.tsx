@@ -54,6 +54,11 @@ export default function PanelPage() {
   const [unclaiming, setUnclaiming] = useState(false);
   const [savingPromptMode, setSavingPromptMode] = useState(false);
 
+  // Captures (galeria zdjec)
+  const [captures, setCaptures] = useState<Array<{ filename: string; deviceId: string; timestamp: string; sizeKB: number }>>([]);
+  const [capturesLoading, setCapturesLoading] = useState(false);
+  const [openedCapture, setOpenedCapture] = useState<string | null>(null);
+
   const setPromptMode = async (mode: "matura" | "raw") => {
     const deviceId = calcInfo?.device?.deviceId;
     if (!deviceId) return;
@@ -142,14 +147,18 @@ export default function PanelPage() {
           const j1 = await r1.json();
           setCalcInfo(j1);
           if (j1.claimed) {
-            const [r2, r3, r4] = await Promise.all([
+            setCapturesLoading(true);
+            const [r2, r3, r4, r5] = await Promise.all([
               fetch("/api/user/conversations?limit=50", { cache: "no-store" }),
               fetch("/api/user/notes", { cache: "no-store" }),
               fetch("/api/user/tests", { cache: "no-store" }),
+              fetch("/api/user/captures", { cache: "no-store" }),
             ]);
             setCalcConvs((await r2.json()).items || []);
             setCalcNotes((await r3.json()).notes || []);
             setCalcTests((await r4.json()).tests || []);
+            setCaptures((await r5.json()).items || []);
+            setCapturesLoading(false);
           }
         } finally {
           setCalcLoading(false);
@@ -1588,6 +1597,76 @@ export default function PanelPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Galeria zdjec z kamery */}
+                  <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)]">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
+                      <span className="km-mono-eyebrow text-[#D8FF3D]">/ Galeria zdjęć</span>
+                      <span className="km-mono-eyebrow text-[#F2EDE3]/45">
+                        {String(captures.length).padStart(2, "0")} ZDJĘĆ
+                      </span>
+                    </div>
+                    {capturesLoading ? (
+                      <div className="px-6 py-10 text-center km-mono-eyebrow text-[#F2EDE3]/45">
+                        Ładowanie…
+                      </div>
+                    ) : captures.length === 0 ? (
+                      <div className="px-6 py-10 text-center km-mono-eyebrow text-[#F2EDE3]/45">
+                        Brak zdjęć. Zrób kamerą zdjęcie zadania w kalkulatorze.
+                      </div>
+                    ) : (
+                      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {captures.map((c) => (
+                          <button
+                            key={c.filename}
+                            onClick={() => setOpenedCapture(c.filename)}
+                            className="group relative aspect-[4/3] bg-[#1A1A1A] overflow-hidden border border-[rgba(242,237,227,0.10)] hover:border-[#D8FF3D] transition-colors"
+                            title={`${new Date(c.timestamp).toLocaleString("pl-PL")} · ${c.sizeKB} kB`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/user/captures/${encodeURIComponent(c.filename)}`}
+                              alt={c.filename}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5">
+                              <div className="km-mono-eyebrow text-[10px] text-[#F2EDE3]/80 truncate">
+                                {new Date(c.timestamp).toLocaleString("pl-PL", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Modal — pelnoekranowy podglad zdjecia */}
+                  {openedCapture && (
+                    <div
+                      onClick={() => setOpenedCapture(null)}
+                      className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/user/captures/${encodeURIComponent(openedCapture)}`}
+                        alt={openedCapture}
+                        className="max-w-full max-h-full object-contain"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <button
+                        onClick={() => setOpenedCapture(null)}
+                        className="absolute top-4 right-4 km-mono-eyebrow text-[#F2EDE3]/80 hover:text-[#D8FF3D] border border-[rgba(242,237,227,0.20)] px-3 py-1.5"
+                      >
+                        Zamknij ×
+                      </button>
+                    </div>
+                  )}
 
                   {/* Historia rozmów */}
                   <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)]">
