@@ -1,9 +1,9 @@
 # KalkMate — Opis oprogramowania i protokołów komunikacyjnych
 
-**Dokument:** Specyfikacja techniczna firmware oraz protokołów łączności
-**Produkt:** KalkMate v1.0 — kalkulator edukacyjny z funkcją AI
-**Wersja firmware:** 1.0.0 (PCB v4, ESP32-S3-WROOM-1-N16R8)
-**Data:** 2026-05-26
+**Dokument:** Specyfikacja techniczna oprogramowania układowego (firmware) oraz protokołów łączności  
+**Produkt:** KalkMate v1.0 — kalkulator edukacyjny z asystentem AI  
+**Wersja firmware:** 1.0.0 (PCB v4, ESP32-S3-WROOM-1-N16R8)  
+**Data:** 2026-06-12  
 
 ---
 
@@ -12,343 +12,129 @@
 ### 1.1 Warstwa sprzętowa
 
 Urządzenie zbudowane jest wokół mikrokontrolera **Espressif ESP32-S3-WROOM-1-N16R8** zawierającego:
-
 - Dwurdzeniowy procesor Xtensa LX7 (240 MHz)
 - 16 MB pamięci flash (Quad-SPI)
 - 8 MB pamięci PSRAM (Octal-SPI)
 - Zintegrowany moduł WiFi IEEE 802.11 b/g/n (2,4 GHz)
-- Bluetooth Low Energy 5.0 *(nieużywany w obecnej wersji firmware)*
+- Bluetooth Low Energy 5.0 *(nieużywany w obecnej wersji oprogramowania)*
 - Natywny kontroler USB OTG (USB-CDC do programowania i serial monitor)
 
 Peryferia podłączone do MCU:
 - Wyświetlacz OLED **SSD1322** 256×64 monochromatyczny — interfejs 4-wire SPI
 - Ekspander GPIO **MCP23017** — interfejs I²C (adres `0x20`) — obsługa klawiatury matrycowej 27 klawiszy oraz sterowanie zasilaniem peryferiów
 - Moduł aparatu **OmniVision OV2640** (2 Mpx) — interfejs równoległy 8-bit + SCCB (I²C)
-- Przetwornica step-up **MT3608** generująca 14,5 V dla wysokonapięciowej szyny zasilania OLED
+- Przetwornica step-up **MT3608** generująca 14,5 V dla szyny zasilania OLED
 - Bateria LiPo 3,7 V 2000 mAh z układem ładowania MCP73831 + zabezpieczeniem DW01A/FS8205A
 
-### 1.2 Warstwa firmware
+### 1.2 Warstwa oprogramowania układowego (Firmware)
 
-Firmware zbudowany w środowisku **PlatformIO** z użyciem **Arduino ESP32 Core** (frameworku opartego o ESP-IDF i FreeRTOS). Architektura modułowa, header-only — każdy moduł funkcjonalny w osobnym pliku `.h`:
+Firmware został zbudowany w środowisku **PlatformIO** z użyciem **Arduino ESP32 Core** (framework oparty o ESP-IDF i FreeRTOS). Kod ma strukturę modułową i składa się z następujących plików:
 
 | Moduł | Plik | Funkcjonalność |
 |---|---|---|
-| Punkt wejścia | `main.cpp` | Inicjalizacja, menu główne, dyspozycja UI |
-| Obsługa klawiatury | `input.h` | Skanowanie matrycy 27 klawiszy przez MCP23017, debouncing |
-| Wyświetlacz | (U8g2) | Sterowanie OLED SSD1322 przez SPI |
-| Kalkulator | `calculator.h` | Tryb kalkulatora 4 działań, unlock-code do trybu AI |
-| AI | `solve_screen.h` | Klawiatura ekranowa, wysyłka zapytań HTTPS, wyświetlanie odpowiedzi |
-| Notatki | `notes.h` | Pobieranie i wyświetlanie notatek z serwera, magazyn SPIFFS |
-| Sprawdziany | `tests.h` | Analogicznie do notatek, plus konwersja LaTeX → ASCII |
-| Aktualizacje | `ota_update.h` | Pobieranie i instalacja firmware przez HTTPS |
-| WiFi | `wifi_settings.h`, `wifi_persist.h` | Konfiguracja sieci, zapis poświadczeń w NVS |
-| Konto użytkownika | `device_account.h` | Komunikacja z serwerem o sparowaniu urządzenia |
-| Panic | `panic.h` | Awaryjny powrót do trybu kalkulatora |
-| Bezpieczeństwo zasilania | `power.h` | Auto-sleep OLED, oszczędzanie baterii |
-| Historia | `history.h` | Cache wcześniejszych zapytań AI w NVS |
+| **Punkt wejścia** | `main.cpp` | Inicjalizacja FreeRTOS, pętla główna, obsługa menu i dyspozycja UI |
+| **Klawiatura** | `input.h` | Skanowanie matrycy 27 klawiszy przez MCP23017, eliminowanie drgań styków (debouncing) |
+| **Bateria** | `battery.h` | Odczyt napięcia akumulatora przez ADC, obliczanie procentu naładowania i stanu ładowania |
+| **Aparat** | `camera.h` | Inicjalizacja sensora OV2640, obsługa sygnałów PWDN/RESET i przechwytywanie klatek JPEG |
+| **Konto urządzenia** | `device_account.h` | Rejestracja urządzenia na serwerze i synchronizacja statusu licencji oraz sparowania z kontem |
+| **Notatki** | `notes.h` | Pobieranie i wyświetlanie notatek użytkownika z pamięci SPIFFS (notatki synchronizowane z serwerem) |
+| **Sprawdziany** | `tests.h` | Odczyt i wyświetlanie sprawdzianów użytkownika, konwersja podstawowych elementów LaTeX na ASCII |
+| **Aktualizacje** | `ota_update.h` | Bezpieczna aktualizacja oprogramowania przez HTTPS z weryfikacją podpisu cyfrowego |
+| **Zarządzanie energią** | `power.h` | Przejście mikrokontrolera w tryb Light Sleep, wyłączanie OLED, aparatu oraz radia WiFi |
+| **Tryb kalkulatora** | `calculator.h` | Tradycyjny kalkulator biurowy, blokada kodu dostępu do funkcji AI |
+| **Rozwiązywanie AI** | `solve_screen.h` | Klawiatura ekranowa, przechwytywanie obrazu, wysyłanie zapytań HTTPS i renderowanie odpowiedzi AI |
+| **Historia** | `history.h` | Magazyn kołowy ostatnich 5 zapytań i odpowiedzi AI, zapisywany lokalnie w NVS |
+| **Ustawienia** | `settings_screen.h` | Menu konfiguracji jasności OLED, języka, trybu rozwiązywania, haseł oraz funkcji diagnostycznych |
+| **WiFi** | `wifi_settings.h` | Interfejs wyboru sieci WiFi, wprowadzania haseł i łączenia |
+| **Trwałość WiFi** | `wifi_persist.h` | Odczyt/zapis poświadczeń sieciowych i klucza licencyjnego w pamięci nieulotnej NVS |
+| **Obfuskacja kluczy** | `key_obfuscate.h` | Ochrona przed statyczną analizą pliku binarnego (zabezpieczenie klucza API przed strings) |
+| **Panic Key** | `panic.h` | Natychmiastowe przerwanie pracy bota AI i powrót do tradycyjnego kalkulatora |
+| **Ekrany UI** | `about_screen.h`, `info_screen.h`, `splash_screen.h`, `screen_test.h` | Ekrany informacyjne, powitalne, testowe i diagnostyczne |
 
-Całkowity rozmiar firmware: **~1 MB** (kompresji nie stosuje się).
+### 1.3 Struktura magazynu danych (Flash & NVS)
 
-### 1.3 Magazyn danych
-
-| Pamięć | Rozmiar | Zawartość |
-|---|---|---|
-| Flash (program) | 6,25 MB × 2 (OTA A/B) | Firmware (aktywny + zapasowy do rollbacku) |
-| Flash (NVS) | 24 KB | Konfiguracja: SSID/hasło WiFi, kod licencji, ustawienia użytkownika, historia zapytań, mapowanie klawiatury |
-| Flash (SPIFFS) | ~2 MB | Notatki użytkownika, sprawdziany (LaTeX/markdown) |
-| RAM (SRAM) | 320 KB | Stos i sterta wykonawcza |
-| PSRAM | 8 MB | Bufory ramki JPEG z aparatu, parsing dużych odpowiedzi JSON |
-
-Wszystkie dane przechowywane lokalnie są zapisane w pamięci flash i przetrwują wyłączenie zasilania. Brak nielotnego magazynu dla danych szczególnie wrażliwych (np. nie przechowujemy haseł użytkowników).
-
----
-
-## 2. Łączność WiFi (IEEE 802.11)
-
-### 2.1 Standardy
-
-Urządzenie obsługuje:
-- **IEEE 802.11 b/g/n** (2,4 GHz, pasmo ISM 2400–2483,5 MHz)
-- Kanały 1–13 (Europa, CEPT)
-- Sieci 5 GHz **nie są obsługiwane** (limitacja modułu radia ESP32-S3)
-- Tryb pracy: **Station (STA)** — kalkulator jako klient WiFi
-- Tryb Access Point nie jest aktywowany w produkcji
-
-### 2.2 Bezpieczeństwo
-
-Obsługiwane mechanizmy uwierzytelniania i szyfrowania:
-
-| Standard | Wsparcie | Komentarz |
-|---|---|---|
-| **WPA2-PSK (CCMP/AES)** | ✓ Pełne | Główny tryb używany w domach i szkołach |
-| WPA-PSK (TKIP) | ✓ Tylko legacy | Zalecane przejście na WPA2 |
-| WEP | ✓ Tylko legacy | Niezalecane — niezgodny ze współczesnymi standardami bezpieczeństwa |
-| WPA3-SAE | ⚠ Częściowe | Wymaga aktualizacji frameworku |
-| Sieci otwarte | ✓ | Dopuszczalne, np. hotspoty |
-
-Hasło WiFi przechowywane lokalnie w pamięci NVS (partycja `kalkmate`, klucz `wifi_pass`). Pamięć NVS chroniona przez sumę kontrolną CRC32 — modyfikacja zawartości flash bez znajomości algorytmu jest wykrywana. Hasło nie jest szyfrowane sprzętowo (brak flash encryption w obecnej wersji), zakładamy fizyczne bezpieczeństwo urządzenia.
-
-### 2.3 Moc nadawcza
-
-Konfiguracja firmware ustawia maksymalną moc nadawczą TX na **11 dBm** (~12,5 mW EIRP):
-```cpp
-WiFi.setTxPower(WIFI_POWER_11dBm);
-```
-
-Wartość znajduje się znacząco poniżej limitów regulacyjnych CEPT/UE (100 mW = 20 dBm) i pozwala uniknąć spadków napięcia baterii podczas transmisji.
-
-### 2.4 Auto-łączenie
-
-Po pomyślnym podłączeniu się do sieci WiFi (akcja użytkownika w menu konfiguracji), poświadczenia są zapisywane w NVS i przy kolejnych włączeniach urządzenia kalkulator próbuje automatycznie połączyć się z ostatnio użytą siecią. W przypadku niedostępności sieci użytkownik może uruchomić ponowne skanowanie (Menu → Ustawienia → WiFi).
+Pamięć Flash została podzielona na partycje obsługujące:
+1. **Dwie partycje fabryczne programu (Dual Boot OTA)**: `app0` oraz `app1` (po 6,25 MB każda) pozwalające na bezawaryjną instalację aktualizacji z opcją automatycznego powrotu (rollback) w przypadku błędu rozruchu.
+2. **Pamięć nieulotną NVS (Non-Volatile Storage)**:
+   - Przestrzeń `"kalkmate"`: Przechowuje dane konfiguracji WiFi (SSID, hasło), kod licencyjny, kod odblokowujący funkcje AI (`ai_code`) oraz zmapowany klawisz bezpieczeństwa (`panic_key`).
+   - Przestrzeń `"kalkhist"`: Zawiera magazyn kołowy dla 5 ostatnich sesji AI (klucze `q0`-`q4` dla pytań, `a0`-`a4` dla odpowiedzi oraz timestampy `t0`-`t4`).
+   - Przestrzeń `"kalkmap"`: Zapisuje niestandardowe mapowania klawiszy klawiatury użytkownika.
+3. **System plików SPIFFS**: Partycja o rozmiarze ok. 2 MB przechowująca lokalny bufor notatek użytkownika (`/notes.json`) oraz sprawdzianów (`/tests.json`).
 
 ---
 
-## 3. Łączność serwerowa (HTTPS)
+## 2. Łączność bezprzewodowa WiFi
 
-Wszystkie zapytania do serwera centralnego (**kalkmate.pl**) odbywają się wyłącznie po HTTPS — ruch w warstwie aplikacyjnej jest szyfrowany.
-
-### 3.1 Standardy kryptograficzne
-
-| Element | Standard |
-|---|---|
-| Protokół transportu | **TLS 1.2** (minimum), TLS 1.3 (jeśli serwer wspiera) |
-| Wymiana klucza | ECDHE (Elliptic Curve Diffie-Hellman, krzywe P-256/P-384) |
-| Algorytm szyfrowania | AES-256-GCM, ChaCha20-Poly1305 |
-| Hash | SHA-256 / SHA-384 |
-| Certyfikat serwera | ECDSA, **Let's Encrypt** (ISRG Root X1) |
-| Walidacja | `WiFiClientSecure.setInsecure()` — *uwaga, patrz pkt 3.7* |
-
-### 3.2 Endpoint'y API
-
-Wszystkie endpoint'y dostępne są pod prefiksem `https://kalkmate.pl/api/`:
-
-| Endpoint | Metoda | Cel |
-|---|---|---|
-| `/device/register` | POST | Rejestracja urządzenia (deviceId + unlockCode) |
-| `/device/account-status` | GET | Sprawdzenie sparowania z kontem użytkownika |
-| `/device/solve` | POST | Wysłanie pytania do AI (tekst lub obraz JPEG) |
-| `/device/notes` | GET | Pobranie notatek przypisanych do konta |
-| `/device/tests` | GET | Pobranie sprawdzianów |
-| `/device/conversations` | GET | Historia rozwiązań AI |
-| `/firmware/latest` | GET | Sprawdzenie najnowszej wersji firmware (do OTA) |
-| `/firmware/v{wersja}.bin` | GET | Pobranie binariów firmware do aktualizacji |
-
-### 3.3 Uwierzytelnianie
-
-Każde zapytanie HTTP zawiera nagłówki:
-
-```
-x-api-key: <statyczny klucz API kalkulatora>
-x-device-id: <12-znakowy MAC adres modułu WiFi, hex bez separatorów>
-x-fw-version: <wersja firmware, np. "1.0.0">
-```
-
-Pole `x-api-key` jest globalnym sekretem aplikacji, identyfikującym żądania pochodzące z prawdziwego urządzenia KalkMate (vs. ruch bot/spam). Konkretne urządzenie identyfikowane jest przez `x-device-id` — odpytanie bazy `Device.userId` zwraca przypisanego użytkownika.
-
-Klucz API w obecnej wersji jest **wspólny dla wszystkich urządzeń** i jest umieszczony statycznie w firmware. Stanowi to teoretyczny wektor ataku w przypadku reverse-engineeringu binariów (chip ESP32-S3 wspiera flash encryption — opcjonalnie do wdrożenia w kolejnych iteracjach produktu).
-
-### 3.4 Format danych
-
-| Strona | Format |
-|---|---|
-| Zapytania (body POST) | JSON (`application/json; charset=utf-8`) |
-| Odpowiedzi | JSON |
-| Obrazy z aparatu | `multipart/form-data` z polem `image` typu JPEG |
-
-Parsowanie JSON na ESP32 odbywa się własnym parserem (nie ArduinoJson) — zoptymalizowanym pod kątem niskiego zużycia pamięci. Duże odpowiedzi (>50 KB) są strumieniowane z TCP socketu bezpośrednio do bufora w PSRAM, parsowane "w locie" i zapisywane do SPIFFS, bez bufora pośredniego w stosie SRAM.
-
-### 3.5 Sesja AI (przykładowy przebieg)
-
-1. Użytkownik wpisuje treść zadania na klawiaturze ekranowej lub robi zdjęcie aparatem
-2. Firmware łączy się z `kalkmate.pl/api/device/solve` przez HTTPS (`POST`)
-3. Body zawiera: `{deviceId, mode: "text" | "image", question | image_base64, subject?}`
-4. Serwer pośredniczy przez **Cloudflare Worker** (kalkmate.gordulek.workers.dev) do **Google Gemini API** — Worker służy do ominięcia geo-blokady (serwer fizyczny w OVH Italy)
-5. Odpowiedź (~5-30 sekund) zwracana w polu `answer` (treść tekstowa do 16 KB)
-6. Kalkulator zapisuje pytanie+odpowiedź w lokalnej historii (NVS) i wyświetla wynik
-
-Limit czasu pojedynczego zapytania: **45 sekund** (`HTTPClient.setTimeout(45000)`).
-
-### 3.6 Aktualizacje firmware (OTA)
-
-Mechanizm aktualizacji "over-the-air" wykorzystuje partycję dual-app A/B:
-
-1. Użytkownik wybiera **Ustawienia → Aktualizacje → OK**
-2. Kalkulator pobiera `GET /firmware/latest` — odpowiedź zawiera najnowszą dostępną wersję i URL pliku binarnego
-3. Jeśli wersja jest nowsza niż lokalna — kalkulator pyta użytkownika o potwierdzenie
-4. Pobiera plik (`firmware.bin`, ~1 MB) przez HTTPS i zapisuje do nieaktywnej partycji (np. `app1` jeśli aktualnie uruchomiony z `app0`)
-5. Po pomyślnej weryfikacji checksumy oznacza nową partycję jako rozruchową i wywołuje restart
-6. W przypadku awarii nowego firmware'u (np. trzykrotny boot loop) bootloader ESP32 automatycznie wraca do poprzedniej, działającej partycji
-
-### 3.7 Walidacja certyfikatów
-
-W obecnej wersji firmware używany jest `WiFiClientSecure.setInsecure()` — **walidacja łańcucha certyfikatów X.509 jest wyłączona**. To pragmatyczny kompromis na rzecz:
-- Mniejszego rozmiaru firmware (eliminacja pełnego store CA — ~50 KB)
-- Eliminacji konieczności aktualizacji bundles CA wraz z firmware
-- Możliwości pracy w sieciach z corporate proxy
-
-Konsekwencje:
-- Ruch pozostaje **szyfrowany** (kanał TLS jest negocjowany prawidłowo, klucze sesyjne ustanawiane)
-- Aplikacja jest podatna na atak **MITM** (Man-in-the-Middle) w przypadku pełnego kontroli infrastruktury sieci przez napastnika (np. fałszywy access point + DNS spoofing)
-- Mitygacja: dane przesyłane do AI nie zawierają informacji wrażliwych (treść zadania matematycznego, nie dane osobowe / finansowe)
-
-Pełna walidacja certyfikatu jest rozważana w przyszłych wersjach firmware z mechanizmem auto-aktualizacji listy CA.
+- **Standard**: Urządzenie działa zgodnie z IEEE 802.11 b/g/n w pasmie 2,4 GHz (kanały 1–13 dla Europy). Sieci 5 GHz nie są obsługiwane sprzętowo.
+- **Tryb pracy**: Moduł działa wyłącznie jako stacja kliencka (Station - STA). Tryb punktu dostępowego (Access Point - AP) nie jest uruchamiany w kodzie produkcyjnym.
+- **Zabezpieczenia sieciowe**: Pełne wsparcie dla WPA2-PSK (szyfrowanie AES/CCMP). Obsługa WPA3-SAE oraz sieci otwartych. Hasła są zapisywane w chronionym sumą kontrolną rejestrze NVS mikrokontrolera.
+- **Ograniczenie mocy TX**: Firmware programowo limituje maksymalną moc nadawczą radia do **11 dBm** (~12,5 mW EIRP) przy pomocy funkcji `WiFi.setTxPower(WIFI_POWER_11dBm)`. Minimalizuje to chwilowe spadki napięcia na baterii i utrzymuje emisję znacząco poniżej europejskiego limitu 20 dBm (100 mW).
 
 ---
 
-## 4. Komunikacja peryferiów wewnątrz urządzenia
+## 3. Łączność serwerowa i API (HTTPS)
 
-### 4.1 SPI (Wyświetlacz OLED)
+Wszystkie połączenia sieciowe z serwerem centralnym `kalkmate.pl` realizowane są szyfrowanym protokołem HTTPS (TLS 1.2 lub TLS 1.3).
 
-| Parametr | Wartość |
-|---|---|
-| Protokół | 4-wire SPI (SCK, MOSI, CS, DC) |
-| Tryb | Mode 0 (CPOL=0, CPHA=0) |
-| Częstotliwość | 8 MHz |
-| Sterownik | SSD1322 (256×64 monochromatyczny OLED) |
-| Biblioteka | U8g2 ≥ 2.35 |
+### 3.1 Endpointy API serwera (Next.js)
 
-### 4.2 I²C (Ekspander GPIO + Aparat)
+Dedykowany serwer Next.js (zintegrowany z SQLite przez Prisma ORM) udostępnia następujące endpointy pod adresem bazowym `https://kalkmate.pl/api/device/`:
 
-| Parametr | Wartość |
-|---|---|
-| Protokół | I²C (Inter-Integrated Circuit) |
-| Częstotliwość | 400 kHz (Fast Mode) |
-| Adresy | MCP23017: `0x20` (7-bit), OV2640 SCCB: `0x30` |
-| Pull-up | 10 kΩ na liniach SDA/SCL |
+1. **`POST /register`**:
+   Służy do sparowania urządzenia. Kalkulator wysyła unikalny `deviceId` (MAC adres) oraz dynamicznie generowany `unlockCode`. Dane te są rejestrowane w bazie danych w tabeli `Device`.
+2. **`GET /account-status`**:
+   Urządzenie odpytuje serwer o status przypisanego konta. Zwraca informacje o adresie e-mail właściciela, stanie licencji oraz liczbie pozostałych dni. Endpoint ten automatycznie wysyła nowo przypisany kod licencyjny na urządzenie, synchronizując go z pamięcią NVS kalkulatora.
+3. **`POST /solve`**:
+   Przesyłanie zadania do rozwiązania.
+   - Obsługuje tryb tekstowy (`text`) oraz obrazkowy (`image`) – przesyłany jako Base64 JPEG (maksymalny rozmiar obrazu to 8 MB, tekstu 50 KB w celu zabezpieczenia serwera przed atakami typu DoS).
+   - Serwer zapisuje przesyłane zdjęcia na dysku poza folderem publicznym w celach diagnostycznych, po czym wysyła zapytanie do Google Gemini API (z automatycznym przełączeniem na model `gemini-2.5-flash` w przypadku przeciążenia głównego modelu `gemini-2.5-pro`).
+   - Każde zapytanie zwiększa licznik `requestCount` w rekordzie urządzenia oraz jest rejestrowane w bazie danych w tabeli `DeviceSolve`.
+4. **`GET /notes` i `GET /tests`**:
+   Pobieranie w formacie JSON notatek i sprawdzianów przypisanych do konta użytkownika. Zwracane dane są zapisywane bezpośrednio do pamięci SPIFFS.
+5. **`GET /firmware/check`**:
+   Zwraca informacje o najnowszej dostępnej wersji oprogramowania, adresie URL pliku `.bin` oraz cyfrowym podpisie pliku. Dla starszych wersji firmware (poniżej 1.4.0) zwraca publiczny adres URL, natomiast dla wersji nowszych zwraca chroniony endpoint.
+6. **`GET /firmware/download/[version]`**:
+   Dostępny wyłącznie dla zarejestrowanych urządzeń o prawidłowym nagłówku `x-device-id`. Pliki `.bin` umieszczone są w prywatnym katalogu systemu plików serwera, uniemożliwiając bezpośrednie pobranie oprogramowania bez autoryzacji. Posiada zabezpieczenia przed atakami typu path traversal.
 
-Adresy `0x20` (MCP) i `0x30` (kamera) nie kolidują — komunikacja na wspólnej magistrali jest możliwa.
+### 3.2 Nagłówki autoryzacyjne
 
-### 4.3 Skanowanie matrycy klawiatury
-
-Klawiatura membranowa Esperanza T8809-2 wyprowadza 27 klawiszy przez 10-pinowy elastyczny przewód FFC. Każde naciśnięcie zwiera parę z 10 dostępnych linii. Algorytm skanowania:
-
-1. Wszystkie 10 linii ustawione jako wejścia z wewnętrznym pull-up (MCP23017)
-2. Iteracyjnie jedna linia ustawiana na wyjście, wartość `LOW`
-3. Odczyt stanu pozostałych 9 linii — jeśli któraś jest `LOW`, oznacza zwarcie (klawisz naciśnięty)
-4. Pełen skan = 10 iteracji × ~80 µs = ~1 ms
-5. Debouncing programowy: 2 kolejne identyczne odczyty wymagane do uznania stanu za stabilny
-
-### 4.4 Aparat OV2640 (interfejs równoległy)
-
-| Parametr | Wartość |
-|---|---|
-| Interfejs danych | 8-bit równoległy (D0–D7) |
-| Sygnały sterujące | VSYNC, HREF, PCLK, XCLK |
-| Konfiguracja | I²C/SCCB (oddzielna od głównego I²C — opcjonalnie wspólne) |
-| Częstotliwość XCLK | 10 MHz (kalkulator), 20 MHz (datasheet maksymalna) |
-| Rozdzielczość kalibracji | SVGA (800×600) — kompromis jakość/pamięć |
-| Format wyjściowy | JPEG (kompresja sprzętowa w sensorze) |
-| Bufor klatki | 8 MB PSRAM (mieści ~80 klatek SVGA JPEG ~100 KB) |
-
-Sterowanie zasilaniem aparatu:
-- `PWDN` (power-down) sygnał: `HIGH` = aparat uśpiony (pobór <50 µA), `LOW` = aparat aktywny (~50 mA przy 2,8 V)
-- `RESET` sygnał: aktywny `LOW`, czas trzymania min. 1 ms, po zwolnieniu sensor potrzebuje ~20 ms na stabilizację
-
-Oba sygnały sterowane są przez ekspander MCP23017 (porty GPA5 i GPA6) — pozwala to na pełne wyłączenie aparatu między zapytaniami, oszczędzając ok. 50 mA prądu z baterii.
+Zapytania wysyłane przez urządzenie do serwera Next.js muszą zawierać zestaw nagłówków:
+- `x-api-key`: Klucz uwierzytelniający aplikację kliencką.
+- `x-device-id`: MAC adres urządzenia (identyfikator fizyczny).
+- `x-fw-version`: Wersja oprogramowania (np. `1.0.0`).
+- `x-license-key` *(dla `/solve`)*: Klucz licencyjny pobrany z NVS.
 
 ---
 
-## 5. Zarządzanie zasilaniem
+## 4. Wdrożone mechanizmy bezpieczeństwa
 
-### 5.1 Topologia
+### 4.1 Obfuskacja klucza API (Compile-time XOR)
 
-```
-LiPo 3,7 V ─┬─→ AP2112K-3,3 LDO ──→ 3,3 V (ESP32, MCP, OLED logika)
-            │
-            ├─→ MT3608 boost ──→ 14,5 V (OLED VCC wysokie napięcie)
-            │
-            ├─→ AP2112K-2,8 LDO ──→ 2,8 V (OV2640 AVDD, DOVDD)
-            │
-            └─→ XC6206P132 LDO ──→ 1,2 V (OV2640 DVDD)
-```
+Aby utrudnić wydobycie globalnego klucza API (`CALCULATOR_API_KEY`) z dystrybuowanych plików binarnych za pomocą prostych poleceń typu `strings firmware.bin`, klucz nie jest zapisany w kodzie jako czytelny łańcuch znaków. 
 
-### 5.2 Stany urządzenia
+W module `key_obfuscate.h` zastosowano technikę XOR-owania klucza podczas kompilacji z 16-bajtową losową maską `_OBFK`. Odszyfrowanie klucza następuje wyłącznie w pamięci RAM w czasie rzeczywistym wewnątrz funkcji `kalkApiKey()` bezpośrednio przed wysłaniem zapytania sieciowego. Po użyciu bufor pamięci jest nadpisywany, co uniemożliwia jego łatwy odczyt z pamięci RAM.
 
-| Stan | Pobór prądu | Sytuacja |
-|---|---|---|
-| Active (OLED on, WiFi off) | ~150 mA | Praca w trybie kalkulatora |
-| AI request (WiFi TX peak) | do 400 mA | Wysyłanie pytania, pobieranie odpowiedzi |
-| Camera active | +50 mA | Robienie zdjęcia (krótkotrwałe) |
-| Sleep (OLED off, ESP32 light sleep) | ~10 mA | Po 4 minutach bezczynności (konfigurowalne) |
-| Deep sleep | <50 µA | Nieużywane w obecnej wersji firmware |
+### 4.2 Podpis cyfrowy oprogramowania (Signed OTA)
 
-### 5.3 Algorytm auto-sleep
+Wdrożony od wersji `1.4.1` mechanizm **Signed OTA** zapobiega instalacji zmodyfikowanego lub złośliwego oprogramowania na urządzeniu:
+1. Podczas pobierania pliku `.bin` z serwera, strumień danych jest na bieżąco przekazywany do algorytmu SHA-256 w celu obliczenia sumy kontrolnej pobranego programu.
+2. Serwer w odpowiedzi na zapytanie o aktualizację przesyła podpis cyfrowy oprogramowania (`sig` w formacie DER zakodowany jako base64), wygenerowany za pomocą prywatnego klucza ECDSA P-256.
+3. Przed sfinalizowaniem zapisu w pamięci flash i wywołaniem restartu, funkcja `otaInstall()` weryfikuje podpis cyfrowy przy użyciu publicznego klucza kryptograficznego `_OTA_PUBLIC_KEY_PEM` wbudowanego na stałe w oprogramowanie kalkulatora. Weryfikacja realizowana jest sprzętowo przy użyciu wbudowanego w ESP-IDF modułu `mbedtls` (`mbedtls_pk_verify`).
+4. W przypadku niezgodności podpisu lub braku autentyczności pliku aktualizacja jest natychmiast przerywana, zapobiegając uszkodzeniu urządzenia.
 
-Po skonfigurowanym czasie bezczynności klawiatury (domyślnie 4 minuty):
-1. Kalkulator wyłącza wyjście MT3608 (boost EN → LOW) — gaśnie OLED, zysk ~140 mA
-2. Wyłącza WiFi (`WiFi.mode(WIFI_OFF)`) — zysk ~80 mA
-3. Wyłącza aparat jeśli był aktywny — zysk ~50 mA
-4. ESP32 przechodzi w light sleep z wybudzaniem przez przerwanie z linii MCP23017 (klawiatura)
-5. Naciśnięcie dowolnego klawisza powoduje wybudzenie i powrót do poprzedniego stanu
+### 4.3 Reset do ustawień fabrycznych (Factory Reset)
+
+Dostępna w panelu ustawień funkcja `_editFactoryReset()` zapewnia całkowite usunięcie danych poufnych użytkownika z pamięci urządzenia przed np. jego odsprzedażą lub zwrotem:
+- Wywołuje funkcję `clear()` dla przestrzeni NVS `"kalkmate"` (usuwa SSID i hasło WiFi, klucz licencji, kody zabezpieczające i panic key).
+- Czyści przestrzeń NVS `"kalkhist"` (usuwa historię zapytań i odpowiedzi AI).
+- Czyści przestrzeń NVS `"kalkmap"` (resetuje własną mapę klawiatury).
+- Usuwa z systemu plików SPIFFS pobrane notatki (`/notes.json`) oraz sprawdziany (`/tests.json`).
+- Wpisuje wartości domyślne do struktury ustawień w pamięci RAM i wywołuje restart `ESP.restart()`.
 
 ---
 
-## 6. Bezpieczeństwo i zgodność
+## 5. Bezpieczeństwo i izolacja wewnętrzna
 
-### 6.1 Dane osobowe
-
-Urządzenie KalkMate nie przechowuje danych osobowych użytkownika w pamięci nielotnej:
-- Adres email konta — przechowywany **wyłącznie na serwerze** (baza danych SQLite z polityką prywatności)
-- Identyfikator urządzenia — przechowywany lokalnie, jest **MAC adresem WiFi**, deterministyczny dla danego chipu ESP32
-- Historia zapytań — treść matematyczna, nieidentyfikowalna osobowo
-
-### 6.2 Aktualizacje bezpieczeństwa
-
-Mechanizm OTA (sekcja 3.6) pozwala na zdalne wdrażanie poprawek bezpieczeństwa do urządzeń w polu. Producent zobowiązuje się do wydawania aktualizacji w przypadku odkrycia istotnych podatności w kolejnych wersjach Arduino ESP32 Core / TLS / WiFi.
-
-### 6.3 Zgodność z normami
-
-| Norma | Status |
-|---|---|
-| **CE marking** | W przygotowaniu (dokumentacja kompatybilności EMC) |
-| **EN 300 328** (2,4 GHz radio) | Zgodne — moduł ESP32-S3-WROOM-1 posiada certyfikat |
-| **EN 301 489** (EMC) | W trakcie testów |
-| **EN 62368-1** (bezpieczeństwo elektryczne) | W trakcie testów |
-| **RED Directive 2014/53/EU** | W trakcie certyfikacji |
-| **RoHS 2** (substancje niebezpieczne) | Zgodne — komponenty SMD z certyfikatami od dostawców |
-| **WEEE** (utylizacja) | Zgłoszenie do BDO planowane przed wprowadzeniem do obrotu |
-
-### 6.4 Pamięć krzyżowa / izolacja
-
-ESP32-S3 posiada Memory Protection Unit (MPU) izolujący kod od danych. Nie wykorzystywany w obecnej wersji firmware (Arduino framework nie konfiguruje MPU). Rozważane wdrożenie w wersji 2.0 jako dodatkowa warstwa zabezpieczenia przed atakami typu buffer overflow.
-
----
-
-## 7. Licencjonowanie oprogramowania
-
-### 7.1 Komponenty open source
-
-Firmware wykorzystuje następujące biblioteki open source:
-
-| Biblioteka | Licencja | Wykorzystanie |
-|---|---|---|
-| Arduino ESP32 Core | LGPL 2.1+ | Framework |
-| ESP-IDF | Apache 2.0 | Bazowy SDK |
-| U8g2 (olikraus) | New BSD | Sterownik OLED |
-| Adafruit MCP23017 | BSD | Sterownik ekspandera |
-| esp32-camera (espressif) | Apache 2.0 | Sterownik OV2640 |
-| QRCode (ricmoo) | MIT | Generator kodu QR |
-
-Wszystkie licencje są kompatybilne z dystrybucją binarną — producent KalkMate nie modyfikuje źródeł bibliotek i dołącza ich teksty licencji w dokumentacji urządzenia (zgodnie z LGPL § 6).
-
-### 7.2 Kod własny
-
-Kod aplikacyjny KalkMate (~5000 linii C++) pozostaje własnością intelektualną producenta. Nie jest dystrybuowany publicznie. W przypadku zakończenia działalności producenta zobowiązuje się on do udostępnienia użytkownikom narzędzi pozwalających na samodzielne wgranie alternatywnego firmware (chip ESP32-S3 jest standardowy i dostępne są open source firmware zastępcze).
-
----
-
-## 8. Diagnostyka i debugowanie
-
-Firmware udostępnia w menu urządzenia panel diagnostyczny (**Ustawienia → Diagnostyka**) zawierający:
-
-- **Test ekranu** — wyświetlenie wzorca testowego (pełen ekran, krata, gradient) do weryfikacji uszkodzeń OLED
-- **Test kamery** — pobranie i wyświetlenie miniatury zdjęcia (weryfikacja działania OV2640)
-- **Test klawiatury** — wizualizacja stanu wszystkich 27 klawiszy w czasie rzeczywistym
-- **Skaner par MCP23017** — wyświetlenie aktywnych zwarć na matrycy klawiszy (debug fizycznych usterek)
-- **Pin Driver Test** — wymuszanie stanu OUTPUT/LOW na poszczególnych pinach MCP23017 do weryfikacji multimetrem
-
-Logi systemowe dostępne są przez port USB (USB-CDC, 115200 baud) — dostęp wyłącznie po rozłączeniu obudowy urządzenia, nieaktywny w trybie produkcyjnym.
-
----
-
-*Koniec dokumentu*
+1. **Magistrale komunikacyjne**: Komunikacja wewnętrzna z ekranem (SPI) oraz ekspanderem MCP23017 i aparatem (I²C) odbywa się lokalnie wewnątrz obudowy urządzenia.
+2. **Wyłączenie aparatu**: W stanie czuwania aparat OV2640 jest całkowicie odłączany od zasilania przez ekspander GPIO (stan `PWDN` ustawiany na `HIGH`). Pozwala to na oszczędność ok. 50 mA prądu oraz fizycznie uniemożliwia przechwytywanie obrazu bez wiedzy użytkownika.
+3. **Brak nasłuchu sieciowego**: Urządzenie nie uruchamia serwerów HTTP, FTP, Telnet ani żadnych gniazd nasłuchujących (brak funkcji nasłuchu portów TCP/UDP). Wszystkie akcje sieciowe są inicjowane wyłącznie przez klienta (kalkulator) i zamykane natychmiast po zakończeniu transmisji.
