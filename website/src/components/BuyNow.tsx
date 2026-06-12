@@ -37,7 +37,7 @@ export default function BuyNow() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isCreatingIntent, setIsCreatingIntent] = useState(false);
-  const [formData, setFormData] = useState({ name: "", email: "", phone: "", consent: false });
+  const [formData, setFormData] = useState({ name: "", email: "", phone: "", street: "", postcode: "", city: "", consent: false });
   const [selectedPoint, setSelectedPoint] = useState<InPostPoint | null>(null);
   const [stockLeft, setStockLeft] = useState(9);
 
@@ -109,6 +109,12 @@ export default function BuyNow() {
     setIsCreatingIntent(true);
     setErrorMessage("");
     try {
+      if (!formData.street || !formData.postcode || !formData.city) {
+        setErrorMessage("Podaj pełny adres (ulica, kod pocztowy, miasto) — wymagany do wystawienia faktury.");
+        setIsCreatingIntent(false);
+        return;
+      }
+
       const res = await fetch("/api/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,6 +122,9 @@ export default function BuyNow() {
           ...formData,
           pickupPoint: selectedPoint.name,
           pickupPointAddress: `${selectedPoint.address.line1}, ${selectedPoint.address.line2}`,
+          street: formData.street,
+          postcode: formData.postcode,
+          city: formData.city,
         }),
       });
       const data = await res.json();
@@ -348,6 +357,47 @@ export default function BuyNow() {
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         className={inputClass}
                       />
+                    </div>
+
+                    {/* Address section for invoicing */}
+                    <div className="border border-[rgba(242,237,227,0.10)] p-4 space-y-3">
+                      <p className="km-mono-eyebrow text-[#D8FF3D] text-xs">/ Adres do faktury VAT</p>
+                      <div>
+                        <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">Ulica i numer domu</label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.street}
+                          onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                          className={inputClass}
+                          placeholder="np. Marszałkowska 1/2"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">Kod pocztowy</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.postcode}
+                            onChange={(e) => setFormData({ ...formData, postcode: e.target.value })}
+                            className={inputClass}
+                            placeholder="00-000"
+                            pattern="\d{2}-\d{3}"
+                          />
+                        </div>
+                        <div>
+                          <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">Miasto</label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.city}
+                            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                            className={inputClass}
+                            placeholder="Warszawa"
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div>

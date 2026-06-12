@@ -40,6 +40,9 @@ export async function GET(
         customer_name: pi.metadata.customer_name || "",
         customer_email: pi.metadata.customer_email || "",
         customer_phone: pi.metadata.customer_phone || "",
+        customer_address_street: pi.metadata.customer_address_street || "",
+        customer_address_postcode: pi.metadata.customer_address_postcode || "",
+        customer_address_city: pi.metadata.customer_address_city || "",
         pickup_point: pi.metadata.pickup_point || "",
         pickup_point_address: pi.metadata.pickup_point_address || "",
         product: pi.metadata.product || "",
@@ -47,8 +50,12 @@ export async function GET(
         shipped_at: pi.metadata.shipped_at || null,
         tracking_number: pi.metadata.tracking_number || "",
         admin_notes: pi.metadata.admin_notes || "",
+        furgonetka_package_id: pi.metadata.furgonetka_package_id || "",
+        furgonetka_order_uuid: pi.metadata.furgonetka_order_uuid || "",
+        furgonetka_status: pi.metadata.furgonetka_status || "",
       },
     });
+
   } catch (error) {
     console.error("Error fetching order:", error);
     return NextResponse.json({ error: "Order not found" }, { status: 404 });

@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, phone, pickupPoint, pickupPointAddress } = body;
+    const { name, phone, pickupPoint, pickupPointAddress, street, postcode, city } = body;
     // Uzywamy emaila z sesji (a nie z body) - eliminuje ryzyko podszywania
     const email = user.email!;
 
@@ -51,12 +51,16 @@ export async function POST(request: NextRequest) {
         customer_name: name,
         customer_email: email,
         customer_phone: phone,
+        customer_address_street: street || "",
+        customer_address_postcode: postcode || "",
+        customer_address_city: city || "",
         pickup_point: pickupPoint,
         pickup_point_address: pickupPointAddress || "",
       },
       receipt_email: email,
       description: "KalkMate v1.0 - Inteligentny kalkulator z AI",
     });
+
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
