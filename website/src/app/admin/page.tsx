@@ -4,7 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import StatCard from "@/components/admin/StatCard";
-import DailyChart from "@/components/admin/DailyChart";
+import RevenueChart from "@/components/admin/RevenueChart";
+import OrdersChart from "@/components/admin/OrdersChart";
+import GeminiUsageChart from "@/components/admin/GeminiUsageChart";
+import OrdersPieChart from "@/components/admin/OrdersPieChart";
 
 interface Analytics {
   totalRevenue: number;
@@ -513,24 +516,39 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Status breakdown */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-[#313338] rounded-xl border border-[#3F4147] p-6 text-center hover:border-green-500/30 transition-colors">
-              <p className="text-3xl font-bold text-green-400 mb-1">{analytics.succeededOrders}</p>
-              <p className="text-xs text-[#E0E0E0]/50">Opłacone zamówienia</p>
+          {/* Zaawansowana Analityka (Recharts Dashboard) */}
+          <div className="space-y-6 mt-8">
+            <h2 className="text-xl font-bold text-[#E0E0E0] mb-2 flex items-center gap-2">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+              </svg>
+              Zaawansowana Analityka
+            </h2>
+            
+            {/* Przychód - pełna szerokość */}
+            <div className="w-full">
+              <RevenueChart data={analytics.dailyOrders} />
             </div>
-            <div className="bg-[#313338] rounded-xl border border-[#3F4147] p-6 text-center hover:border-amber-500/30 transition-colors">
-              <p className="text-3xl font-bold text-amber-400 mb-1">{analytics.pendingOrders}</p>
-              <p className="text-xs text-[#E0E0E0]/50">Oczekujące płatności</p>
-            </div>
-            <div className="bg-[#313338] rounded-xl border border-[#3F4147] p-6 text-center hover:border-red-500/30 transition-colors">
-              <p className="text-3xl font-bold text-red-400 mb-1">{analytics.canceledOrders}</p>
-              <p className="text-xs text-[#E0E0E0]/50">Anulowane</p>
+
+            {/* Siatka 3 kolumn: Słupki zamówień, Pie chart statusów, Linie użycia Gemini */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <OrdersChart data={analytics.dailyOrders} />
+              <OrdersPieChart 
+                succeeded={analytics.succeededOrders} 
+                pending={analytics.pendingOrders} 
+                canceled={analytics.canceledOrders} 
+              />
+              {geminiStats?.dailyActivity && geminiStats.dailyActivity.length > 0 ? (
+                <GeminiUsageChart data={geminiStats.dailyActivity} />
+              ) : (
+                <div className="bg-[#313338] rounded-2xl border border-[#3F4147] p-6 flex items-center justify-center text-[#E0E0E0]/40 text-sm">
+                  Brak danych AI do wyświetlenia
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Daily chart */}
-          <DailyChart data={analytics.dailyOrders} />
         </div>
       ) : (
         <div className="bg-[#313338] rounded-xl border border-red-500/30 p-6 text-center">
