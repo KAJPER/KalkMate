@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         updatedAt: true,
         _count: {
-          select: { messages: true },
+          select: { ChatMessage: true },
         },
       },
       take: 50, // Limit to last 50 conversations
@@ -73,8 +73,10 @@ export async function POST(request: NextRequest) {
 
     const conversation = await prisma.conversation.create({
       data: {
+        id: require("crypto").randomUUID(),
         userId: user.id,
         title: sanitizedTitle || "Nowa konwersacja",
+        updatedAt: new Date(),
       },
     });
 

@@ -52,10 +52,12 @@ export async function POST(request: NextRequest) {
       const now = new Date();
       subscription = await prisma.subscription.create({
         data: {
+          id: require("crypto").randomUUID(),
           userId: user.id,
           status: "trial",
           trialEndsAt: new Date(now.getTime() + 24 * 60 * 60 * 1000), // 1 day
           trialDays: 1,
+          updatedAt: new Date(),
         },
       });
     }

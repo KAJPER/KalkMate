@@ -251,7 +251,7 @@ export default function BuyNow() {
                   <p className="km-mono-eyebrow text-[#D8FF3D]">/ produkcja</p>
                   <p className="mt-2 text-[13.5px] leading-[1.55] text-[#F2EDE3]/65">
                     Urządzenia są <span className="text-[#F2EDE3]">ręcznie składane</span>.
-                    Wysyłka wszystkich zamówień z przedsprzedaży do <span className="text-[#F2EDE3]">3 maja</span>.
+                    Czas realizacji zamówienia wynosi do <span className="text-[#F2EDE3]">4 tygodni</span>.
                   </p>
                 </div>
 
@@ -498,7 +498,7 @@ export default function BuyNow() {
                     <p className="mt-3 text-sm text-[#F2EDE3]/60 max-w-sm mx-auto leading-relaxed">
                       Dziękujemy za zamówienie. Potwierdzenie wysłaliśmy na{" "}
                       <span className="text-[#F2EDE3]">{formData.email}</span>.
-                      Wysyłka 3–5 dni roboczych.
+                      Wysyłka w ciągu 4 tygodni.
                     </p>
                     <button
                       onClick={closeModal}

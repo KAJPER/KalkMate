@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         const trialEndsAt = new Date();
         trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
         await prisma.subscription.create({
-          data: { userId: user.id, status: "trial", trialEndsAt, trialDays },
+          data: { id: require("crypto").randomUUID(), userId: user.id, status: "trial", trialEndsAt, trialDays, updatedAt: new Date() },
         });
       }
     } else {
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
       await prisma.subscription.create({
-        data: { userId: user.id, status: "trial", trialEndsAt, trialDays },
+        data: { id: require("crypto").randomUUID(), userId: user.id, status: "trial", trialEndsAt, trialDays, updatedAt: new Date() },
       });
     }
 

@@ -133,6 +133,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   // Zapisz zamowienie z userId
   await prisma.order.create({
     data: {
+      id: require("crypto").randomUUID(),
       userId: existingUser?.id,
       orderNumber,
       status: "paid",
@@ -145,6 +146,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       amount: pi.amount,
       currency: pi.currency,
       paidAt: new Date(),
+      updatedAt: new Date(),
     },
   });
 
@@ -214,6 +216,7 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
   // Zapisz zamówienie (z userId jeśli użytkownik istnieje, bez userId jeśli nie)
   await prisma.order.create({
     data: {
+      id: require("crypto").randomUUID(),
       userId: existingUser?.id, // Może być undefined - wtedy NULL w bazie
       orderNumber,
       status: "paid",
@@ -226,6 +229,7 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
       amount: session.amount_total || 0,
       currency: session.currency || "pln",
       paidAt: new Date(),
+      updatedAt: new Date(),
     },
   });
 

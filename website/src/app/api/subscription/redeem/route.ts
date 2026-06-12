@@ -80,10 +80,12 @@ export async function POST(request: NextRequest) {
 
       subscription = await prisma.subscription.create({
         data: {
+          id: require("crypto").randomUUID(),
           userId: user.id,
           status: "trial",
           trialEndsAt,
           trialDays: license.durationDays,
+          updatedAt: new Date(),
         },
       });
     } else {

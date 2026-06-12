@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
       select: {
         userId: true,
         _count: {
-          select: { messages: true },
+          select: { ChatMessage: true },
         },
       },
     });
@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
     const userMessageCounts = new Map<string, number>();
     allConversations.forEach((conv) => {
       const current = userMessageCounts.get(conv.userId) || 0;
-      userMessageCounts.set(conv.userId, current + conv._count.messages);
+      userMessageCounts.set(conv.userId, current + conv._count.ChatMessage);
     });
 
     // Sort and get top 10

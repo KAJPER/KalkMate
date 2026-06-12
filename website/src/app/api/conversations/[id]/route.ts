@@ -30,10 +30,10 @@ export async function GET(
         userId: user.id, // Security: only owner can access
       },
       include: {
-        messages: {
+        ChatMessage: {
           orderBy: { createdAt: "asc" },
           include: {
-            attachments: true, // Include attachments
+            Attachment: true, // Include attachments
           },
         },
       },

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       skip: offset,
       orderBy: { createdAt: "desc" },
       include: {
-        subscription: true,
+        Subscription: true,
       },
     });
 
@@ -37,19 +37,19 @@ export async function GET(req: NextRequest) {
           email: user.email,
           name: user.name,
           createdAt: user.createdAt,
-          subscription: user.subscription
+          subscription: user.Subscription
             ? {
-                status: user.subscription.status,
-                trialEndsAt: user.subscription.trialEndsAt,
-                trialDays: user.subscription.trialDays,
-                plan: user.subscription.plan,
-                pricePerMonth: user.subscription.pricePerMonth,
-                stripeCustomerId: user.subscription.stripeCustomerId,
-                stripeSubscriptionId: user.subscription.stripeSubscriptionId,
-                stripeCurrentPeriodEnd: user.subscription.stripeCurrentPeriodEnd,
-                cancelledAt: user.subscription.cancelledAt,
-                createdAt: user.subscription.createdAt,
-                updatedAt: user.subscription.updatedAt,
+                status: user.Subscription.status,
+                trialEndsAt: user.Subscription.trialEndsAt,
+                trialDays: user.Subscription.trialDays,
+                plan: user.Subscription.plan,
+                pricePerMonth: user.Subscription.pricePerMonth,
+                stripeCustomerId: user.Subscription.stripeCustomerId,
+                stripeSubscriptionId: user.Subscription.stripeSubscriptionId,
+                stripeCurrentPeriodEnd: user.Subscription.stripeCurrentPeriodEnd,
+                cancelledAt: user.Subscription.cancelledAt,
+                createdAt: user.Subscription.createdAt,
+                updatedAt: user.Subscription.updatedAt,
               }
             : null,
           licensesUsed,

@@ -104,10 +104,12 @@ export async function POST(request: NextRequest) {
         trialDays: license.durationDays,
       },
       create: {
+        id: require("crypto").randomUUID(),
         userId: user.id,
         status: "active",
         trialEndsAt: newEnd,
         trialDays: license.durationDays,
+        updatedAt: new Date(),
       },
     });
 

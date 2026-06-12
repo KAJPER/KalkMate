@@ -1250,7 +1250,7 @@ export async function POST(request: NextRequest) {
     // Sprawdź użytkownika i subskrypcję
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: { subscription: true },
+      include: { Subscription: true },
     });
 
     if (!user) {
@@ -1261,7 +1261,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Sprawdź czy użytkownik ma aktywną subskrypcję lub trial
-    const subscription = user.subscription;
+    const subscription = user.Subscription;
     if (!subscription) {
       return NextResponse.json(
         { error: "Brak aktywnej subskrypcji. Wykup dostęp do AI Chat." },
@@ -1377,11 +1377,13 @@ export async function POST(request: NextRequest) {
 
         const newConversation = await prisma.conversation.create({
           data: {
+            id: require("crypto").randomUUID(),
             userId: user.id,
             title: title
               .replace(/<[^>]*>/g, "")
               .replace(/[^\w\s\u0100-\u017F\u0400-\u04FF?!.,()-]/g, "")
               .trim() || "Nowa konwersacja",
+            updatedAt: new Date(),
           },
         });
         activeConversationId = newConversation.id;
@@ -1398,6 +1400,7 @@ export async function POST(request: NextRequest) {
         if (lastUserMessage?.role === "user") {
           const userMsg = await prisma.chatMessage.create({
             data: {
+              id: require("crypto").randomUUID(),
               conversationId: activeConversationId,
               role: "user",
               content: lastUserMessage.content.substring(0, 10000),
@@ -1408,6 +1411,7 @@ export async function POST(request: NextRequest) {
           if (lastUserMessage.attachments && Array.isArray(lastUserMessage.attachments)) {
             await prisma.attachment.createMany({
               data: lastUserMessage.attachments.map((att: any) => ({
+                id: require("crypto").randomUUID(),
                 messageId: userMsg.id,
                 filename: att.filename,
                 mimeType: att.mimeType,
@@ -1422,6 +1426,7 @@ export async function POST(request: NextRequest) {
         // Save AI response
         await prisma.chatMessage.create({
           data: {
+            id: require("crypto").randomUUID(),
             conversationId: activeConversationId,
             role: "assistant",
             content: aiResponse.substring(0, 10000),

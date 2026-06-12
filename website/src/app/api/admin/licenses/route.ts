@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
 
       const license = await prisma.license.create({
         data: {
+          id: require("crypto").randomUUID(),
           code,
           durationDays,
           description: description || `Generated ${new Date().toISOString()}`,

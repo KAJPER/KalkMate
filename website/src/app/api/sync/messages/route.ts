@@ -50,8 +50,10 @@ export async function POST(request: NextRequest) {
     if (!conversation) {
       conversation = await prisma.conversation.create({
         data: {
+          id: require("crypto").randomUUID(),
           userId,
           title: "Calculator Sync",
+          updatedAt: new Date(),
         },
       });
     }
@@ -59,6 +61,7 @@ export async function POST(request: NextRequest) {
     // Save messages to the conversation
     await prisma.chatMessage.createMany({
       data: messages.map((msg: any) => ({
+        id: require("crypto").randomUUID(),
         conversationId: conversation.id,
         role: msg.role,
         content: msg.content,
@@ -101,7 +104,7 @@ export async function GET(request: NextRequest) {
     const conversations = await prisma.conversation.findMany({
       where: { userId },
       include: {
-        messages: {
+        ChatMessage: {
           orderBy: { createdAt: "desc" },
           take: limit,
           select: {
@@ -115,7 +118,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Flatten all messages from all conversations
-    const allMessages = conversations.flatMap((conv) => conv.messages);
+    const allMessages = conversations.flatMap((conv) => conv.ChatMessage);
 
     // Sort by date and limit
     const messages = allMessages
