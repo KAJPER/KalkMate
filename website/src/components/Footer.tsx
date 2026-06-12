@@ -46,9 +46,36 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-16 pt-6 border-t border-[rgba(242,237,227,0.10)] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        {/* Dane firmy — wymagane prawnie + zgodne z ustawa o swiadczeniu uslug drogą elektroniczna */}
+        <div className="mt-14 pt-6 border-t border-[rgba(242,237,227,0.10)]">
+          <p className="km-mono-eyebrow text-[#D8FF3D] mb-4">Dane firmy</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-3 text-[13.5px] text-[#F2EDE3]/70">
+            <div>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">Sprzedawca</p>
+              <p className="text-[#F2EDE3]">KAJPA Kacper Popko</p>
+            </div>
+            <div>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">NIP</p>
+              <p className="font-mono text-[#F2EDE3]">9662222951</p>
+            </div>
+            <div>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">E-mail</p>
+              <a href="mailto:kontakt@kajpa.pl" className="font-mono text-[#F2EDE3] hover:text-[#D8FF3D] transition-colors">
+                kontakt@kajpa.pl
+              </a>
+            </div>
+            <div>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">Telefon</p>
+              <a href="tel:+48600580888" className="font-mono text-[#F2EDE3] hover:text-[#D8FF3D] transition-colors">
+                600 580 888
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-10 pt-6 border-t border-[rgba(242,237,227,0.10)] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <p className="km-mono-eyebrow text-[#F2EDE3]/40">
-            © 2026 KalkMate. Wyprodukowano w Polsce.
+            © 2026 KAJPA Kacper Popko · KalkMate. Wyprodukowano w Polsce.
           </p>
           <p className="km-mono-eyebrow text-[#F2EDE3]/30">
             FW 0.6.4 · LAT 50.0647 LON 19.9450

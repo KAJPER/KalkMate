@@ -125,12 +125,35 @@ export default function PrivacyPolicy() {
           <section>
             <H id="sek-2" eyebrow="02" title="Administrator" accent="danych" />
             <P>Administratorem danych osobowych zbieranych za pośrednictwem Serwisu jest:</P>
-            <p className="mt-4 text-[18px] font-semibold text-[#F2EDE3]">KalkMate</p>
-            <div className="mt-4">
-              <P>Kontakt z Administratorem możliwy jest poprzez:</P>
+
+            <div className="mt-5 p-5 border border-[rgba(242,237,227,0.10)] bg-[#0E0E0E]">
+              <p className="km-mono-eyebrow text-[#D8FF3D] mb-3">KAJPA Kacper Popko</p>
+              <div className="grid sm:grid-cols-2 gap-y-2 gap-x-6 text-[14px] text-[#F2EDE3]/80">
+                <div>
+                  <span className="text-[#F2EDE3]/45">NIP:</span>{" "}
+                  <span className="font-mono">9662222951</span>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">Nazwa skrócona:</span>{" "}
+                  <span className="font-mono">KAJPA</span>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">E-mail:</span>{" "}
+                  <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">Telefon:</span>{" "}
+                  <a href="tel:+48600580888" className="text-[#D8FF3D] hover:underline font-mono">+48 600 580 888</a>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <P>Kontakt z Administratorem w sprawach przetwarzania danych osobowych możliwy jest poprzez:</P>
             </div>
             <UL>
-              <li>email: kontakt podany w stopce strony,</li>
+              <li>e-mail: <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>,</li>
+              <li>telefonicznie: <a href="tel:+48600580888" className="text-[#D8FF3D] hover:underline">+48 600 580 888</a>,</li>
               <li>formularz kontaktowy dostępny na stronie.</li>
             </UL>
           </section>

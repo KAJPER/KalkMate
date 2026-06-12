@@ -4,7 +4,7 @@
 **Norma zharmonizowana:** EN 18031  
 **Produkt:** KalkMate v1.0 — kalkulator edukacyjny z asystentem AI  
 **Model:** KalkMate-ESP32S3-v1  
-**Producent:** KalkMate  
+**Producent:** KAJPA Kacper Popko  
 **Data sporządzenia:** 2026-06-12  
 
 ---
@@ -48,6 +48,8 @@ Ocena została przeprowadzona w oparciu o specyfikację oprogramowania układowe
    Moduł aparatu OV2640 jest zasilany wyłącznie podczas aktywnego korzystania z trybu rozwiązywania zadań ze zdjęcia. W stanie czuwania (gdy użytkownik korzysta z trybu tekstowego lub tradycyjnego kalkulatora), aparat jest wprowadzany w tryb sprzętowego power-down (`PWDN` na `HIGH`), co fizycznie odcina zasilanie od sensora obrazu i uniemożliwia potajemne przechwytywanie obrazu.
 5. **Procedura pełnego usuwania danych (Factory Reset)**:  
    Użytkownik ma możliwość wywołania funkcji przywracania ustawień fabrycznych bezpośrednio z menu urządzenia. Procedura ta bezpowrotnie usuwa wszystkie dane konfiguracji WiFi, klucze licencji, kody AI, lokalną historię zapytań AI oraz pobrane z serwera notatki/sprawdziany poprzez wyczyszczenie przestrzeni NVS oraz sformatowanie partycji systemowej SPIFFS.
+6. **Polityka RODO / Privacy Policy**:  
+   Sposób przetwarzania danych w systemie KalkMate (w tym kontakt e-mailowy `kontakt@kajpa.pl`) podlega regulacjom RODO i jest ujęty w Polityce Prywatności serwera.
 
 ---
 
@@ -86,4 +88,4 @@ Na podstawie przeprowadzonej analizy technicznej stwierdza się, że urządzenie
 Wdrożone zabezpieczenia są w pełni adekwatne do klasy ryzyka urządzenia IoT o charakterze edukacyjnym i spełniają wymagania normy **EN 18031**.
 
 Podpisano w imieniu producenta:  
-*KalkMate Compliance Team*
+*Kacper Popko — Właściciel KAJPA*

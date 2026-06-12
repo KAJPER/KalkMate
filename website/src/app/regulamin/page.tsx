@@ -115,9 +115,26 @@ export default function TermsOfService() {
           <section>
             <H id="par-1" eyebrow="§ 1" title="Postanowienia" accent="ogólne" />
             <OL>
-              <li>Regulamin określa zasady korzystania ze sklepu internetowego KalkMate.pl, prowadzonego przez KalkMate (dalej: „Sprzedawca").</li>
+              <li>
+                Regulamin określa zasady korzystania ze sklepu internetowego KalkMate.pl,
+                prowadzonego przez <strong className="text-[#F2EDE3]">KAJPA Kacper Popko</strong>{" "}
+                (dalej: „Sprzedawca").
+              </li>
+              <li>
+                Dane Sprzedawcy:
+                <UL>
+                  <li><strong className="text-[#F2EDE3]">Nazwa:</strong> KAJPA Kacper Popko</li>
+                  <li><strong className="text-[#F2EDE3]">NIP:</strong> 9662222951</li>
+                  <li><strong className="text-[#F2EDE3]">E-mail:</strong>{" "}
+                    <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>
+                  </li>
+                  <li><strong className="text-[#F2EDE3]">Telefon:</strong>{" "}
+                    <a href="tel:+48600580888" className="text-[#D8FF3D] hover:underline">+48 600 580 888</a>
+                  </li>
+                </UL>
+              </li>
               <li>KalkMate oferuje sprzedaż kalkulatorów graficznych wraz z subskrypcją usługi AI Chat.</li>
-              <li>Kontakt ze Sprzedawcą możliwy jest poprzez formularz kontaktowy na stronie lub email podany w stopce strony.</li>
+              <li>Kontakt ze Sprzedawcą możliwy jest poprzez formularz kontaktowy na stronie, e-mail lub telefon wskazane powyżej.</li>
               <li>Niniejszy Regulamin jest integralną częścią umowy sprzedaży zawieranej między Sprzedawcą a Klientem.</li>
               <li>Przed złożeniem zamówienia Klient zobowiązany jest zapoznać się z treścią Regulaminu.</li>
             </OL>
@@ -332,12 +349,29 @@ export default function TermsOfService() {
           <section>
             <H id="par-13" eyebrow="§ 13" title="Kontakt" accent="" />
             <p className="text-[15px] leading-[1.65] text-[#F2EDE3]/75">
-              W razie pytań dotyczących Regulaminu lub działalności sklepu prosimy o kontakt poprzez{" "}
-              <Link href="/pomoc#kontakt" className="text-[#D8FF3D] hover:underline">
-                formularz kontaktowy
-              </Link>{" "}
-              na stronie lub email podany w stopce strony.
+              W razie pytań dotyczących Regulaminu lub działalności sklepu prosimy o kontakt:
             </p>
+            <div className="mt-5 p-5 border border-[rgba(242,237,227,0.10)] bg-[#0E0E0E] text-[14px] text-[#F2EDE3]/80">
+              <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">KAJPA Kacper Popko</div>
+              <div className="grid sm:grid-cols-2 gap-y-2 gap-x-6">
+                <div>
+                  <span className="text-[#F2EDE3]/45">NIP:</span>{" "}
+                  <span className="font-mono">9662222951</span>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">E-mail:</span>{" "}
+                  <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">Telefon:</span>{" "}
+                  <a href="tel:+48600580888" className="text-[#D8FF3D] hover:underline font-mono">+48 600 580 888</a>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">Formularz:</span>{" "}
+                  <Link href="/pomoc#kontakt" className="text-[#D8FF3D] hover:underline">/pomoc#kontakt</Link>
+                </div>
+              </div>
+            </div>
           </section>
 
           {/* Stopka dokumentu */}
