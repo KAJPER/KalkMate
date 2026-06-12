@@ -96,7 +96,30 @@ Dedykowany serwer Next.js (zintegrowany z SQLite przez Prisma ORM) udostępnia n
 6. **`GET /firmware/download/[version]`**:
    Dostępny wyłącznie dla zarejestrowanych urządzeń o prawidłowym nagłówku `x-device-id`. Pliki `.bin` umieszczone są w prywatnym katalogu systemu plików serwera, uniemożliwiając bezpośrednie pobranie oprogramowania bez autoryzacji. Posiada zabezpieczenia przed atakami typu path traversal.
 
-### 3.2 Nagłówki autoryzacyjne
+### 3.2 Aplikacja Webowa (Next.js)
+
+Główna infrastruktura serwerowa oparta jest na nowoczesnym stosie technologicznym (T3-stack) w architekturze Server-Side Rendering (SSR) i Server Actions:
+- **Framework:** Next.js (App Router)
+- **Baza danych:** SQLite + Prisma ORM (tabela `Inventory` obsługiwana przez surowe zapytania SQL)
+- **Stylowanie:** Tailwind CSS
+
+#### Moduły aplikacji:
+1. **Panel Klienta (`/panel`):**
+   - Logowanie i rejestracja (NextAuth.js).
+   - Przeglądanie notatek, historii AI i zapisanych sprawdzianów zsynchronizowanych z urządzeniem.
+   - Zarządzanie subskrypcją na czat AI.
+2. **Panel Administratora (`/admin`):**
+   - Uwierzytelnianie dwuskładnikowe (TOTP 2FA via Google Authenticator) w module logowania (`/admin/login`).
+   - Zarządzanie użytkownikami, urządzeniami, wygenerowanymi kodami licencji.
+   - Obsługa magazynu (stan ilości sztuk KalkMate) i szybki podgląd zapytań do Gemini AI.
+3. **Moduł Zamówień (E-commerce):**
+   - Landing page z koszykiem zakupowym (komponent `BuyNow.tsx`).
+   - Integracja z Paczkomatami (InPost Geowidget) do wyboru punktu odbioru.
+   - Procesowanie płatności via Stripe (z uwzględnieniem natywnych webhooków i obsługą zwrotów/refundacji widocznych w panelu `/admin/orders`).
+4. **Wysyłka e-maili:** 
+   - Moduł powiadomień oparty o Resend API, wykorzystywany m.in. przy weryfikacji adresów e-mail, wysyłce potwierdzeń zamówień oraz komunikacji systemowej.
+
+### 3.3 Nagłówki autoryzacyjne w komunikacji API-Urządzenie
 
 Zapytania wysyłane przez urządzenie do serwera Next.js muszą zawierać zestaw nagłówków:
 - `x-api-key`: Klucz uwierzytelniający aplikację kliencką.
