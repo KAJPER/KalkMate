@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE_NAME, MAX_AGE, validatePassword } from "@/lib/admin-auth";
+import { COOKIE_NAME, MAX_AGE, validateTOTP } from "@/lib/admin-auth";
 
 export async function POST(request: NextRequest) {
-  const { password } = await request.json();
+  const { token } = await request.json();
 
-  if (!validatePassword(password)) {
+  if (!validateTOTP(token)) {
     return NextResponse.json(
-      { error: "Nieprawidłowe hasło" },
+      { error: "Nieprawidłowy kod autoryzacyjny" },
       { status: 401 }
     );
   }

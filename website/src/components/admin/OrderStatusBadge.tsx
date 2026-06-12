@@ -10,6 +10,8 @@ const paymentColors: Record<string, string> = {
   requires_confirmation: "bg-amber-500/10 text-amber-400",
   requires_action: "bg-amber-500/10 text-amber-400",
   canceled: "bg-red-500/10 text-red-400",
+  refunded: "bg-red-500/10 text-red-400",
+  partially_refunded: "bg-orange-500/10 text-orange-400",
 };
 
 const paymentLabels: Record<string, string> = {
@@ -19,6 +21,8 @@ const paymentLabels: Record<string, string> = {
   requires_confirmation: "Oczekuje",
   requires_action: "Wymaga akcji",
   canceled: "Anulowane",
+  refunded: "Zwrócone",
+  partially_refunded: "Częściowy zwrot",
 };
 
 const fulfillmentColors: Record<string, string> = {

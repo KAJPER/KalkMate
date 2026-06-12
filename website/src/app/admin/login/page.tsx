@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 export default function AdminLogin() {
   const router = useRouter();
-  const [password, setPassword] = useState("");
+  const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -18,11 +18,11 @@ export default function AdminLogin() {
       const res = await fetch("/api/admin/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ token }),
       });
 
       if (!res.ok) {
-        setError("Nieprawidłowe hasło");
+        setError("Nieprawidłowy kod");
         setLoading(false);
         return;
       }
@@ -48,16 +48,18 @@ export default function AdminLogin() {
         >
           <div>
             <label className="block text-sm font-medium text-[#E0E0E0]/70 mb-1">
-              Hasło
+              Kod Authenticator
             </label>
             <input
-              type="password"
+              type="text"
               required
               autoFocus
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              maxLength={6}
+              value={token}
+              onChange={(e) => setToken(e.target.value.replace(/\D/g, ''))}
               className="w-full px-4 py-2.5 rounded-lg border border-[#3F4147] bg-[#2B2D31] text-[#E0E0E0] text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
-              placeholder="Wpisz hasło administratora"
+              placeholder="Wpisz 6-cyfrowy kod"
+              inputMode="numeric"
             />
           </div>
 

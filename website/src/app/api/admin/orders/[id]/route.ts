@@ -14,13 +14,27 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const pi = await stripe.paymentIntents.retrieve(id);
+    const pi = await stripe.paymentIntents.retrieve(id, {
+      expand: ["latest_charge"],
+    });
+
+    let mappedStatus = pi.status as string;
+    const charge = pi.latest_charge as any;
+    
+    if (mappedStatus === "succeeded" && charge) {
+      if (charge.refunded) {
+        mappedStatus = "refunded";
+      } else if (charge.amount_refunded && charge.amount_refunded > 0) {
+        mappedStatus = "partially_refunded";
+      }
+    }
+
     return NextResponse.json({
       order: {
         id: pi.id,
         amount: pi.amount,
         currency: pi.currency,
-        status: pi.status,
+        status: mappedStatus,
         created: pi.created,
         metadata: pi.metadata,
         customer_name: pi.metadata.customer_name || "",
