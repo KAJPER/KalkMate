@@ -125,6 +125,8 @@ export default function TermsOfService() {
                 <UL>
                   <li><strong className="text-[#F2EDE3]">Nazwa:</strong> KAJPA Kacper Popko</li>
                   <li><strong className="text-[#F2EDE3]">NIP:</strong> 9662222951</li>
+                  <li><strong className="text-[#F2EDE3]">REGON:</strong> 545011444</li>
+                  <li><strong className="text-[#F2EDE3]">Adres siedziby:</strong> ul. Zastawie I 37, 16-070 Choroszcz</li>
                   <li><strong className="text-[#F2EDE3]">E-mail:</strong>{" "}
                     <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>
                   </li>
@@ -178,6 +180,7 @@ export default function TermsOfService() {
           <section>
             <H id="par-4" eyebrow="§ 4" title="Płatności" accent="" />
             <OL>
+              <li><strong className="text-[#F2EDE3]">Wszystkie ceny podane w Sklepie wyrażone są w złotych polskich (PLN) i zawierają podatek VAT.</strong></li>
               <li>Płatności realizowane są przez system Stripe.</li>
               <li>
                 Akceptowane metody płatności:
@@ -187,6 +190,7 @@ export default function TermsOfService() {
                   <li>Apple Pay i Google Pay.</li>
                 </UL>
               </li>
+              <li>Walutą wszystkich transakcji w Sklepie jest złoty polski (PLN).</li>
               <li>Realizacja zamówienia następuje po otrzymaniu potwierdzenia płatności od operatora płatności.</li>
               <li>W przypadku subskrypcji AI Chat płatność pobierana jest automatycznie co miesiąc.</li>
             </OL>
@@ -213,7 +217,7 @@ export default function TermsOfService() {
               <li><strong className="text-[#F2EDE3]">Prawo odstąpienia od umowy (zwrot towaru) nie przysługuje</strong> w odniesieniu do produktów oferowanych w Sklepie, tj. kalkulatorów graficznych wykonywanych ręcznie, indywidualnie na zamówienie Klienta.</li>
               <li>Podstawa prawna wyłączenia: art. 38 ust. 1 pkt 3 Ustawy z dnia 30 maja 2014 r. o prawach konsumenta (t.j. Dz.U. 2020 poz. 287 ze zm.) — prawo odstąpienia od umowy zawartej poza lokalem przedsiębiorstwa lub na odległość nie przysługuje konsumentowi w odniesieniu do umów, w których przedmiotem świadczenia jest rzecz nieprefabrykowana, wyprodukowana według specyfikacji konsumenta lub służąca zaspokojeniu jego zindywidualizowanych potrzeb.</li>
               <li>Każdy kalkulator jest wytwarzany ręcznie, od podstaw, wyłącznie po złożeniu i opłaceniu zamówienia przez konkretnego Klienta. Produkt nie istnieje przed złożeniem zamówienia i nie może być odsprzedany innemu nabywcy — z tego powodu zwrot nie jest możliwy.</li>
-              <li>Powyższe wyłączenie nie ogranicza uprawnień Klienta z tytułu reklamacji (rękojmi za wady), opisanych w § 7 niniejszego Regulaminu.</li>
+              <li><strong className="text-[#F2EDE3]">Powyższe wyłączenie nie ogranicza uprawnień Klienta z tytułu reklamacji (rękojmi za wady), opisanych w § 7 niniejszego Regulaminu.</strong> W przypadku otrzymania produktu wadliwego lub niezgodnego z umową, Klient ma prawo do wymiany, naprawy, obniżenia ceny lub odstąpienia od umowy i zwrotu środków — szczegóły w § 7.</li>
               <li>Składając zamówienie i dokonując płatności, Klient potwierdza, że zapoznał się z niniejszym wyłączeniem prawa odstąpienia od umowy i akceptuje jego warunki.</li>
             </OL>
           </section>
@@ -226,8 +230,9 @@ export default function TermsOfService() {
               <li>
                 Reklamację można zgłosić:
                 <UL>
-                  <li>poprzez email na adres podany w stopce strony,</li>
-                  <li>poprzez formularz kontaktowy na stronie.</li>
+                  <li>poprzez email na adres: <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>,</li>
+                  <li>telefonicznie: <a href="tel:+48600580888" className="text-[#D8FF3D] hover:underline">+48 600 580 888</a>,</li>
+                  <li>poprzez formularz kontaktowy na stronie (<Link href="/pomoc#kontakt" className="text-[#D8FF3D] hover:underline">/pomoc#kontakt</Link>).</li>
                 </UL>
               </li>
               <li>
@@ -265,6 +270,14 @@ export default function TermsOfService() {
               <li>Anulowanie subskrypcji następuje z końcem bieżącego okresu rozliczeniowego.</li>
               <li>Po anulowaniu subskrypcji Klient nie otrzymuje zwrotu środków za niewykorzystany okres.</li>
               <li>Sprzedawca zastrzega sobie prawo do zmiany ceny subskrypcji z 30-dniowym wyprzedzeniem, powiadamiając Klientów drogą mailową.</li>
+              <li>
+                <strong className="text-[#F2EDE3]">Zasady aktywacji zakupionych usług:</strong>
+                <UL>
+                  <li><strong className="text-[#F2EDE3]">Kalkulator KalkMate:</strong> po opłaceniu zamówienia i otrzymaniu urządzenia, Klient aktywuje kalkulator poprzez sparowanie go ze swoim kontem w panelu klienta — skanując kod QR z ekranu kalkulatora lub wpisując ręcznie Device ID w zakładce „Kalkulator”.</li>
+                  <li><strong className="text-[#F2EDE3]">AI Chat (30 dni gratis przy zakupie kalkulatora):</strong> aktywacja następuje automatycznie po zalogowaniu się na konto, na które zrealizowano zamówienie. 30-dniowy okres startuje od momentu zaksięgowania płatności.</li>
+                  <li><strong className="text-[#F2EDE3]">Subskrypcja AI Chat (płatna):</strong> aktywacja następuje natychmiastowo po opłaceniu subskrypcji w panelu klienta. Dostęp do AI Chat jest aktywny od momentu potwierdzenia płatności przez operatora.</li>
+                </UL>
+              </li>
             </OL>
           </section>
 
@@ -357,6 +370,14 @@ export default function TermsOfService() {
                 <div>
                   <span className="text-[#F2EDE3]/45">NIP:</span>{" "}
                   <span className="font-mono">9662222951</span>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">REGON:</span>{" "}
+                  <span className="font-mono">545011444</span>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">Adres siedziby:</span>{" "}
+                  <span>ul. Zastawie I 37, 16-070 Choroszcz</span>
                 </div>
                 <div>
                   <span className="text-[#F2EDE3]/45">E-mail:</span>{" "}

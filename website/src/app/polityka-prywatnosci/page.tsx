@@ -134,6 +134,14 @@ export default function PrivacyPolicy() {
                   <span className="font-mono">9662222951</span>
                 </div>
                 <div>
+                  <span className="text-[#F2EDE3]/45">REGON:</span>{" "}
+                  <span className="font-mono">545011444</span>
+                </div>
+                <div>
+                  <span className="text-[#F2EDE3]/45">Adres siedziby:</span>{" "}
+                  <span>ul. Zastawie I 37, 16-070 Choroszcz</span>
+                </div>
+                <div>
                   <span className="text-[#F2EDE3]/45">Nazwa skrócona:</span>{" "}
                   <span className="font-mono">KAJPA</span>
                 </div>
@@ -457,7 +465,8 @@ export default function PrivacyPolicy() {
               z przysługujących Państwu praw prosimy kierować na:
             </P>
             <UL>
-              <li>Email: podany w stopce strony,</li>
+              <li>Email: <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>,</li>
+              <li>Telefon: <a href="tel:+48600580888" className="text-[#D8FF3D] hover:underline">+48 600 580 888</a>,</li>
               <li>
                 <Link href="/pomoc#kontakt" className="text-[#D8FF3D] hover:underline">
                   Formularz kontaktowy

@@ -9,8 +9,11 @@ function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/panel";
+  // Tryb formularza: ?mode=register | ?mode=signup | ?signup=1 -> rejestracja, domyslnie login
+  const initialMode = searchParams.get("mode") || (searchParams.get("signup") ? "register" : "");
+  const startAsRegister = initialMode === "register" || initialMode === "signup";
 
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(!startAsRegister);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");

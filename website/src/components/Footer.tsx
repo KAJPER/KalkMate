@@ -49,7 +49,7 @@ export default function Footer() {
         {/* Dane firmy — wymagane prawnie + zgodne z ustawa o swiadczeniu uslug drogą elektroniczna */}
         <div className="mt-14 pt-6 border-t border-[rgba(242,237,227,0.10)]">
           <p className="km-mono-eyebrow text-[#D8FF3D] mb-4">Dane firmy</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-3 text-[13.5px] text-[#F2EDE3]/70">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3 text-[13.5px] text-[#F2EDE3]/70">
             <div>
               <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">Sprzedawca</p>
               <p className="text-[#F2EDE3]">KAJPA Kacper Popko</p>
@@ -57,6 +57,14 @@ export default function Footer() {
             <div>
               <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">NIP</p>
               <p className="font-mono text-[#F2EDE3]">9662222951</p>
+            </div>
+            <div>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">REGON</p>
+              <p className="font-mono text-[#F2EDE3]">545011444</p>
+            </div>
+            <div>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">Adres siedziby</p>
+              <p className="text-[#F2EDE3]">ul. Zastawie I 37, 16-070 Choroszcz</p>
             </div>
             <div>
               <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">E-mail</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Elements, PaymentMethodMessagingElement } from "@stripe/react-stripe-js";
 import type { StripeElementsOptions } from "@stripe/stripe-js";
@@ -76,6 +76,53 @@ export default function BuyNow() {
       setStage("success");
     }
   }, []);
+
+  // Google Customer Reviews opt-in
+  const gcsSurveyRendered = useRef(false);
+  useEffect(() => {
+    if (stage !== "success" || gcsSurveyRendered.current) return;
+    gcsSurveyRendered.current = true;
+
+    // Compute estimated delivery date (today + 28 days)
+    const deliveryDate = new Date();
+    deliveryDate.setDate(deliveryDate.getDate() + 28);
+    const estimatedDelivery = deliveryDate.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // Get order_id from URL params (redirect case) or clientSecret (inline case)
+    const params = new URLSearchParams(window.location.search);
+    const orderId =
+      params.get("payment_intent") ||
+      (clientSecret ? clientSecret.split("_secret_")[0] : `KM-${Date.now()}`);
+
+    // Get email: formData (inline) or session (redirect)
+    const customerEmail = formData.email || session?.user?.email || "";
+
+    // Define the renderOptIn callback
+    (window as any).renderOptIn = function () {
+      (window as any).gapi.load("surveyoptin", function () {
+        (window as any).gapi.surveyoptin.render({
+          merchant_id: 5808165395,
+          order_id: orderId,
+          email: customerEmail,
+          delivery_country: "PL",
+          estimated_delivery_date: estimatedDelivery,
+          products: [{ gtin: "5904224900012" }],
+        });
+      });
+    };
+
+    // Load Google platform.js if not already loaded
+    if (!(window as any).gapi) {
+      const script = document.createElement("script");
+      script.src =
+        "https://apis.google.com/js/platform.js?onload=renderOptIn";
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    } else {
+      (window as any).renderOptIn();
+    }
+  }, [stage, clientSecret, formData.email, session]);
 
   useEffect(() => {
     document.body.style.overflow = isModalOpen ? "hidden" : "";
