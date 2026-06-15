@@ -50,25 +50,12 @@ export default function BuyNow() {
     }
   }, [session, formData.email]);
 
-  // Day-seeded stock
+  // Pobierz stan magazynowy z API (ustawiany przez admina)
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    let seed = 0;
-    for (let i = 0; i < today.length; i++) seed += today.charCodeAt(i) * (i + 1);
-    const baseStock = (seed % 6) + 7;
-    const cookieKey = "km_s";
-    const cookies = document.cookie.split("; ").reduce((acc, c) => {
-      const [k, v] = c.split("=");
-      acc[k] = v;
-      return acc;
-    }, {} as Record<string, string>);
-    const stored = cookies[cookieKey];
-    let decrements = 0;
-    if (stored) {
-      const [storedDate, storedDec] = stored.split(":");
-      if (storedDate === today) decrements = parseInt(storedDec, 10) || 0;
-    }
-    setStockLeft(Math.max(3, baseStock - decrements));
+    fetch("/api/stock")
+      .then((r) => r.json())
+      .then((d) => { if (typeof d.stock === "number") setStockLeft(d.stock); })
+      .catch(() => setStockLeft(11));
   }, []);
 
   useEffect(() => {

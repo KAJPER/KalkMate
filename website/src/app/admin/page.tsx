@@ -91,15 +91,19 @@ export default function AdminDashboard() {
   const [generatingCodes, setGeneratingCodes] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
   const [licenseDuration, setLicenseDuration] = useState<"week" | "month" | "3months">("month");
+  const [stockValue, setStockValue] = useState<number | "">("");
+  const [stockSaving, setStockSaving] = useState(false);
+  const [stockSaved, setStockSaved] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [analyticsRes, visitsRes, statsRes, geminiRes, usersRes] = await Promise.all([
+      const [analyticsRes, visitsRes, statsRes, geminiRes, usersRes, stockRes] = await Promise.all([
         fetch("/api/admin/analytics"),
         fetch("/api/admin/visits"),
         fetch("/api/admin/stats"),
         fetch("/api/admin/gemini-stats"),
         fetch("/api/admin/users?limit=10"),
+        fetch("/api/admin/stock"),
       ]);
 
       if (analyticsRes.ok) {
@@ -118,6 +122,10 @@ export default function AdminDashboard() {
       if (usersRes.ok) {
         const usersData = await usersRes.json();
         setUsers(usersData.users);
+      }
+      if (stockRes.ok) {
+        const s = await stockRes.json();
+        setStockValue(s.stock);
       }
     } catch (error) {
       console.error("Failed to fetch:", error);
@@ -154,6 +162,22 @@ export default function AdminDashboard() {
     } finally {
       setGeneratingCodes(false);
     }
+  };
+
+  const saveStock = async () => {
+    if (stockValue === "" || stockSaving) return;
+    setStockSaving(true);
+    setStockSaved(false);
+    try {
+      const res = await fetch("/api/admin/stock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stock: Number(stockValue) }),
+      });
+      if (res.ok) setStockSaved(true);
+    } catch {}
+    setStockSaving(false);
+    setTimeout(() => setStockSaved(false), 3000);
   };
 
   useEffect(() => {
@@ -214,6 +238,50 @@ export default function AdminDashboard() {
               color="purple"
             />
           </div>
+
+          {/* Stock widget */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-br from-[#313338] to-[#2B2D31] rounded-2xl border border-[#3F4147] p-6 shadow-xl"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#D8FF3D] to-[#a8cc00] flex items-center justify-center">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B0B0B" strokeWidth="2.2">
+                  <path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+                  <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-[#E0E0E0]">Stan magazynowy</h2>
+                <p className="text-sm text-[#E0E0E0]/60">Liczba "szt. dostępnych" na stronie głównej</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={0}
+                max={9999}
+                value={stockValue}
+                onChange={(e) => { setStockValue(e.target.value === "" ? "" : Number(e.target.value)); setStockSaved(false); }}
+                onKeyDown={(e) => e.key === "Enter" && saveStock()}
+                className="w-32 px-4 py-3 rounded-xl bg-[#2B2D31] border border-[#3F4147] text-[#E0E0E0] text-2xl font-bold text-center focus:outline-none focus:border-[#D8FF3D] transition-colors"
+                placeholder="11"
+              />
+              <span className="text-[#E0E0E0]/50 text-sm">szt. dostępnych</span>
+              <button
+                onClick={saveStock}
+                disabled={stockSaving || stockValue === ""}
+                className={`ml-auto px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
+                  stockSaved
+                    ? "bg-green-500 text-white"
+                    : "bg-[#D8FF3D] text-[#0B0B0B] hover:bg-[#c8ef2d] disabled:opacity-40"
+                }`}
+              >
+                {stockSaving ? "Zapisuję..." : stockSaved ? "✓ Zapisano" : "Zapisz"}
+              </button>
+            </div>
+          </motion.div>
 
           {/* License Generator Card */}
           <motion.div
