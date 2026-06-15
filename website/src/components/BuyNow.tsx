@@ -10,6 +10,7 @@ import StripeProvider from "@/components/StripeProvider";
 import CheckoutForm from "@/components/CheckoutForm";
 import getStripe from "@/lib/getStripe";
 import type { InPostPoint } from "@/components/InPostGeowidget";
+import { useCart } from "@/components/CartContext";
 
 const InPostGeowidget = lazy(() => import("@/components/InPostGeowidget"));
 
@@ -32,6 +33,7 @@ const inputClass =
 export default function BuyNow() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { addItem } = useCart();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [stage, setStage] = useState<Stage>("form");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -76,6 +78,17 @@ export default function BuyNow() {
       setStage("success");
     }
   }, []);
+
+  // Auto-open checkout modal when redirected from /koszyk after login
+  useEffect(() => {
+    if (status === "loading") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "true" && status === "authenticated") {
+      setIsModalOpen(true);
+      setStage("form");
+      setErrorMessage("");
+    }
+  }, [status]);
 
   // Google Customer Reviews opt-in
   const gcsSurveyRendered = useRef(false);
@@ -321,6 +334,19 @@ export default function BuyNow() {
                     Zamów teraz · 699 zł
                   </span>
                   <span>→</span>
+                </button>
+                <button
+                  onClick={() =>
+                    addItem({ id: "kalkmate-v1", name: "KalkMate v1.0", price: 69900 })
+                  }
+                  className="w-full px-6 py-4 border border-[rgba(242,237,227,0.18)] text-[#F2EDE3]/70 km-mono-eyebrow text-[13px] hover:border-[#D8FF3D] hover:text-[#F2EDE3] transition-colors flex items-center justify-between"
+                >
+                  <span>Dodaj do koszyka</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M16 10a4 4 0 01-8 0" />
+                  </svg>
                 </button>
               </div>
             </motion.div>

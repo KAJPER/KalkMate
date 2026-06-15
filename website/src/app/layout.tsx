@@ -4,6 +4,8 @@ import "./globals.css";
 import HeadSEO from "./head-seo";
 import SessionProvider from "@/components/SessionProvider";
 import CookieBanner from "@/components/CookieBanner";
+import { CartProvider } from "@/components/CartContext";
+import CartDrawer from "@/components/CartDrawer";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -121,7 +123,12 @@ export default function RootLayout({
       <body
         className={`${geist.variable} ${instrument.variable} ${jetbrains.variable} antialiased km-grain bg-[#0B0B0B] text-[#F2EDE3]`}
       >
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          <CartProvider>
+            {children}
+            <CartDrawer />
+          </CartProvider>
+        </SessionProvider>
         <CookieBanner />
       </body>
     </html>

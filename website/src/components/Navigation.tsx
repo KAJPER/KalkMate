@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useCart } from "@/components/CartContext";
 
 const links = [
   { href: "#jak-dziala", label: "Jak działa", n: "01" },
@@ -14,6 +15,7 @@ export default function Navigation() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [clock, setClock] = useState("");
+  const { totalItems, openDrawer } = useCart();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -77,22 +79,70 @@ export default function Navigation() {
             >
               Panel ↗
             </a>
-            <a
-              href="#kup-teraz"
-              className="group inline-flex items-center gap-2 px-4 py-2 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow hover:bg-[#F2EDE3] transition-colors"
+            {/* Cart button */}
+            <button
+              onClick={openDrawer}
+              className="relative inline-flex items-center gap-2 px-4 py-2 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow hover:bg-[#F2EDE3] transition-colors"
+              aria-label="Koszyk"
             >
-              <span className="w-1.5 h-1.5 bg-[#0B0B0B] rounded-full km-blink" />
-              Kup — 699 zł
-            </a>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <path d="M16 10a4 4 0 01-8 0" />
+              </svg>
+              Koszyk
+              {totalItems > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#0B0B0B] text-[#D8FF3D] rounded-full flex items-center justify-center text-[10px] font-bold border border-[#D8FF3D]">
+                  {totalItems}
+                </span>
+              )}
+            </button>
           </div>
 
-          <button
-            onClick={() => setMenuOpen((v) => !v)}
-            className="lg:hidden km-mono-eyebrow text-[#F2EDE3] px-3 py-1.5 border border-[rgba(242,237,227,0.20)]"
-            aria-label="Menu"
-          >
-            {menuOpen ? "✕" : "Menu"}
-          </button>
+          {/* Mobile: cart icon + menu */}
+          <div className="lg:hidden flex items-center gap-3">
+            <button
+              onClick={openDrawer}
+              className="relative p-2 text-[#F2EDE3]"
+              aria-label="Koszyk"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <path d="M16 10a4 4 0 01-8 0" />
+              </svg>
+              {totalItems > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-[#D8FF3D] text-[#0B0B0B] rounded-full flex items-center justify-center text-[9px] font-bold min-w-[18px] min-h-[18px]">
+                  {totalItems}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="km-mono-eyebrow text-[#F2EDE3] px-3 py-1.5 border border-[rgba(242,237,227,0.20)]"
+              aria-label="Menu"
+            >
+              {menuOpen ? "✕" : "Menu"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -118,11 +168,11 @@ export default function Navigation() {
               Panel · Logowanie ↗
             </a>
             <a
-              href="#kup-teraz"
+              href="/koszyk"
               onClick={() => setMenuOpen(false)}
               className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow"
             >
-              Kup — 699 zł
+              Koszyk {totalItems > 0 && `(${totalItems})`}
             </a>
           </div>
         </div>
