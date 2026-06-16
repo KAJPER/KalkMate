@@ -4,9 +4,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
+const EU_COUNTRIES = new Set([
+  "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE",
+  "GR","HU","IE","IT","LV","LT","LU","MT","NL","PT","RO","SK","SI","ES","SE",
+]);
+
 export async function POST(request: NextRequest) {
   try {
-    // Wymagamy zalogowania zeby kupic
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json(
@@ -30,41 +34,56 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, phone, pickupPoint, pickupPointAddress, street, postcode, city } = body;
-    // Uzywamy emaila z sesji (a nie z body) - eliminuje ryzyko podszywania
+    const {
+      name, phone,
+      pickupPoint, pickupPointAddress,
+      street, postcode, city,
+      country, currency, shippingCents,
+    } = body;
     const email = user.email!;
+    const resolvedCountry = (country || "PL") as string;
+    const isPoland = resolvedCountry === "PL";
+    const resolvedCurrency = ((currency as string) || "pln").toLowerCase();
 
-    if (!name || !phone || !pickupPoint) {
-      return NextResponse.json(
-        { error: "Imie, telefon i paczkomat sa wymagane." },
-        { status: 400 }
-      );
+    if (!name || !phone) {
+      return NextResponse.json({ error: "Imie i telefon sa wymagane." }, { status: 400 });
+    }
+    if (isPoland && !pickupPoint) {
+      return NextResponse.json({ error: "Paczkomat jest wymagany dla dostaw do Polski." }, { status: 400 });
+    }
+    if (!isPoland && (!street || !city)) {
+      return NextResponse.json({ error: "Street and city are required for international delivery." }, { status: 400 });
     }
 
+    // Pricing
+    const productAmount = resolvedCurrency === "eur" ? 16900 : 69900;
+    const resolvedShipping = typeof shippingCents === "number" ? shippingCents : 0;
+    const totalAmount = productAmount + resolvedShipping;
+
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: 69900,
-      currency: "pln",
+      amount: totalAmount,
+      currency: resolvedCurrency,
       automatic_payment_methods: { enabled: true },
       metadata: {
         product: "KalkMate v1.0",
-        user_id: user.id,                  // <-- key: link payment do konta
+        user_id: user.id,
         customer_name: name,
         customer_email: email,
         customer_phone: phone,
         customer_address_street: street || "",
         customer_address_postcode: postcode || "",
         customer_address_city: city || "",
-        pickup_point: pickupPoint,
+        customer_country: resolvedCountry,
+        pickup_point: pickupPoint || "",
         pickup_point_address: pickupPointAddress || "",
+        currency: resolvedCurrency,
+        shipping_amount: String(resolvedShipping),
       },
       receipt_email: email,
-      description: "KalkMate v1.0 - Inteligentny kalkulator z AI",
+      description: "KalkMate v1.0 - AI Calculator",
     });
 
-
-    return NextResponse.json({
-      clientSecret: paymentIntent.client_secret,
-    });
+    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
     console.error("Stripe error:", error);
     return NextResponse.json(

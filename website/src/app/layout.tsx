@@ -41,13 +41,26 @@ export const metadata: Metadata = {
     "kalkulator do matury 2026",
     "kalkulator naukowy ai",
     "kalkmate",
+    "calculator ai",
+    "ai calculator",
+    "ai exam calculator",
+    "KI Taschenrechner",
+    "calculator ai kaufen",
   ],
   authors: [{ name: "KalkMate" }],
   creator: "KalkMate",
   publisher: "KalkMate",
   formatDetection: { email: false, address: false, telephone: false },
   metadataBase: new URL("https://kalkmate.pl"),
-  alternates: { canonical: "/" },
+  alternates: {
+    canonical: "https://kalkmate.pl",
+    languages: {
+      "pl": "https://kalkmate.pl",
+      "en": "https://kalkmate.pl/en",
+      "de": "https://kalkmate.pl/de",
+      "x-default": "https://kalkmate.pl",
+    },
+  },
   openGraph: {
     title: "KalkMate — Kalkulator AI na Maturę",
     description:
