@@ -27,7 +27,11 @@ interface OrderDetail {
   furgonetka_package_id: string;
   furgonetka_order_uuid: string;
   furgonetka_status: string;
+  invoice_sent_at: string | null;
+  invoice_filename: string;
+  metadata: Record<string, string>;
 }
+
 
 export default function OrderDetailPage({
   params,
@@ -53,6 +57,13 @@ export default function OrderDetailPage({
   const [serviceId, setServiceId] = useState("");
   const [documentUrl, setDocumentUrl] = useState("");
   const [documentLoading, setDocumentLoading] = useState(false);
+  const [furgonetkaServices, setFurgonetkaServices] = useState<Array<{ id: number; name: string; courier?: string; carrier?: string }>>([]);
+  const [loadingServices, setLoadingServices] = useState(false);
+
+  // Invoice state
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [invoiceSending, setInvoiceSending] = useState(false);
+  const [invoiceMsg, setInvoiceMsg] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -102,6 +113,46 @@ export default function OrderDetailPage({
       setSaveMsg("Błąd zapisu");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendInvoice = async () => {
+    if (!invoiceFile) return;
+    setInvoiceSending(true);
+    setInvoiceMsg("");
+    try {
+      const form = new FormData();
+      form.append("invoice", invoiceFile);
+      const res = await fetch(`/api/admin/orders/${id}/invoice`, { method: "POST", body: form });
+      const data = await res.json();
+      if (res.ok) {
+        setInvoiceMsg(`✓ Wysłano na ${data.sentTo}`);
+        setInvoiceFile(null);
+      } else {
+        setInvoiceMsg(`Błąd: ${data.error}`);
+      }
+    } catch (e) {
+      setInvoiceMsg(`Błąd: ${(e as Error).message}`);
+    } finally {
+      setInvoiceSending(false);
+    }
+  };
+
+  const handleFetchServices = async () => {
+    setLoadingServices(true);
+    try {
+      const res = await fetch("/api/admin/furgonetka/services");
+      const data = await res.json();
+      if (res.ok) {
+        const list = Array.isArray(data.services) ? data.services : (Array.isArray(data.services?.services) ? data.services.services : []);
+        setFurgonetkaServices(list);
+      } else {
+        setFurgonetkaError(data.error || "Błąd pobierania usług");
+      }
+    } catch (e) {
+      setFurgonetkaError((e as Error).message);
+    } finally {
+      setLoadingServices(false);
     }
   };
 
@@ -464,18 +515,52 @@ export default function OrderDetailPage({
 
               {/* Service ID input */}
               {!furgonetkaPackageId && (
-                <div>
-                  <label className="block text-sm text-[#E0E0E0]/70 mb-1">
-                    Service ID Furgonetka
-                    <span className="text-xs text-[#E0E0E0]/40 ml-2">(opcjonalne – domyślnie z .env)</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={serviceId}
-                    onChange={(e) => setServiceId(e.target.value)}
-                    className={inputClass}
-                    placeholder="np. 12345 (z panelu Furgonetka)"
-                  />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <label className="block text-sm text-[#E0E0E0]/70 mb-1">
+                        Service ID Furgonetka
+                        <span className="text-xs text-[#E0E0E0]/40 ml-2">(domyślnie z .env)</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={serviceId}
+                        onChange={(e) => setServiceId(e.target.value)}
+                        className={inputClass}
+                        placeholder="np. 12345"
+                      />
+                    </div>
+                    <button
+                      onClick={handleFetchServices}
+                      disabled={loadingServices}
+                      className="mt-6 px-3 py-2 rounded-lg bg-[#3F4147] hover:bg-[#4a4d55] text-[#E0E0E0] text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-50"
+                    >
+                      {loadingServices ? "..." : "Pobierz listę usług"}
+                    </button>
+                  </div>
+
+                  {/* Lista dostępnych usług Furgonetka */}
+                  {furgonetkaServices.length > 0 && (
+                    <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] overflow-hidden">
+                      <div className="px-3 py-2 border-b border-[#3F4147] text-xs text-[#E0E0E0]/50 font-medium">
+                        Kliknij usługę, aby wybrać jej ID:
+                      </div>
+                      <div className="max-h-48 overflow-y-auto divide-y divide-[#3F4147]/50">
+                        {furgonetkaServices.map((s) => (
+                          <button
+                            key={s.id}
+                            onClick={() => setServiceId(String(s.id))}
+                            className={`w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-[#313338] transition-colors ${
+                              serviceId === String(s.id) ? "bg-[#3B82F6]/10 border-l-2 border-[#3B82F6]" : ""
+                            }`}
+                          >
+                            <span className="text-sm text-[#E0E0E0]">{s.name || s.carrier || "Usługa"}</span>
+                            <span className="text-xs font-mono text-[#D8FF3D] ml-4 shrink-0">ID: {s.id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -587,6 +672,96 @@ export default function OrderDetailPage({
 
               <p className="text-xs text-[#E0E0E0]/30 mt-2">
                 Przesyłka zostanie nadana w Paczkomacie InPost. Punkt odbioru: {order.pickup_point || "—"}
+              </p>
+            </div>
+
+            {/* Invoice section */}
+            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center flex-shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-[#E0E0E0]">Faktura</h2>
+                  <p className="text-xs text-[#E0E0E0]/50">Wyślij PDF faktury na email klienta</p>
+                </div>
+              </div>
+
+              {order.invoice_sent_at && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3">
+                  <p className="text-sm text-green-400">
+                    ✓ Wysłano: {new Date(order.invoice_sent_at).toLocaleString("pl-PL")}
+                    {order.invoice_filename && (
+                      <span className="block text-xs text-green-400/70 font-mono mt-0.5">{order.invoice_filename}</span>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-[#E0E0E0]/70 mb-2">Plik faktury (PDF)</label>
+                <label className="flex items-center gap-3 w-full px-4 py-3 rounded-lg border border-dashed border-[#3F4147] bg-[#2B2D31] hover:border-purple-500/50 hover:bg-purple-500/5 cursor-pointer transition-colors">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#E0E0E0]/40 shrink-0">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  <span className="text-sm text-[#E0E0E0]/60 truncate">
+                    {invoiceFile ? invoiceFile.name : "Kliknij aby wybrać plik PDF…"}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setInvoiceFile(f);
+                      setInvoiceMsg("");
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSendInvoice}
+                  disabled={!invoiceFile || invoiceSending}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm text-white transition-all ${
+                    !invoiceFile || invoiceSending
+                      ? "bg-purple-500/30 cursor-not-allowed"
+                      : "bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/20"
+                  }`}
+                >
+                  {invoiceSending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Wysyłanie…
+                    </>
+                  ) : (
+                    <>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                      </svg>
+                      Wyślij fakturę
+                    </>
+                  )}
+                </button>
+                {invoiceMsg && (
+                  <span className={`text-sm ${invoiceMsg.startsWith("✓") ? "text-green-400" : "text-red-400"}`}>
+                    {invoiceMsg}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-[#E0E0E0]/30">
+                Email zostanie wysłany na: <span className="text-[#E0E0E0]/60">{order.customer_email}</span>
               </p>
             </div>
           </div>

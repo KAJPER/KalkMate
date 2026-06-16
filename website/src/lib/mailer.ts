@@ -44,12 +44,19 @@ function getTransporter(): nodemailer.Transporter {
 export const FROM_EMAIL = `${fromName} <${fromAddress}>`;
 export const CONTACT_EMAIL = "kontakt@kalkmate.pl";
 
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface MailOptions {
   to: string | string[];
   subject: string;
   html: string;
   text?: string;
   replyTo?: string;
+  attachments?: MailAttachment[];
 }
 
 export async function sendMail(opts: MailOptions): Promise<{ ok: boolean; error?: string }> {
@@ -62,6 +69,7 @@ export async function sendMail(opts: MailOptions): Promise<{ ok: boolean; error?
       html: opts.html,
       text: opts.text,
       replyTo: opts.replyTo || CONTACT_EMAIL,
+      attachments: opts.attachments,
     });
     return { ok: true };
   } catch (e) {

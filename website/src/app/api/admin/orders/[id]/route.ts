@@ -53,6 +53,8 @@ export async function GET(
         furgonetka_package_id: pi.metadata.furgonetka_package_id || "",
         furgonetka_order_uuid: pi.metadata.furgonetka_order_uuid || "",
         furgonetka_status: pi.metadata.furgonetka_status || "",
+        invoice_sent_at: pi.metadata.invoice_sent_at || null,
+        invoice_filename: pi.metadata.invoice_filename || "",
       },
     });
 
@@ -92,7 +94,7 @@ export async function PATCH(
         metadata.shipped_at = new Date().toISOString();
       }
     }
-    if (tracking_number !== undefined) metadata.tracking_number = tracking_number;
+    if (tracking_number) metadata.tracking_number = tracking_number;
     if (notes !== undefined) metadata.admin_notes = notes;
 
     const updated = await stripe.paymentIntents.update(id, { metadata });

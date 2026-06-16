@@ -1,36 +1,81 @@
 /**
  * Furgonetka.pl API integration
- * Uses OAuth2 client_credentials flow to get bearer tokens.
+ * Uses OAuth2 password grant — Basic auth(client_id:client_secret) + username/password konta.
+ * Token jest cachowany w pamięci procesu i odświeżany przez refresh_token.
  */
 
 const FURGONETKA_API_URL = process.env.FURGONETKA_API_URL || "https://api.furgonetka.pl";
-const CLIENT_ID = process.env.FURGONETKA_CLIENT_ID || "";
+const CLIENT_ID     = process.env.FURGONETKA_CLIENT_ID     || "";
 const CLIENT_SECRET = process.env.FURGONETKA_CLIENT_SECRET || "";
+const USERNAME      = process.env.FURGONETKA_USERNAME       || "";
+const PASSWORD      = process.env.FURGONETKA_PASSWORD       || "";
 
 interface TokenCache {
   token: string;
+  refreshToken: string;
   expiresAt: number;
 }
 
 let _tokenCache: TokenCache | null = null;
 
+function basicAuth() {
+  return Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64");
+}
+
+async function _refreshToken(refreshToken: string): Promise<void> {
+  const now = Date.now();
+  const res = await fetch(`${FURGONETKA_API_URL}/oauth/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${basicAuth()}`,
+    },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
+  });
+  if (!res.ok) throw new Error("refresh failed");
+  const data = await res.json();
+  _tokenCache = {
+    token: data.access_token,
+    refreshToken: data.refresh_token || refreshToken,
+    expiresAt: now + (data.expires_in ?? 3600) * 1000,
+  };
+}
+
 export async function getFurgonetkaToken(): Promise<string> {
   const now = Date.now();
+
+  // Token wciąż ważny
   if (_tokenCache && _tokenCache.expiresAt > now + 60_000) {
     return _tokenCache.token;
   }
 
-  if (!CLIENT_ID || !CLIENT_SECRET) {
-    throw new Error("Brak konfiguracji Furgonetka API (FURGONETKA_CLIENT_ID / FURGONETKA_CLIENT_SECRET)");
+  // Spróbuj refresh zanim token wygaśnie
+  if (_tokenCache?.refreshToken) {
+    try {
+      await _refreshToken(_tokenCache.refreshToken);
+      return _tokenCache!.token;
+    } catch {
+      _tokenCache = null; // refresh failed — fallback do password grant
+    }
+  }
+
+  if (!CLIENT_ID || !CLIENT_SECRET || !USERNAME || !PASSWORD) {
+    throw new Error(
+      "Brak konfiguracji Furgonetka: ustaw FURGONETKA_CLIENT_ID, FURGONETKA_CLIENT_SECRET, FURGONETKA_USERNAME, FURGONETKA_PASSWORD"
+    );
   }
 
   const res = await fetch(`${FURGONETKA_API_URL}/oauth/token`, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${basicAuth()}`,
+    },
     body: new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
+      grant_type: "password",
+      scope: "api",
+      username: USERNAME,
+      password: PASSWORD,
     }),
   });
 
@@ -42,6 +87,7 @@ export async function getFurgonetkaToken(): Promise<string> {
   const data = await res.json();
   _tokenCache = {
     token: data.access_token,
+    refreshToken: data.refresh_token || "",
     expiresAt: now + (data.expires_in ?? 3600) * 1000,
   };
   return _tokenCache.token;
