@@ -35,7 +35,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.4.2"
+#define FW_VERSION "1.4.4"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -990,10 +990,17 @@ void setup() {
 
     esp_log_level_set("nvs", ESP_LOG_NONE);
 
-    // NVS — Arduino core robi to lazy przy pierwszym Preferences.begin(),
-    // ale bezpieczniej zrobic teraz raz, zeby uniknac pierwszego
-    // wywolania w hot pathie.
-    nvs_flash_init();
+    // NVS init z obsługa bledu — konieczne po wlaczeniu flash encryption
+    // (stare dane w NVS sa "szyfrowane" innym kluczem i wygladaja jak smieci).
+    // Bez erase+reinit Preferences.putString() cicho nie zapisuje niczego.
+    {
+        esp_err_t nvs_ret = nvs_flash_init();
+        if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+            Serial.println("[NVS] korupcja — czyszcze i reinicjalizuje");
+            nvs_flash_erase();
+            nvs_flash_init();
+        }
+    }
 
     // Klawiatura matrycowa
     if (!inputBegin()) {

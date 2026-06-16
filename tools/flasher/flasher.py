@@ -329,6 +329,7 @@ class FlasherApp:
         try:
             cmd = [self.cfg["esptool"], "--chip", self.cfg["chip"],
                    "--port", self.current_port, "--baud", "115200",
+                   "--after", "no_reset",
                    "chip_id"]
             res = subprocess.run(cmd, capture_output=True, text=True,
                                  timeout=15)
@@ -396,47 +397,84 @@ class FlasherApp:
                 if not os.path.exists(f):
                     raise FileNotFoundError(f"Brak pliku: {f}")
 
-            # Step 1: flash firmware via esptool write_flash
+            # Step 1: flash firmware
+            # Dla PROD_DEV/PROD_REL: pre-szyfrujemy binaries kluczem przed wgraniem,
+            # bo przy host-generated key ESP32 NIE auto-szyfruje flash przy pierwszym
+            # boocie (robi to tylko przy device-generated key).
+            if mode in ("PROD_DEV", "PROD_REL"):
+                key_file = self.cfg["fe_key_file"]
+                if not os.path.exists(key_file):
+                    os.makedirs(os.path.dirname(key_file), exist_ok=True)
+                    self.log(f"  Generuje nowy klucz FE: {key_file}")
+                    with open(key_file, "wb") as f:
+                        f.write(os.urandom(64))   # 64 bajtow = XTS-AES-256
+                espsecure = self.cfg.get("espsecure",
+                    self.cfg["espefuse"].replace("espefuse", "espsecure"))
+                enc_dir = os.path.join(os.path.dirname(key_file), "encrypted")
+                os.makedirs(enc_dir, exist_ok=True)
+                self.log(f"[0/3] Pre-szyfrowanie binaries kluczem FE...")
+                enc_bins = []
+                for addr, src in [
+                    (self.cfg["flash_addr_bootloader"], self.cfg["bootloader_bin"]),
+                    (self.cfg["flash_addr_partitions"], self.cfg["partitions_bin"]),
+                    (self.cfg["flash_addr_firmware"],   self.cfg["firmware_bin"]),
+                ]:
+                    dst = os.path.join(enc_dir, os.path.basename(src).replace(".bin", "_enc.bin"))
+                    cmd = [espsecure, "encrypt-flash-data",
+                           "--aes-xts", "--keyfile", key_file,
+                           "--address", addr, "--output", dst, src]
+                    self._run_subprocess(cmd, prefix="espsecure")
+                    enc_bins.append((addr, dst))
+                boot_bin, part_bin, fw_bin = enc_bins[0][1], enc_bins[1][1], enc_bins[2][1]
+            else:
+                boot_bin = self.cfg["bootloader_bin"]
+                part_bin = self.cfg["partitions_bin"]
+                fw_bin   = self.cfg["firmware_bin"]
+
             self.log(f"[1/3] Flashuje bootloader + partitions + firmware...")
+            force_flag = ["--force"] if mode in ("PROD_DEV", "PROD_REL") else []
             cmd = [
                 self.cfg["esptool"], "--chip", self.cfg["chip"],
                 "--port", port, "--baud", str(self.cfg["baud"]),
-                "write_flash", "-z",
-                self.cfg["flash_addr_bootloader"], self.cfg["bootloader_bin"],
-                self.cfg["flash_addr_partitions"], self.cfg["partitions_bin"],
-                self.cfg["flash_addr_firmware"],   self.cfg["firmware_bin"],
+                "--after", "no-reset",
+                "write-flash", *force_flag,
+                self.cfg["flash_addr_bootloader"], boot_bin,
+                self.cfg["flash_addr_partitions"], part_bin,
+                self.cfg["flash_addr_firmware"],   fw_bin,
             ]
             self._run_subprocess(cmd, prefix="esptool")
 
             # Step 2 (opcjonalne): Flash Encryption eFuse
             if mode in ("PROD_DEV", "PROD_REL"):
                 self.log("[2/3] Wypalanie Flash Encryption eFuse...")
-                # Wygeneruj klucz jezeli brak
-                key_file = self.cfg["fe_key_file"]
-                if not os.path.exists(key_file):
-                    os.makedirs(os.path.dirname(key_file), exist_ok=True)
-                    self.log(f"  Generuje nowy klucz FE: {key_file}")
-                    with open(key_file, "wb") as f:
-                        f.write(os.urandom(32))   # 256-bit random
                 # Wypal klucz w BLOCK_KEY0
                 cmd = [self.cfg["espefuse"], "--chip", self.cfg["chip"],
-                       "--port", port, "burn_key", "BLOCK_KEY0",
-                       key_file, "XTS_AES_256_KEY", "--do-not-confirm"]
-                self._run_subprocess(cmd, prefix="espefuse-key")
+                       "--port", port,
+                       "burn-key", "BLOCK_KEY0",
+                       key_file, "XTS_AES_256_KEY"]
+                self._run_subprocess(cmd, prefix="espefuse-key", stdin_input="BURN\n")
                 # Wlacz Flash Encryption
                 cmd = [self.cfg["espefuse"], "--chip", self.cfg["chip"],
-                       "--port", port, "burn_efuse",
-                       "SPI_BOOT_CRYPT_CNT", "1", "--do-not-confirm"]
-                self._run_subprocess(cmd, prefix="espefuse-en")
+                       "--port", port,
+                       "burn-efuse", "SPI_BOOT_CRYPT_CNT", "1"]
+                self._run_subprocess(cmd, prefix="espefuse-en", stdin_input="BURN\n")
 
             # Step 3 (tylko PROD_REL): zamknij Flash Encryption Release
             if mode == "PROD_REL":
                 self.log("[3/3] Przelaczenie FE na RELEASE mode (PERMANENT!)...")
                 cmd = [self.cfg["espefuse"], "--chip", self.cfg["chip"],
-                       "--port", port, "burn_efuse",
-                       "DIS_DOWNLOAD_MANUAL_ENCRYPT", "1",
-                       "--do-not-confirm"]
-                self._run_subprocess(cmd, prefix="espefuse-release")
+                       "--port", port,
+                       "burn-efuse", "DIS_DOWNLOAD_MANUAL_ENCRYPT", "1"]
+                self._run_subprocess(cmd, prefix="espefuse-release", stdin_input="BURN\n")
+
+            # Reset chip zeby dostal sie z bootloader mode do normalnego bootu
+            self.log("Resetuje urzadzenie...")
+            try:
+                cmd = [self.cfg["esptool"], "--chip", self.cfg["chip"],
+                       "--port", port, "--baud", "115200", "run"]
+                self._run_subprocess(cmd, prefix="esptool-reset")
+            except Exception:
+                self.log("  (reset przez esptool nie powiodl sie — nacisnij RESET recznie)", "#F88")
 
             self.log(f"=== FLASH SUKCES: {mac} ===\n", "#0F0")
             self.status_label.config(text=f"SUKCES — odlacz urzadzenie",
@@ -454,12 +492,17 @@ class FlasherApp:
         finally:
             self.busy = False
 
-    def _run_subprocess(self, cmd, prefix=""):
+    def _run_subprocess(self, cmd, prefix="", stdin_input=None):
         """Odpal subprocess i streamuj jego stdout/stderr do console."""
         self.log(f"  $ {' '.join(cmd)}", "#88F")
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE if stdin_input else None,
             text=True, bufsize=1)
+        if stdin_input:
+            proc.stdin.write(stdin_input)
+            proc.stdin.flush()
+            proc.stdin.close()
         for line in proc.stdout:
             self.log(f"  [{prefix}] {line.rstrip()}")
         proc.wait()
