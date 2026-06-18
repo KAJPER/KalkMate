@@ -81,9 +81,6 @@ export default function Hero() {
             >
               Zobacz jak działa
             </a>
-            <div className="km-mono-eyebrow text-[#F2EDE3]/40 ml-1">
-              Przedsprzedaż · 9 z 50 dostępnych
-            </div>
           </div>
 
           {/* Footnote / spec */}

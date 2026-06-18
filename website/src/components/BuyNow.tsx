@@ -560,9 +560,11 @@ export default function BuyNow({ defaultCountry = "PL" }: { defaultCountry?: str
                         onChange={(e) => setFormData({ ...formData, consent: e.target.checked })}
                         className="mt-1 accent-[#D8FF3D]" />
                       <span className="text-xs text-[#F2EDE3]/55 leading-relaxed">
-                        {isPoland
-                          ? "Akceptuję regulamin i wyrażam zgodę na przetwarzanie danych osobowych w celu realizacji zamówienia."
-                          : "I accept the terms and conditions and consent to the processing of my personal data for order fulfillment."}
+                        {isPoland ? (
+                          <>Akceptuję <a href="/regulamin" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#D8FF3D]">Regulamin Sklepu</a> i wyrażam zgodę na przetwarzanie danych osobowych w celu realizacji zamówienia.</>
+                        ) : (
+                          <>I accept the <a href="/regulamin" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#D8FF3D]">Terms and Conditions</a> and consent to the processing of my personal data for order fulfillment.</>
+                        )}
                       </span>
                     </label>
 

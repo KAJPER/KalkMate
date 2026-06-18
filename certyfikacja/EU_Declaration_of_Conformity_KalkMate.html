@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>EU Declaration of Conformity — KalkMate v1.0</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'IBM Plex Sans', Arial, sans-serif;
+    font-size: 9.5px;
+    color: #111;
+    background: #fff;
+    line-height: 1.5;
+  }
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 12mm 18mm 14mm 18mm;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    border-bottom: 3px solid #111;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+  }
+  .header-left h1 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+  }
+  .header-left .subtitle {
+    font-size: 8px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 3px;
+  }
+  .header-right {
+    text-align: right;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8px;
+    color: #666;
+    line-height: 1.8;
+  }
+  .ce-logo {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: -3px;
+    color: #111;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  /* POINTS */
+  .point {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+  }
+  .point:last-of-type { border-bottom: none; }
+  .point-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    background: #111;
+    color: #fff;
+    min-width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .point-body { flex: 1; }
+  .point-label {
+    font-size: 7.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #555;
+    margin-bottom: 4px;
+  }
+  .point-content {
+    font-size: 9.5px;
+    line-height: 1.55;
+    color: #111;
+  }
+  .point-content .row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 2px;
+  }
+  .point-content .lbl {
+    min-width: 36mm;
+    color: #666;
+    font-size: 9px;
+    flex-shrink: 0;
+  }
+  .point-content .val { font-weight: 500; }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 3px; }
+  th { background: #111; color: #fff; padding: 3px 7px; text-align: left;
+       font-family: 'IBM Plex Mono', monospace; font-size: 7px; text-transform: uppercase;
+       letter-spacing: 0.5px; font-weight: 700; }
+  td { padding: 3px 7px; border-bottom: 1px solid #eee; vertical-align: top; line-height: 1.45; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+
+  /* SIGNATURE */
+  .sig-section {
+    border-top: 2px solid #111;
+    margin-top: 10px;
+    padding-top: 8px;
+  }
+  .sig-label {
+    font-size: 7.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .sig-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+  }
+  .sig-field span {
+    display: block;
+    font-size: 7.5px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 16px;
+  }
+  .sig-line {
+    border-bottom: 1px solid #333;
+    margin-bottom: 3px;
+    height: 18px;
+  }
+  .sig-caption { font-size: 8px; color: #444; }
+
+  /* FOOTER */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 7px;
+    color: #aaa;
+    border-top: 1px solid #eee;
+    padding-top: 4px;
+    margin-top: 16px;
+  }
+
+  @media print {
+    body { background: white; }
+    @page { margin: 0; size: A4; }
+    .page { margin: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="ce-logo">CE</div>
+      <h1>EU Declaration of Conformity</h1>
+      <div class="subtitle">Deklaracja Zgodności UE · RED 2014/53/UE · RoHS II 2011/65/UE · LVD 2014/35/UE</div>
+    </div>
+    <div class="header-right">
+      Nr: KAJPA-DOC-2026-001<br>
+      Data / Date: 17.06.2026<br>
+      Rev.: 1.0
+    </div>
+  </div>
+
+  <!-- POINT 1 -->
+  <div class="point">
+    <div class="point-num">1</div>
+    <div class="point-body">
+      <div class="point-label">Unique identification of the product / Unikalna identyfikacja produktu</div>
+      <div class="point-content">
+        <div class="row"><span class="lbl">Model / Type:</span><span class="val">KalkMate-ESP32S3-v1</span></div>
+        <div class="row"><span class="lbl">Product name:</span><span class="val">KalkMate v1.0 — AI Educational Calculator</span></div>
+        <div class="row"><span class="lbl">Batch / Series:</span><span class="val">PCB-v4-2026 (first commercial batch)</span></div>
+        <div class="row"><span class="lbl">Doc. No.:</span><span class="val">KAJPA-DOC-2026-001</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POINT 2 -->
+  <div class="point">
+    <div class="point-num">2</div>
+    <div class="point-body">
+      <div class="point-label">Name and address of the manufacturer / Nazwa i adres producenta</div>
+      <div class="point-content">
+        <div class="row"><span class="lbl">Nazwa / Name:</span><span class="val">KAJPA Kacper Popko</span></div>
+        <div class="row"><span class="lbl">Adres / Address:</span><span class="val">ul. Zastawie I 37, 16-070 Choroszcz, Polska / Poland</span></div>
+        <div class="row"><span class="lbl">NIP / VAT:</span><span class="val">9662222951</span></div>
+        <div class="row"><span class="lbl">REGON:</span><span class="val">545011444</span></div>
+        <div class="row"><span class="lbl">E-mail:</span><span class="val">kontakt@kajpa.pl</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POINT 3 -->
+  <div class="point">
+    <div class="point-num">3</div>
+    <div class="point-body">
+      <div class="point-label">Sole responsibility / Wyłączna odpowiedzialność producenta</div>
+      <div class="point-content">
+        Niniejsza deklaracja zgodności wydana zostaje na <strong>wyłączną odpowiedzialność producenta</strong>.<br>
+        <em>This declaration of conformity is issued under the sole responsibility of the manufacturer.</em>
+      </div>
+    </div>
+  </div>
+
+  <!-- POINT 4 -->
+  <div class="point">
+    <div class="point-num">4</div>
+    <div class="point-body">
+      <div class="point-label">Object of the declaration — traceability / Przedmiot deklaracji</div>
+      <div class="point-content">
+        <div class="row"><span class="lbl">Opis / Description:</span><span class="val">Kalkulator edukacyjny z wbudowaną kamerą i asystentem AI — Educational calculator with built-in camera and AI assistant</span></div>
+        <div class="row"><span class="lbl">MCU:</span><span class="val">Espressif ESP32-S3-WROOM-1-N16R8 — Xtensa LX7 240 MHz, WiFi 802.11 b/g/n 2,4 GHz, BLE 5.0</span></div>
+        <div class="row"><span class="lbl">Display:</span><span class="val">OLED SSD1322 256×64 px, 4-wire SPI</span></div>
+        <div class="row"><span class="lbl">Camera:</span><span class="val">OmniVision OV2640 2 Mpx, 8-bit parallel</span></div>
+        <div class="row"><span class="lbl">Power / Zasilanie:</span><span class="val">LiPo 3,7 V 1500 mAh, ładowanie USB-C 5 V — MCP73831 charger + DW01A protection</span></div>
+        <div class="row"><span class="lbl">Firmware:</span><span class="val">v1.4.4 — PlatformIO / Arduino ESP32 Core, OTA Signed ECDSA P-256</span></div>
+        <div class="row"><span class="lbl">Kraj prod. / Origin:</span><span class="val">Polska / Poland</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POINT 5 -->
+  <div class="point">
+    <div class="point-num">5</div>
+    <div class="point-body">
+      <div class="point-label">Conformity with Union harmonisation legislation / Zgodność z prawodawstwem UE</div>
+      <div class="point-content">
+        <table>
+          <thead><tr><th>Dyrektywa / Directive</th><th>Nr</th><th>Zakres / Scope</th></tr></thead>
+          <tbody>
+            <tr><td>Radio Equipment Directive (RED)<br><em>Dyrektywa dot. urządzeń radiowych</em></td><td><strong>2014/53/UE</strong></td><td>WiFi 2,4 GHz; cybersecurity Art. 3.3(d)(e)(f)</td></tr>
+            <tr><td>Restriction of Hazardous Substances (RoHS II)<br><em>Dyrektywa RoHS II</em></td><td><strong>2011/65/UE</strong></td><td>Substancje niebezpieczne w sprzęcie elektrycznym</td></tr>
+            <tr><td>Low Voltage Directive (LVD)<br><em>Dyrektywa niskonapięciowa</em></td><td><strong>2014/35/UE</strong></td><td>Bezpieczeństwo elektryczne &lt;75 V DC (zasilanie bateryjne)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- POINT 6 -->
+  <div class="point">
+    <div class="point-num">6</div>
+    <div class="point-body">
+      <div class="point-label">Harmonised standards / Normy zharmonizowane</div>
+      <div class="point-content">
+        <table>
+          <thead><tr><th>Norma / Standard</th><th>Tytuł / Title</th></tr></thead>
+          <tbody>
+            <tr><td><strong>EN 300 328 v2.2.2</strong></td><td>Wideband transmission systems — 2,4 GHz radio requirements</td></tr>
+            <tr><td><strong>EN 301 489-1 v2.2.3</strong></td><td>EMC — Common technical requirements</td></tr>
+            <tr><td><strong>EN 301 489-17 v3.2.4</strong></td><td>EMC — Broadband data transmission equipment</td></tr>
+            <tr><td><strong>EN 62368-1:2020</strong></td><td>Bezpieczeństwo elektryczne urządzeń AV/IT — Electrical safety</td></tr>
+            <tr><td><strong>EN 62311:2020</strong></td><td>Ekspozycja na pola EM (0 Hz–300 GHz) — EM field exposure</td></tr>
+            <tr><td><strong>EN 18031-1:2024</strong></td><td>Cyberbezpieczeństwo urządzeń radiowych — RED Art. 3.3(d)(e)(f)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- POINT 7 -->
+  <div class="point">
+    <div class="point-num">7</div>
+    <div class="point-body">
+      <div class="point-label">Notified body / Jednostka notyfikowana</div>
+      <div class="point-content">
+        Nie dotyczy. Zastosowano <strong>Moduł A</strong> (wewnętrzna kontrola produkcji — Annex II Dyrektywy RED 2014/53/UE). Udział jednostki notyfikowanej nie jest wymagany.<br>
+        <em>Not applicable. Module A (internal production control — Annex II of RED 2014/53/EU) applied. No notified body intervention required.</em>
+      </div>
+    </div>
+  </div>
+
+  <!-- POINT 8 — nowa strona -->
+  <div style="page-break-before: always; padding-top: 12mm;">
+
+  <div style="display:flex; justify-content:space-between; border-bottom:2px solid #111; padding-bottom:8px; margin-bottom:12px;">
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700;">EU Declaration of Conformity <span style="font-size:9px; font-weight:400; color:#666;">— KalkMate-ESP32S3-v1</span></div>
+    <div style="font-family:'IBM Plex Mono',monospace; font-size:8px; color:#666; text-align:right;">KAJPA-DOC-2026-001 · Strona 2 / 2</div>
+  </div>
+
+  <div class="point">
+    <div class="point-num">8</div>
+    <div class="point-body">
+      <div class="point-label">Additional information / Informacje dodatkowe</div>
+      <div class="point-content">
+        Moduł radiowy ESP32-S3-WROOM-1 posiada własny certyfikat RED (nr: CE2021-XXXX) wystawiony przez Espressif Systems. Teczka techniczna (Technical File) zawiera: schemat elektryczny PCB v4, BOM, datasheety komponentów, certyfikaty RoHS/REACH dostawców, ocenę cyberbezpieczeństwa (EN 18031) oraz opis oprogramowania układowego. Dokumentacja przechowywana przez producenta przez min. 10 lat od daty wprowadzenia produktu do obrotu. Deklaracja dotyczy urządzeń wyprodukowanych po 01.01.2026.<br>
+        <em>The radio module ESP32-S3-WROOM-1 holds its own RED certificate issued by Espressif Systems. Technical File is held by the manufacturer for a minimum of 10 years from the date of placing on the market.</em>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- end page-break wrapper -->
+
+  <!-- SIGNATURE -->
+  <div class="sig-section">
+    <div class="sig-label">Signed for and on behalf of / Podpisano w imieniu producenta:</div>
+    <div class="sig-grid">
+      <div class="sig-field">
+        <span>Miejsce i data / Place &amp; date</span>
+        <div class="sig-line"></div>
+        <div class="sig-caption">Choroszcz, 17.06.2026</div>
+      </div>
+      <div class="sig-field">
+        <span>Imię i nazwisko / Name</span>
+        <div class="sig-line"></div>
+        <div class="sig-caption">Kacper Popko</div>
+      </div>
+      <div class="sig-field">
+        <span>Funkcja / Function &amp; Signature</span>
+        <div class="sig-line"></div>
+        <div class="sig-caption">Właściciel / Owner — KAJPA Kacper Popko</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>KAJPA Kacper Popko · ul. Zastawie I 37, 16-070 Choroszcz · NIP 9662222951 · kontakt@kajpa.pl</span>
+    <span>KAJPA-DOC-2026-001 · Rev. 1.0 · 17.06.2026</span>
+  </div>
+
+</div>
+</body>
+</html>

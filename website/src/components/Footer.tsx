@@ -37,6 +37,7 @@ export default function Footer() {
             <ul className="space-y-2.5">
               <li><a href="/regulamin" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">Regulamin</a></li>
               <li><a href="/polityka-prywatnosci" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">Polityka prywatności</a></li>
+              <li><a href="/docs/ce-declaration.pdf" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]" target="_blank" rel="noopener noreferrer">Deklaracja zgodności CE</a></li>
               <li>
                 <a href="mailto:kontakt@kalkmate.pl" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">
                   kontakt@kalkmate.pl
