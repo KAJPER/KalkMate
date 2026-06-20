@@ -26,18 +26,39 @@ export async function GET(
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  // Auth: device must be registered (raises bar — losowy z API key
-  // dalej nie pobierze bez waznego device-id sparowanego z baza)
-  const deviceId = request.headers.get("x-device-id");
-  if (!deviceId) {
+  // Wymagamy device-id (MAC). Normalizujemy jak w /register (.toUpperCase),
+  // zeby uniknac niedopasowania wielkosci liter.
+  const deviceId = (request.headers.get("x-device-id") || "").trim().toUpperCase();
+  if (deviceId.length < 6) {
     return new NextResponse("Missing x-device-id", { status: 403 });
   }
 
-  const device = await prisma.device.findUnique({
-    where: { deviceId },
-  });
+  // Urzadzenie POWINNO byc zarejestrowane (accountRegister na boot). Jezeli
+  // jednak go nie ma (nowy egzemplarz / rejestracja nie przeszla) — NIE
+  // blokujemy OTA przez 403. To pulapka chicken-and-egg: nie da sie naprawic
+  // firmware przez OTA, gdy OTA jest zablokowane. Sam api key i tak musi byc
+  // poprawny, a /api/device/register juz teraz pozwala zarejestrowac dowolne
+  // device-id z tym api key, wiec brama "musi byc wczesniej zarejestrowane"
+  // nie dawala realnej ochrony. Auto-rejestrujemy minimalny rekord.
+  let device = await prisma.device.findUnique({ where: { deviceId } });
   if (!device) {
-    return new NextResponse("Device not registered", { status: 403 });
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      null;
+    const fwVersion = request.headers.get("x-fw-version") || null;
+    try {
+      device = await prisma.device.create({
+        data: { deviceId, firmwareVersion: fwVersion, lastIp: ip },
+      });
+      console.log(`[firmware] auto-registered device=${deviceId} fw=${fwVersion}`);
+    } catch {
+      // Wyscig — rekord mogl powstac rownolegle. Sprobuj ponownie odczytac.
+      device = await prisma.device.findUnique({ where: { deviceId } });
+      if (!device) {
+        return new NextResponse("Device registration failed", { status: 500 });
+      }
+    }
   }
 
   // Walidacja wersji (anty path-traversal — tylko semver X.Y.Z)

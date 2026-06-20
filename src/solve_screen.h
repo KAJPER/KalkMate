@@ -684,30 +684,147 @@ static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
 }
 
 // ---------------------------------------------------------------------------
-// Tryb ZDJECIE: zrob zdjecie → wyslij do API → pokaz wynik
+// Pomocnik: bramki kadrowania (narozniki L) w trybie XOR — widoczne na kazdym tle
 // ---------------------------------------------------------------------------
-static void _solRunPhotoMode(U8G2 &d) {
-    // Informacja o przygotowaniu do zdjecia
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 16, _solT("Tryb: Zdjecie", "Mode: Photo"));
-    d.drawHLine(0, 18, 256);
-    d.drawStr(2, 32, _solT("Skieruj na zadanie.", "Point at the problem."));
-    d.drawStr(2, 46, _solT("OK = zrob zdjecie", "OK = take photo"));
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 62, _solT("< = anuluj", "< = cancel"));
-    d.sendBuffer();
+static void _solDrawCorners(U8G2 &d, int x, int y, int w, int h) {
+    const int L = 8;            // dlugosc ramienia narożnika
+    d.setDrawColor(2);          // XOR — narozniki widoczne i na jasnym, i na ciemnym
+    d.drawHLine(x, y, L);                  d.drawVLine(x, y, L);                  // gora-lewo
+    d.drawHLine(x + w - L, y, L);          d.drawVLine(x + w - 1, y, L);          // gora-prawo
+    d.drawHLine(x, y + h - 1, L);          d.drawVLine(x, y + h - L, L);          // dol-lewo
+    d.drawHLine(x + w - L, y + h - 1, L);  d.drawVLine(x + w - 1, y + h - L, L);  // dol-prawo
+    d.setDrawColor(1);          // przywroc normalny tryb
+}
+
+// ---------------------------------------------------------------------------
+// Podglad na zywo (mono viewfinder) przed zdjeciem.
+// Kamera musi byc juz w trybie GRAYSCALE QQVGA (camBeginPreview()). Bierzemy
+// srodkowy pas 160x64 z klatki 160x120, ditherujemy do 1-bit (ordered Bayer
+// 4x4) i rysujemy 1:1 na lewej polowie OLED. Po prawej: pasek ostrosci +
+// podpowiedzi. Zwraca true = rob zdjecie, false = anuluj.
+// ---------------------------------------------------------------------------
+static bool _solPreviewAndConfirm(U8G2 &d) {
+    static const int PV_W = 160;                 // szerokosc viewfinder = szerokosc QQVGA
+    static const int PV_H = 64;                  // wysokosc viewfinder = wysokosc OLED
+    static const int XBM_STRIDE = (PV_W + 7) / 8; // 20 B/wiersz
+    static uint8_t xbm[XBM_STRIDE * PV_H];        // 20*64 = 1280 B (BSS, nie stos)
+
+    // Ordered Bayer 4x4 (wartosci 0..15)
+    static const uint8_t bayer4[4][4] = {
+        {  0,  8,  2, 10},
+        { 12,  4, 14,  6},
+        {  3, 11,  1,  9},
+        { 15,  7, 13,  5}
+    };
+
+    float sharpMax = 1.0f;   // adaptacyjne maksimum metryki ostrosci (normalizacja paska)
 
     _solWaitRelease();
     while (true) {
-        if (panicTriggered()) return;
-        if (_solBtn(BTN_OK)) break;
-        if (_solBtn(BTN_LEFT)) { _solWaitRelease(); return; }
-        delay(20);
-    }
-    _solWaitRelease();
+        if (panicTriggered()) return false;
 
-    // === Init kamery przez nasz wrapper ===
+        camera_fb_t* fb = esp_camera_fb_get();
+        if (!fb) { delay(10); continue; }
+
+        const int sw = fb->width;    // 160
+        const int sh = fb->height;   // 120
+        if (sw < PV_W || sh < PV_H || !fb->buf) {
+            esp_camera_fb_return(fb);
+            delay(10);
+            continue;
+        }
+        const int row0 = (sh - PV_H) / 2;   // srodkowy pas w pionie (= 28 dla 120)
+
+        uint32_t sharp = 0;
+        memset(xbm, 0, sizeof(xbm));
+        for (int y = 0; y < PV_H; y++) {
+            const uint8_t* row  = fb->buf + (size_t)(row0 + y) * sw;
+            uint8_t*       xrow = xbm + (size_t)y * XBM_STRIDE;
+            const uint8_t* brow = bayer4[y & 3];
+            for (int x = 0; x < PV_W; x++) {
+                // Dithering: piksel ON (papier jasny) gdy jasnosc > prog Bayera.
+                // XBM: LSB w bajcie = lewy piksel, wiec bit = (x & 7).
+                uint8_t thr = (uint8_t)(brow[x & 3] * 16);   // 0..240
+                if (row[x] > thr) xrow[x >> 3] |= (1 << (x & 7));
+                // Metryka ostrosci: suma |poziomego gradientu|
+                if (x + 1 < PV_W) {
+                    int g = (int)row[x] - (int)row[x + 1];
+                    sharp += (g < 0 ? -g : g);
+                }
+            }
+        }
+        esp_camera_fb_return(fb);
+
+        // Normalizacja ostrosci do adaptacyjnego maksimum -> pasek 0..100%
+        float sf = (float)sharp;
+        if (sf > sharpMax) sharpMax = sf;
+        else               sharpMax = sharpMax * 0.97f + sf * 0.03f;  // powolny zanik
+        int pct = (sharpMax > 1.0f) ? (int)(sf * 100.0f / sharpMax) : 0;
+        if (pct > 100) pct = 100;
+
+        // === Rysowanie ===
+        d.clearBuffer();
+        d.drawXBM(0, 0, PV_W, PV_H, xbm);     // obraz na lewej polowie
+        _solDrawCorners(d, 0, 0, PV_W, PV_H); // bramki kadrowania (XOR)
+
+        // Prawy panel (x:164..255)
+        d.setDrawColor(1);
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(166, 8,  _solT("PODGLAD", "PREVIEW"));
+        d.drawStr(166, 24, _solT("Ostrosc", "Sharp"));
+        // Pasek ostrosci 84px
+        const int bx = 166, by = 28, bw = 84, bh = 8;
+        d.drawFrame(bx, by, bw, bh);
+        d.drawBox(bx + 1, by + 1, (bw - 2) * pct / 100, bh - 2);
+        char pctbuf[8];
+        snprintf(pctbuf, sizeof(pctbuf), "%d%%", pct);
+        d.drawStr(166, 44, pctbuf);
+        d.drawStr(166, 53, _solT("OK = foto", "OK = photo"));
+        d.drawStr(166, 62, _solT("< = wyjdz", "< = exit"));
+        d.sendBuffer();
+
+        // Przyciski
+        if (_solBtn(BTN_OK))   { _solWaitRelease(); return true; }
+        if (_solBtn(BTN_LEFT)) { _solWaitRelease(); return false; }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tryb ZDJECIE: zrob zdjecie → wyslij do API → pokaz wynik
+// ---------------------------------------------------------------------------
+static void _solRunPhotoMode(U8G2 &d) {
+    // === Faza 1: podglad na zywo (mono viewfinder) ===
+    // Kamera w trybie GRAYSCALE QQVGA — uzytkownik kadruje zadanie i ustawia
+    // odleglosc (pasek ostrosci pomaga trafic w sweet-spot stalej ostrosci).
+    _solDrawLoading(d, _solT("Uruchamiam podglad...", "Starting preview..."), 0);
+
+    if (camBeginPreview()) {
+        bool go = _solPreviewAndConfirm(d);
+        camEnd();                 // KONIECZNE: zwolnij preview, inaczej camBegin() (JPEG) zrobi early-return
+        if (!go) return;          // anulowano w podgladzie
+    } else {
+        // Fallback (KALK_HW_LEGACY albo blad preview): statyczny ekran jak dawniej
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 16, _solT("Tryb: Zdjecie", "Mode: Photo"));
+        d.drawHLine(0, 18, 256);
+        d.drawStr(2, 32, _solT("Skieruj na zadanie.", "Point at the problem."));
+        d.drawStr(2, 46, _solT("OK = zrob zdjecie", "OK = take photo"));
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 62, _solT("< = anuluj", "< = cancel"));
+        d.sendBuffer();
+
+        _solWaitRelease();
+        while (true) {
+            if (panicTriggered()) return;
+            if (_solBtn(BTN_OK)) break;
+            if (_solBtn(BTN_LEFT)) { _solWaitRelease(); return; }
+            delay(20);
+        }
+        _solWaitRelease();
+    }
+
+    // === Faza 2: finalne zdjecie JPEG/UXGA ===
     // camBegin: PWDN low, RESET pulse (przez MCP23017), esp_camera_init().
     // I2C dzielony z MCP23017 (sccb_i2c_port=0 w camera.h).
     _solDrawLoading(d, _solT("Wlaczam kamere...", "Powering camera..."), 0);
@@ -717,8 +834,8 @@ static void _solRunPhotoMode(U8G2 &d) {
         return;
     }
 
-    // Warm-up - wyrzuc 2 pierwsze klatki (zwykle przeswiecone po power-on)
-    camWarmup(2);
+    // Warm-up - po switchu z podgladu AEC/AGC zbiega na nowo (3 klatki)
+    camWarmup(3);
 
     _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo..."), 0);
     camera_fb_t* fb = camCapture();

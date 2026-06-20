@@ -94,21 +94,10 @@ static void _camPowerOff() {
     _inMcp.digitalWrite(CAM_MCP_PWDN, HIGH);  // power down
 }
 
-// Inicjalizacja kamery. Zwraca true gdy OK. Wywolac PO inputBegin().
-inline bool camBegin() {
-    if (_camReady) return true;
-
-#ifdef KALK_HW_LEGACY
-    return false;   // stary PCB bez kamery
-#else
-    if (!_inMcpReady) {
-        Serial.println("[CAM] MCP not ready - call inputBegin() first");
-        return false;
-    }
-
-    _camPowerOn();
-
-    camera_config_t config;
+// Wspolne pola configu (piny, SCCB, XCLK, lokalizacja bufora) — identyczne dla
+// trybu JPEG (camBegin) i podgladu grayscale (camBeginPreview). pixel_format,
+// frame_size, jpeg_quality, fb_count i grab_mode ustawia wolajacy.
+static void _camFillCommonConfig(camera_config_t& config) {
     config.ledc_channel = LEDC_CHANNEL_0;
     config.ledc_timer   = LEDC_TIMER_0;
     config.pin_d0       = CAM_PIN_D0;
@@ -133,7 +122,59 @@ inline bool camBegin() {
     config.sccb_i2c_port = 0;     // I2C_NUM_0 = Arduino Wire
     config.pin_pwdn      = -1;    // przez MCP, nie GPIO
     config.pin_reset     = -1;    // przez MCP, nie GPIO
-    config.xclk_freq_hz = 10000000;            // 10 MHz - stabilniej z WiFi (vs 20MHz)
+    config.xclk_freq_hz  = 10000000;           // 10 MHz - stabilniej z WiFi (vs 20MHz)
+    config.fb_location   = CAMERA_FB_IN_PSRAM; // PSRAM (8MB) dla buforow
+}
+
+// Wspolne ustawienia sensora (AEC/AGC/AWB + orientacja 180°). Wywolac po
+// esp_camera_init(). Te same wartosci dla podgladu i finalnego zdjecia, zeby
+// ekspozycja i orientacja kadru sie zgadzaly.
+static void _camApplyCommonSensor() {
+    sensor_t* s = esp_camera_sensor_get();
+    if (!s) return;
+    s->set_brightness(s,    0);   // -2..2
+    s->set_contrast(s,      0);   // -2..2
+    s->set_saturation(s,    0);   // -2..2
+    s->set_special_effect(s, 0);  // 0=none, 1=negative, 2=grayscale...
+    s->set_whitebal(s,      1);   // AWB on - elimnuje zielony tint
+    s->set_awb_gain(s,      1);
+    s->set_wb_mode(s,       0);   // 0=auto
+    s->set_exposure_ctrl(s, 1);   // AEC on - auto-ekspozycja
+    s->set_aec2(s,          1);   // AEC algorithm v2 (lepszy)
+    s->set_ae_level(s,      0);   // -2..2
+    s->set_aec_value(s,     300); // 0..1200, "target brightness"
+    s->set_gain_ctrl(s,     1);   // AGC on - auto-wzmocnienie
+    s->set_agc_gain(s,      0);
+    s->set_gainceiling(s, (gainceiling_t)2);  // max gain 4x (mniej szumu)
+    s->set_bpc(s,           1);   // black pixel correction
+    s->set_wpc(s,           1);   // white pixel correction
+    s->set_raw_gma(s,       1);   // gamma correction
+    s->set_lenc(s,          1);   // lens correction (winietowanie)
+    // Sensor zamontowany w obudowie do gory nogami → wymaga obrotu 180°
+    // czyli hmirror=1 + vflip=1 (mirror w pionie + odbicie poziome razem
+    // = obrot 180° w stosunku do natywnej orientacji sensora).
+    s->set_hmirror(s,       1);
+    s->set_vflip(s,         1);
+    s->set_dcw(s,           1);   // downsize crop window
+    s->set_colorbar(s,      0);   // 1 = test pattern (tylko debug)
+}
+
+// Inicjalizacja kamery. Zwraca true gdy OK. Wywolac PO inputBegin().
+inline bool camBegin() {
+    if (_camReady) return true;
+
+#ifdef KALK_HW_LEGACY
+    return false;   // stary PCB bez kamery
+#else
+    if (!_inMcpReady) {
+        Serial.println("[CAM] MCP not ready - call inputBegin() first");
+        return false;
+    }
+
+    _camPowerOn();
+
+    camera_config_t config;
+    _camFillCommonConfig(config);
     config.pixel_format = PIXFORMAT_JPEG;
     // UXGA 1600x1200 - max rozdzielczosc OV2640 (2MP). Dla matury wazne
     // zeby drobny druk i ulamki byly czytelne dla AI. JPEG ~150-250KB w PSRAM.
@@ -144,7 +185,6 @@ inline bool camBegin() {
     // przez co OLED i debounce klawiszy lagowaly i ekran zamarzal.
     config.fb_count     = 1;
     config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
-    config.fb_location  = CAMERA_FB_IN_PSRAM;  // PSRAM (8MB) dla JPEG buffers
 
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
@@ -157,38 +197,51 @@ inline bool camBegin() {
     // Domyslnie po esp_camera_init AEC/AGC/AWB sa wylaczone, stad jedna klatka
     // byla totalnie przepalona, druga prawie czarna. Wlaczamy automatyke +
     // standardowe parametry ktore daja dobra ekspozycje dla rozne oswietlenia.
-    sensor_t* s = esp_camera_sensor_get();
-    if (s) {
-        s->set_brightness(s,    0);   // -2..2
-        s->set_contrast(s,      0);   // -2..2
-        s->set_saturation(s,    0);   // -2..2
-        s->set_special_effect(s, 0);  // 0=none, 1=negative, 2=grayscale...
-        s->set_whitebal(s,      1);   // AWB on - elimnuje zielony tint
-        s->set_awb_gain(s,      1);
-        s->set_wb_mode(s,       0);   // 0=auto
-        s->set_exposure_ctrl(s, 1);   // AEC on - auto-ekspozycja
-        s->set_aec2(s,          1);   // AEC algorithm v2 (lepszy)
-        s->set_ae_level(s,      0);   // -2..2
-        s->set_aec_value(s,     300); // 0..1200, "target brightness"
-        s->set_gain_ctrl(s,     1);   // AGC on - auto-wzmocnienie
-        s->set_agc_gain(s,      0);
-        s->set_gainceiling(s, (gainceiling_t)2);  // max gain 4x (mniej szumu)
-        s->set_bpc(s,           1);   // black pixel correction
-        s->set_wpc(s,           1);   // white pixel correction
-        s->set_raw_gma(s,       1);   // gamma correction
-        s->set_lenc(s,          1);   // lens correction (winietowanie)
-        // Sensor zamontowany w obudowie do gory nogami → wymaga obrotu 180°
-        // czyli hmirror=1 + vflip=1 (mirror w pionie + odbicie poziome razem
-        // = obrot 180° w stosunku do natywnej orientacji sensora).
-        s->set_hmirror(s,       1);
-        s->set_vflip(s,         1);
-        Serial.println("[CAM] flips: hmirror=1 vflip=1 (rot 180°)");
-        s->set_dcw(s,           1);   // downsize crop window
-        s->set_colorbar(s,      0);   // 1 = test pattern (tylko debug)
-    }
+    _camApplyCommonSensor();
 
     _camReady = true;
-    Serial.println("[CAM] OK (AEC/AGC/AWB enabled)");
+    Serial.println("[CAM] OK JPEG/UXGA (AEC/AGC/AWB enabled)");
+    return true;
+#endif
+}
+
+// Inicjalizacja kamery w trybie PODGLADU: grayscale QQVGA (160x120), 1 B/px,
+// bezposredni dostep do pikseli dla live viewfinder na OLED. Te same piny i
+// sensor co camBegin() — zmienia sie tylko format/rozdzielczosc.
+// Po podgladzie wywolaj camEnd() PRZED camBegin() (JPEG), bo camBegin ma
+// early-return gdy _camReady=true.
+inline bool camBeginPreview() {
+    if (_camReady) return true;
+
+#ifdef KALK_HW_LEGACY
+    return false;   // stary PCB bez kamery
+#else
+    if (!_inMcpReady) {
+        Serial.println("[CAM] MCP not ready - call inputBegin() first");
+        return false;
+    }
+
+    _camPowerOn();
+
+    camera_config_t config;
+    _camFillCommonConfig(config);
+    config.pixel_format = PIXFORMAT_GRAYSCALE;  // 1 bajt/piksel — bezposredni dostep
+    config.frame_size   = FRAMESIZE_QQVGA;      // 160x120 = 19200 B w PSRAM
+    config.jpeg_quality = 12;                   // ignorowane przy GRAYSCALE, ale pole musi byc ustawione
+    config.fb_count     = 1;
+    config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
+
+    esp_err_t err = esp_camera_init(&config);
+    if (err != ESP_OK) {
+        Serial.printf("[CAM] preview init failed: 0x%x\n", err);
+        _camPowerOff();
+        return false;
+    }
+
+    _camApplyCommonSensor();
+
+    _camReady = true;
+    Serial.println("[CAM] OK GRAYSCALE/QQVGA (preview)");
     return true;
 #endif
 }
