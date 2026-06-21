@@ -31,8 +31,9 @@
 // Progi napiec (mV)
 #define BATTERY_VMAX_MV      4200    // 100% - LiPo pelna
 #define BATTERY_VMIN_MV      3000    // 0% - DW01A obetnie ponizej 2.7V
-#define BATTERY_CRITICAL_MV  3100    // auto-shutdown - zostaw zapas dla DW01A
-#define BATTERY_LOW_MV       3400    // ostrzezenie low battery (15%)
+#define BATTERY_SHUTDOWN_MV  3200    // watchdog safe-shutdown — za niskie na boost+WiFi
+#define BATTERY_CRITICAL_MV  3100    // ponizej shutdown, rezerwa DW01A
+#define BATTERY_LOW_MV       3400    // ostrzezenie low battery (~10%)
 
 // Cache - ADC moze byc wolny (~ms na sample). Update raz na ~5s wystarczy.
 static uint16_t _batCachedMv = 0;
@@ -69,13 +70,17 @@ inline uint8_t batteryReadPercent() {
     if (mv >= BATTERY_VMAX_MV) return 100;
     if (mv <= BATTERY_VMIN_MV) return 0;
 
-    // Punkty kontrolne (mV, %) — interpolacja liniowa miedzy nimi
+    // Punkty kontrolne (mV, %) — interpolacja liniowa miedzy nimi.
+    // Krzywa skalibrowana na typowy ogniwo LiPo 3.7V 1C discharge:
+    //   Plateau 3.70-3.90V (~60% zakresu napiecia, ~70% pojemnosci)
+    //   Kolano przy 3.65V (napięcie spada szybciej)
+    //   Strefa krytyczna <3.35V (booster niestabilny)
     struct Pt { uint16_t mv; uint8_t pct; };
     static const Pt curve[] = {
-        { 4200, 100 }, { 4150,  95 }, { 4050,  85 }, { 3950,  75 },
-        { 3870,  65 }, { 3800,  55 }, { 3750,  50 }, { 3700,  40 },
-        { 3650,  30 }, { 3600,  20 }, { 3500,  15 }, { 3400,  10 },
-        { 3300,   5 }, { 3200,   2 }, { 3000,   0 },
+        { 4200, 100 }, { 4100,  90 }, { 4000,  80 }, { 3900,  70 },
+        { 3820,  60 }, { 3760,  52 }, { 3720,  45 }, { 3680,  37 },
+        { 3650,  28 }, { 3620,  20 }, { 3580,  13 }, { 3520,   8 },
+        { 3450,   5 }, { 3350,   2 }, { 3200,   1 }, { 3000,   0 },
     };
     static const int N = sizeof(curve) / sizeof(curve[0]);
 

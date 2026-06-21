@@ -13,12 +13,23 @@ function SignInForm() {
   const initialMode = searchParams.get("mode") || (searchParams.get("signup") ? "register" : "");
   const startAsRegister = initialMode === "register" || initialMode === "signup";
 
+  const urlError = searchParams.get("error");
+  const urlErrorMsg = urlError === "OAuthCallback" || urlError === "OAuthSignin"
+    ? "Błąd logowania przez Google. Spróbuj ponownie."
+    : urlError === "OAuthAccountNotLinked"
+    ? "Ten email jest już zarejestrowany hasłem. Zaloguj się emailem i hasłem."
+    : urlError === "AccessDenied"
+    ? "Dostęp odmówiony przez Google."
+    : urlError
+    ? `Błąd: ${urlError}`
+    : "";
+
   const [isLogin, setIsLogin] = useState(!startAsRegister);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(urlErrorMsg);
   const [verificationSent, setVerificationSent] = useState(false);
   const [showResend, setShowResend] = useState(false);
   const [resending, setResending] = useState(false);

@@ -529,23 +529,38 @@ void showAccountStatusScreen(U8G2 &d) {
             d.drawStr(2, 44, "kalkmate.pl/panel -> Kalkulator");
             d.drawStr(2, 54, "Wpisz Device ID + kod odblokowania.");
         } else {
-            d.drawStr(2, 22, "Status:  PODLACZONE");
-            snprintf(line, sizeof(line), "Konto: %s", st.userEmail.c_str());
-            d.drawStr(2, 32, line);
+            d.drawStr(2, 21, "Status:  PODLACZONE");
+            snprintf(line, sizeof(line), "Konto: %.34s", st.userEmail.c_str());
+            d.drawStr(2, 30, line);
             if (st.hasLicense) {
-                if (st.licenseStatus == "active" || st.licenseStatus == "trial") {
-                    snprintf(line, sizeof(line), "Licencja: %.16s (%s)",
-                             st.licenseCode.c_str(), st.licenseStatus.c_str());
-                } else {
-                    snprintf(line, sizeof(line), "Licencja: WYGASLA");
+                const char* lic_s = (st.licenseStatus == "active") ? "OK" :
+                                    (st.licenseStatus == "trial")  ? "trial" : "wygas";
+                snprintf(line, sizeof(line), "Lic: %.14s (%s)",
+                         st.licenseCode.c_str(), lic_s);
+                d.drawStr(2, 39, line);
+
+                // Dni + aktywny model AI na jednej linii
+                char combo[64] = "";
+                if (st.daysLeft >= 0)
+                    snprintf(combo, sizeof(combo), "Dni: %d", st.daysLeft);
+                if (st.aiModel.length() > 0) {
+                    // Skroc do nazwy po '/' (np. "google/gemini-2.5-pro" -> "gemini-2.5-pro")
+                    int sl = st.aiModel.lastIndexOf('/');
+                    String m = (sl >= 0) ? st.aiModel.substring(sl + 1) : st.aiModel;
+                    if (m.length() > 13) m = m.substring(0, 11) + "..";
+                    char tmp[40];
+                    snprintf(tmp, sizeof(tmp), "%sAI:%s",
+                             combo[0] ? "  " : "", m.c_str());
+                    strncat(combo, tmp, sizeof(combo) - strlen(combo) - 1);
                 }
-                d.drawStr(2, 42, line);
-                if (st.daysLeft >= 0) {
-                    snprintf(line, sizeof(line), "Dni pozostalo: %d", st.daysLeft);
-                    d.drawStr(2, 52, line);
+                if (combo[0]) d.drawStr(2, 48, combo);
+
+                if (st.aiMode.length() > 0) {
+                    snprintf(line, sizeof(line), "Tryb: %.28s", st.aiMode.c_str());
+                    d.drawStr(2, 57, line);
                 }
             } else {
-                d.drawStr(2, 42, "Brak licencji na koncie");
+                d.drawStr(2, 39, "Brak licencji na koncie");
             }
         }
 
@@ -1064,7 +1079,7 @@ static void _wifiAutoConnectLazy() {
     WiFi.mode(WIFI_STA);
     WiFi.setTxPower(WIFI_POWER_8_5dBm);  // anty-brownout
     delay(50);
-    WiFi.begin(ssid, pass);
+    wifiFastBegin(ssid, pass);  // uzywa cache BSSID+kanal jesli dostepny
     // Nie blokujemy - async connect w tle. _solEnsureWifi w solve_screen
     // sprawdzi status przed POST.
 }
@@ -1095,11 +1110,10 @@ static void _vbatWatchdogLoop() {
     if (millis() - _vbatWatchdogLast < 2000) return;
     _vbatWatchdogLast = millis();
 
-    uint32_t sum = 0;
-    for (int i = 0; i < 4; i++) sum += analogReadMilliVolts(3);
-    uint16_t vbatMv = (uint16_t)((sum / 4) * 2);
+    // Kalibrowana ADC z battery.h (16 sampli, cache 5s) zamiast surowego odczytu.
+    uint16_t vbatMv = batteryReadMillivolts();
 
-    if (vbatMv >= 500 && vbatMv < 3200) {
+    if (vbatMv >= 500 && vbatMv < BATTERY_SHUTDOWN_MV) {
         Serial.printf("[VBAT-WD] VBAT=%u mV - CRITICAL, shutdown\n", vbatMv);
         Serial.flush();
 

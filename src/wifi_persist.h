@@ -94,6 +94,48 @@ static uint8_t loadPanicKey(uint8_t defaultKey) {
     return k;
 }
 
+// === Szybki reconnect WiFi — cache BSSID + kanal AP ===
+// Po udanym polaczeniu wywolaj wifiSaveBssidChannel(). Nastepny WiFi.begin
+// via wifiFastBegin() podaje AP hint i pomija ~1-3s skanowania.
+
+static void wifiSaveBssidChannel() {
+    if (WiFi.status() != WL_CONNECTED) return;
+    uint8_t* bssid = WiFi.BSSID();
+    int32_t  ch    = WiFi.channel();
+    if (!bssid || ch <= 0) return;
+    Preferences prefs;
+    prefs.begin(_WP_NS, false);
+    prefs.putBytes("bssid", bssid, 6);
+    prefs.putInt ("chan",  ch);
+    prefs.end();
+}
+
+// Laduje BSSID i kanal z NVS. Zwraca true gdy dane sa wazne.
+static bool wifiLoadBssidChannel(uint8_t* bssidOut, int32_t& channelOut) {
+    Preferences prefs;
+    prefs.begin(_WP_NS, true);
+    size_t n   = prefs.getBytes("bssid", bssidOut, 6);
+    channelOut = prefs.getInt ("chan",  0);
+    prefs.end();
+    if (n != 6 || channelOut <= 0) return false;
+    // Sprawdz czy BSSID nie jest zerowy (brak danych)
+    for (int i = 0; i < 6; i++) if (bssidOut[i]) return true;
+    return false;
+}
+
+// WiFi.begin z hint BSSID+kanal gdy dostepny — pomija skan, szybszy o 1-3s.
+static void wifiFastBegin(const char* ssid, const char* pass) {
+    uint8_t bssid[6];
+    int32_t ch;
+    if (wifiLoadBssidChannel(bssid, ch)) {
+        Serial.printf("[WiFi] fast begin ch=%d bssid=%02X:%02X:%02X:%02X:%02X:%02X\n",
+                      ch, bssid[0],bssid[1],bssid[2],bssid[3],bssid[4],bssid[5]);
+        WiFi.begin(ssid, pass, ch, bssid);
+    } else {
+        WiFi.begin(ssid, pass);
+    }
+}
+
 // kalkSaveSettings / kalkLoadSettings zdefiniowane w settings_screen.h
 // (musza byc po definicji struct kalkSettings)
 

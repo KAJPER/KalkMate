@@ -24,6 +24,7 @@
 #include "power.h"
 #include "history.h"
 #include "camera.h"         // camBegin / camCapture / camEnd
+#include "offline_queue.h"  // kolejka zadan gdy brak WiFi
 
 #ifndef KALK_CAMERA_ENABLED
 #define KALK_CAMERA_ENABLED 1
@@ -515,7 +516,7 @@ static bool _solEnsureWifi(U8G2 &d) {
         return false;
     }
 
-    // Proba polaczenia
+    // Proba polaczenia (z cache BSSID+kanal dla szybszego reconnectu)
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
     char ln[48];
@@ -525,7 +526,7 @@ static bool _solEnsureWifi(U8G2 &d) {
     d.sendBuffer();
 
     WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, pass);
+    wifiFastBegin(ssid, pass);  // cache BSSID+kanal pomija skan (~1-3s)
 
     unsigned long start = millis();
     int frame = 0;
@@ -539,8 +540,189 @@ static bool _solEnsureWifi(U8G2 &d) {
         _solDrawLoading(d, _solT("Laczenie WiFi...", "Connecting WiFi..."), frame++);
         delay(250);
     }
-    accountRegisterOnce();   // zarejestruj device po pierwszym polaczeniu
+    wifiSaveBssidChannel();      // zapisz BSSID+kanal do NVS na nastepny raz
+    accountRegisterOnce();       // zarejestruj device po pierwszym polaczeniu
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// _solSendText — wyslij zadanie tekstowe do API i pokaz wynik.
+// Wymaga aktywnego WiFi. Tekst w taskText (C-string).
+// ---------------------------------------------------------------------------
+static void _solSendText(U8G2 &d, const char* taskText) {
+    char licKey[40];
+    wifiLoadLicense(licKey, sizeof(licKey));
+
+    // Zbuduj JSON body
+    String jsonBody = "{\"mode\":\"text\",\"text\":\"";
+    for (int i = 0; taskText[i]; i++) {
+        char c = taskText[i];
+        if (c == '"')       jsonBody += "\\\"";
+        else if (c == '\\') jsonBody += "\\\\";
+        else if (c == '\n') jsonBody += "\\n";
+        else                jsonBody += c;
+    }
+    jsonBody += "\"}";
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setTimeout(60);
+    HTTPClient http;
+    http.begin(client, _SOL_SOLVE_ENDPOINT);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("x-api-key", KALK_API_KEY);
+    http.addHeader("x-device-id", _solDeviceId());
+    http.addHeader("x-fw-version", FW_VERSION);
+    if (licKey[0]) http.addHeader("x-license-key", licKey);
+    http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
+
+    Serial.printf("[SOL] POST text %d B\n", jsonBody.length());
+
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
+    d.setFont(u8g2_font_5x7_tf);
+    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
+    d.sendBuffer();
+
+    int httpCode = http.POST(jsonBody);
+    String resp  = http.getString();
+    http.end();
+
+    Serial.printf("[SOL] HTTP %d, resp len=%d\n", httpCode, resp.length());
+
+    if (httpCode != 200) {
+        int errIdx = resp.indexOf("\"error\":\"");
+        char errMsg[64] = "";
+        if (errIdx >= 0) {
+            int s2 = errIdx + 9, e2 = resp.indexOf("\"", s2);
+            if (e2 > s2) strncpy(errMsg, resp.substring(s2, e2).c_str(), sizeof(errMsg)-1);
+        } else {
+            snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
+        }
+        _solDrawError(d, _solT("Blad API:", "API error:"), errMsg);
+        return;
+    }
+
+    int solIdx = resp.indexOf("\"solution\":\"");
+    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer"), ""); return; }
+
+    int solStart = solIdx + 12;
+    static char _stSolution[_SOL_SOLUTION_MAX + 1];
+    int spos = 0;
+    for (int i = solStart; i < (int)resp.length() && spos < _SOL_SOLUTION_MAX; i++) {
+        char c = resp[i];
+        if (c == '"' && (i == 0 || resp[i-1] != '\\')) break;
+        if (c == '\\' && i + 1 < (int)resp.length()) {
+            char nx = resp[i+1];
+            if (nx == 'n')       { _stSolution[spos++] = '\n'; i++; }
+            else if (nx == '"')  { _stSolution[spos++] = '"';  i++; }
+            else if (nx == '\\') { _stSolution[spos++] = '\\'; i++; }
+            else                 { _stSolution[spos++] = c; }
+        } else {
+            _stSolution[spos++] = c;
+        }
+    }
+    _stSolution[spos] = '\0';
+
+    historySave(String(taskText), String(_stSolution));
+    _solDisplaySolution(d, _stSolution);
+}
+
+// ---------------------------------------------------------------------------
+// _solSendJpeg — wyslij JPEG do API przez multipart/form-data i pokaz wynik.
+// Wymaga aktywnego WiFi. jpegBuf zarzadzany przez wywolujacego (nie zwalniany tu).
+// ---------------------------------------------------------------------------
+static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
+    char licKey[40];
+    wifiLoadLicense(licKey, sizeof(licKey));
+
+    // Zbuduj multipart body w PSRAM
+    static const char _mpHdr[] =
+        "--KalkMateB\r\n"
+        "Content-Disposition: form-data; name=\"image\"; filename=\"photo.jpg\"\r\n"
+        "Content-Type: image/jpeg\r\n"
+        "\r\n";
+    static const char _mpFtr[] = "\r\n--KalkMateB--\r\n";
+    const size_t hdrLen  = sizeof(_mpHdr) - 1;
+    const size_t ftrLen  = sizeof(_mpFtr) - 1;
+    size_t bodySize = hdrLen + jpegLen + ftrLen;
+    uint8_t* bodyBuf = (uint8_t*)ps_malloc(bodySize);
+    if (!bodyBuf) {
+        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!"), "");
+        return;
+    }
+    memcpy(bodyBuf,                   _mpHdr, hdrLen);
+    memcpy(bodyBuf + hdrLen,          jpegBuf, jpegLen);
+    memcpy(bodyBuf + hdrLen + jpegLen, _mpFtr, ftrLen);
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setTimeout(60);
+    HTTPClient http;
+    http.begin(client, _SOL_SOLVE_ENDPOINT);
+    http.addHeader("Content-Type", "multipart/form-data; boundary=KalkMateB");
+    http.addHeader("x-api-key", KALK_API_KEY);
+    http.addHeader("x-device-id", _solDeviceId());
+    http.addHeader("x-fw-version", FW_VERSION);
+    if (licKey[0]) http.addHeader("x-license-key", licKey);
+    http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
+
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
+    d.setFont(u8g2_font_5x7_tf);
+    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
+    d.sendBuffer();
+
+    int httpCode = http.POST(bodyBuf, (int)bodySize);
+    free(bodyBuf);
+
+    if (httpCode <= 0) {
+        http.end();
+        _solDrawError(d, _solT("Blad polaczenia", "Connection error"), "");
+        return;
+    }
+
+    String resp = http.getString();
+    http.end();
+
+    if (httpCode != 200) {
+        int errIdx = resp.indexOf("\"error\":\"");
+        char errMsg[64] = "";
+        if (errIdx >= 0) {
+            int s2 = errIdx + 9, e2 = resp.indexOf("\"", s2);
+            if (e2 > s2) strncpy(errMsg, resp.substring(s2, e2).c_str(), sizeof(errMsg)-1);
+        } else {
+            snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
+        }
+        _solDrawError(d, _solT("Blad API:", "API error:"), errMsg);
+        return;
+    }
+
+    int solIdx = resp.indexOf("\"solution\":\"");
+    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer"), ""); return; }
+
+    int solStart = solIdx + 12;
+    static char _jpSolution[_SOL_SOLUTION_MAX + 1];
+    int spos = 0;
+    for (int i = solStart; i < (int)resp.length() && spos < _SOL_SOLUTION_MAX; i++) {
+        char c = resp[i];
+        if (c == '"' && (i == 0 || resp[i-1] != '\\')) break;
+        if (c == '\\' && i + 1 < (int)resp.length()) {
+            char nx = resp[i+1];
+            if (nx == 'n')       { _jpSolution[spos++] = '\n'; i++; }
+            else if (nx == '"')  { _jpSolution[spos++] = '"';  i++; }
+            else if (nx == '\\') { _jpSolution[spos++] = '\\'; i++; }
+            else                 { _jpSolution[spos++] = c; }
+        } else {
+            _jpSolution[spos++] = c;
+        }
+    }
+    _jpSolution[spos] = '\0';
+
+    historySave(String("[Zdjecie]"), String(_jpSolution));
+    _solDisplaySolution(d, _jpSolution);
 }
 
 // ---------------------------------------------------------------------------
@@ -566,121 +748,22 @@ static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
                               _solT("Zadanie: ", "Problem: "));
     if (!saved || taskText[0] == '\0') return;
 
-    // Upewnij sie ze jest WiFi
-    if (!_solEnsureWifi(d)) return;
-
-    // Wyslij do API
-    char licKey[40];
-    wifiLoadLicense(licKey, sizeof(licKey));
-
-    // Zbuduj JSON
-    // {"mode":"text","text":"..."}
-    // Escapowanie cudzyslowow w taskText
-    String jsonBody = "{\"mode\":\"text\",\"text\":\"";
-    for (int i = 0; taskText[i]; i++) {
-        char c = taskText[i];
-        if (c == '"')  jsonBody += "\\\"";
-        else if (c == '\\') jsonBody += "\\\\";
-        else if (c == '\n') jsonBody += "\\n";
-        else jsonBody += c;
-    }
-    jsonBody += "\"}";
-
-    int frame = 0;
-    unsigned long sendStart = millis();
-
-    WiFiClientSecure client;
-    client.setInsecure();  // akceptuj kazdy cert (dla uproszczenia)
-    // KLUCZOWE: WiFiClientSecure ma domyslny socket timeout ~5-10 s.
-    // Gdy Gemini myśli długo, socket sie zamyka i HTTPClient zwraca -11
-    // (HTTPC_ERROR_READ_TIMEOUT). Ustawiamy 60 s.
-    client.setTimeout(60);  // sekundy
-    HTTPClient http;
-    http.begin(client, _SOL_SOLVE_ENDPOINT);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("x-api-key", KALK_API_KEY);
-    http.addHeader("x-device-id", _solDeviceId());
-    http.addHeader("x-fw-version", FW_VERSION);
-    if (licKey[0]) http.addHeader("x-license-key", licKey);
-    http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
-
-    // Log wysylanego requestu — diagnostyka HTTP 400/401 itd.
-    Serial.printf("[SOL] POST %s\n", _SOL_SOLVE_ENDPOINT);
-    // [SOL] x-api-key=... usunięte z logu (poziom obfuskacji — nie wyciekamy klucza)
-    Serial.printf("[SOL] x-license-key=%s\n", licKey[0] ? licKey : "(none)");
-    Serial.printf("[SOL] Body (%d B): %s\n", jsonBody.length(), jsonBody.c_str());
-
-    // Pokaz "AI rozwiazuje zadanie" OD RAZU, nie po POST.
-    // POST blokuje 5-20 s czekajac na odpowiedz Gemini — przez ten czas
-    // user widzi "AI rozwiazuje zadanie / Prosze czekac" zamiast martwego
-    // "Wysylam zadanie".
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
-    d.sendBuffer();
-
-    // POST blokujacy — Gemini moze odpowiadac do 30 s, klient czeka.
-    int httpCode = http.POST(jsonBody);
-
-    String resp = http.getString();
-    http.end();
-
-    Serial.printf("[SOL] HTTP %d, response len=%d\n", httpCode, resp.length());
-    Serial.printf("[SOL] Response: %s\n", resp.c_str());
-
-    if (httpCode != 200) {
-        // Sprobuj wyciagnac error z JSON
-        int errIdx = resp.indexOf("\"error\":\"");
-        char errMsg[64] = "HTTP ";
-        if (errIdx >= 0) {
-            int start2 = errIdx + 9;
-            int end2   = resp.indexOf("\"", start2);
-            if (end2 > start2) {
-                String e = resp.substring(start2, end2);
-                strncpy(errMsg, e.c_str(), sizeof(errMsg) - 1);
-            }
-        } else {
-            snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
+    if (!_solEnsureWifi(d)) {
+        // Brak WiFi — zakolejkuj zadanie
+        if (offlineQueueAddText(taskText)) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 18, _solT("Brak WiFi.", "No WiFi."));
+            d.drawStr(2, 32, _solT("Zadanie w kolejce.", "Task queued."));
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 48, _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available."));
+            d.sendBuffer();
+            _solWaitRelease();
+            delay(2000);
         }
-        _solDrawError(d, _solT("Blad API:", "API error:"), errMsg);
         return;
     }
-
-    // Wyciagnij solution z JSON {"ok":true,"solution":"..."}
-    int solIdx = resp.indexOf("\"solution\":\"");
-    Serial.printf("[SOL] solIdx=%d respLen=%d\n", solIdx, resp.length());
-    if (solIdx < 0) {
-        _solDrawError(d, _solT("Brak odpowiedzi", "No answer"), "");
-        return;
-    }
-
-    int solStart = solIdx + 12;
-    // Proste unescapowanie
-    static char solution[_SOL_SOLUTION_MAX + 1];
-    int spos = 0;
-    for (int i = solStart; i < (int)resp.length() && spos < _SOL_SOLUTION_MAX; i++) {
-        char c = resp[i];
-        if (c == '"' && (i == 0 || resp[i-1] != '\\')) break;
-        if (c == '\\' && i + 1 < (int)resp.length()) {
-            char next = resp[i+1];
-            if (next == 'n') { solution[spos++] = '\n'; i++; }
-            else if (next == '"') { solution[spos++] = '"'; i++; }
-            else if (next == '\\') { solution[spos++] = '\\'; i++; }
-            else { solution[spos++] = c; }
-        } else {
-            solution[spos++] = c;
-        }
-    }
-    solution[spos] = '\0';
-
-    Serial.printf("[SOL] Parsed solution len=%d:\n%s\n---END---\n", spos, solution);
-
-    // Zapisz do lokalnej historii (NVS, FIFO 5 ostatnich)
-    historySave(String(taskText), String(solution));
-
-    _solDisplaySolution(d, solution);
+    _solSendText(d, taskText);
 }
 
 // ---------------------------------------------------------------------------
@@ -860,109 +943,24 @@ static void _solRunPhotoMode(U8G2 &d) {
 
     // Teraz mozemy bezpiecznie wlaczyc WiFi
     if (!_solEnsureWifi(d)) {
+        // Brak WiFi — zakolejkuj zdjecie w SPIFFS
+        if (offlineQueueAddPhoto(jpegBuf, jpegLen)) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 18, _solT("Brak WiFi.", "No WiFi."));
+            d.drawStr(2, 32, _solT("Zdjecie w kolejce.", "Photo queued."));
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 48, _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available."));
+            d.sendBuffer();
+            _solWaitRelease();
+            delay(2000);
+        }
         free(jpegBuf);
         return;
     }
 
-    char licKey[40];
-    wifiLoadLicense(licKey, sizeof(licKey));
-
-    // Zbuduj multipart/form-data body w PSRAM — binarnie bez base64 (~25% szybsze)
-    // Endpoint /api/device/solve oczekuje pola "image" (image/jpeg).
-    static const char _mpHdr[] =
-        "--KalkMateB\r\n"
-        "Content-Disposition: form-data; name=\"image\"; filename=\"photo.jpg\"\r\n"
-        "Content-Type: image/jpeg\r\n"
-        "\r\n";
-    static const char _mpFtr[] = "\r\n--KalkMateB--\r\n";
-    const size_t hdrLen = sizeof(_mpHdr) - 1;
-    const size_t ftrLen = sizeof(_mpFtr) - 1;
-    size_t bodySize = hdrLen + jpegLen + ftrLen;
-    uint8_t* bodyBuf = (uint8_t*)ps_malloc(bodySize);
-    if (!bodyBuf) {
-        free(jpegBuf);
-        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!"), "");
-        return;
-    }
-    memcpy(bodyBuf,              _mpHdr, hdrLen);
-    memcpy(bodyBuf + hdrLen,     jpegBuf, jpegLen);
-    memcpy(bodyBuf + hdrLen + jpegLen, _mpFtr, ftrLen);
+    _solSendJpeg(d, jpegBuf, jpegLen);
     free(jpegBuf);
-
-    WiFiClientSecure client;
-    client.setInsecure();
-    client.setTimeout(60);
-    HTTPClient http;
-    http.begin(client, _SOL_SOLVE_ENDPOINT);
-    http.addHeader("Content-Type", "multipart/form-data; boundary=KalkMateB");
-    http.addHeader("x-api-key", KALK_API_KEY);
-    http.addHeader("x-device-id", _solDeviceId());
-    http.addHeader("x-fw-version", FW_VERSION);
-    if (licKey[0]) http.addHeader("x-license-key", licKey);
-    http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
-
-    // Pokaz "AI rozwiazuje zadanie" OD RAZU — przed blokujacym POST
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
-    d.sendBuffer();
-
-    int httpCode = http.POST(bodyBuf, (int)bodySize);
-    free(bodyBuf);
-
-    if (httpCode <= 0) {
-        http.end();
-        _solDrawError(d, _solT("Blad polaczenia", "Connection error"), "");
-        return;
-    }
-
-    String resp = http.getString();
-    http.end();
-
-    if (httpCode != 200) {
-        int errIdx = resp.indexOf("\"error\":\"");
-        char errMsg[64] = "";
-        if (errIdx >= 0) {
-            int s2 = errIdx + 9;
-            int e2 = resp.indexOf("\"", s2);
-            if (e2 > s2) strncpy(errMsg, resp.substring(s2, e2).c_str(), sizeof(errMsg)-1);
-        } else {
-            snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
-        }
-        _solDrawError(d, _solT("Blad API:", "API error:"), errMsg);
-        return;
-    }
-
-    int solIdx = resp.indexOf("\"solution\":\"");
-    if (solIdx < 0) {
-        _solDrawError(d, _solT("Brak odpowiedzi", "No answer"), "");
-        return;
-    }
-
-    int solStart = solIdx + 12;
-    static char solution[_SOL_SOLUTION_MAX + 1];
-    int spos = 0;
-    for (int i = solStart; i < (int)resp.length() && spos < _SOL_SOLUTION_MAX; i++) {
-        char c = resp[i];
-        if (c == '"' && (i == 0 || resp[i-1] != '\\')) break;
-        if (c == '\\' && i + 1 < (int)resp.length()) {
-            char next = resp[i+1];
-            if (next == 'n') { solution[spos++] = '\n'; i++; }
-            else if (next == '"') { solution[spos++] = '"'; i++; }
-            else if (next == '\\') { solution[spos++] = '\\'; i++; }
-            else { solution[spos++] = c; }
-        } else {
-            solution[spos++] = c;
-        }
-    }
-    solution[spos] = '\0';
-
-    // Zapisz do historii (image mode)
-    historySave(String("[Zdjecie kamery]"), String(solution));
-
-    _solDisplaySolution(d, solution);
 }
 
 // ---------------------------------------------------------------------------
@@ -1121,6 +1119,64 @@ static void _solRunHistoryMode(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
+// _solProcessQueue — wyslij zadania z kolejki offline jesli WiFi dostepne.
+// Wolana na wejsciu showSolveScreen (cicha — brak ekranu blokujacego jesli
+// WiFi niedostepne).
+// ---------------------------------------------------------------------------
+static void _solProcessQueue(U8G2 &d) {
+    uint8_t n = offlineQueueCount();
+    if (n == 0) return;
+
+    // Polacz z WiFi jesli nie jest polaczony (cichy tryb — max 8s)
+    if (WiFi.status() != WL_CONNECTED) {
+        char ssid[33] = "", pass[64] = "";
+        wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
+        if (ssid[0] == '\0') return;
+        WiFi.mode(WIFI_STA);
+        wifiFastBegin(ssid, pass);
+        unsigned long t = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - t < 8000) delay(200);
+        if (WiFi.status() != WL_CONNECTED) return;
+        wifiSaveBssidChannel();
+        accountRegisterOnce();
+    }
+
+    // Poinformuj uzytkownika
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    char hdr[40];
+    snprintf(hdr, sizeof(hdr), _solT("Kolejka: %d zadan", "Queue: %d tasks"), (int)n);
+    d.drawStr(2, 24, hdr);
+    d.setFont(u8g2_font_5x7_tf);
+    d.drawStr(2, 40, _solT("Wysylam do serwera...", "Sending to server..."));
+    d.sendBuffer();
+    delay(1000);
+
+    // Wyslij FIFO — _solSendText/_solSendJpeg pokazuja wyniki kolejno
+    while (offlineQueueCount() > 0) {
+        OfflineTask task;
+        if (!offlineQueuePeek(0, task)) break;
+
+        if (task.type == 0) {
+            _solSendText(d, task.text.c_str());
+        } else {
+            // Wczytaj JPEG z SPIFFS do PSRAM, wyslij, zwolnij
+            if (!SPIFFS.begin(false)) { offlineQueueRemoveFirst(); continue; }
+            File f = SPIFFS.open(task.path.c_str(), "r");
+            if (!f)  { offlineQueueRemoveFirst(); continue; }
+            size_t sz  = f.size();
+            uint8_t* buf = (uint8_t*)ps_malloc(sz);
+            if (!buf) { f.close(); offlineQueueRemoveFirst(); continue; }
+            f.read(buf, sz);
+            f.close();
+            _solSendJpeg(d, buf, sz);
+            free(buf);
+        }
+        offlineQueueRemoveFirst();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Publiczna funkcja — glowny punkt wejscia
 // ---------------------------------------------------------------------------
 void showSolveScreen(U8G2 &display) {
@@ -1129,6 +1185,9 @@ void showSolveScreen(U8G2 &display) {
     // pinMode(BTN_LEFT,  INPUT_PULLUP);
     // pinMode(BTN_RIGHT, INPUT_PULLUP);
     // pinMode(BTN_OK,    INPUT_PULLUP);
+
+    // Wyslij zadania z kolejki offline jesli WiFi dostepne (cichy tryb)
+    _solProcessQueue(display);
 
     int mode = 1;  // domyslnie tekst (kamera moze byc niedostepna)
 

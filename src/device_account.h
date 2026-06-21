@@ -52,6 +52,8 @@ struct AccountStatus {
     String licenseCode;
     String licenseStatus; // "trial" | "active" | "expired"
     int    daysLeft;      // -1 jesli niedostepne
+    String aiModel;       // aktywny model AI, np. "google/gemini-2.5-pro"
+    String aiMode;        // tryb: "detailed" | "calc_only" | "result_only"
     String error;
 };
 
@@ -127,6 +129,8 @@ inline bool accountFetchStatus(AccountStatus& out) {
     }
 
     // Bardzo prosty parser bez ArduinoJson (jak w innych modulach KalkMate).
+    out.aiModel = "";
+    out.aiMode  = "";
     out.ok = (resp.indexOf("\"ok\":true") >= 0);
     out.paired = (resp.indexOf("\"paired\":true") >= 0);
 
@@ -153,6 +157,8 @@ inline bool accountFetchStatus(AccountStatus& out) {
     out.userEmail     = extract("userEmail");
     out.licenseCode   = extract("code");
     out.licenseStatus = extract("status");
+    out.aiModel       = extract("aiModel");
+    out.aiMode        = extract("aiMode");
     if (out.licenseCode.length() > 0) {
         out.hasLicense = true;
         // AUTO-SYNC do NVS — serwer wie jaka jest licencja, urzadzenie
