@@ -591,6 +591,13 @@ static void _solSendText(U8G2 &d, const char* taskText) {
 
     Serial.printf("[SOL] HTTP %d, resp len=%d\n", httpCode, resp.length());
 
+    if (httpCode == 402) {
+        // Serwer zwraca 402 gdy saldo tokenow < 1000 (skonczyly sie).
+        _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!"),
+                      _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl"));
+        return;
+    }
+
     if (httpCode != 200) {
         int errIdx = resp.indexOf("\"error\":\"");
         char errMsg[64] = "";
@@ -686,6 +693,13 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
 
     String resp = http.getString();
     http.end();
+
+    if (httpCode == 402) {
+        // Serwer zwraca 402 gdy saldo tokenow < 1000 (skonczyly sie).
+        _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!"),
+                      _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl"));
+        return;
+    }
 
     if (httpCode != 200) {
         int errIdx = resp.indexOf("\"error\":\"");

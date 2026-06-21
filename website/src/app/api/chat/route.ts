@@ -1434,7 +1434,7 @@ export async function POST(request: NextRequest) {
 
       // Odejmij tokeny po udanej odpowiedzi (fire-and-forget)
       prisma.$executeRaw`
-        UPDATE "User" SET "tokenBalance" = GREATEST(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${user.id}
+        UPDATE "User" SET "tokenBalance" = MAX(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${user.id}
       `.catch((e: any) => console.error("[chat] token deduction fail:", e));
 
       return NextResponse.json({
@@ -1446,7 +1446,7 @@ export async function POST(request: NextRequest) {
     } catch (saveError) {
       console.error("Failed to save messages:", saveError);
       prisma.$executeRaw`
-        UPDATE "User" SET "tokenBalance" = GREATEST(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${user.id}
+        UPDATE "User" SET "tokenBalance" = MAX(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${user.id}
       `.catch(() => {});
       return NextResponse.json({ response: aiResponse });
     }

@@ -383,7 +383,7 @@ export async function POST(request: NextRequest) {
     if (ownerUserId) {
       const effectiveTokens = Math.ceil(r.tokensUsed * costMultiplier);
       prisma.$executeRaw`
-        UPDATE "User" SET "tokenBalance" = GREATEST(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${ownerUserId}
+        UPDATE "User" SET "tokenBalance" = MAX(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${ownerUserId}
       `.catch((e: any) => console.error("[solve] token deduction fail:", e));
     }
 
