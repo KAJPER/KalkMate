@@ -1,13 +1,19 @@
 import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
+import GoogleProvider from "next-auth/providers/google"
+import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "./db"
 import bcrypt from "bcryptjs"
+import { randomUUID } from "crypto"
 
 export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: "jwt",
-  },
+  adapter: PrismaAdapter(prisma) as any,
+  session: { strategy: "jwt" },
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -40,7 +46,6 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Nieprawidłowy email lub hasło")
         }
 
-        // Wymagaj zweryfikowanego emaila przed logowaniem
         if (!user.emailVerified) {
           throw new Error("Email niezweryfikowany. Sprawdź skrzynkę lub poproś o nowy link.")
         }
@@ -56,6 +61,27 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/auth/signin",
     error: "/auth/error",
+  },
+  events: {
+    async createUser({ user }) {
+      // Fires only for OAuth-created users (Google etc.) — not for CredentialsProvider
+      if (!user.id) return
+      try {
+        await prisma.subscription.create({
+          data: {
+            id: randomUUID(),
+            userId: user.id,
+            status: "trial",
+            trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            trialDays: 30,
+            updatedAt: new Date(),
+          },
+        })
+      } catch {}
+      try {
+        await prisma.$executeRaw`UPDATE "User" SET "tokenBalance" = 1000000 WHERE "id" = ${user.id}`
+      } catch {}
+    },
   },
   callbacks: {
     async jwt({ token, user }) {

@@ -102,6 +102,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    await prisma.$executeRaw`UPDATE "User" SET "tokenBalance" = 1000000 WHERE "id" = ${user.id}`;
+
     // Wyslij mail weryfikacyjny
     await sendVerification(email, name || user.name, user.id);
 
