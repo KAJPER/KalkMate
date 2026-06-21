@@ -442,7 +442,7 @@ export default function AdminDashboard() {
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-[#E0E0E0]">Google Gemini API</h2>
+                  <h2 className="text-xl font-bold text-[#E0E0E0]">OpenRouter AI</h2>
                   <p className="text-sm text-[#E0E0E0]/60">Statystyki zużycia i koszty</p>
                 </div>
               </div>

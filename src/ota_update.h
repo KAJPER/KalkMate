@@ -24,6 +24,9 @@
 // (mbedtls jest juz w ESP-IDF, nie wymaga external lib).
 #include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
+#include <Preferences.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 
 #ifndef KALK_SERVER_URL
 #error "ota_update.h wymaga zdefiniowania KALK_SERVER_URL przed include"
@@ -206,6 +209,86 @@ inline size_t _otaBase64Decode(const String& in, uint8_t* out, size_t outMax) {
 }
 
 // ---------------------------------------------------------------------
+//  Rollback support — health-check po aktualizacji OTA.
+//
+//  Mechanizm:
+//    1. otaMarkPendingValidation() — wywolaj tuz przed ESP.restart() po sukcesie OTA.
+//       Zapisuje do NVS flage "pending=true" i licznik "boot_cnt=0".
+//    2. otaBootCheck() — wywolaj wczesnie w setup(). Jesli pending, inkrementuje
+//       licznik. Jesli >= 3 proby (boot loop) — rollback na poprzednia partycje.
+//    3. otaMarkValid() — wywolaj po potwierdzeniu poprawnego dzialania (WiFi OK).
+//       Czysci flage. Bez tego po 3 nieudanych bootach nastapi rollback.
+// ---------------------------------------------------------------------
+
+inline void otaMarkPendingValidation() {
+    Preferences p;
+    p.begin("ota_rb", false);
+    p.putBool("pending", true);
+    p.putInt("boot_cnt", 0);
+    p.end();
+    Serial.println("[OTA] oznaczono jako oczekujacy walidacji");
+}
+
+inline void otaMarkValid() {
+    Preferences p;
+    p.begin("ota_rb", true);
+    bool pending = p.getBool("pending", false);
+    p.end();
+    if (!pending) return;
+    p.begin("ota_rb", false);
+    p.putBool("pending", false);
+    p.putInt("boot_cnt", 0);
+    p.end();
+    Serial.println("[OTA] firmware zawalidowany (WiFi OK)");
+}
+
+inline void otaBootCheck() {
+    Preferences p;
+    p.begin("ota_rb", false);
+    bool pending = p.getBool("pending", false);
+    if (!pending) { p.end(); return; }
+
+    int cnt = p.getInt("boot_cnt", 0) + 1;
+    p.putInt("boot_cnt", cnt);
+    p.end();
+    Serial.printf("[OTA] boot po OTA — proba %d/3\n", cnt);
+    if (cnt < 3) return;
+
+    // Boot loop wykryty — rollback do poprzedniej partycji OTA
+    Serial.println("[OTA] BOOT LOOP WYKRYTY — rollback!");
+    Preferences p2;
+    p2.begin("ota_rb", false);
+    p2.putBool("pending", false);
+    p2.putInt("boot_cnt", 0);
+    p2.end();
+
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    esp_partition_iterator_t it = esp_partition_find(
+        ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, NULL);
+    const esp_partition_t* fallback = NULL;
+    while (it) {
+        const esp_partition_t* part = esp_partition_get(it);
+        if (part->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_MIN &&
+            part->subtype <= ESP_PARTITION_SUBTYPE_APP_OTA_MAX &&
+            part->address != running->address) {
+            fallback = part;
+            break;
+        }
+        it = esp_partition_next(it);
+    }
+    esp_partition_iterator_release(it);
+
+    if (fallback) {
+        Serial.printf("[OTA] rollback -> %s @ 0x%x\n", fallback->label, fallback->address);
+        esp_ota_set_boot_partition(fallback);
+    } else {
+        Serial.println("[OTA] brak partycji do rollbacku — restart bez rollbacku");
+    }
+    delay(500);
+    ESP.restart();
+}
+
+// ---------------------------------------------------------------------
 //  otaInstall — pobiera .bin i wpisuje przez Update API
 //  Streaming SHA-256 + ECDSA verify przed commit (od v1.4.1).
 //  Pokazuje postep na OLED. Po sukcesie wywoluje ESP.restart().
@@ -218,6 +301,15 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
         delay(2000);
         return false;
     }
+
+#ifdef KALK_REQUIRE_SIGNED_OTA
+    if (sigB64.isEmpty()) {
+        Serial.println("[OTA] KALK_REQUIRE_SIGNED_OTA: brak podpisu — install odrzucony");
+        _otaDrawProgress(d, "PROD: brak podpisu!", 0);
+        delay(3000);
+        return false;
+    }
+#endif
 
     _otaDrawProgress(d, "Laczenie z serwerem...", 0);
 
@@ -389,6 +481,7 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
 
     _otaDrawProgress(d, "Sukces! Restart...", 100);
     delay(1500);
+    otaMarkPendingValidation();
     ESP.restart();
     return true; // never reached
 }

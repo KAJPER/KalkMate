@@ -844,68 +844,57 @@ static void _solRunPhotoMode(U8G2 &d) {
         _solDrawError(d, _solT("Blad zdjecia!", "Capture error!"), "");
         return;
     }
-    // Buffer fb wazny — najpierw zakoduj base64, potem zwolnij + wylacz kamere
+    // Skopiuj JPEG do PSRAM, potem zwolnij bufor kamery i wylacz kamere
     // PRZED WiFi (XCLK 10MHz kamery zaklocaja 2.4GHz radio).
-
-    _solDrawLoading(d, _solT("Koduje obraz...", "Encoding image..."), 0);
-
-    // Zakoduj obraz jako base64
-    // Base64 potrzebuje ok 4/3 rozmiaru wejscia
-    size_t b64len = ((fb->len + 2) / 3) * 4 + 1;
-    char* b64buf = (char*)ps_malloc(b64len);  // PSRAM
-    if (!b64buf) {
+    size_t jpegLen = fb->len;
+    uint8_t* jpegBuf = (uint8_t*)ps_malloc(jpegLen);
+    if (!jpegBuf) {
         esp_camera_fb_return(fb);
         camEnd();
         _solDrawError(d, _solT("Brak pamieci!", "Out of memory!"), "PSRAM");
         return;
     }
-
-    // Kodowanie base64
-    const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    size_t len = fb->len;
-    uint8_t* src = fb->buf;
-    size_t bpos = 0;
-    for (size_t i = 0; i < len; i += 3) {
-        uint32_t val = ((uint32_t)src[i] << 16) |
-                       ((i+1 < len ? (uint32_t)src[i+1] : 0) << 8) |
-                       (i+2 < len ? (uint32_t)src[i+2] : 0);
-        b64buf[bpos++] = b64chars[(val >> 18) & 0x3F];
-        b64buf[bpos++] = b64chars[(val >> 12) & 0x3F];
-        b64buf[bpos++] = (i+1 < len) ? b64chars[(val >> 6) & 0x3F] : '=';
-        b64buf[bpos++] = (i+2 < len) ? b64chars[val & 0x3F] : '=';
-    }
-    b64buf[bpos] = '\0';
+    memcpy(jpegBuf, fb->buf, jpegLen);
     esp_camera_fb_return(fb);
     camEnd();   // OFF kamery PRZED WiFi (anty-interference)
 
     // Teraz mozemy bezpiecznie wlaczyc WiFi
     if (!_solEnsureWifi(d)) {
-        free(b64buf);
+        free(jpegBuf);
         return;
     }
 
     char licKey[40];
     wifiLoadLicense(licKey, sizeof(licKey));
 
-    // Zbuduj JSON w PSRAM (duzy bufor)
-    // {"mode":"image","mimeType":"image/jpeg","image":"<b64>"}
-    size_t jsonSize = b64len + 80;
-    char* jsonBuf = (char*)ps_malloc(jsonSize);
-    if (!jsonBuf) {
-        free(b64buf);
+    // Zbuduj multipart/form-data body w PSRAM — binarnie bez base64 (~25% szybsze)
+    // Endpoint /api/device/solve oczekuje pola "image" (image/jpeg).
+    static const char _mpHdr[] =
+        "--KalkMateB\r\n"
+        "Content-Disposition: form-data; name=\"image\"; filename=\"photo.jpg\"\r\n"
+        "Content-Type: image/jpeg\r\n"
+        "\r\n";
+    static const char _mpFtr[] = "\r\n--KalkMateB--\r\n";
+    const size_t hdrLen = sizeof(_mpHdr) - 1;
+    const size_t ftrLen = sizeof(_mpFtr) - 1;
+    size_t bodySize = hdrLen + jpegLen + ftrLen;
+    uint8_t* bodyBuf = (uint8_t*)ps_malloc(bodySize);
+    if (!bodyBuf) {
+        free(jpegBuf);
         _solDrawError(d, _solT("Brak pamieci!", "Out of memory!"), "");
         return;
     }
-    snprintf(jsonBuf, jsonSize,
-             "{\"mode\":\"image\",\"mimeType\":\"image/jpeg\",\"image\":\"%s\"}", b64buf);
-    free(b64buf);
+    memcpy(bodyBuf,              _mpHdr, hdrLen);
+    memcpy(bodyBuf + hdrLen,     jpegBuf, jpegLen);
+    memcpy(bodyBuf + hdrLen + jpegLen, _mpFtr, ftrLen);
+    free(jpegBuf);
 
     WiFiClientSecure client;
     client.setInsecure();
-    client.setTimeout(60);  // socket timeout 60s — vs domyslny 5-10s
+    client.setTimeout(60);
     HTTPClient http;
     http.begin(client, _SOL_SOLVE_ENDPOINT);
-    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Content-Type", "multipart/form-data; boundary=KalkMateB");
     http.addHeader("x-api-key", KALK_API_KEY);
     http.addHeader("x-device-id", _solDeviceId());
     http.addHeader("x-fw-version", FW_VERSION);
@@ -920,8 +909,8 @@ static void _solRunPhotoMode(U8G2 &d) {
     d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
     d.sendBuffer();
 
-    int httpCode = http.POST(jsonBuf);
-    free(jsonBuf);
+    int httpCode = http.POST(bodyBuf, (int)bodySize);
+    free(bodyBuf);
 
     if (httpCode <= 0) {
         http.end();

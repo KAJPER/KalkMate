@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { AI_MODEL_IDS, getCostMultiplier } from "@/lib/aiModels";
 
 // Endpoint dla kalkulatora ESP32 — rozwiązywanie zadań przez AI
 // POST /api/device/solve
@@ -44,84 +45,8 @@ async function saveCapture(
     return null;
   }
 }
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro";
-// Gdy glowny model padnie na 5xx (overload), sprobuj fallbacka. Flash jest
-// szybszy i znacznie rzadziej przeciazony niz Pro.
-const GEMINI_MODEL_FALLBACK = process.env.GEMINI_MODEL_FALLBACK || "gemini-2.5-flash";
-// Hostname mozna nadpisac przez env (np. proxy Cloudflare Workers gdy
-// IP serwera jest blokowany przez geo-restrykcje Gemini API)
-const GEMINI_HOST = process.env.GEMINI_HOST || "generativelanguage.googleapis.com";
-const buildGeminiUrl = (model: string) =>
-  `https://${GEMINI_HOST}/v1beta/models/${model}:generateContent`;
-const GEMINI_API_URL = buildGeminiUrl(GEMINI_MODEL);
-
-// Wyciagnij text ze wszystkich parts (Gemini moze zwrocic multi-part response,
-// szczegolnie z thinking). Zwraca null gdy nic sensownego nie ma.
-function extractText(geminiData: any): string | null {
-  const parts = geminiData?.candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) return null;
-  const text = parts
-    .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-  return text || null;
-}
-
-// Pojedyncze wywolanie Gemini z retry na:
-//  - 5xx (overload Google)
-//  - pusty wynik (MAX_TOKENS / SAFETY / inny finishReason bez tekstu)
-// Zwraca ostatnia odpowiedz, uzyty model i wyciagniety solution (moze byc null).
-async function callGeminiWithRetry(
-  body: unknown,
-  apiKey: string,
-): Promise<{ res: Response; modelUsed: string; solution: string | null }> {
-  const attempts: { model: string; url: string }[] = [
-    { model: GEMINI_MODEL, url: GEMINI_API_URL },
-    { model: GEMINI_MODEL, url: GEMINI_API_URL }, // retry tego samego po krotkim sleep
-    { model: GEMINI_MODEL_FALLBACK, url: buildGeminiUrl(GEMINI_MODEL_FALLBACK) },
-  ];
-  let last: Response | null = null;
-  let lastModel = GEMINI_MODEL;
-  let lastSolution: string | null = null;
-  for (let i = 0; i < attempts.length; i++) {
-    const { model, url } = attempts[i];
-    if (i > 0) await new Promise((r) => setTimeout(r, i === 1 ? 800 : 200));
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify(body),
-    });
-    last = res;
-    lastModel = model;
-    if (!res.ok) {
-      if (res.status < 500) return { res, modelUsed: model, solution: null }; // 4xx — nie retrowac
-      console.warn(`[solve] Gemini ${res.status} on ${model} (attempt ${i + 1}/${attempts.length})`);
-      continue;
-    }
-    // 200 OK — sprawdz czy faktycznie jest text. Klon zeby moc czytac body
-    // jeszcze raz w callerze gdyby trzeba bylo (np. error reporting).
-    const data = await res.clone().json().catch(() => null);
-    const text = extractText(data);
-    if (text) return { res, modelUsed: model, solution: text };
-    lastSolution = null;
-    const finishReason = data?.candidates?.[0]?.finishReason || "?";
-    const usage = data?.usageMetadata
-      ? `prompt=${data.usageMetadata.promptTokenCount} thoughts=${data.usageMetadata.thoughtsTokenCount ?? 0} candidates=${data.usageMetadata.candidatesTokenCount ?? 0}`
-      : "?";
-    console.warn(
-      `[solve] Gemini 200 but empty text on ${model} (attempt ${i + 1}/${attempts.length}) — finishReason=${finishReason} usage=${usage}`,
-    );
-    // Pusty wynik: kontynuuj petle (retry tego samego, potem fallback)
-  }
-  return { res: last as Response, modelUsed: lastModel, solution: lastSolution };
-}
-
-// === OpenRouter — jedno API do wszystkich najlepszych modeli (GPT, Claude,
-// Gemini, Grok, DeepSeek, Qwen...). Uzywane gdy user wybral konkretny model w
-// panelu. Bez OPENROUTER_API_KEY solve route i tak spadnie na Gemini. ===
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_DEFAULT_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || "google/gemini-2.5-pro";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 async function callOpenRouter(
@@ -131,7 +56,7 @@ async function callOpenRouter(
   text: string,
   base64Data: string | null,
   imgMime: string,
-): Promise<{ ok: boolean; status: number; solution: string | null; detail: string }> {
+): Promise<{ ok: boolean; status: number; solution: string | null; detail: string; tokensUsed: number }> {
   const content: any[] = [];
   if (mode === "text") {
     content.push({ type: "text", text });
@@ -167,12 +92,13 @@ async function callOpenRouter(
       const j = JSON.parse(t);
       if (j?.error?.message) detail = String(j.error.message).slice(0, 200);
     } catch {}
-    return { ok: false, status: res.status, solution: null, detail };
+    return { ok: false, status: res.status, solution: null, detail, tokensUsed: 0 };
   }
   const data = await res.json().catch(() => null);
   const sol = data?.choices?.[0]?.message?.content;
   const solution = typeof sol === "string" && sol.trim() ? sol.trim() : null;
-  return { ok: true, status: 200, solution, detail: "" };
+  const tokensUsed: number = data?.usage?.total_tokens ?? 0;
+  return { ok: true, status: 200, solution, detail: "", tokensUsed };
 }
 
 const SYSTEM_PROMPT_MATURA = `Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii.
@@ -312,7 +238,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!GEMINI_API_KEY) {
+    if (!OPENROUTER_API_KEY) {
       return NextResponse.json(
         { ok: false, error: "AI nie skonfigurowane" },
         { status: 500 }
@@ -346,8 +272,25 @@ export async function POST(request: NextRequest) {
       if (rows?.[0]?.promptMode === "raw") aiMode = "raw";
     }
     const systemPrompt = aiMode === "raw" ? SYSTEM_PROMPT_RAW : SYSTEM_PROMPT_MATURA;
-    // OpenRouter tylko gdy user wybral konkretny model (provider/model) i jest klucz
-    const useOpenRouter = aiModel !== "default" && aiModel.includes("/") && !!OPENROUTER_API_KEY;
+    const modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
+      ? aiModel
+      : OPENROUTER_DEFAULT_MODEL;
+    const costMultiplier = getCostMultiplier(aiModel);
+
+    // Sprawdz saldo tokenow (tylko dla userow z kontem)
+    // Minimum 1000 efektywnych tokenow w rezerwie przed kazdym zapytaniem
+    if (ownerUserId) {
+      const balRows = await prisma.$queryRaw<{ tokenBalance: number }[]>`
+        SELECT "tokenBalance" FROM "User" WHERE "id" = ${ownerUserId} LIMIT 1
+      `.catch(() => null);
+      const tokenBalance = balRows?.[0]?.tokenBalance ?? 0;
+      if (tokenBalance < 1000) {
+        return NextResponse.json(
+          { ok: false, error: `Brak tokenow (${tokenBalance}). Odnow subskrypcje na kalkmate.pl.` },
+          { status: 402 }
+        );
+      }
+    }
 
     // Parsuj body
     const body = await request.json();
@@ -418,99 +361,30 @@ export async function POST(request: NextRequest) {
       userParts.push({ text: "Rozwiąż zadanie z tego zdjęcia." });
     }
 
-    const geminiBody = {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: systemPrompt }],
-        },
-        {
-          role: "model",
-          parts: [
-            {
-              text: "Rozumiem. Rozwiązuję zadania maturalne krótko i zwięźle. Podaj zadanie.",
-            },
-          ],
-        },
-        {
-          role: "user",
-          parts: userParts,
-        },
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        topK: 40,
-        topP: 0.95,
-        // 8192 daje Pro 2.5 zapas na thinking + wynik. Wczesniej 1024 czesto
-        // konczylo sie MAX_TOKENS po samym thinking i pustym parts[].
-        maxOutputTokens: 8192,
-      },
-    };
-
-    // === Wywolanie AI: OpenRouter (wybrany model) lub Gemini (default) ===
+    // === Wywolanie AI przez OpenRouter ===
     let solution: string | null = null;
-    let modelUsed = GEMINI_MODEL;
+    const r = await callOpenRouter(modelToUse, systemPrompt, mode, (text || "").trim(), base64Data, imgMime);
+    if (!r.ok) {
+      console.error(`[solve] OpenRouter ${r.status} (model=${modelToUse}): ${r.detail}`);
+      return NextResponse.json(
+        { ok: false, error: `AI ${r.status}: ${r.detail}`, model: modelToUse },
+        { status: 502 }
+      );
+    }
+    if (!r.solution) {
+      return NextResponse.json(
+        { ok: false, error: "Brak odpowiedzi AI (pusty wynik modelu)", model: modelToUse },
+        { status: 502 }
+      );
+    }
+    solution = r.solution;
 
-    if (useOpenRouter) {
-      modelUsed = aiModel;
-      const r = await callOpenRouter(aiModel, systemPrompt, mode, (text || "").trim(), base64Data, imgMime);
-      if (!r.ok) {
-        console.error(`[solve] OpenRouter ${r.status} (model=${aiModel}): ${r.detail}`);
-        // Fallback na Gemini — user nie zostaje bez odpowiedzi gdy OpenRouter padnie
-        const g = await callGeminiWithRetry(geminiBody, GEMINI_API_KEY!);
-        if (g.solution) {
-          solution = g.solution;
-          modelUsed = `${g.modelUsed} (fallback)`;
-        } else {
-          return NextResponse.json(
-            { ok: false, error: `AI ${r.status}: ${r.detail}`, model: aiModel },
-            { status: 502 }
-          );
-        }
-      } else if (!r.solution) {
-        return NextResponse.json(
-          { ok: false, error: "Brak odpowiedzi AI (pusty wynik modelu)", model: aiModel },
-          { status: 502 }
-        );
-      } else {
-        solution = r.solution;
-      }
-    } else {
-      const g = await callGeminiWithRetry(geminiBody, GEMINI_API_KEY!);
-      modelUsed = g.modelUsed;
-      if (!g.res.ok) {
-        const errText = await g.res.text();
-        console.error(`Gemini error ${g.res.status} (model=${modelUsed}):`, errText);
-        let detail = errText.slice(0, 200);
-        try {
-          const j = JSON.parse(errText);
-          if (j?.error?.message) detail = String(j.error.message).slice(0, 200);
-        } catch {}
-        return NextResponse.json(
-          { ok: false, error: `AI ${g.res.status}: ${detail}`, model: modelUsed },
-          { status: 502 }
-        );
-      }
-      solution = g.solution;
-      if (!solution) {
-        const finalData = await g.res.clone().json().catch(() => null);
-        const finishReason = finalData?.candidates?.[0]?.finishReason || "UNKNOWN";
-        const promptFeedback = finalData?.promptFeedback?.blockReason || null;
-        console.error(
-          `[solve] empty response (model=${modelUsed}) finishReason=${finishReason} blockReason=${promptFeedback || "-"} usage=${JSON.stringify(finalData?.usageMetadata || {})}`,
-        );
-        const hint = promptFeedback
-          ? `zablokowane (${promptFeedback})`
-          : finishReason === "MAX_TOKENS"
-            ? "przekroczono limit"
-            : finishReason === "SAFETY"
-              ? "blokada bezpieczenstwa"
-              : finishReason;
-        return NextResponse.json(
-          { ok: false, error: `Brak odpowiedzi AI: ${hint}`, model: modelUsed },
-          { status: 502 }
-        );
-      }
+    // Odejmij tokeny po udanej odpowiedzi (fire-and-forget)
+    if (ownerUserId) {
+      const effectiveTokens = Math.ceil(r.tokensUsed * costMultiplier);
+      prisma.$executeRaw`
+        UPDATE "User" SET "tokenBalance" = GREATEST(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${ownerUserId}
+      `.catch((e: any) => console.error("[solve] token deduction fail:", e));
     }
 
     // Zlicz zapytanie + log do DeviceSolve (fire-and-forget, nie blokuje odpowiedzi)

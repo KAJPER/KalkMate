@@ -1002,6 +1002,9 @@ void setup() {
         }
     }
 
+    // OTA rollback check — wykrywa boot loop po aktualizacji (>= 3 proby = rollback)
+    otaBootCheck();
+
     // Klawiatura matrycowa
     if (!inputBegin()) {
         Serial.println("[FATAL] MCP23017 brak — klawiatura nie dziala");
@@ -1122,12 +1125,24 @@ static void _vbatWatchdogLoop() {
 #endif
 }
 
+// OTA walidacja: oznacz firmware jako valid gdy WiFi sie polaczy po raz pierwszy.
+// Jezeli to nie nastapi przed 3 rebootami, otaBootCheck() zrobi rollback.
+static bool _otaValidated = false;
+static void _otaValidateLoop() {
+    if (_otaValidated) return;
+    if (WiFi.status() == WL_CONNECTED) {
+        otaMarkValid();
+        _otaValidated = true;
+    }
+}
+
 void loop() {
     inputScan();        // skanuj matrycę co iterację (max raz na 30 ms)
     panicCheck();       // sprawdz panic key, ustaw flagę gdy nacisnięty
     handlePanicIfRequested();  // jesli flaga -> kalkulator
     _vbatWatchdogLoop();    // anti-brownout: shutdown przy VBAT<3.2V
     _wifiAutoConnectLazy(); // auto-WiFi 3s po wejsciu w AI menu
+    _otaValidateLoop();     // OTA health-check: waliduj po polaczeniu WiFi
     if (powerCheckSleep()) {
         // Po wybudzeniu — przerysuj menu
         drawMenu();

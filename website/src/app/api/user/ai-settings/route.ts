@@ -19,14 +19,15 @@ export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Nie zalogowany" }, { status: 401 });
 
-  const rows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null }[]>`
-    SELECT "aiModel", "aiMode" FROM "User" WHERE "id" = ${user.id} LIMIT 1
+  const rows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null; tokenBalance: number | null }[]>`
+    SELECT "aiModel", "aiMode", "tokenBalance" FROM "User" WHERE "id" = ${user.id} LIMIT 1
   `;
   const row = rows?.[0];
   return NextResponse.json({
     ok: true,
     aiModel: row?.aiModel || "default",
     aiMode: row?.aiMode === "raw" ? "raw" : "matura",
+    tokenBalance: row?.tokenBalance ?? 0,
     models: AI_MODELS,
   });
 }

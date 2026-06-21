@@ -2,32 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { AI_MODEL_IDS, getCostMultiplier } from "@/lib/aiModels";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_HOST = process.env.GEMINI_HOST || "generativelanguage.googleapis.com";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-pro";
-const GEMINI_MODEL_FALLBACK = process.env.GEMINI_MODEL_FALLBACK || "gemini-2.5-flash";
-const buildGeminiUrl = (model: string) =>
-  `https://${GEMINI_HOST}/v1beta/models/${model}:generateContent`;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_DEFAULT_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || "google/gemini-2.5-pro";
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-// Retry na 5xx (overload Gemini) + automatyczny fallback na lzejszy model.
-async function callGeminiWithRetry(body: unknown): Promise<Response> {
-  const attempts = [GEMINI_MODEL, GEMINI_MODEL, GEMINI_MODEL_FALLBACK];
-  let last: Response | null = null;
-  for (let i = 0; i < attempts.length; i++) {
-    if (i > 0) await new Promise((r) => setTimeout(r, i === 1 ? 800 : 200));
-    const res = await fetch(`${buildGeminiUrl(attempts[i])}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    last = res;
-    if (res.ok) return res;
-    if (res.status < 500) return res;
-    console.warn(`[chat] Gemini ${res.status} on ${attempts[i]} (attempt ${i + 1}/${attempts.length})`);
-  }
-  return last as Response;
-}
+const SYSTEM_PROMPT_RAW = `Jesteś pomocnym asystentem AI. Odpowiadaj po polsku, chyba że użytkownik pisze w innym języku.
+Pomagasz z każdym tematem: matematyką, fizyką, chemią, biologią, elektroniką, informatyką, językami obcymi i wszystkim innym.
+Używaj formatowania markdown tam gdzie pomaga (nagłówki, listy, bloki kodu). Odpowiadaj wyczerpująco i krok po kroku.`;
 
 // System prompt załadowany z pliku system_prompt_matura_all.md
 const SYSTEM_PROMPT = `# Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki (poziom podstawowy i rozszerzony), fizyki (poziom rozszerzony), biologii (poziom rozszerzony) i chemii (poziom rozszerzony).
@@ -1282,81 +1265,89 @@ export async function POST(request: NextRequest) {
 
     const { messages, conversationId } = await request.json();
 
-    if (!GEMINI_API_KEY) {
+    if (!OPENROUTER_API_KEY) {
       return NextResponse.json(
-        { error: "Gemini API key not configured" },
+        { error: "OpenRouter API key not configured" },
         { status: 500 }
       );
     }
 
-    // Prepare messages for Gemini (with multimodal support)
-    const geminiMessages = messages.map((msg: any) => {
-      const parts: any[] = [];
+    // Odczytaj tryb AI i model z ustawień użytkownika
+    let aiMode: "matura" | "raw" = "matura";
+    let aiModel = "default";
+    try {
+      const urows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null }[]>`
+        SELECT "aiModel", "aiMode" FROM "User" WHERE "id" = ${user.id} LIMIT 1
+      `;
+      if (urows?.[0]?.aiMode === "raw") aiMode = "raw";
+      if (urows?.[0]?.aiModel) aiModel = urows[0].aiModel;
+    } catch {}
+    const modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
+      ? aiModel
+      : OPENROUTER_DEFAULT_MODEL;
+    const systemPrompt = aiMode === "raw" ? SYSTEM_PROMPT_RAW : SYSTEM_PROMPT;
+    const costMultiplier = getCostMultiplier(aiModel);
 
-      // Add text content
+    // Sprawdz saldo tokenow — minimum 1000 efektywnych tokenow w rezerwie
+    const balanceRows = await prisma.$queryRaw<{ tokenBalance: number }[]>`
+      SELECT "tokenBalance" FROM "User" WHERE "id" = ${user.id} LIMIT 1
+    `.catch(() => null);
+    const tokenBalance = balanceRows?.[0]?.tokenBalance ?? 0;
+    if (tokenBalance < 1000) {
+      return NextResponse.json(
+        { error: `Brak tokenów (${tokenBalance}). Odnów subskrypcję w panelu.` },
+        { status: 402 }
+      );
+    }
+
+    // Prepare messages for OpenRouter (OpenAI-compatible format)
+    const openRouterMessages: any[] = [
+      { role: "system", content: systemPrompt },
+    ];
+
+    messages.forEach((msg: any) => {
+      const content: any[] = [];
+
       if (msg.content) {
-        parts.push({ text: msg.content });
+        content.push({ type: "text", text: msg.content });
       }
 
-      // Add image attachments for Gemini vision
       if (msg.attachments && Array.isArray(msg.attachments)) {
         msg.attachments.forEach((att: any) => {
-          if (att.mimeType.startsWith('image/')) {
-            // Extract base64 data (remove data:image/...;base64, prefix)
-            const base64Data = att.data.split(',')[1] || att.data;
-            parts.push({
-              inlineData: {
-                mimeType: att.mimeType,
-                data: base64Data,
-              },
-            });
-          } else if (att.mimeType === 'application/pdf') {
-            // For PDF, add as text with note
-            parts.push({
-              text: `[Załącznik PDF: ${att.filename}]`,
-            });
+          if (att.mimeType.startsWith("image/")) {
+            const dataUrl = att.data.startsWith("data:") ? att.data : `data:${att.mimeType};base64,${att.data}`;
+            content.push({ type: "image_url", image_url: { url: dataUrl } });
+          } else if (att.mimeType === "application/pdf") {
+            content.push({ type: "text", text: `[Załącznik PDF: ${att.filename}]` });
           }
         });
       }
 
-      return {
-        role: msg.role === "user" ? "user" : "model",
-        parts,
-      };
+      openRouterMessages.push({
+        role: msg.role === "user" ? "user" : "assistant",
+        content: content.length === 1 && content[0].type === "text" ? content[0].text : content,
+      });
     });
 
-    // Add system prompt as first message
-    const allMessages = [
-      {
-        role: "user",
-        parts: [{ text: SYSTEM_PROMPT }],
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://kalkmate.pl",
+        "X-Title": "KalkMate",
       },
-      {
-        role: "model",
-        parts: [{ text: "Rozumiem. Jestem ekspertem od polskiego egzaminu maturalnego. Rozwiązuję zadania zgodnie z zasadami oceniania CKE - krok po kroku, z pełnym uzasadnieniem, właściwą terminologią i jednostkami. Wklej treść zadania z matematyki, fizyki, chemii lub biologii!" }],
-      },
-      ...geminiMessages,
-    ];
-
-    const response = await callGeminiWithRetry({
-      contents: allMessages,
-      generationConfig: {
+      body: JSON.stringify({
+        model: modelToUse,
+        messages: openRouterMessages,
         temperature: 0.3,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 4096,
-      },
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-      ],
+        max_tokens: 4096,
+      }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Gemini API error:", error);
+      console.error("OpenRouter API error:", error);
       return NextResponse.json(
         { error: "Failed to generate response" },
         { status: response.status }
@@ -1364,7 +1355,8 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    const aiResponse = data.candidates[0]?.content?.parts[0]?.text || "Przepraszam, nie mogłem wygenerować odpowiedzi.";
+    const aiResponse = data.choices?.[0]?.message?.content || "Przepraszam, nie mogłem wygenerować odpowiedzi.";
+    const effectiveTokens = Math.ceil((data.usage?.total_tokens ?? 0) * costMultiplier);
 
     // Save messages to database - create conversation if needed
     try {
@@ -1440,13 +1432,22 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      // Odejmij tokeny po udanej odpowiedzi (fire-and-forget)
+      prisma.$executeRaw`
+        UPDATE "User" SET "tokenBalance" = GREATEST(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${user.id}
+      `.catch((e: any) => console.error("[chat] token deduction fail:", e));
+
       return NextResponse.json({
         response: aiResponse,
-        conversationId: activeConversationId // Return conversationId to frontend
+        conversationId: activeConversationId,
+        tokensUsed: effectiveTokens,
+        tokensLeft: Math.max(0, tokenBalance - effectiveTokens),
       });
     } catch (saveError) {
       console.error("Failed to save messages:", saveError);
-      // Still return the AI response even if saving failed
+      prisma.$executeRaw`
+        UPDATE "User" SET "tokenBalance" = GREATEST(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${user.id}
+      `.catch(() => {});
       return NextResponse.json({ response: aiResponse });
     }
   } catch (error) {

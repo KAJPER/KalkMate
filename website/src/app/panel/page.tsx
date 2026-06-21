@@ -61,8 +61,11 @@ export default function PanelPage() {
   // === AI settings (sekcja AI): wybor modelu + tryb Matura/Czysty (per-user) ===
   const [aiModel, setAiModel] = useState<string>("default");
   const [aiMode, setAiMode] = useState<"matura" | "raw">("matura");
-  const [aiModels, setAiModels] = useState<Array<{ id: string; label: string; provider: string; note?: string }>>([]);
+  const [aiModels, setAiModels] = useState<Array<{ id: string; label: string; provider: string; note?: string; costMultiplier: number }>>([]);
   const [aiSaving, setAiSaving] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState<number>(1_000_000);
+
+  const TOKEN_GRANT = 1_000_000;
 
   const loadAiSettings = async () => {
     try {
@@ -72,6 +75,7 @@ export default function PanelPage() {
         setAiModel(j.aiModel || "default");
         setAiMode(j.aiMode === "raw" ? "raw" : "matura");
         setAiModels(Array.isArray(j.models) ? j.models : []);
+        if (typeof j.tokenBalance === "number") setTokenBalance(j.tokenBalance);
       }
     } catch {}
   };
@@ -1494,11 +1498,132 @@ export default function PanelPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3, ease: "easeOut" as const }}
+              className="space-y-5 max-w-3xl"
             >
-              <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)] max-w-3xl">
+              {/* === LICZNIK TOKENÓW === */}
+              {(() => {
+                const consumed = Math.max(0, TOKEN_GRANT - tokenBalance);
+                const pct = Math.min(100, (consumed / TOKEN_GRANT) * 100);
+                const currentModel = aiModels.find((m) => m.id === aiModel);
+                const multiplier = currentModel?.costMultiplier ?? 4;
+                // Szacowana liczba zadań maturalnych (typowe zadanie: ~800 realnych tokenów wejście+wyjście)
+                const avgRealTokensPerTask = 800;
+                const avgEffectiveTokensPerTask = Math.ceil(avgRealTokensPerTask * multiplier);
+                const tasksLeft = Math.floor(tokenBalance / avgEffectiveTokensPerTask);
+                const tasksTotal = Math.floor(TOKEN_GRANT / avgEffectiveTokensPerTask);
+                const barColor = pct > 80 ? "#FF4D2E" : pct > 50 ? "#FFB800" : "#D8FF3D";
+                return (
+                  <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                    <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Zużycie tokenów</div>
+
+                    {/* Pasek postępu */}
+                    <div className="mb-4">
+                      <div className="flex items-end justify-between mb-1.5">
+                        <div>
+                          <span className="text-2xl font-bold" style={{ color: barColor }}>
+                            {consumed >= 1_000_000
+                              ? `${(consumed / 1_000_000).toFixed(2)}M`
+                              : consumed >= 1_000
+                              ? `${(consumed / 1_000).toFixed(1)}K`
+                              : consumed}
+                          </span>
+                          <span className="text-sm text-[#F2EDE3]/40 ml-1">/ 1 000 000 efektywnych tokenów</span>
+                        </div>
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/40">{pct.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-[#1a1a1a] h-2 border border-[rgba(242,237,227,0.08)]">
+                        <div
+                          className="h-full transition-all duration-700"
+                          style={{ width: `${pct}%`, backgroundColor: barColor }}
+                        />
+                      </div>
+                      <div className="flex justify-between mt-1">
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/30">ZUŻYTE</span>
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/30">
+                          POZOSTAŁO:{" "}
+                          <span className="text-[#F2EDE3]/60">
+                            {tokenBalance >= 1_000_000
+                              ? `${(tokenBalance / 1_000_000).toFixed(3)}M`
+                              : tokenBalance >= 1_000
+                              ? `${(tokenBalance / 1_000).toFixed(1)}K`
+                              : tokenBalance}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Szacunkowa liczba zadań */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-[#141414] border border-[rgba(242,237,227,0.08)] p-3">
+                        <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">Zadań zostało</div>
+                        <div className="text-xl font-bold text-[#D8FF3D]">
+                          ~{tasksLeft.toLocaleString("pl-PL")}
+                        </div>
+                        <div className="text-xs text-[#F2EDE3]/40 mt-0.5">zadań maturalnych</div>
+                      </div>
+                      <div className="bg-[#141414] border border-[rgba(242,237,227,0.08)] p-3">
+                        <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">Limit na miesiąc</div>
+                        <div className="text-xl font-bold text-[#F2EDE3]">
+                          ~{tasksTotal.toLocaleString("pl-PL")}
+                        </div>
+                        <div className="text-xs text-[#F2EDE3]/40 mt-0.5">dla modelu {currentModel?.label ?? "domyślnego"}</div>
+                      </div>
+                    </div>
+
+                    {/* Tabelka kosztów modeli */}
+                    <div className="border border-[rgba(242,237,227,0.08)] mb-3">
+                      <div className="flex items-center gap-2 px-3 py-2 border-b border-[rgba(242,237,227,0.08)] bg-[#141414]">
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px]">WYDAJNOŚĆ MODELI — ile zadań z 1 mln tokenów</span>
+                      </div>
+                      <div className="divide-y divide-[rgba(242,237,227,0.05)]">
+                        {aiModels.map((m) => {
+                          const eff = Math.ceil(avgRealTokensPerTask * m.costMultiplier);
+                          const tasks = Math.floor(TOKEN_GRANT / eff);
+                          const isCurrent = m.id === aiModel;
+                          return (
+                            <div
+                              key={m.id}
+                              className={`flex items-center justify-between px-3 py-2 ${isCurrent ? "bg-[#D8FF3D]/05" : ""}`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isCurrent && <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full flex-shrink-0" />}
+                                <span className={`text-xs truncate ${isCurrent ? "text-[#D8FF3D] font-medium" : "text-[#F2EDE3]/60"}`}>
+                                  {m.label}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 flex-shrink-0">
+                                <span className={`km-mono-eyebrow text-[10px] px-1.5 py-0.5 ${
+                                  m.costMultiplier >= 6
+                                    ? "bg-red-500/10 text-red-400"
+                                    : m.costMultiplier >= 2
+                                    ? "bg-yellow-500/10 text-yellow-400"
+                                    : "bg-emerald-500/10 text-emerald-400"
+                                }`}>
+                                  ×{m.costMultiplier}
+                                </span>
+                                <span className={`text-xs font-bold w-20 text-right ${isCurrent ? "text-[#D8FF3D]" : "text-[#F2EDE3]/50"}`}>
+                                  ~{tasks.toLocaleString("pl-PL")} zad.
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-[#F2EDE3]/30">
+                      Szacunek dla typowego zadania maturalnego (~800 realnych tokenów wejście + odpowiedź).
+                      Tokeny odnawiają się razem z subskrypcją.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* === MODEL AI === */}
+              <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
                 <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ Model AI</div>
                 <p className="text-sm text-[#F2EDE3]/55 mb-4">
-                  Wybierz model, którego kalkulator użyje do rozwiązywania zadań. Wszystkie najlepsze modele przez jedno API (OpenRouter).
+                  Wybierz model. Mnożnik (×) pokazuje ile efektywnych tokenów kosztuje jedno zapytanie w stosunku do najtańszego.
                 </p>
                 <div className="grid sm:grid-cols-2 gap-2">
                   {aiModels.map((m) => (
@@ -1513,48 +1638,59 @@ export default function PanelPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`font-medium ${aiModel === m.id ? "text-[#D8FF3D]" : "text-[#F2EDE3]"}`}>{m.label}</span>
-                        <span className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] whitespace-nowrap">{m.provider}</span>
+                        <span className={`font-medium text-sm ${aiModel === m.id ? "text-[#D8FF3D]" : "text-[#F2EDE3]"}`}>{m.label}</span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className={`km-mono-eyebrow text-[10px] px-1.5 py-0.5 ${
+                            m.costMultiplier >= 6
+                              ? "bg-red-500/10 text-red-400"
+                              : m.costMultiplier >= 2
+                              ? "bg-yellow-500/10 text-yellow-400"
+                              : "bg-emerald-500/10 text-emerald-400"
+                          }`}>
+                            ×{m.costMultiplier}
+                          </span>
+                          <span className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px]">{m.provider}</span>
+                        </div>
                       </div>
                       {m.note && <div className="text-xs text-[#F2EDE3]/45 mt-1">{m.note}</div>}
                     </button>
                   ))}
                 </div>
+              </div>
 
-                {/* Tryb AI — przeniesiony z zakładki Kalkulator */}
-                <div className="mt-6 pt-5 border-t border-[rgba(242,237,227,0.10)]">
-                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Tryb AI</div>
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      onClick={() => saveAiSettings({ aiMode: "matura" })}
-                      disabled={aiSaving}
-                      className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
-                        aiMode !== "raw"
-                          ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
-                          : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
-                      }`}
-                      title="Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)"
-                    >
-                      Matura (CKE)
-                    </button>
-                    <button
-                      onClick={() => saveAiSettings({ aiMode: "raw" })}
-                      disabled={aiSaving}
-                      className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
-                        aiMode === "raw"
-                          ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
-                          : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
-                      }`}
-                      title="Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)"
-                    >
-                      Czysty AI
-                    </button>
-                  </div>
-                  <div className="text-xs text-[#F2EDE3]/45">
-                    {aiMode === "raw"
-                      ? "Tryb uniwersalny — AI nie zakłada matury. Działa dla elektroniki, informatyki, języków itp."
-                      : "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia)."}
-                  </div>
+              {/* === TRYB AI === */}
+              <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Tryb AI</div>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onClick={() => saveAiSettings({ aiMode: "matura" })}
+                    disabled={aiSaving}
+                    className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
+                      aiMode !== "raw"
+                        ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
+                        : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
+                    }`}
+                    title="Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)"
+                  >
+                    Matura (CKE)
+                  </button>
+                  <button
+                    onClick={() => saveAiSettings({ aiMode: "raw" })}
+                    disabled={aiSaving}
+                    className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
+                      aiMode === "raw"
+                        ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
+                        : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
+                    }`}
+                    title="Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)"
+                  >
+                    Czysty AI
+                  </button>
+                </div>
+                <div className="text-xs text-[#F2EDE3]/45">
+                  {aiMode === "raw"
+                    ? "Tryb uniwersalny — AI nie zakłada matury. Działa dla elektroniki, informatyki, języków itp."
+                    : "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia)."}
                 </div>
               </div>
             </motion.div>
