@@ -118,6 +118,63 @@ async function callGeminiWithRetry(
   return { res: last as Response, modelUsed: lastModel, solution: lastSolution };
 }
 
+// === OpenRouter — jedno API do wszystkich najlepszych modeli (GPT, Claude,
+// Gemini, Grok, DeepSeek, Qwen...). Uzywane gdy user wybral konkretny model w
+// panelu. Bez OPENROUTER_API_KEY solve route i tak spadnie na Gemini. ===
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+async function callOpenRouter(
+  model: string,
+  systemPrompt: string,
+  mode: string,
+  text: string,
+  base64Data: string | null,
+  imgMime: string,
+): Promise<{ ok: boolean; status: number; solution: string | null; detail: string }> {
+  const content: any[] = [];
+  if (mode === "text") {
+    content.push({ type: "text", text });
+  } else {
+    content.push({ type: "text", text: "Rozwiąż zadanie z tego zdjęcia." });
+    content.push({
+      type: "image_url",
+      image_url: { url: `data:${imgMime};base64,${base64Data}` },
+    });
+  }
+  const res = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://kalkmate.pl",
+      "X-Title": "KalkMate",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content },
+      ],
+      temperature: 0.2,
+      max_tokens: 1500,
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    let detail = t.slice(0, 200);
+    try {
+      const j = JSON.parse(t);
+      if (j?.error?.message) detail = String(j.error.message).slice(0, 200);
+    } catch {}
+    return { ok: false, status: res.status, solution: null, detail };
+  }
+  const data = await res.json().catch(() => null);
+  const sol = data?.choices?.[0]?.message?.content;
+  const solution = typeof sol === "string" && sol.trim() ? sol.trim() : null;
+  return { ok: true, status: 200, solution, detail: "" };
+}
+
 const SYSTEM_PROMPT_MATURA = `Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii.
 Odpowiadaj KRÓTKO i ZWIĘŹLE — ekran kalkulatora ma ograniczoną przestrzeń.
 Format odpowiedzi:
@@ -262,17 +319,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Wybor system prompta na podstawie Device.promptMode (kolumna nie jest w
-    // Prisma schemie wiec raw SQL). Default = matura.
-    let systemPrompt = SYSTEM_PROMPT_MATURA;
-    if (deviceIdHeader) {
+    // Ustawienia AI usera: model (przez OpenRouter) + tryb prompta. Kolumny
+    // User.aiModel / User.aiMode oraz Device.promptMode nie sa w Prisma schemie
+    // -> raw SQL. Priorytet trybu: user.aiMode -> Device.promptMode (legacy) ->
+    // default "matura". Model: user.aiModel -> "default" (Gemini).
+    const ownerUserId = license.claimedByUserId || pairedDevice?.userId || null;
+    let aiMode: "matura" | "raw" = "matura";
+    let aiModel = "default";
+    if (ownerUserId) {
+      try {
+        const urows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null }[]>`
+          SELECT "aiModel", "aiMode" FROM "User" WHERE "id" = ${ownerUserId} LIMIT 1
+        `;
+        if (urows?.[0]?.aiMode === "raw") aiMode = "raw";
+        if (urows?.[0]?.aiModel) aiModel = urows[0].aiModel;
+      } catch (e) {
+        // Kolumny aiModel/aiMode moga nie istniec (stara baza) — fallback na default
+        console.error("[solve] ai-settings read fail:", e);
+      }
+    }
+    // Fallback trybu na ustawienie per-device (legacy) gdy user nie wybral "raw"
+    if (aiMode === "matura" && deviceIdHeader) {
       const rows = await prisma.$queryRaw<{ promptMode: string | null }[]>`
         SELECT "promptMode" FROM "Device" WHERE "deviceId" = ${deviceIdHeader} LIMIT 1
       `;
-      if (rows?.[0]?.promptMode === "raw") {
-        systemPrompt = SYSTEM_PROMPT_RAW;
-      }
+      if (rows?.[0]?.promptMode === "raw") aiMode = "raw";
     }
+    const systemPrompt = aiMode === "raw" ? SYSTEM_PROMPT_RAW : SYSTEM_PROMPT_MATURA;
+    // OpenRouter tylko gdy user wybral konkretny model (provider/model) i jest klucz
+    const useOpenRouter = aiModel !== "default" && aiModel.includes("/") && !!OPENROUTER_API_KEY;
 
     // Parsuj body
     const body = await request.json();
@@ -303,8 +378,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Zbuduj wiadomość dla Gemini
+    // Zbuduj wiadomość (parts dla Gemini / content dla OpenRouter)
     const userParts: any[] = [];
+    let imgMime = "image/jpeg";
+    let base64Data: string | null = null;
 
     if (mode === "text") {
       if (!text || typeof text !== "string" || text.trim().length === 0) {
@@ -322,9 +399,9 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      const imgMime = mimeType || "image/jpeg";
+      imgMime = mimeType || "image/jpeg";
       // Usuń ewentualny prefiks data:image/...;base64,
-      const base64Data = image.includes(",") ? image.split(",")[1] : image;
+      base64Data = image.includes(",") ? image.split(",")[1] : image;
 
       // Zapis na dysku PRZED wyslaniem do AI — gdyby Gemini sie wywalil,
       // wciaz mamy oryginalne zdjecie do debugu/audytu.
@@ -370,50 +447,70 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Wywolanie z retry na 5xx + fallback na flash + retry gdy pusty wynik
-    const { res: geminiRes, modelUsed, solution } = await callGeminiWithRetry(
-      geminiBody,
-      GEMINI_API_KEY!,
-    );
+    // === Wywolanie AI: OpenRouter (wybrany model) lub Gemini (default) ===
+    let solution: string | null = null;
+    let modelUsed = GEMINI_MODEL;
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error(`Gemini error ${geminiRes.status} (model=${modelUsed}):`, errText);
-      // Wyciagnij krotki opis bledu z JSON (jesli jest)
-      let detail = errText.slice(0, 200);
-      try {
-        const j = JSON.parse(errText);
-        if (j?.error?.message) detail = String(j.error.message).slice(0, 200);
-      } catch {}
-      return NextResponse.json(
-        {
-          ok: false,
-          error: `AI ${geminiRes.status}: ${detail}`,
-          model: modelUsed,
-        },
-        { status: 502 }
-      );
-    }
-
-    if (!solution) {
-      // Zaloguj pelny JSON ostatniej odpowiedzi do diagnozy (raz na zapytanie)
-      const finalData = await geminiRes.clone().json().catch(() => null);
-      const finishReason = finalData?.candidates?.[0]?.finishReason || "UNKNOWN";
-      const promptFeedback = finalData?.promptFeedback?.blockReason || null;
-      console.error(
-        `[solve] empty response (model=${modelUsed}) finishReason=${finishReason} blockReason=${promptFeedback || "-"} usage=${JSON.stringify(finalData?.usageMetadata || {})}`,
-      );
-      const hint = promptFeedback
-        ? `zablokowane (${promptFeedback})`
-        : finishReason === "MAX_TOKENS"
-          ? "przekroczono limit"
-          : finishReason === "SAFETY"
-            ? "blokada bezpieczenstwa"
-            : finishReason;
-      return NextResponse.json(
-        { ok: false, error: `Brak odpowiedzi AI: ${hint}`, model: modelUsed },
-        { status: 502 }
-      );
+    if (useOpenRouter) {
+      modelUsed = aiModel;
+      const r = await callOpenRouter(aiModel, systemPrompt, mode, (text || "").trim(), base64Data, imgMime);
+      if (!r.ok) {
+        console.error(`[solve] OpenRouter ${r.status} (model=${aiModel}): ${r.detail}`);
+        // Fallback na Gemini — user nie zostaje bez odpowiedzi gdy OpenRouter padnie
+        const g = await callGeminiWithRetry(geminiBody, GEMINI_API_KEY!);
+        if (g.solution) {
+          solution = g.solution;
+          modelUsed = `${g.modelUsed} (fallback)`;
+        } else {
+          return NextResponse.json(
+            { ok: false, error: `AI ${r.status}: ${r.detail}`, model: aiModel },
+            { status: 502 }
+          );
+        }
+      } else if (!r.solution) {
+        return NextResponse.json(
+          { ok: false, error: "Brak odpowiedzi AI (pusty wynik modelu)", model: aiModel },
+          { status: 502 }
+        );
+      } else {
+        solution = r.solution;
+      }
+    } else {
+      const g = await callGeminiWithRetry(geminiBody, GEMINI_API_KEY!);
+      modelUsed = g.modelUsed;
+      if (!g.res.ok) {
+        const errText = await g.res.text();
+        console.error(`Gemini error ${g.res.status} (model=${modelUsed}):`, errText);
+        let detail = errText.slice(0, 200);
+        try {
+          const j = JSON.parse(errText);
+          if (j?.error?.message) detail = String(j.error.message).slice(0, 200);
+        } catch {}
+        return NextResponse.json(
+          { ok: false, error: `AI ${g.res.status}: ${detail}`, model: modelUsed },
+          { status: 502 }
+        );
+      }
+      solution = g.solution;
+      if (!solution) {
+        const finalData = await g.res.clone().json().catch(() => null);
+        const finishReason = finalData?.candidates?.[0]?.finishReason || "UNKNOWN";
+        const promptFeedback = finalData?.promptFeedback?.blockReason || null;
+        console.error(
+          `[solve] empty response (model=${modelUsed}) finishReason=${finishReason} blockReason=${promptFeedback || "-"} usage=${JSON.stringify(finalData?.usageMetadata || {})}`,
+        );
+        const hint = promptFeedback
+          ? `zablokowane (${promptFeedback})`
+          : finishReason === "MAX_TOKENS"
+            ? "przekroczono limit"
+            : finishReason === "SAFETY"
+              ? "blokada bezpieczenstwa"
+              : finishReason;
+        return NextResponse.json(
+          { ok: false, error: `Brak odpowiedzi AI: ${hint}`, model: modelUsed },
+          { status: 502 }
+        );
+      }
     }
 
     // Zlicz zapytanie + log do DeviceSolve (fire-and-forget, nie blokuje odpowiedzi)

@@ -29,6 +29,7 @@ export default function Footer() {
               <li><a href="/auth/signin" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">Logowanie</a></li>
               <li><a href="/panel" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">Panel</a></li>
               <li><a href="/claim" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">Aktywacja</a></li>
+              <li><a href="/pomoc" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">Pomoc</a></li>
             </ul>
           </div>
 

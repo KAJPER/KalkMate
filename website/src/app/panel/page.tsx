@@ -11,7 +11,7 @@ import MessageRenderer from "@/components/MessageRenderer";
 export default function PanelPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"orders" | "chat" | "subscription" | "calculator" | "notes" | "tests">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "chat" | "subscription" | "ai" | "calculator" | "notes" | "tests" | "settings">("orders");
   const [isLoading, setIsLoading] = useState(false);
 
   // Chat state
@@ -52,40 +52,98 @@ export default function PanelPage() {
   const [calcOpenedConv, setCalcOpenedConv] = useState<any>(null);
   const [showChangeLicense, setShowChangeLicense] = useState(false);
   const [unclaiming, setUnclaiming] = useState(false);
-  const [savingPromptMode, setSavingPromptMode] = useState(false);
 
   // Captures (galeria zdjec)
   const [captures, setCaptures] = useState<Array<{ filename: string; deviceId: string; timestamp: string; sizeKB: number }>>([]);
   const [capturesLoading, setCapturesLoading] = useState(false);
   const [openedCapture, setOpenedCapture] = useState<string | null>(null);
 
-  const setPromptMode = async (mode: "matura" | "raw") => {
-    const deviceId = calcInfo?.device?.deviceId;
-    if (!deviceId) return;
-    setSavingPromptMode(true);
+  // === AI settings (sekcja AI): wybor modelu + tryb Matura/Czysty (per-user) ===
+  const [aiModel, setAiModel] = useState<string>("default");
+  const [aiMode, setAiMode] = useState<"matura" | "raw">("matura");
+  const [aiModels, setAiModels] = useState<Array<{ id: string; label: string; provider: string; note?: string }>>([]);
+  const [aiSaving, setAiSaving] = useState(false);
+
+  const loadAiSettings = async () => {
     try {
-      const r = await fetch(
-        `/api/user/devices?deviceId=${encodeURIComponent(deviceId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ promptMode: mode }),
-        }
-      );
+      const r = await fetch("/api/user/ai-settings");
       const j = await r.json();
-      if (!j.ok) {
-        alert(j.error || "Nie udalo sie zapisac trybu");
-      } else {
-        setCalcInfo((prev: any) =>
-          prev?.device
-            ? { ...prev, device: { ...prev.device, promptMode: mode === "raw" ? "raw" : null } }
-            : prev
-        );
+      if (j?.ok) {
+        setAiModel(j.aiModel || "default");
+        setAiMode(j.aiMode === "raw" ? "raw" : "matura");
+        setAiModels(Array.isArray(j.models) ? j.models : []);
       }
+    } catch {}
+  };
+
+  const saveAiSettings = async (patch: { aiModel?: string; aiMode?: "matura" | "raw" }) => {
+    setAiSaving(true);
+    try {
+      const r = await fetch("/api/user/ai-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const j = await r.json();
+      if (!j?.ok) { alert(j?.error || "Nie udało się zapisać"); return; }
+      if (patch.aiModel !== undefined) setAiModel(patch.aiModel);
+      if (patch.aiMode !== undefined) setAiMode(patch.aiMode);
     } finally {
-      setSavingPromptMode(false);
+      setAiSaving(false);
     }
   };
+
+  // === Ustawienia konta: zmiana hasla + emaila ===
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwNew2, setPwNew2] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const changePassword = async () => {
+    setPwMsg(null);
+    if (pwNew.length < 6) { setPwMsg({ ok: false, text: "Nowe hasło musi mieć min. 6 znaków" }); return; }
+    if (pwNew !== pwNew2) { setPwMsg({ ok: false, text: "Hasła nie są takie same" }); return; }
+    setPwSaving(true);
+    try {
+      const r = await fetch("/api/user/account/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
+      });
+      const j = await r.json();
+      if (!j?.ok) { setPwMsg({ ok: false, text: j?.error || "Błąd" }); return; }
+      setPwMsg({ ok: true, text: "Hasło zostało zmienione." });
+      setPwCurrent(""); setPwNew(""); setPwNew2("");
+    } finally { setPwSaving(false); }
+  };
+
+  const [emNew, setEmNew] = useState("");
+  const [emPassword, setEmPassword] = useState("");
+  const [emSaving, setEmSaving] = useState(false);
+  const [emMsg, setEmMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const changeEmail = async () => {
+    setEmMsg(null);
+    setEmSaving(true);
+    try {
+      const r = await fetch("/api/user/account/change-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newEmail: emNew, password: emPassword }),
+      });
+      const j = await r.json();
+      if (!j?.ok) { setEmMsg({ ok: false, text: j?.error || "Błąd" }); return; }
+      setEmMsg({ ok: true, text: "Email zmieniony. Za chwilę nastąpi wylogowanie..." });
+      setTimeout(() => signOut({ callbackUrl: "/auth/signin" }), 1600);
+    } finally { setEmSaving(false); }
+  };
+
+  // Wczytaj ustawienia AI gdy sesja gotowa
+  useEffect(() => {
+    if (session) loadAiSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   // === Pair device (deviceId + unlockCode) ===
   const [pairDeviceId, setPairDeviceId] = useState("");
@@ -605,9 +663,11 @@ export default function PanelPage() {
     { id: "orders" as const, n: "01", label: "Zamówienia" },
     { id: "chat" as const, n: "02", label: "AI Chat" },
     { id: "subscription" as const, n: "03", label: "Subskrypcja" },
-    { id: "calculator" as const, n: "04", label: "Kalkulator" },
-    { id: "notes" as const, n: "05", label: "Notatki" },
-    { id: "tests" as const, n: "06", label: "Sprawdziany" },
+    { id: "ai" as const, n: "04", label: "AI" },
+    { id: "calculator" as const, n: "05", label: "Kalkulator" },
+    { id: "notes" as const, n: "06", label: "Notatki" },
+    { id: "tests" as const, n: "07", label: "Sprawdziany" },
+    { id: "settings" as const, n: "08", label: "Ustawienia konta" },
   ];
 
   return (
@@ -1427,6 +1487,79 @@ export default function PanelPage() {
             </motion.div>
           )}
 
+          {activeTab === "ai" && (
+            <motion.div
+              key="ai"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" as const }}
+            >
+              <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)] max-w-3xl">
+                <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ Model AI</div>
+                <p className="text-sm text-[#F2EDE3]/55 mb-4">
+                  Wybierz model, którego kalkulator użyje do rozwiązywania zadań. Wszystkie najlepsze modele przez jedno API (OpenRouter).
+                </p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {aiModels.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => saveAiSettings({ aiModel: m.id })}
+                      disabled={aiSaving}
+                      className={`text-left px-4 py-3 border transition-colors disabled:opacity-50 ${
+                        aiModel === m.id
+                          ? "border-[#D8FF3D] bg-[#D8FF3D]/10"
+                          : "border-[rgba(242,237,227,0.18)] hover:border-[rgba(242,237,227,0.40)]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`font-medium ${aiModel === m.id ? "text-[#D8FF3D]" : "text-[#F2EDE3]"}`}>{m.label}</span>
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] whitespace-nowrap">{m.provider}</span>
+                      </div>
+                      {m.note && <div className="text-xs text-[#F2EDE3]/45 mt-1">{m.note}</div>}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tryb AI — przeniesiony z zakładki Kalkulator */}
+                <div className="mt-6 pt-5 border-t border-[rgba(242,237,227,0.10)]">
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Tryb AI</div>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      onClick={() => saveAiSettings({ aiMode: "matura" })}
+                      disabled={aiSaving}
+                      className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
+                        aiMode !== "raw"
+                          ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
+                          : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
+                      }`}
+                      title="Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)"
+                    >
+                      Matura (CKE)
+                    </button>
+                    <button
+                      onClick={() => saveAiSettings({ aiMode: "raw" })}
+                      disabled={aiSaving}
+                      className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
+                        aiMode === "raw"
+                          ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
+                          : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
+                      }`}
+                      title="Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)"
+                    >
+                      Czysty AI
+                    </button>
+                  </div>
+                  <div className="text-xs text-[#F2EDE3]/45">
+                    {aiMode === "raw"
+                      ? "Tryb uniwersalny — AI nie zakłada matury. Działa dla elektroniki, informatyki, języków itp."
+                      : "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia)."}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === "calculator" && (
             <motion.div
               key="calculator"
@@ -1561,39 +1694,12 @@ export default function PanelPage() {
                       )}
                     </div>
 
-                    {/* Tryb AI */}
+                    {/* Tryb AI + model — przeniesione do zakładki "AI" */}
                     <div className="mt-5 pt-5 border-t border-[rgba(242,237,227,0.10)]">
-                      <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Tryb AI</div>
-                      <div className="flex gap-2 mb-2">
-                        <button
-                          onClick={() => setPromptMode("matura")}
-                          disabled={savingPromptMode}
-                          className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
-                            calcInfo.device.promptMode !== "raw"
-                              ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
-                              : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
-                          }`}
-                          title="Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)"
-                        >
-                          Matura (CKE)
-                        </button>
-                        <button
-                          onClick={() => setPromptMode("raw")}
-                          disabled={savingPromptMode}
-                          className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
-                            calcInfo.device.promptMode === "raw"
-                              ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
-                              : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
-                          }`}
-                          title="Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)"
-                        >
-                          Czysty AI
-                        </button>
-                      </div>
+                      <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ Tryb AI i model</div>
                       <div className="text-xs text-[#F2EDE3]/45">
-                        {calcInfo.device.promptMode === "raw"
-                          ? "Tryb uniwersalny — AI nie zakłada matury. Działa dla elektroniki, informatyki, języków itp."
-                          : "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia)."}
+                        Model AI oraz tryb (Matura / Czysty AI) ustawisz w zakładce{" "}
+                        <button onClick={() => setActiveTab("ai")} className="text-[#D8FF3D] underline hover:no-underline">AI</button>.
                       </div>
                     </div>
                   </div>
@@ -1942,6 +2048,55 @@ export default function PanelPage() {
                       </div>
                     )}
                   </div></>)}
+            </motion.div>
+          )}
+
+          {activeTab === "settings" && (
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "easeOut" as const }}
+            >
+              <div className="max-w-2xl space-y-6">
+                {/* Profil */}
+                <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Konto</div>
+                  <div className="text-sm text-[#F2EDE3]/55">Zalogowany jako</div>
+                  <div className="text-[#F2EDE3] font-medium break-all">{session.user?.email}</div>
+                </div>
+
+                {/* Zmiana hasła */}
+                <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-4">/ Zmiana hasła</div>
+                  <div className="space-y-2">
+                    <input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} placeholder="Aktualne hasło" autoComplete="current-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                    <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder="Nowe hasło (min. 6 znaków)" autoComplete="new-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                    <input type="password" value={pwNew2} onChange={(e) => setPwNew2(e.target.value)} placeholder="Powtórz nowe hasło" autoComplete="new-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                  </div>
+                  {pwMsg && <div className={`text-xs mt-2 ${pwMsg.ok ? "text-[#D8FF3D]" : "text-[#FF4D2E]"}`}>{pwMsg.text}</div>}
+                  <button onClick={changePassword} disabled={pwSaving} className="mt-3 px-4 py-2 bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50 transition-colors">{pwSaving ? "Zapisuje..." : "Zmień hasło"}</button>
+                </div>
+
+                {/* Zmiana emaila */}
+                <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-4">/ Zmiana adresu email</div>
+                  <div className="space-y-2">
+                    <input type="email" value={emNew} onChange={(e) => setEmNew(e.target.value)} placeholder="Nowy adres email" autoComplete="email" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                    <input type="password" value={emPassword} onChange={(e) => setEmPassword(e.target.value)} placeholder="Potwierdź hasłem" autoComplete="current-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                  </div>
+                  {emMsg && <div className={`text-xs mt-2 ${emMsg.ok ? "text-[#D8FF3D]" : "text-[#FF4D2E]"}`}>{emMsg.text}</div>}
+                  <button onClick={changeEmail} disabled={emSaving} className="mt-3 px-4 py-2 bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50 transition-colors">{emSaving ? "Zapisuje..." : "Zmień email"}</button>
+                  <p className="text-xs text-[#F2EDE3]/40 mt-2">Po zmianie emaila nastąpi wylogowanie — zaloguj się nowym adresem.</p>
+                </div>
+
+                {/* Wyloguj */}
+                <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Sesja</div>
+                  <button onClick={() => signOut({ callbackUrl: "/" })} className="px-4 py-2 border border-[rgba(242,237,227,0.20)] hover:border-[#FF4D2E] text-[#F2EDE3]/80 hover:text-[#FF4D2E] km-mono-eyebrow transition-colors">Wyloguj się ↗</button>
+                </div>
+              </div>
             </motion.div>
           )}
 
