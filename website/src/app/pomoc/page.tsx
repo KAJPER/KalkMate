@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 const sections = [
@@ -16,7 +16,9 @@ const sections = [
   { id: "kontakt",     label: "10 · Kontakt" },
 ];
 
-const changelog = [
+// Wartosc poczatkowa/fallback — realne dane ciagniemy z /api/firmware/changelog
+// (single source of truth: firmware-private/releases.json karmiony przez deploy.ps1).
+const CHANGELOG_FALLBACK = [
   { v: "1.4.1", date: "2026-05-28", notes: "Bezpieczeństwo: Signed OTA (ECDSA P-256) + obfuskacja API key w binarce — chronione przed wstrzyknięciem firmware i strings extraction" },
   { v: "1.4.0", date: "2026-05-28", notes: "Bezpieczeństwo: OTA wymaga autoryzacji (x-api-key + zarejestrowany device-id), pliki .bin poza public/" },
   { v: "1.3.9", date: "2026-05-28", notes: "Kamera: test rotacji — tylko vflip + Serial log z aktualną konfiguracją" },
@@ -119,6 +121,27 @@ export default function PomocPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Changelog + aktualna wersja serwera — pobierane z /api/firmware/changelog.
+  // CHANGELOG_FALLBACK jako stan poczatkowy, zeby strona nie byla pusta zanim
+  // fetch wroci (oraz gdy API jest chwilowo niedostepne).
+  const [changelog, setChangelog] = useState(CHANGELOG_FALLBACK);
+  const [serverVersion, setServerVersion] = useState(CHANGELOG_FALLBACK[0].v);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/firmware/changelog")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || !d?.ok) return;
+        if (Array.isArray(d.releases) && d.releases.length > 0) setChangelog(d.releases);
+        if (d.latest) setServerVersion(d.latest);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const submitContact = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -167,7 +190,7 @@ export default function PomocPage() {
           </h1>
           <p className="mt-6 text-[17px] leading-[1.6] text-[#F2EDE3]/65 max-w-2xl">
             Wszystko czego potrzebujesz żeby zacząć: instrukcja, wideo, FAQ
-            i kontakt do nas. Materiały zaktualizowane dla firmware v1.4.1.
+            i kontakt do nas. Materiały zaktualizowane dla firmware v{serverVersion}.
           </p>
         </div>
       </section>
@@ -323,7 +346,7 @@ export default function PomocPage() {
           <Section id="ota" eyebrow="06 · Aktualizacje" title="OTA — aktualizacje firmware." accent="aktualizacje">
             <Step n={1} title="Sprawdź dostępność">
               Ustawienia → Aktualizacje → OK. Kalkulator pyta serwer, czy jest
-              nowsza wersja niż twoja aktualna (widoczna jako <code className="text-[#D8FF3D]">v1.4.1</code> itp.).
+              nowsza wersja niż twoja aktualna (widoczna jako <code className="text-[#D8FF3D]">v{serverVersion}</code> itp.).
             </Step>
             <Step n={2} title="Zainstaluj">
               Jeśli jest nowa — pokazuje notes do zmian + przycisk Zainstaluj.
@@ -337,7 +360,7 @@ export default function PomocPage() {
 
             <div className="mt-8">
               <p className="km-mono-eyebrow text-[#F2EDE3]/55 mb-3">/ AKTUALNA WERSJA SERWERA:</p>
-              <p className="km-display text-3xl text-[#D8FF3D]">v1.4.1</p>
+              <p className="km-display text-3xl text-[#D8FF3D]">v{serverVersion}</p>
               <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">Sprawdź swoją wersję w Ustawienia → Aktualizacje</p>
             </div>
           </Section>
