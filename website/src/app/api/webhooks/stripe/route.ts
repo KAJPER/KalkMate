@@ -58,7 +58,11 @@ export async function POST(request: NextRequest) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.mode === "payment") {
-        await handleCalculatorPurchase(session);
+        if (session.metadata?.type === "token_purchase") {
+          await handleTokenPurchase(session);
+        } else {
+          await handleCalculatorPurchase(session);
+        }
       } else if (session.mode === "subscription") {
         await handleSubscriptionCreated(session);
       }
@@ -276,6 +280,21 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
   } catch (emailError) {
     console.error("[WEBHOOK] ❌ Failed to send confirmation email:", emailError);
   }
+}
+
+async function handleTokenPurchase(session: Stripe.Checkout.Session) {
+  const userId = session.metadata?.userId;
+  const tokens = parseInt(session.metadata?.tokens || "0", 10);
+  if (!userId || !tokens || tokens <= 0) {
+    console.error("[WEBHOOK] token purchase: brak userId/tokens w metadata", session.metadata);
+    return;
+  }
+  // Dolicz tokeny (kolumna raw SQL, nie ma jej w Prisma schema). Idempotencja
+  // zapewniona wyzej przez ProcessedStripeEvent (event.id) — brak podwojnego doladowania.
+  await prisma.$executeRaw`
+    UPDATE "User" SET "tokenBalance" = COALESCE("tokenBalance", 0) + ${tokens} WHERE "id" = ${userId}
+  `;
+  console.log(`[WEBHOOK] token purchase: +${tokens} tokenow dla user ${userId}`);
 }
 
 async function handleSubscriptionCreated(session: Stripe.Checkout.Session) {

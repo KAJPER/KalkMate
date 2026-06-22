@@ -7,6 +7,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import MessageRenderer from "@/components/MessageRenderer";
+import { TOKEN_PACKS } from "@/lib/tokenPacks";
 
 export default function PanelPage() {
   const { data: session, status } = useSession();
@@ -64,6 +65,24 @@ export default function PanelPage() {
   const [aiModels, setAiModels] = useState<Array<{ id: string; label: string; provider: string; note?: string; costMultiplier: number }>>([]);
   const [aiSaving, setAiSaving] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<number>(1_000_000);
+  const [buyingPack, setBuyingPack] = useState<string | null>(null);
+  const buyTokens = async (packId: string) => {
+    setBuyingPack(packId);
+    try {
+      const r = await fetch("/api/tokens/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packId }),
+      });
+      const j = await r.json();
+      if (j?.url) { window.location.href = j.url; return; }
+      alert(j?.error || "Nie udało się rozpocząć płatności");
+    } catch {
+      alert("Błąd sieci");
+    } finally {
+      setBuyingPack(null);
+    }
+  };
 
   const TOKEN_GRANT = 1_000_000;
 
@@ -1618,6 +1637,44 @@ export default function PanelPage() {
                   </div>
                 );
               })()}
+
+              {/* === SKLEP: KUP TOKENY === */}
+              <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ Kup tokeny</div>
+                <p className="text-sm text-[#F2EDE3]/55 mb-4">
+                  Doładuj saldo tokenów. Płatność jednorazowa (karta / BLIK / Przelewy24) — tokeny dodają się od razu po opłaceniu.
+                </p>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {TOKEN_PACKS.map((p) => (
+                    <div
+                      key={p.id}
+                      className={`relative border p-4 flex flex-col ${
+                        p.popular ? "border-[#D8FF3D]" : "border-[rgba(242,237,227,0.18)]"
+                      }`}
+                    >
+                      {p.popular && (
+                        <span className="absolute -top-2 left-3 km-mono-eyebrow text-[10px] bg-[#D8FF3D] text-[#0B0B0B] px-1.5 py-0.5">
+                          POPULARNY
+                        </span>
+                      )}
+                      <div className="text-lg font-bold text-[#F2EDE3]">{p.label}</div>
+                      <div className="text-3xl font-bold text-[#D8FF3D] mt-1">
+                        {(p.priceGrosze / 100).toFixed(0)}<span className="text-base text-[#F2EDE3]/50"> zł</span>
+                      </div>
+                      <div className="text-xs text-[#F2EDE3]/40 mt-1 mb-3">
+                        ~{Math.floor(p.tokens / 3200).toLocaleString("pl-PL")} zadań maturalnych
+                      </div>
+                      <button
+                        onClick={() => buyTokens(p.id)}
+                        disabled={buyingPack !== null}
+                        className="mt-auto px-4 py-2 km-mono-eyebrow bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] disabled:opacity-50 transition-colors"
+                      >
+                        {buyingPack === p.id ? "Przekierowanie..." : "Kup"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               {/* === MODEL AI === */}
               <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">

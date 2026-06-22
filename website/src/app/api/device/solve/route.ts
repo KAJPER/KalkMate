@@ -229,12 +229,29 @@ export async function POST(request: NextRequest) {
             .catch((e) => console.error("[solve] licenseCode upgrade fail:", e));
         }
       }
-      // Jezeli po fallbacku dalej expired → odrzuc
+      // Jezeli po fallbacku dalej expired:
+      // Model tokenowy — wygasla licencja CZASOWA nie blokuje, jezeli wlasciciel
+      // ma tokeny (tokeny = nowa waluta, dokupisz w sklepie). Brak tokenow
+      // obsluzy ponizej token-gate (402 "Brak tokenow"). Dzieki temu konto z
+      // saldem dziala mimo wygaslej 30-dniowej licencji.
       if (isExpired(license)) {
-        return NextResponse.json(
-          { ok: false, error: "Licencja wygasla" },
-          { status: 403 }
-        );
+        const oid = license.claimedByUserId || pairedDevice?.userId || null;
+        let hasTokens = false;
+        if (oid) {
+          try {
+            const br = await prisma.$queryRaw<{ tokenBalance: number | null }[]>`
+              SELECT "tokenBalance" FROM "User" WHERE "id" = ${oid} LIMIT 1
+            `;
+            hasTokens = (br?.[0]?.tokenBalance ?? 0) >= 1000;
+          } catch {}
+        }
+        if (!hasTokens) {
+          return NextResponse.json(
+            { ok: false, error: "Licencja wygasla" },
+            { status: 403 }
+          );
+        }
+        console.log(`[solve] expired license ${license.code} OK via token balance (user ${oid})`);
       }
     }
 

@@ -13,10 +13,14 @@ export const authOptions: NextAuthOptions = {
       id: "google",
       name: "Google",
       type: "oauth",
-      issuer: "https://accounts.google.com",
+      // Czysty OAuth2 (NIE OIDC): bez `issuer` i bez scope `openid`, oraz
+      // idToken:false — dzieki temu openid-client uzywa oauthCallback() i NIE
+      // probuje walidowac id_token przez JWKS (https://www.googleapis.com/oauth2/v3/certs
+      // jest zablokowany na tym VPS). Tozsamosc bierzemy z endpointu userinfo.
+      idToken: false,
       authorization: {
         url: "https://accounts.google.com/o/oauth2/v2/auth",
-        params: { scope: "email profile openid", response_type: "code" },
+        params: { scope: "email profile", response_type: "code" },
       },
       token: {
         url: "https://oauth2.googleapis.com/token",
