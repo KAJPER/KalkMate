@@ -27,6 +27,7 @@
 #include <esp_sleep.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "wifi_persist.h"   // wifiLoadSaved / wifiFastBegin — reconnect po wybudzeniu
 #include "panic.h"
 
 static bool   _powerInhibit = false;
@@ -103,6 +104,18 @@ inline bool powerCheckSleep() {
     // === Wybudzenie ===
     _powerU8g2->setPowerSave(0);
     inputActivityReset();
+    // Auto-reconnect WiFi do zapisanej sieci (creds w NVS) — po wybudzeniu user
+    // NIE traci polaczenia. TxPower ograniczony (anty-brownout, jak przy boot).
+    {
+        char ssid[33] = "", pass[64] = "";
+        if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
+            WiFi.mode(WIFI_STA);
+            WiFi.setTxPower(WIFI_POWER_8_5dBm);
+            delay(30);
+            wifiFastBegin(ssid, pass);
+            Serial.printf("[POWER] wake -> WiFi reconnect: %s\n", ssid);
+        }
+    }
     Serial.println("[POWER] wake");
     return true;
 }

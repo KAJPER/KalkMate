@@ -159,11 +159,14 @@ static void _drawWifiStatus(U8G2 &d) {
         d.drawStr(2, 40, _wifiT("Brak polaczenia z siecia.", "No network connection."));
     }
 
-    // Dwa przyciski na dole: [< WSTECZ]  [OK: Zmien siec >]
+    // Trzy podpowiedzi na dole: [< Wstecz] [OK Skanuj] [v Zapisane(N)]
     d.drawHLine(0, 54, 256);
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2,  63, _wifiT("< WSTECZ", "< BACK"));
-    d.drawStr(connected ? 140 : 130, 63, _wifiT("OK: Zmien siec >", "OK: Change network >"));
+    char sav[24];
+    snprintf(sav, sizeof(sav), _wifiT("v Zapisane(%d)", "v Saved(%d)"), wifiSavedCount());
+    d.drawStr(2,   62, _wifiT("< Wstecz", "< Back"));
+    d.drawStr(62,  62, _wifiT("OK Skanuj", "OK Scan"));
+    d.drawStr(150, 62, sav);
 
     d.sendBuffer();
 }
@@ -570,6 +573,97 @@ static bool _doConnect(U8G2 &d, const char* ssid, const char* password) {
 }
 
 // ---------------------------------------------------------------------------
+// Ekran zapamietanych sieci (jak w telefonie).
+//   OK = polacz (bez wpisywania hasla — uzywa zapisanego)
+//   >  = zapomnij siec
+//   <  = wstecz
+// Zwraca true gdy polaczono (status sie odswiezy).
+// ---------------------------------------------------------------------------
+static bool _runSavedNetworks(U8G2 &d) {
+    int sel = 0, scroll = 0;
+    _wifiWaitRelease();
+    while (true) {
+        if (_panicRequested) return false;
+        uint8_t cnt = wifiSavedCount();
+
+        if (cnt == 0) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 12, _wifiT("Zapamietane sieci", "Saved networks"));
+            d.drawHLine(0, 14, 256);
+            d.drawStr(2, 34, _wifiT("Brak zapisanych sieci.", "No saved networks."));
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, _wifiT("< wstecz", "< back"));
+            d.sendBuffer();
+            if (_wifiBtn(BTN_LEFT) || _wifiBtn(BTN_OK)) { _wifiWaitRelease(); return false; }
+            delay(20);
+            continue;
+        }
+        if (sel >= cnt) sel = cnt - 1;
+
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        char hdr[40];
+        snprintf(hdr, sizeof(hdr), _wifiT("Zapamietane (%d)", "Saved (%d)"), cnt);
+        d.drawStr(2, 10, hdr);
+        d.drawHLine(0, 12, 256);
+
+        String curSsid = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : String("");
+        for (int i = 0; i < WIFI_SCAN_VISIBLE; i++) {
+            int idx = scroll + i;
+            if (idx >= cnt) break;
+            int y = 23 + i * 11;
+            char s[33];
+            wifiGetSavedNet((uint8_t)idx, s, sizeof(s), nullptr, 0);
+            char line[48];
+            bool isCur = (curSsid.length() > 0 && curSsid == String(s));
+            snprintf(line, sizeof(line), "%s%s", s,
+                     isCur ? (kalkSettings.language == 0 ? " (akt.)" : " (now)") : "");
+            line[40] = '\0';
+            if (idx == sel) {
+                int tw = (int)strlen(line) * 6;
+                int bw = (tw + 4 < 254) ? tw + 4 : 254;
+                d.drawBox(0, y - 9, bw, 11);
+                d.setDrawColor(0); d.drawStr(2, y, line); d.setDrawColor(1);
+            } else {
+                d.drawStr(2, y, line);
+            }
+        }
+        if (scroll > 0) d.drawStr(248, 18, "^");
+        if (scroll + WIFI_SCAN_VISIBLE < cnt) d.drawStr(248, 50, "v");
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 63, _wifiT("OK polacz  > zapomnij  < wstecz",
+                                "OK connect  > forget  < back"));
+        d.sendBuffer();
+
+        if (_wifiBtn(BTN_UP)) {
+            if (sel > 0) { sel--; if (sel < scroll) scroll = sel; }
+        } else if (_wifiBtn(BTN_DOWN)) {
+            if (sel < cnt - 1) { sel++; if (sel >= scroll + WIFI_SCAN_VISIBLE) scroll = sel - WIFI_SCAN_VISIBLE + 1; }
+        } else if (_wifiBtn(BTN_OK)) {
+            char ssid[33] = "", pass[64] = "";
+            wifiGetSavedNet((uint8_t)sel, ssid, sizeof(ssid), pass, sizeof(pass));
+            _wifiWaitRelease();
+            bool ok = _doConnect(d, ssid, pass);
+            if (ok) { wifiAddNetwork(ssid, pass); _drawConnectOk(d); return true; }
+            _drawConnectError(d);
+            _wifiWaitRelease();
+            while (!_wifiBtn(BTN_OK) && !_wifiBtn(BTN_LEFT)) delay(20);
+            _wifiWaitRelease();
+        } else if (_wifiBtn(BTN_RIGHT)) {
+            wifiForgetNetwork((uint8_t)sel);
+            if (sel > 0 && sel >= wifiSavedCount()) sel--;
+            if (sel < scroll) scroll = sel;
+            _wifiWaitRelease();
+        } else if (_wifiBtn(BTN_LEFT)) {
+            _wifiWaitRelease();
+            return false;
+        }
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Publiczna funkcja — glowny punkt wejscia
 // ---------------------------------------------------------------------------
 void showWifiSettings(U8G2 &display) {
@@ -580,6 +674,7 @@ void showWifiSettings(U8G2 &display) {
     // pinMode(BTN_OK,    INPUT_PULLUP);
 
     _wifiWaitRelease();
+    wifiEnsureListSeeded();   // przenies stara pojedyncza siec do listy zapamietanych
 
     while (true) {
         if (_panicRequested) return;
@@ -592,6 +687,7 @@ void showWifiSettings(U8G2 &display) {
         if (_panicRequested) return;
             if (_wifiBtn(BTN_OK))   { break; }
             if (_wifiBtn(BTN_LEFT)) { goBack = true; break; }
+            if (_wifiBtn(BTN_DOWN)) { _runSavedNetworks(display); _drawWifiStatus(display); }
             delay(20);
         }
         _wifiWaitRelease();
@@ -623,8 +719,8 @@ void showWifiSettings(U8G2 &display) {
         bool ok = _doConnect(display, ssid, password);
 
         if (ok) {
-            // Zapisz dane WiFi do NVS zeby auto-reconnect dzialal
-            wifiSaveCreds(ssid, password);
+            // Zapisz do listy zapamietanych sieci (jak telefon) + ustaw primary
+            wifiAddNetwork(ssid, password);
             _drawConnectOk(display);
             // Petla wróci do ekranu statusu, który pokaze IP
         } else {

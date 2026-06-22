@@ -167,149 +167,151 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
 }
 
 // ---------------------------------------------------------------------------
-// Konwerter notacji matematycznej na czytelny tekst ASCII dla OLED
-// Zamienia: x^2 -> x^2(=x kwadrat), sqrt(x) -> v(x), itp.
+// Konwerter LaTeX -> czytelny UTF-8 dla OLED (z polskimi znakami).
+// Renderowane czcionka 6x12_te przez drawUTF8 (ma polskie glyphy + greke +
+// symbole). Obsluga: \frac, \sqrt, ^ _ (potegi/indeksy), greka, operatory,
+// relacje, strzalki. Polskie znaki UTF-8 przepisywane bez zmian.
 // ---------------------------------------------------------------------------
-static void _solFormatMath(const char* src, char* dst, int dstSize) {
-    int si = 0, di = 0;
-    int slen = strlen(src);
 
-    while (si < slen && di < dstSize - 1) {
-        char c = src[si];
+// Dlugosc znaku UTF-8 wg bajtu wiodacego.
+static inline int _utf8Len(uint8_t b) {
+    if (b < 0x80) return 1;
+    if ((b >> 5) == 0x6) return 2;
+    if ((b >> 4) == 0xE) return 3;
+    if ((b >> 3) == 0x1E) return 4;
+    return 1;
+}
 
-        // --- sqrt( ... ) -> zostawiam bez zmian, ladnie wyglada ---
-        // (brak konwersji sqrt)
+// Tablica komend LaTeX -> UTF-8 (greka, operatory, relacje, strzalki).
+struct _SolSym { const char* cmd; const char* utf8; };
+static const _SolSym _SOL_SYMS[] = {
+    {"alpha","α"},{"beta","β"},{"gamma","γ"},{"delta","δ"},{"epsilon","ε"},
+    {"varepsilon","ε"},{"zeta","ζ"},{"eta","η"},{"theta","θ"},{"vartheta","θ"},
+    {"iota","ι"},{"kappa","κ"},{"lambda","λ"},{"mu","μ"},{"nu","ν"},{"xi","ξ"},
+    {"pi","π"},{"rho","ρ"},{"sigma","σ"},{"tau","τ"},{"upsilon","υ"},
+    {"phi","φ"},{"varphi","φ"},{"chi","χ"},{"psi","ψ"},{"omega","ω"},
+    {"Gamma","Γ"},{"Delta","Δ"},{"Theta","Θ"},{"Lambda","Λ"},{"Xi","Ξ"},
+    {"Pi","Π"},{"Sigma","Σ"},{"Phi","Φ"},{"Psi","Ψ"},{"Omega","Ω"},
+    {"cdot","·"},{"times","×"},{"div","÷"},{"pm","±"},{"mp","∓"},{"ast","*"},
+    {"leq","≤"},{"le","≤"},{"geq","≥"},{"ge","≥"},{"neq","≠"},{"ne","≠"},
+    {"approx","≈"},{"equiv","≡"},{"cong","≅"},{"sim","~"},{"propto","∝"},
+    {"infty","∞"},{"partial","∂"},{"nabla","∇"},{"prime","′"},
+    {"rightarrow","→"},{"to","→"},{"leftarrow","←"},{"leftrightarrow","↔"},
+    {"Rightarrow","⇒"},{"implies","⇒"},{"Leftarrow","⇐"},{"iff","⇔"},
+    {"Leftrightarrow","⇔"},{"mapsto","→"},
+    {"in","∈"},{"notin","∉"},{"subset","⊂"},{"subseteq","⊆"},{"supset","⊃"},
+    {"cup","∪"},{"cap","∩"},{"emptyset","∅"},{"varnothing","∅"},
+    {"forall","∀"},{"exists","∃"},{"neg","¬"},{"lnot","¬"},
+    {"land","∧"},{"wedge","∧"},{"lor","∨"},{"vee","∨"},
+    {"sum","Σ"},{"prod","Π"},{"int","∫"},{"angle","∠"},{"perp","⊥"},
+    {"parallel","∥"},{"ldots","…"},{"dots","…"},{"cdots","…"},
+    {"deg","°"},{"circ","°"},{"degree","°"},{"mathbb",""},
+    {"left",""},{"right",""},{"quad"," "},{"qquad","  "},
+};
+static const int _SOL_SYM_N = sizeof(_SOL_SYMS) / sizeof(_SOL_SYMS[0]);
 
-        // --- \sqrt{ -> sqrt( ---
-        if (si + 5 < slen && src[si]=='\\' &&
-            src[si+1]=='s' && src[si+2]=='q' && src[si+3]=='r' && src[si+4]=='t' && src[si+5]=='{') {
-            const char* rep = "sqrt(";
-            for (int k = 0; rep[k] && di < dstSize-1; k++) dst[di++] = rep[k];
-            si += 6;
-            // Zamien zamykajacy } na )
-            // (zostanie skopiowany jako } normalnie, pozniej go zastapmy)
-            continue;
-        }
-
-        // --- x^{n} lub x^n -> potega ---
-        if (c == '^' && si + 1 < slen) {
-            si++; // pominij ^
-            char next = src[si];
-            // Zbierz wykladnik
-            char exp[16] = "";
-            int ei = 0;
-            bool brace = (next == '{');
-            if (brace) si++; // pominij {
-            while (si < slen && ei < 14) {
-                char ec = src[si];
-                if (brace && ec == '}') { si++; break; }
-                if (!brace && (ec == ' ' || ec == '+' || ec == '-' || ec == '*' || ec == '/' || ec == ')' || ec == '\n')) break;
-                exp[ei++] = ec;
-                si++;
-            }
-            exp[ei] = '\0';
-
-            // Zamien cyfre na superscript Unicode (jesli jeden znak)
-            if (ei == 1) {
-                char sup = exp[0];
-                const char* supMap = "0123456789";
-                const char* supUni[] = {"0","1","2","3","4","5","6","7","8","9"};
-                // Uzyj ASCII: ^2 -> ^2 ale dodaj nawiasy dla dlugich
-                if (sup == '2' && di < dstSize - 2) { dst[di++] = '^'; dst[di++] = '2'; }
-                else if (sup == '3' && di < dstSize - 2) { dst[di++] = '^'; dst[di++] = '3'; }
-                else {
-                    if (di < dstSize - 1) dst[di++] = '^';
-                    for (int k = 0; k < ei && di < dstSize - 1; k++) dst[di++] = exp[k];
-                }
-            } else if (ei > 1) {
-                if (di < dstSize - 1) dst[di++] = '^';
-                dst[di++] = '(';
-                for (int k = 0; k < ei && di < dstSize - 1; k++) dst[di++] = exp[k];
-                if (di < dstSize - 1) dst[di++] = ')';
-            }
-            continue;
-        }
-
-        // --- x_{n} lub x_n -> indeks dolny ---
-        if (c == '_' && si + 1 < slen) {
-            si++;
-            char next = src[si];
-            char sub[16] = "";
-            int ei = 0;
-            bool brace = (next == '{');
-            if (brace) si++;
-            while (si < slen && ei < 14) {
-                char ec = src[si];
-                if (brace && ec == '}') { si++; break; }
-                if (!brace && (ec == ' ' || ec == '+' || ec == '-' || ec == ')' || ec == '\n')) break;
-                sub[ei++] = ec;
-                si++;
-            }
-            sub[ei] = '\0';
-            if (di < dstSize - 1) dst[di++] = '_';
-            for (int k = 0; k < ei && di < dstSize - 1; k++) dst[di++] = sub[k];
-            continue;
-        }
-
-        // --- \frac{a}{b} -> a/b ---
-        if (c == '\\' && si + 4 < slen &&
-            src[si+1]=='f' && src[si+2]=='r' && src[si+3]=='a' && src[si+4]=='c') {
-            si += 5;
-            // Zbierz licznik {a}
-            char num[32] = "", den[32] = "";
-            if (si < slen && src[si] == '{') {
-                si++;
-                int k = 0;
-                while (si < slen && src[si] != '}' && k < 30) num[k++] = src[si++];
-                num[k] = '\0';
-                if (si < slen) si++; // pominij }
-            }
-            if (si < slen && src[si] == '{') {
-                si++;
-                int k = 0;
-                while (si < slen && src[si] != '}' && k < 30) den[k++] = src[si++];
-                den[k] = '\0';
-                if (si < slen) si++; // pominij }
-            }
-            // Wypisz jako (num/den)
-            dst[di++] = '(';
-            for (int k = 0; num[k] && di < dstSize-1; k++) dst[di++] = num[k];
-            dst[di++] = '/';
-            for (int k = 0; den[k] && di < dstSize-1; k++) dst[di++] = den[k];
-            dst[di++] = ')';
-            continue;
-        }
-
-        // --- Pomijaj znaki LaTeX: $, \[ \], \( \) ---
-        if (c == '$') { si++; continue; }
-        if (c == '\\' && si + 1 < slen) {
-            char n = src[si+1];
-            if (n == '[' || n == ']' || n == '(' || n == ')') { si += 2; continue; }
-            if (n == ' ') { dst[di++] = ' '; si += 2; continue; }
-            // \cdot -> *
-            if (si+4<slen && src[si+1]=='c' && src[si+2]=='d' && src[si+3]=='o' && src[si+4]=='t') {
-                dst[di++] = '*'; si += 5; continue;
-            }
-            // \times -> x
-            if (si+5<slen && src[si+1]=='t' && src[si+2]=='i' && src[si+3]=='m' && src[si+4]=='e' && src[si+5]=='s') {
-                dst[di++] = 'x'; si += 6; continue;
-            }
-            // \pi -> pi
-            if (si+2<slen && src[si+1]=='p' && src[si+2]=='i') {
-                if(di<dstSize-2){dst[di++]='p';dst[di++]='i';} si+=3; continue;
-            }
-            // \alpha -> alpha, \beta -> beta, itp.
-            // Pominij backslash, skopiuj slowo
-            si++;
-            while (si < slen && src[si] >= 'a' && src[si] <= 'z' && di < dstSize-1)
-                dst[di++] = src[si++];
-            continue;
-        }
-
-        // Zwykly znak
-        dst[di++] = c;
-        si++;
+// Znajduje koniec klamry. s wskazuje ZA '{'. Zwraca dlugosc zawartosci (do
+// pasujacego '}'), z obsluga zagniezdzen.
+static int _solBraceSpan(const char* s, int n) {
+    int depth = 1, i = 0;
+    while (i < n) {
+        if (s[i] == '{') depth++;
+        else if (s[i] == '}') { if (--depth == 0) return i; }
+        i++;
     }
+    return n;
+}
+
+// Rekurencyjny emiter: przetwarza span [s, s+n) LaTeX -> UTF-8 do dst.
+static void _solLatexEmit(const char* s, int n, char* dst, int& di, int cap) {
+    int i = 0;
+    while (i < n && di < cap - 1) {
+        char c = s[i];
+
+        if (c == '\\') {
+            // \\ -> nowa linia
+            if (i + 1 < n && s[i + 1] == '\\') { if (di < cap - 1) dst[di++] = '\n'; i += 2; continue; }
+            // \[ \] \( \) -> usun (delimitery)
+            if (i + 1 < n && (s[i+1]=='['||s[i+1]==']'||s[i+1]=='('||s[i+1]==')')) { i += 2; continue; }
+            // \{ \} -> dosłowna klamra
+            if (i + 1 < n && (s[i+1]=='{'||s[i+1]=='}')) { if (di<cap-1) dst[di++]=s[i+1]; i += 2; continue; }
+            // \, \; \: \! -> spacja / nic
+            if (i + 1 < n && (s[i+1]==','||s[i+1]==';'||s[i+1]==':')) { if (di<cap-1) dst[di++]=' '; i += 2; continue; }
+            if (i + 1 < n && s[i+1]=='!') { i += 2; continue; }
+            // slowo komendy
+            int j = i + 1;
+            while (j < n && ((s[j]>='a'&&s[j]<='z')||(s[j]>='A'&&s[j]<='Z'))) j++;
+            int wlen = j - i - 1;
+            // \frac{A}{B} -> (A)/(B)
+            if (wlen == 4 && strncmp(s+i+1,"frac",4)==0) {
+                i = j;
+                if (i<n && s[i]=='{') { i++; int a=_solBraceSpan(s+i,n-i); if(di<cap-1)dst[di++]='('; _solLatexEmit(s+i,a,dst,di,cap); if(di<cap-1)dst[di++]=')'; i+=a; if(i<n&&s[i]=='}')i++; }
+                if (di<cap-1) dst[di++]='/';
+                if (i<n && s[i]=='{') { i++; int b=_solBraceSpan(s+i,n-i); if(di<cap-1)dst[di++]='('; _solLatexEmit(s+i,b,dst,di,cap); if(di<cap-1)dst[di++]=')'; i+=b; if(i<n&&s[i]=='}')i++; }
+                continue;
+            }
+            // \sqrt[n]{x} / \sqrt{x} -> [n]√(x) / √(x)
+            if (wlen == 4 && strncmp(s+i+1,"sqrt",4)==0) {
+                i = j;
+                if (i<n && s[i]=='[') { i++; while(i<n && s[i]!=']'){ if(di<cap-1)dst[di++]=s[i]; i++; } if(i<n&&s[i]==']')i++; }
+                const char* r="√"; while(*r && di<cap-1) dst[di++]=*r++;
+                if (i<n && s[i]=='{') { i++; int a=_solBraceSpan(s+i,n-i); if(di<cap-1)dst[di++]='('; _solLatexEmit(s+i,a,dst,di,cap); if(di<cap-1)dst[di++]=')'; i+=a; if(i<n&&s[i]=='}')i++; }
+                continue;
+            }
+            // \text{...} \mathrm{...} -> zawartosc
+            if ((wlen==4 && strncmp(s+i+1,"text",4)==0) || (wlen==6 && strncmp(s+i+1,"mathrm",6)==0)) {
+                i = j;
+                if (i<n && s[i]=='{') { i++; int a=_solBraceSpan(s+i,n-i); _solLatexEmit(s+i,a,dst,di,cap); i+=a; if(i<n&&s[i]=='}')i++; }
+                continue;
+            }
+            // tablica symboli
+            int found = -1;
+            for (int k=0;k<_SOL_SYM_N;k++){ const char* cm=_SOL_SYMS[k].cmd; int cl=(int)strlen(cm); if(cl==wlen && strncmp(s+i+1,cm,cl)==0){ found=k; break; } }
+            if (found >= 0) {
+                const char* u=_SOL_SYMS[found].utf8; while(*u && di<cap-1) dst[di++]=*u++;
+                i = j;
+                if (i<n && s[i]==' ') i++; // zjedz spacje po komendzie
+                continue;
+            }
+            // nieznana \komenda -> usun backslash, zostaw slowo
+            if (wlen > 0) { for(int k=i+1;k<j && di<cap-1;k++) dst[di++]=s[k]; i = j; continue; }
+            i++; continue;  // samotny backslash
+        }
+
+        if (c == '$') { i++; continue; }
+        if (c == '{' || c == '}') { i++; continue; }  // pojedyncze klamry -> usun
+        if (c == '&') { if (di<cap-1) dst[di++]=' '; i++; continue; }  // separator w macierzach
+        if (c == '*' && i+1<n && s[i+1]=='*') { i += 2; continue; }    // **bold** markdown -> usun
+
+        // ^ potega
+        if (c == '^') {
+            i++;
+            if (di<cap-1) dst[di++]='^';
+            if (i<n && s[i]=='{') { i++; int a=_solBraceSpan(s+i,n-i);
+                if (a>1) { if(di<cap-1)dst[di++]='('; _solLatexEmit(s+i,a,dst,di,cap); if(di<cap-1)dst[di++]=')'; }
+                else { _solLatexEmit(s+i,a,dst,di,cap); }
+                i+=a; if(i<n&&s[i]=='}')i++;
+            } else if (i<n) { int cl=_utf8Len((uint8_t)s[i]); for(int q=0;q<cl&&i<n&&di<cap-1;q++) dst[di++]=s[i++]; }
+            continue;
+        }
+        // _ indeks dolny
+        if (c == '_') {
+            i++;
+            if (di<cap-1) dst[di++]='_';
+            if (i<n && s[i]=='{') { i++; int a=_solBraceSpan(s+i,n-i); _solLatexEmit(s+i,a,dst,di,cap); i+=a; if(i<n&&s[i]=='}')i++; }
+            else if (i<n) { int cl=_utf8Len((uint8_t)s[i]); for(int q=0;q<cl&&i<n&&di<cap-1;q++) dst[di++]=s[i++]; }
+            continue;
+        }
+
+        // zwykly bajt (w tym UTF-8 wielobajtowy — polskie znaki kopiowane jak sa)
+        dst[di++] = c; i++;
+    }
+}
+
+// Sygnatura jak stary _solFormatMath (zachowane wywolania).
+static void _solFormatMath(const char* src, char* dst, int dstSize) {
+    int di = 0;
+    _solLatexEmit(src, (int)strlen(src), dst, di, dstSize);
     dst[di] = '\0';
 }
 
@@ -318,45 +320,44 @@ static void _solFormatMath(const char* src, char* dst, int dstSize) {
 // Tekst jest zawijany reczne co ~40 znakow na linie ekranu 6x10
 // ---------------------------------------------------------------------------
 #define _SOL_LINES_MAX    64
-#define _SOL_LINE_LEN     44
+#define _SOL_LINE_LEN     160   // bajty/linie (UTF-8: polskie znaki i symbole 2-3 B)
 
-// Rysuje tekst z obsluga poteg: "e^3" -> "e" normalnie + "3" malym fontem wyzej
-// Zwraca szerokosc narysowanego tekstu w px
+// Rysuje linie UTF-8 (font 6x12_te przez drawUTF8 — ma polskie glyphy/greke/
+// symbole) z obsluga poteg: "e^3" -> "e" + "3" malym fontem wyzej. Iteruje po
+// kodpunktach UTF-8 (nie bajtach). Zwraca szerokosc w px.
 static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
     int xi = x;
     int len = strlen(text);
-    for (int i = 0; i < len; ) {
+    int i = 0;
+    while (i < len) {
         if (text[i] == '^' && i + 1 < len) {
             i++; // pominij ^
-            char exp[16] = "";
+            char exp[24] = "";
             int elen = 0;
             if (text[i] == '(') {
-                // Wykladnik wieloznakowy w nawiasach: ^(abc) -> wszystko do ')'
-                i++; // pominij '('
-                while (i < len && text[i] != ')' && elen < 14)
-                    exp[elen++] = text[i++];
-                if (i < len && text[i] == ')') i++; // pominij ')'
+                i++;
+                while (i < len && text[i] != ')' && elen < 22) exp[elen++] = text[i++];
+                if (i < len && text[i] == ')') i++;
             } else {
-                // Wykladnik bez nawiasow: tylko cyfry i litery
-                // zatrzymaj sie na wszystkich operatorach: + - * / = spacja itp.
-                while (i < len && elen < 14 &&
-                       isalnum((unsigned char)text[i])) {
-                    exp[elen++] = text[i++];
-                }
+                // jeden kodpunkt (konwerter wstawia ^(...) dla wieloznakowych)
+                int cl = _utf8Len((uint8_t)text[i]);
+                for (int q = 0; q < cl && i < len && elen < 22; q++) exp[elen++] = text[i++];
             }
             exp[elen] = '\0';
             if (elen > 0) {
                 d.setFont(u8g2_font_5x7_tf);
-                d.drawStr(xi, y - 4, exp);
-                xi += elen * 5 + 1;
-                d.setFont(u8g2_font_6x10_tf);
+                int w = d.drawUTF8(xi, y - 4, exp);
+                xi += (w > 0 ? w : elen * 5) + 1;
             }
         } else {
-            char ch[2] = {text[i], '\0'};
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(xi, y, ch);
-            xi += 6;
-            i++;
+            int cl = _utf8Len((uint8_t)text[i]);
+            char ch[5];
+            int q = 0;
+            for (; q < cl && i < len; q++) ch[q] = text[i++];
+            ch[q] = '\0';
+            d.setFont(u8g2_font_6x12_te);
+            int w = d.drawUTF8(xi, y, ch);
+            xi += (w > 0 ? w : 6);
         }
     }
     return xi - x;
@@ -376,16 +377,12 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
     // Maks znakow na linie przy foncie 6px: (256-4)/6 = 42
     const int LINE_CHARS = 41;
 
-    // UTF-8 polskie -> ASCII (font 6x10 nie ma polskich glyphow).
-    // Robione PRZED _solFormatMath bo math format moze dorzucic znaki ktore
-    // by zlapaly UTF-8 multi-byte (lepiej wyczyscic na wejsciu).
-    String asciiSol = _solUtf8ToAscii(String(solution));
-
-    // Przetworz tekst przez konwerter matematyki
+    // Konwersja LaTeX -> UTF-8. Polskie znaki ZACHOWANE (font 6x12_te je ma).
     static char _solConverted[_SOL_SOLUTION_MAX + 1];
-    _solFormatMath(asciiSol.c_str(), _solConverted, sizeof(_solConverted));
+    _solFormatMath(solution, _solConverted, sizeof(_solConverted));
 
-    // Podziel na linie
+    // Podziel na linie — liczymy KODPUNKTY UTF-8 (nie bajty), zeby nie urwac w
+    // srodku znaku wielobajtowego i zawijac po realnej liczbie widocznych znakow.
     static char _lines[_SOL_LINES_MAX][_SOL_LINE_LEN + 1];
     int lineCount = 0;
     int slen = strlen(_solConverted);
@@ -393,14 +390,16 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
 
     while (pos < slen && lineCount < _SOL_LINES_MAX) {
         int end = pos;
+        int cols = 0;
         int lastSpace = -1;
-        while (end < slen && (end - pos) < LINE_CHARS) {
+        while (end < slen && cols < LINE_CHARS) {
             if (_solConverted[end] == '\n') break;
-            if (_solConverted[end] == ' ')  lastSpace = end;
-            end++;
+            if (_solConverted[end] == ' ') lastSpace = end;
+            end += _utf8Len((uint8_t)_solConverted[end]);
+            cols++;
         }
-        // Zawroc do ostatniej spacji jesli nie koniec
-        if (end < slen && _solConverted[end] != '\n' && lastSpace > pos)
+        // Zawroc do ostatniej spacji jesli urwalismy w srodku slowa
+        if (end < slen && _solConverted[end] != '\n' && cols >= LINE_CHARS && lastSpace > pos)
             end = lastSpace;
         int len = end - pos;
         if (len > _SOL_LINE_LEN) len = _SOL_LINE_LEN;
@@ -880,9 +879,16 @@ static bool _solPreviewAndConfirm(U8G2 &d) {
         d.drawStr(166, 62, _solT("< = wyjdz", "< = exit"));
         d.sendBuffer();
 
-        // Przyciski
-        if (_solBtn(BTN_OK))   { _solWaitRelease(); return true; }
-        if (_solBtn(BTN_LEFT)) { _solWaitRelease(); return false; }
+        // Przyciski — po wolnej klatce kamery (~80ms) robimy krotki burst
+        // skanowania na kadencji ~35ms. Debounce klawiatury wymaga 2 kolejnych
+        // skanow (~60ms); bez tego burst'u petla skanowala raz na ~80ms i
+        // POJEDYNCZE nacisniecie OK/LEFT sie gubilo — trzeba bylo TRZYMAC.
+        // Uzywamy inputBtn()==LOW (bez throttle 200ms z _solBtn) dla responsywnosci.
+        for (int k = 0; k < 3; k++) {
+            if (inputBtn(BTN_OK)   == LOW) { _solWaitRelease(); return true; }
+            if (inputBtn(BTN_LEFT) == LOW) { _solWaitRelease(); return false; }
+            delay(35);
+        }
     }
 }
 
@@ -1080,13 +1086,15 @@ static void _solRunHistoryMode(U8G2 &d) {
         HistoryEntry entry;
         if (historyGet(cursor, entry)) {
             d.setFont(u8g2_font_6x10_tf);
-            String q = entry.question;
+            // Polskie znaki UTF-8 -> ASCII (font 6x10/5x7 nie ma glyphow ą/ł/...).
+            // Konwersja PRZED obcieciem, zeby nie urwac w srodku znaku wielobajtowego.
+            String q = _solUtf8ToAscii(entry.question);
             if (q.length() > 40) q = q.substring(0, 38) + "..";
             d.drawStr(2, 24, q.c_str());
 
             d.setFont(u8g2_font_5x7_tf);
             // Pierwsze 2 linie odpowiedzi
-            String a = entry.answer;
+            String a = _solUtf8ToAscii(entry.answer);
             int nl = a.indexOf('\n');
             String l1 = nl >= 0 ? a.substring(0, nl) : a;
             String rest = nl >= 0 ? a.substring(nl + 1) : "";

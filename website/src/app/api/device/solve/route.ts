@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
-import { AI_MODEL_IDS, getCostMultiplier } from "@/lib/aiModels";
+import { AI_MODEL_IDS, getCostMultiplier, modelSupportsVision } from "@/lib/aiModels";
 
 // Endpoint dla kalkulatora ESP32 — rozwiązywanie zadań przez AI
 // POST /api/device/solve
@@ -82,7 +82,7 @@ async function callOpenRouter(
         { role: "user", content },
       ],
       temperature: 0.2,
-      max_tokens: 1500,
+      max_tokens: 8000,
     }),
   });
   if (!res.ok) {
@@ -107,14 +107,84 @@ Format odpowiedzi:
 1. Dane/Szukane (1-2 linijki)
 2. Rozwiązanie krok po kroku (maksymalnie 6 kroków)
 3. Odpowiedź: [wynik z jednostkami]
-Nie używaj markdown, gwiazdek, nagłówków. Tylko czysty tekst. Maksymalnie 800 znaków.`;
+WAŻNE — formatowanie pod mały ekran kalkulatora:
+- NIE używaj LaTeX (żadnych \\frac, \\sqrt, \\(, \\[, $, \\boxed, \\begin) ani markdown (gwiazdek, #, |, tabel, pogrubień).
+- Pisz matematykę zwykłym tekstem z symbolami Unicode: ułamek jako a/b, potęga jako x² lub x^n, pierwiastek jako √(x), mnożenie ·, oraz Δ, π, α, ≤, ≥, ≠, °, ± gdy trzeba.
+- Każdy krok w osobnej linii. Bądź zwięzły (do ~3000 znaków), ale ZAWSZE dokończ całe rozwiązanie — NIE przerywaj w połowie.`;
 
 // Tryb "raw" — bez ograniczenia do maturalnych przedmiotow. Tylko hint o
 // formacie pod maly ekran OLED. User wybiera ten tryb gdy robi zdjecia spoza
 // matury (elektronika, informatyka, jezyki obce itp.).
 const SYSTEM_PROMPT_RAW = `Odpowiadaj po polsku, KRÓTKO i ZWIĘŹLE — ekran kalkulatora jest mały.
 Maksymalnie 6 krótkich kroków. Wyróżnij końcową odpowiedź.
-Nie używaj markdown, gwiazdek, nagłówków. Tylko czysty tekst. Maksymalnie 800 znaków.`;
+WAŻNE — formatowanie pod mały ekran kalkulatora:
+- NIE używaj LaTeX (żadnych \\frac, \\sqrt, \\(, \\[, $, \\boxed, \\begin) ani markdown (gwiazdek, #, |, tabel, pogrubień).
+- Pisz matematykę zwykłym tekstem z symbolami Unicode: ułamek jako a/b, potęga jako x² lub x^n, pierwiastek jako √(x), mnożenie ·, oraz Δ, π, α, ≤, ≥, ≠, °, ± gdy trzeba.
+- Każdy krok w osobnej linii. Bądź zwięzły (do ~3000 znaków), ale ZAWSZE dokończ całe rozwiązanie — NIE przerywaj w połowie.`;
+
+// === Normalizacja odpowiedzi AI dla malego ekranu kalkulatora ===
+// Rozne modele zwracaja matematyke roznie (DeepSeek/GPT: ciezki LaTeX \frac \(
+// \Delta; Qwen/Mistral: gotowe Unicode). Zamieniamy WSZYSTKO na czysty tekst z
+// symbolami Unicode, ktore czcionka OLED (6x12_te) renderuje. Dziala dla
+// kazdego modelu i kazdej wersji firmware (kalkulator dostaje gotowy tekst).
+const _GREEK_OPS: Record<string, string> = {
+  alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",varepsilon:"ε",zeta:"ζ",eta:"η",
+  theta:"θ",vartheta:"θ",iota:"ι",kappa:"κ",lambda:"λ",mu:"μ",nu:"ν",xi:"ξ",pi:"π",
+  rho:"ρ",sigma:"σ",tau:"τ",upsilon:"υ",phi:"φ",varphi:"φ",chi:"χ",psi:"ψ",omega:"ω",
+  Gamma:"Γ",Delta:"Δ",Theta:"Θ",Lambda:"Λ",Xi:"Ξ",Pi:"Π",Sigma:"Σ",Phi:"Φ",Psi:"Ψ",Omega:"Ω",
+  cdot:"·",times:"×",div:"÷",pm:"±",mp:"∓",ast:"*",star:"*",
+  leq:"≤",le:"≤",geq:"≥",ge:"≥",neq:"≠",ne:"≠",approx:"≈",equiv:"≡",cong:"≅",sim:"~",propto:"∝",
+  infty:"∞",partial:"∂",nabla:"∇",prime:"′",
+  rightarrow:"→",to:"→",longrightarrow:"→",leftarrow:"←",leftrightarrow:"↔",mapsto:"→",
+  Rightarrow:"⇒",implies:"⇒",Leftarrow:"⇐",iff:"⇔",Leftrightarrow:"⇔",
+  in:"∈",notin:"∉",subset:"⊂",subseteq:"⊆",supset:"⊃",cup:"∪",cap:"∩",emptyset:"∅",varnothing:"∅",
+  forall:"∀",exists:"∃",neg:"¬",lnot:"¬",land:"∧",wedge:"∧",lor:"∨",vee:"∨",
+  sum:"Σ",prod:"Π",int:"∫",oint:"∮",angle:"∠",perp:"⊥",parallel:"∥",
+  ldots:"…",dots:"…",cdots:"…",vdots:"⋮",deg:"°",circ:"°",degree:"°",
+  left:"",right:"",bigg:"",Big:"",big:"",Bigg:"",displaystyle:"",textstyle:"",limits:"",nolimits:"",
+  quad:" ",qquad:"  ",",":" ",";":" ",":":" ","!":"",
+};
+const _SUP: Record<string, string> = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","+":"⁺","-":"⁻","(":"⁽",")":"⁾","n":"ⁿ","i":"ⁱ"};
+const _SUB: Record<string, string> = {"0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉","+":"₊","-":"₋","(":"₍",")":"₎"};
+function _toScript(x: string, map: Record<string, string>): string | null {
+  let out = "";
+  for (const c of x) { if (!(c in map)) return null; out += map[c]; }
+  return out;
+}
+function normalizeForCalc(input: string): string {
+  if (!input) return input;
+  let t = input;
+  // delimitery LaTeX
+  t = t.replace(/\\[()[\]]/g, "").replace(/\$\$?/g, "");
+  // srodowiska \begin{...}..\end{...} -> nowa linia (zawartosc zostaje)
+  t = t.replace(/\\(?:begin|end)\s*\{[^}]*\}/g, "\n");
+  // \boxed{X} \text{X} \mathrm{X} ... -> X
+  t = t.replace(/\\(?:boxed|text|mathrm|mathbf|mathit|mathsf|operatorname|mathbb)\s*\{([^{}]*)\}/g, "$1");
+  // \frac{A}{B} / \dfrac / \tfrac -> (A)/(B), kilka przebiegow dla zagniezdzen
+  for (let i = 0; i < 5; i++) t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "($1)/($2)");
+  // \sqrt[n]{X} -> [n]√(X) ; \sqrt{X} -> √(X)
+  t = t.replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, "$1√($2)");
+  for (let i = 0; i < 3; i++) t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, "√($1)");
+  // greka + operatory + komendy (po frac/sqrt). Nieznane \komenda -> sama nazwa.
+  t = t.replace(/\\([A-Za-z]+)|\\(.)/g, (m, w, sym) => {
+    if (w !== undefined) return w in _GREEK_OPS ? _GREEK_OPS[w] : w;
+    return sym in _GREEK_OPS ? _GREEK_OPS[sym] : sym; // \, \; itp.
+  });
+  // potegi i indeksy -> Unicode (gdy sie da), inaczej ^(...) / _(...)
+  t = t.replace(/\^\{([^{}]*)\}/g, (m, e) => _toScript(e, _SUP) ?? `^(${e})`);
+  t = t.replace(/\^\(([^()]*)\)/g, (m, e) => _toScript(e, _SUP) ?? `^(${e})`);
+  t = t.replace(/\^(\S)/g, (m, c) => _toScript(c, _SUP) ?? `^${c}`);
+  t = t.replace(/_\{([^{}]*)\}/g, (m, e) => _toScript(e, _SUB) ?? `_(${e})`);
+  t = t.replace(/_(\S)/g, (m, c) => _toScript(c, _SUB) ?? `_${c}`);
+  // markdown: **bold** __bold__ -> tekst, ### naglowki -> usun, listy -> zostaw
+  t = t.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/__([^_]+)__/g, "$1");
+  t = t.replace(/^#{1,6}\s+/gm, "").replace(/`/g, "");
+  // \\ -> nowa linia, resztki klamr -> usun
+  t = t.replace(/\\\\/g, "\n").replace(/[{}]/g, "");
+  // sprzataj biale znaki
+  t = t.replace(/[ \t]{2,}/g, " ").replace(/ +\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+  return t.trim();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -289,7 +359,7 @@ export async function POST(request: NextRequest) {
       if (rows?.[0]?.promptMode === "raw") aiMode = "raw";
     }
     const systemPrompt = aiMode === "raw" ? SYSTEM_PROMPT_RAW : SYSTEM_PROMPT_MATURA;
-    const modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
+    let modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
       ? aiModel
       : OPENROUTER_DEFAULT_MODEL;
     const costMultiplier = getCostMultiplier(aiModel);
@@ -309,15 +379,53 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Parsuj body
-    const body = await request.json();
-    const { mode, text, image, mimeType } = body;
+    // Parsuj body: JSON (tryb text / legacy image base64) ALBO multipart/form-data
+    // (nowy upload zdjecia z firmware — pole "image" = binarny JPEG). Bez tego
+    // request.json() na multipart rzuca "No number after minus sign" (--boundary) -> 500.
+    let mode: string | undefined;
+    let text: string | undefined;
+    let image: string | undefined;
+    let mimeType: string | undefined;
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("multipart/form-data")) {
+      const form = await request.formData();
+      const file = form.get("image");
+      if (!file || typeof file === "string") {
+        return NextResponse.json({ ok: false, error: "Brak obrazu (multipart)" }, { status: 400 });
+      }
+      const f = file as File;
+      image = Buffer.from(await f.arrayBuffer()).toString("base64");
+      mimeType = f.type || "image/jpeg";
+      mode = "image";
+    } else {
+      let body: any;
+      try {
+        body = await request.json();
+      } catch {
+        return NextResponse.json(
+          { ok: false, error: "Nieprawidlowy format zapytania" },
+          { status: 400 }
+        );
+      }
+      mode = body?.mode;
+      text = body?.text;
+      image = body?.image;
+      mimeType = body?.mimeType;
+    }
 
     if (!mode || (mode !== "text" && mode !== "image")) {
       return NextResponse.json(
         { ok: false, error: "Nieprawidlowy tryb (text/image)" },
         { status: 400 }
       );
+    }
+
+    // Tryb zdjecia wymaga modelu z wizja. Modele tekstowe (DeepSeek/Qwen/Mistral/
+    // Sonar) zwracaja z OpenRouter 404 "No endpoints support image input" —
+    // podmieniamy na domyslny model z wizja (OPENROUTER_DEFAULT_MODEL = Gemini).
+    if (mode === "image" && !modelSupportsVision(modelToUse)) {
+      console.log(`[solve] image: model ${modelToUse} bez wizji -> ${OPENROUTER_DEFAULT_MODEL}`);
+      modelToUse = OPENROUTER_DEFAULT_MODEL;
     }
 
     // Limity rozmiarow — anty-DoS (atakujacy z API key moglby spamowac OOM).
@@ -394,7 +502,7 @@ export async function POST(request: NextRequest) {
         { status: 502 }
       );
     }
-    solution = r.solution;
+    solution = normalizeForCalc(r.solution);
 
     // Odejmij tokeny po udanej odpowiedzi (fire-and-forget)
     if (ownerUserId) {

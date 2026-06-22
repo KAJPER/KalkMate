@@ -45,6 +45,104 @@ static String wifiGetSavedSSID() {
     return s;
 }
 
+// === Lista zapamietanych sieci (jak w telefonie) ===
+// Przechowywane jako n0_s/n0_p .. n7_s/n7_p + licznik "netcnt".
+// Indeks 0 = ostatnio uzyta. Primary (_WP_SSID/_WP_PASS) = idx 0 (kompat z
+// istniejacym auto-connect).
+#define _WP_MAX_NETS 8
+
+static uint8_t wifiSavedCount() {
+    Preferences prefs; prefs.begin(_WP_NS, true);
+    uint8_t c = prefs.getUChar("netcnt", 0);
+    prefs.end();
+    return c > _WP_MAX_NETS ? _WP_MAX_NETS : c;
+}
+
+// Zwraca true gdy slot idx ma zapisana siec; wypelnia bufory (moga byc NULL).
+static bool wifiGetSavedNet(uint8_t idx, char* ssidBuf, int ssidSize, char* passBuf, int passSize) {
+    if (idx >= _WP_MAX_NETS) return false;
+    char ks[12], kp[12];
+    snprintf(ks, sizeof(ks), "n%u_s", idx);
+    snprintf(kp, sizeof(kp), "n%u_p", idx);
+    Preferences prefs; prefs.begin(_WP_NS, true);
+    String s = prefs.getString(ks, "");
+    String p = prefs.getString(kp, "");
+    prefs.end();
+    if (ssidBuf) { strncpy(ssidBuf, s.c_str(), ssidSize - 1); ssidBuf[ssidSize - 1] = '\0'; }
+    if (passBuf) { strncpy(passBuf, p.c_str(), passSize - 1); passBuf[passSize - 1] = '\0'; }
+    return s.length() > 0;
+}
+
+// Dodaj/zaktualizuj siec — laduje na poczatek listy (idx 0). Duplikat SSID
+// zostaje przesuniety na przod z nowym haslem. Ustawia tez primary.
+static void wifiAddNetwork(const char* ssid, const char* pass) {
+    if (!ssid || !ssid[0]) return;
+    static char ss[_WP_MAX_NETS][33];
+    static char pp[_WP_MAX_NETS][64];
+    uint8_t cnt = wifiSavedCount();
+    int n = 0;
+    for (uint8_t i = 0; i < cnt && n < _WP_MAX_NETS - 1; i++) {
+        char s[33], p[64];
+        if (!wifiGetSavedNet(i, s, sizeof(s), p, sizeof(p))) continue;
+        if (strcmp(s, ssid) == 0) continue;  // pomin duplikat (bedzie na przodzie)
+        strncpy(ss[n], s, 32); ss[n][32] = '\0';
+        strncpy(pp[n], p, 63); pp[n][63] = '\0';
+        n++;
+    }
+    Preferences prefs; prefs.begin(_WP_NS, false);
+    prefs.putString("n0_s", ssid);
+    prefs.putString("n0_p", pass ? pass : "");
+    for (int i = 0; i < n; i++) {
+        char ks[12], kp[12];
+        snprintf(ks, sizeof(ks), "n%d_s", i + 1);
+        snprintf(kp, sizeof(kp), "n%d_p", i + 1);
+        prefs.putString(ks, ss[i]);
+        prefs.putString(kp, pp[i]);
+    }
+    prefs.putUChar("netcnt", (uint8_t)(n + 1));
+    prefs.putString(_WP_SSID, ssid);
+    prefs.putString(_WP_PASS, pass ? pass : "");
+    prefs.end();
+}
+
+// Usun zapamietana siec o indeksie idx (przesuwa pozostale).
+static void wifiForgetNetwork(uint8_t idx) {
+    uint8_t cnt = wifiSavedCount();
+    if (idx >= cnt) return;
+    static char ss[_WP_MAX_NETS][33];
+    static char pp[_WP_MAX_NETS][64];
+    int n = 0;
+    for (uint8_t i = 0; i < cnt; i++) {
+        if (i == idx) continue;
+        char s[33], p[64];
+        wifiGetSavedNet(i, s, sizeof(s), p, sizeof(p));
+        strncpy(ss[n], s, 32); ss[n][32] = '\0';
+        strncpy(pp[n], p, 63); pp[n][63] = '\0';
+        n++;
+    }
+    Preferences prefs; prefs.begin(_WP_NS, false);
+    for (int i = 0; i < n; i++) {
+        char ks[12], kp[12];
+        snprintf(ks, sizeof(ks), "n%d_s", i);
+        snprintf(kp, sizeof(kp), "n%d_p", i);
+        prefs.putString(ks, ss[i]);
+        prefs.putString(kp, pp[i]);
+    }
+    { char ks[12], kp[12]; snprintf(ks,sizeof(ks),"n%d_s",n); snprintf(kp,sizeof(kp),"n%d_p",n); prefs.remove(ks); prefs.remove(kp); }
+    prefs.putUChar("netcnt", (uint8_t)n);
+    if (n > 0) { prefs.putString(_WP_SSID, ss[0]); prefs.putString(_WP_PASS, pp[0]); }
+    else       { prefs.remove(_WP_SSID); prefs.remove(_WP_PASS); }
+    prefs.end();
+}
+
+// Jednorazowa migracja: jezeli lista pusta, a istnieje stara pojedyncza siec
+// (_WP_SSID/_WP_PASS) — przenies ja do listy zapamietanych.
+static void wifiEnsureListSeeded() {
+    if (wifiSavedCount() > 0) return;
+    char s[33] = "", p[64] = "";
+    if (wifiLoadSaved(s, sizeof(s), p, sizeof(p))) wifiAddNetwork(s, p);
+}
+
 // Zapisz klucz licencji do NVS
 static void wifiSaveLicense(const char* key) {
     Preferences prefs;
