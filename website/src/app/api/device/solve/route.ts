@@ -82,7 +82,7 @@ async function callOpenRouter(
         { role: "user", content },
       ],
       temperature: 0.2,
-      max_tokens: 8000,
+      max_tokens: 16000,
     }),
   });
   if (!res.ok) {
@@ -101,26 +101,32 @@ async function callOpenRouter(
   return { ok: true, status: 200, solution, detail: "", tokensUsed };
 }
 
-const SYSTEM_PROMPT_MATURA = `Jesteś ekspertem od polskiego egzaminu maturalnego. Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii.
-Odpowiadaj KRÓTKO i ZWIĘŹLE — ekran kalkulatora ma ograniczoną przestrzeń.
-Format odpowiedzi:
-1. Dane/Szukane (1-2 linijki)
-2. Rozwiązanie krok po kroku (maksymalnie 6 kroków)
-3. Odpowiedź: [wynik z jednostkami]
-WAŻNE — formatowanie pod mały ekran kalkulatora:
-- NIE używaj LaTeX (żadnych \\frac, \\sqrt, \\(, \\[, $, \\boxed, \\begin) ani markdown (gwiazdek, #, |, tabel, pogrubień).
-- Pisz matematykę zwykłym tekstem z symbolami Unicode: ułamek jako a/b, potęga jako x² lub x^n, pierwiastek jako √(x), mnożenie ·, oraz Δ, π, α, ≤, ≥, ≠, °, ± gdy trzeba.
-- Każdy krok w osobnej linii. Bądź zwięzły (do ~3000 znaków), ale ZAWSZE dokończ całe rozwiązanie — NIE przerywaj w połowie.`;
+// Framing (przedmiot) — niezalezny od poziomu szczegolowosci (aiMode matura/raw).
+const BASE_MATURA = `Jesteś ekspertem od polskiego egzaminu maturalnego (CKE). Rozwiązujesz zadania z matematyki, fizyki, chemii i biologii zgodnie ze standardami oceniania CKE. Stosuj poprawne wzory, jednostki i sensowne zaokrąglenia.`;
+const BASE_RAW = `Jesteś dokładnym, pomocnym asystentem AI. Odpowiadasz po polsku na dowolne pytanie lub zadanie (nie tylko maturalne).`;
 
-// Tryb "raw" — bez ograniczenia do maturalnych przedmiotow. Tylko hint o
-// formacie pod maly ekran OLED. User wybiera ten tryb gdy robi zdjecia spoza
-// matury (elektronika, informatyka, jezyki obce itp.).
-const SYSTEM_PROMPT_RAW = `Odpowiadaj po polsku, KRÓTKO i ZWIĘŹLE — ekran kalkulatora jest mały.
-Maksymalnie 6 krótkich kroków. Wyróżnij końcową odpowiedź.
-WAŻNE — formatowanie pod mały ekran kalkulatora:
+// Poziom szczegolowosci sterowany ustawieniem kalkulatora "Tryb rozwiazan"
+// (kalkSettings.solveMode, wysylany w naglowku x-solve-mode):
+//   0 = Szczegolowy, 1 = Tylko obliczenia, 2 = Tylko wynik.
+const DETAIL_PROMPTS = [
+  // 0 Szczegolowy
+  `Rozwiąż zadanie KROK PO KROKU. Pokaż KAŻDY etap rozumowania oraz WSZYSTKIE obliczenia i przekształcenia — dokładnie tak, jak wymaga egzamin, by zdobyć PEŁNĄ punktację. Nie pomijaj kroków i NIE przeskakuj od razu do wyniku. Dla każdego działania zapisz: użyty wzór, podstawienie liczb i wynik działania, oraz krótko wyjaśnij co robisz. To kluczowe — uczeń musi pokazać pełne obliczenia. Na końcu wyraźnie: "Odpowiedź: ...".`,
+  // 1 Tylko obliczenia
+  `Pokaż obliczenia prowadzące do wyniku w schemacie: wzór → podstawienie liczb → wynik. Zwięźle, bez długiego opisu słownego, ale KAŻDE działanie widoczne. Na końcu: "Odpowiedź: ...".`,
+  // 2 Tylko wynik
+  `Podaj WYŁĄCZNIE końcowy wynik (z jednostką, jeśli dotyczy). Bez kroków, bez obliczeń, bez opisu.`,
+];
+
+const FORMAT_RULES = `Formatowanie pod mały ekran kalkulatora:
 - NIE używaj LaTeX (żadnych \\frac, \\sqrt, \\(, \\[, $, \\boxed, \\begin) ani markdown (gwiazdek, #, |, tabel, pogrubień).
-- Pisz matematykę zwykłym tekstem z symbolami Unicode: ułamek jako a/b, potęga jako x² lub x^n, pierwiastek jako √(x), mnożenie ·, oraz Δ, π, α, ≤, ≥, ≠, °, ± gdy trzeba.
-- Każdy krok w osobnej linii. Bądź zwięzły (do ~3000 znaków), ale ZAWSZE dokończ całe rozwiązanie — NIE przerywaj w połowie.`;
+- Pisz matematykę zwykłym tekstem z symbolami Unicode: ułamek a/b, potęga x² lub x^n, pierwiastek √(x), mnożenie ·, oraz Δ, π, α, ≤, ≥, ≠, °, ± gdy trzeba.
+- Każdy krok w osobnej linii. ZAWSZE dokończ całe rozwiązanie — nie przerywaj w połowie.`;
+
+function buildSystemPrompt(aiMode: string, solveMode: number): string {
+  const base = aiMode === "raw" ? BASE_RAW : BASE_MATURA;
+  const detail = DETAIL_PROMPTS[solveMode] ?? DETAIL_PROMPTS[0];
+  return `${base}\n\n${detail}\n\n${FORMAT_RULES}`;
+}
 
 // === Normalizacja odpowiedzi AI dla malego ekranu kalkulatora ===
 // Rozne modele zwracaja matematyke roznie (DeepSeek/GPT: ciezki LaTeX \frac \(
@@ -358,7 +364,10 @@ export async function POST(request: NextRequest) {
       `;
       if (rows?.[0]?.promptMode === "raw") aiMode = "raw";
     }
-    const systemPrompt = aiMode === "raw" ? SYSTEM_PROMPT_RAW : SYSTEM_PROMPT_MATURA;
+    // Poziom szczegolowosci z kalkulatora (kalkSettings.solveMode -> naglowek).
+    // Domyslnie 0 = Szczegolowy (gdy stary firmware nie wysyla naglowka).
+    const solveMode = Math.max(0, Math.min(2, parseInt(request.headers.get("x-solve-mode") || "0", 10) || 0));
+    const systemPrompt = buildSystemPrompt(aiMode, solveMode);
     let modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
       ? aiModel
       : OPENROUTER_DEFAULT_MODEL;

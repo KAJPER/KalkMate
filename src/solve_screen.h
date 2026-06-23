@@ -573,6 +573,7 @@ static void _solSendText(U8G2 &d, const char* taskText) {
     http.addHeader("x-device-id", _solDeviceId());
     http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
+    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));  // 0=szczeg,1=oblicz,2=wynik
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
     Serial.printf("[SOL] POST text %d B\n", jsonBody.length());
@@ -672,6 +673,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     http.addHeader("x-device-id", _solDeviceId());
     http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
+    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));  // 0=szczeg,1=oblicz,2=wynik
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
     d.clearBuffer();
