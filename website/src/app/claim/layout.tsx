@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import SessionProvider from "@/components/SessionProvider";
+
+// Aktywacja urządzenia — strona transakcyjna, nie indeksujemy.
+export const metadata: Metadata = {
+  title: "Aktywacja — KalkMate",
+  robots: { index: false, follow: false },
+};
 
 const inter = Inter({
   variable: "--font-inter",

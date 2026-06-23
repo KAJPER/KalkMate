@@ -51,15 +51,16 @@ export const metadata: Metadata = {
   publisher: "KalkMate",
   formatDetection: { email: false, address: false, telephone: false },
   metadataBase: new URL("https://kalkmate.pl"),
-  alternates: {
-    canonical: "https://kalkmate.pl",
-    languages: {
-      "pl": "https://kalkmate.pl",
-      "en": "https://kalkmate.pl/en",
-      "de": "https://kalkmate.pl/de",
-      "x-default": "https://kalkmate.pl",
-    },
-  },
+  // Weryfikacja Google Search Console metodą "tag HTML" — wystarczy ustawić
+  // zmienną środowiskową GOOGLE_SITE_VERIFICATION (alternatywnie użyj weryfikacji
+  // przez rekord DNS TXT, która nie wymaga zmian w kodzie).
+  verification: process.env.GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.GOOGLE_SITE_VERIFICATION }
+    : undefined,
+  // UWAGA: NIE ustawiamy tu alternates.canonical — w App Router metadata roota
+  // dziedziczą wszystkie podstrony, więc canonical wyciekłby na /pomoc, /regulamin
+  // itd. (Google traktowałby je jako duplikaty strony głównej). Canonical + hreflang
+  // ustawiamy per-strona (/, /en, /de, /pomoc, /regulamin, /polityka-prywatnosci).
   openGraph: {
     title: "KalkMate — Kalkulator AI na Maturę",
     description:

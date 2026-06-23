@@ -9,8 +9,19 @@ import BuyNow from "@/components/BuyNow";
 import Footer from "@/components/Footer";
 import VisitTracker from "@/components/VisitTracker";
 import { homeJsonLd } from "@/lib/seo";
+import type { Metadata } from "next";
+import { SITE_URL, languageAlternates } from "@/lib/i18n";
 
 const lang = "pl" as const;
+
+// Canonical + hreflang dla polskiej strony głównej (przeniesione z root layout,
+// żeby nie wyciekały na podstrony).
+export const metadata: Metadata = {
+  alternates: {
+    canonical: `${SITE_URL}/`,
+    languages: languageAlternates(),
+  },
+};
 
 export default function Home() {
   return (

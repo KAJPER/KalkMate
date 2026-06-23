@@ -5,6 +5,8 @@ import Footer from "@/components/Footer";
 export const metadata = {
   title: "Polityka Prywatności - KalkMate",
   description: "Polityka prywatności i ochrony danych osobowych KalkMate.pl",
+  robots: { index: true, follow: true },
+  alternates: { canonical: "https://kalkmate.pl/polityka-prywatnosci" },
 };
 
 const sections = [

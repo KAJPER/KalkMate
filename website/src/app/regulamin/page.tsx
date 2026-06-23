@@ -4,6 +4,7 @@ export const metadata: Metadata = {
   title: "Regulamin Sklepu — KalkMate",
   description: "Regulamin sklepu internetowego KalkMate",
   robots: { index: true, follow: true },
+  alternates: { canonical: "https://kalkmate.pl/regulamin" },
 };
 
 export default function ReguaminPage() {
