@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getCoupon, computeDiscount } from "@/lib/coupons";
 
 const EU_COUNTRIES = new Set([
   "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE",
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       pickupPoint, pickupPointAddress,
       street, postcode, city,
       country, currency, shippingCents,
+      couponCode,
     } = body;
     const email = user.email!;
     const resolvedCountry = (country || "PL") as string;
@@ -58,7 +60,20 @@ export async function POST(request: NextRequest) {
     // Pricing
     const productAmount = resolvedCurrency === "eur" ? 16900 : 69900;
     const resolvedShipping = typeof shippingCents === "number" ? shippingCents : 0;
-    const totalAmount = productAmount + resolvedShipping;
+
+    // Kupon rabatowy — autorytatywna walidacja po stronie serwera (nie ufamy klientowi).
+    let discountAmount = 0;
+    let appliedCoupon = "";
+    if (couponCode && String(couponCode).trim()) {
+      const coupon = await getCoupon(String(couponCode));
+      const disc = computeDiscount(coupon, productAmount, resolvedCurrency);
+      if (disc.ok) {
+        discountAmount = disc.discountCents;
+        appliedCoupon = disc.coupon!.code;
+      }
+    }
+
+    const totalAmount = (productAmount - discountAmount) + resolvedShipping;
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalAmount,
@@ -78,6 +93,8 @@ export async function POST(request: NextRequest) {
         pickup_point_address: pickupPointAddress || "",
         currency: resolvedCurrency,
         shipping_amount: String(resolvedShipping),
+        coupon_code: appliedCoupon,
+        discount_amount: String(discountAmount),
       },
       receipt_email: email,
       description: "KalkMate v1.0 - AI Calculator",

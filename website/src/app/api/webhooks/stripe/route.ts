@@ -4,6 +4,7 @@ import { stripe } from "@/lib/stripe";
 import { sendMail } from "@/lib/mailer";
 import { purchaseConfirmationEmail } from "@/lib/email-templates";
 import { prisma } from "@/lib/db";
+import { incrementCouponUsage } from "@/lib/coupons";
 
 export async function POST(request: NextRequest) {
   console.log("[WEBHOOK] Received webhook request");
@@ -176,6 +177,16 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   }
 
   console.log(`[WEBHOOK] ✅ Order created successfully: ${orderNumber} for email ${email}${existingUser ? ` (user ID: ${existingUser.id})` : " (no account yet)"}`);
+
+  // Zlicz uzycie kuponu (dopiero po oplaceniu, zeby porzucone platnosci nie liczyly).
+  if (meta.coupon_code) {
+    try {
+      await incrementCouponUsage(meta.coupon_code);
+      console.log(`[WEBHOOK] ✅ Coupon usage incremented: ${meta.coupon_code} (-${meta.discount_amount || 0})`);
+    } catch (e) {
+      console.error("[WEBHOOK] ❌ Failed to increment coupon usage:", e);
+    }
+  }
 
   // Send confirmation email
   try {

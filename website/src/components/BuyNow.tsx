@@ -251,13 +251,59 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
   const [stockLeft, setStockLeft] = useState(9);
   const [showEUR, setShowEUR] = useState(defaultCountry !== "PL");
 
+  // Coupon / discount
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountCents: number } | null>(null);
+  const [couponMsg, setCouponMsg] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+
   // Derived pricing based on country
   const isPoland = formData.country === "PL";
   const isEU = EU_COUNTRIES.has(formData.country);
   const currency = isPoland ? "PLN" : "EUR";
   const productCents = isPoland ? 69900 : 16900;
   const shippingCents = isPoland ? 0 : isEU ? 2000 : 3500;
-  const totalCents = productCents + shippingCents;
+  const discountCents = appliedCoupon?.discountCents || 0;
+  const totalCents = productCents + shippingCents - discountCents;
+
+  // Format kwoty w aktualnej walucie
+  const fmtMoney = (cents: number) =>
+    isPoland
+      ? `${(cents / 100).toFixed(2).replace(/\.00$/, "").replace(".", ",")} zł`
+      : `${(cents / 100).toFixed(0)} EUR`;
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponLoading(true);
+    setCouponMsg("");
+    try {
+      const r = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, currency }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        setAppliedCoupon({ code: d.code, discountCents: d.discountCents });
+        setCouponMsg("");
+      } else {
+        setAppliedCoupon(null);
+        setCouponMsg(d.error || "Nieprawidłowy kupon.");
+      }
+    } catch {
+      setAppliedCoupon(null);
+      setCouponMsg("Błąd połączenia.");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponMsg("");
+  };
 
   useEffect(() => {
     if (session?.user?.email && !formData.email) {
@@ -370,6 +416,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
           ...formData,
           currency,
           shippingCents,
+          couponCode: appliedCoupon?.code || null,
           pickupPoint: isPoland && selectedPoint ? selectedPoint.name : null,
           pickupPointAddress: isPoland && selectedPoint
             ? `${selectedPoint.address.line1}, ${selectedPoint.address.line2}`
@@ -601,6 +648,52 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                       ) : (
                         <span className="text-right text-[#F2EDE3]">{(shippingCents / 100).toFixed(0)} EUR</span>
                       )}
+                      {appliedCoupon && (
+                        <>
+                          <span className="text-[#D8FF3D] text-xs">Kupon {appliedCoupon.code}</span>
+                          <span className="text-right text-[#D8FF3D]">−{fmtMoney(discountCents)}</span>
+                          <span className="km-mono-eyebrow text-[#F2EDE3] pt-2 border-t border-[rgba(242,237,227,0.10)] mt-1">RAZEM</span>
+                          <span className="text-right km-display text-xl text-[#F2EDE3] pt-2 border-t border-[rgba(242,237,227,0.10)] mt-1">{fmtMoney(totalCents)}</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Coupon code */}
+                    <div>
+                      <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
+                        Kod rabatowy
+                      </label>
+                      {appliedCoupon ? (
+                        <div className="flex items-center justify-between p-3 border border-[#D8FF3D]/50 bg-[#D8FF3D]/[0.05]">
+                          <span className="text-sm text-[#F2EDE3]">
+                            <span className="km-mono-eyebrow text-[#D8FF3D]">{appliedCoupon.code}</span>
+                            {" · "}−{fmtMoney(discountCents)}
+                          </span>
+                          <button type="button" onClick={removeCoupon} className="km-mono-eyebrow text-[#F2EDE3]/55 hover:text-[#FF4D2E] ml-3">
+                            Usuń
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={couponInput}
+                            onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyCoupon(); } }}
+                            placeholder="np. MATURA2026"
+                            className={inputClass + " uppercase flex-1"}
+                          />
+                          <button
+                            type="button"
+                            onClick={applyCoupon}
+                            disabled={couponLoading || !couponInput.trim()}
+                            className="px-4 km-mono-eyebrow border border-[#D8FF3D]/50 text-[#D8FF3D] hover:bg-[#D8FF3D] hover:text-[#0B0B0B] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {couponLoading ? "..." : "Zastosuj"}
+                          </button>
+                        </div>
+                      )}
+                      {couponMsg && <p className="text-xs text-[#FF4D2E] mt-2">{couponMsg}</p>}
                     </div>
 
                     {/* Country selector */}
@@ -613,6 +706,9 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                         onChange={(e) => {
                           setFormData({ ...formData, country: e.target.value });
                           setSelectedPoint(null);
+                          // Zmiana waluty uniewaznia zastosowany kupon (np. kwotowy tylko PLN).
+                          setAppliedCoupon(null);
+                          setCouponMsg("");
                         }}
                         className={inputClass + " cursor-pointer"}
                       >
@@ -796,10 +892,16 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                           ↳ {formData.street}, {formData.city} · {formData.country}
                         </div>
                       )}
+                      {appliedCoupon && (
+                        <div className="flex justify-between">
+                          <span className="text-[#D8FF3D]">Kupon {appliedCoupon.code}</span>
+                          <span className="text-[#D8FF3D]">−{fmtMoney(discountCents)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between pt-3 border-t border-[rgba(242,237,227,0.10)] mt-2">
                         <span className="km-mono-eyebrow text-[#F2EDE3]">TOTAL</span>
                         <span className="km-display text-2xl text-[#F2EDE3]">
-                          {isPoland ? "699 zł" : `${(totalCents / 100).toFixed(0)} EUR`}
+                          {fmtMoney(totalCents)}
                         </span>
                       </div>
                     </div>
