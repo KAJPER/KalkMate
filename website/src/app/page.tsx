@@ -8,22 +8,32 @@ import FAQ from "@/components/FAQ";
 import BuyNow from "@/components/BuyNow";
 import Footer from "@/components/Footer";
 import VisitTracker from "@/components/VisitTracker";
+import { homeJsonLd } from "@/lib/seo";
+
+const lang = "pl" as const;
 
 export default function Home() {
   return (
     <>
+      {homeJsonLd(lang).map((json, i) => (
+        <script
+          key={i}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: json }}
+        />
+      ))}
       <VisitTracker />
-      <Navigation />
+      <Navigation lang={lang} />
       <main className="relative overflow-x-clip">
-        <Hero />
-        <HowItWorks />
-        <ExamBenefits />
-        <Specs />
-        <Gallery />
-        <FAQ />
-        <BuyNow />
+        <Hero lang={lang} />
+        <HowItWorks lang={lang} />
+        <ExamBenefits lang={lang} />
+        <Specs lang={lang} />
+        <Gallery lang={lang} />
+        <FAQ lang={lang} />
+        <BuyNow lang={lang} />
       </main>
-      <Footer />
+      <Footer lang={lang} />
     </>
   );
 }

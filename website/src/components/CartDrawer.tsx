@@ -4,12 +4,78 @@ import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/components/CartContext";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { localeFromPathname, type Locale } from "@/lib/i18n";
 
 function formatPLN(grosze: number) {
   return `${(grosze / 100).toLocaleString("pl-PL")} zł`;
 }
 
+const content: Record<Locale, {
+  heading: string;
+  itemCount: (n: number) => string;
+  closeCart: string;
+  emptyTitle: string;
+  emptyBody: string;
+  continueShopping: string;
+  perUnit: string;
+  removeFromCart: string;
+  products: string;
+  shipping: string;
+  free: string;
+  total: string;
+  goToCart: string;
+}> = {
+  pl: {
+    heading: "/ Koszyk",
+    itemCount: (n) => `${n} ${n === 1 ? "produkt" : n < 5 ? "produkty" : "produktów"}`,
+    closeCart: "Zamknij koszyk",
+    emptyTitle: "Koszyk jest pusty",
+    emptyBody: "Dodaj KalkMate do koszyka, aby kontynuować.",
+    continueShopping: "Kontynuuj zakupy",
+    perUnit: "/ szt.",
+    removeFromCart: "Usuń z koszyka",
+    products: "Produkty",
+    shipping: "Wysyłka InPost",
+    free: "GRATIS",
+    total: "Razem",
+    goToCart: "Przejdź do koszyka →",
+  },
+  en: {
+    heading: "/ Cart",
+    itemCount: (n) => `${n} ${n === 1 ? "item" : "items"}`,
+    closeCart: "Close cart",
+    emptyTitle: "Your cart is empty",
+    emptyBody: "Add KalkMate to your cart to continue.",
+    continueShopping: "Continue shopping",
+    perUnit: "/ ea.",
+    removeFromCart: "Remove from cart",
+    products: "Products",
+    shipping: "InPost shipping",
+    free: "FREE",
+    total: "Total",
+    goToCart: "Go to cart →",
+  },
+  de: {
+    heading: "/ Warenkorb",
+    itemCount: (n) => `${n} Artikel`,
+    closeCart: "Warenkorb schließen",
+    emptyTitle: "Ihr Warenkorb ist leer",
+    emptyBody: "Fügen Sie KalkMate zum Warenkorb hinzu, um fortzufahren.",
+    continueShopping: "Weiter einkaufen",
+    perUnit: "/ Stk.",
+    removeFromCart: "Aus dem Warenkorb entfernen",
+    products: "Produkte",
+    shipping: "InPost-Versand",
+    free: "GRATIS",
+    total: "Gesamt",
+    goToCart: "Zum Warenkorb →",
+  },
+};
+
 export default function CartDrawer() {
+  const lang = localeFromPathname(usePathname());
+  const t = content[lang];
   const {
     items,
     removeItem,
@@ -65,18 +131,18 @@ export default function CartDrawer() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
               <div className="flex items-center gap-3">
                 <span className="km-mono-eyebrow text-[#D8FF3D]">
-                  / Koszyk
+                  {t.heading}
                 </span>
                 {totalItems > 0 && (
                   <span className="km-mono-eyebrow text-[#F2EDE3]/50">
-                    · {totalItems} {totalItems === 1 ? "produkt" : totalItems < 5 ? "produkty" : "produktów"}
+                    · {t.itemCount(totalItems)}
                   </span>
                 )}
               </div>
               <button
                 onClick={closeDrawer}
                 className="w-8 h-8 border border-[rgba(242,237,227,0.20)] flex items-center justify-center text-[#F2EDE3] hover:bg-[#F2EDE3] hover:text-[#0B0B0B] transition-colors"
-                aria-label="Zamknij koszyk"
+                aria-label={t.closeCart}
               >
                 ✕
               </button>
@@ -102,16 +168,16 @@ export default function CartDrawer() {
                     </svg>
                   </div>
                   <p className="km-display text-2xl text-[#F2EDE3] mb-2">
-                    Koszyk jest pusty
+                    {t.emptyTitle}
                   </p>
                   <p className="text-sm text-[#F2EDE3]/50 mb-6">
-                    Dodaj KalkMate do koszyka, aby kontynuować.
+                    {t.emptyBody}
                   </p>
                   <button
                     onClick={closeDrawer}
                     className="px-6 py-3 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow hover:bg-[#F2EDE3] transition-colors"
                   >
-                    Kontynuuj zakupy
+                    {t.continueShopping}
                   </button>
                 </div>
               ) : (
@@ -130,13 +196,13 @@ export default function CartDrawer() {
                             {item.name}
                           </p>
                           <p className="text-sm text-[#F2EDE3]/50 mt-1">
-                            {formatPLN(item.price)} / szt.
+                            {formatPLN(item.price)} {t.perUnit}
                           </p>
                         </div>
                         <button
                           onClick={() => removeItem(item.id)}
                           className="text-[#F2EDE3]/30 hover:text-[#FF4D2E] transition-colors p-1"
-                          aria-label="Usuń z koszyka"
+                          aria-label={t.removeFromCart}
                         >
                           <svg
                             width="16"
@@ -191,22 +257,22 @@ export default function CartDrawer() {
               <div className="border-t border-[rgba(242,237,227,0.10)] p-6 space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#F2EDE3]/65">Produkty</span>
+                    <span className="text-[#F2EDE3]/65">{t.products}</span>
                     <span className="text-[#F2EDE3]">
                       {formatPLN(totalPrice)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-[#F2EDE3]/65">
-                      Wysyłka InPost
+                      {t.shipping}
                     </span>
                     <span className="km-mono-eyebrow text-[#D8FF3D]">
-                      GRATIS
+                      {t.free}
                     </span>
                   </div>
                   <div className="flex justify-between pt-3 border-t border-[rgba(242,237,227,0.10)]">
                     <span className="km-mono-eyebrow text-[#F2EDE3]">
-                      Razem
+                      {t.total}
                     </span>
                     <span className="km-display text-2xl text-[#F2EDE3]">
                       {formatPLN(totalPrice)}
@@ -219,14 +285,14 @@ export default function CartDrawer() {
                   onClick={closeDrawer}
                   className="block w-full py-4 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow text-center hover:bg-[#F2EDE3] transition-colors"
                 >
-                  Przejdź do koszyka →
+                  {t.goToCart}
                 </Link>
 
                 <button
                   onClick={closeDrawer}
                   className="block w-full py-3 km-mono-eyebrow text-[#F2EDE3]/60 hover:text-[#F2EDE3] transition-colors text-center"
                 >
-                  Kontynuuj zakupy
+                  {t.continueShopping}
                 </button>
               </div>
             )}

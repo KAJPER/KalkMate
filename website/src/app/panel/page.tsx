@@ -8,8 +8,896 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import MessageRenderer from "@/components/MessageRenderer";
 import { TOKEN_PACKS } from "@/lib/tokenPacks";
+import { usePanelLang } from "@/lib/usePanelLang";
+import PanelLangSwitcher from "@/components/PanelLangSwitcher";
+import { type Locale } from "@/lib/i18n";
+
+const DATE_LOCALE: Record<Locale, string> = { pl: "pl-PL", en: "en-GB", de: "de-DE" };
+
+const PANEL_DICT: Record<Locale, {
+  // header / heading
+  logout: string;
+  logoutLong: string;
+  yourPanel: string;
+  greeting: (name: React.ReactNode) => React.ReactNode;
+  sessionActive: string;
+  loading: string;
+  // tabs
+  tabsOrders: string;
+  tabsChat: string;
+  tabsSubscription: string;
+  tabsAi: string;
+  tabsCalculator: string;
+  tabsNotes: string;
+  tabsTests: string;
+  tabsSettings: string;
+  // alerts / messages
+  alertPaymentStart: string;
+  alertNetwork: string;
+  alertSaveFailed: string;
+  errGeneric: string;
+  pwTooShort: string;
+  pwMismatch: string;
+  pwChanged: string;
+  emailChanged: string;
+  alertNoDeviceUnpair: string;
+  confirmUnpair: (id: string) => string;
+  alertError: string;
+  confirmDeleteNote: string;
+  confirmDeleteTest: string;
+  confirmDeleteConversation: string;
+  errPairFailed: string;
+  errNetwork: string;
+  newConversationTitle: string;
+  fileAttached: string;
+  serverError: (status: number) => string;
+  tryAgain: string;
+  subCreateFailed: string;
+  enterLicenseCode: string;
+  licenseRedeemFailed: string;
+  licenseRedeemError: string;
+  confirmCancelSub: string;
+  subCancelled: string;
+  subCancelFailed: string;
+  // orders
+  ordersHeading: string;
+  ordersSubtitle: string;
+  ordersEmpty: string;
+  ordersCta: string;
+  orderNo: (n: string) => string;
+  statusPaid: string;
+  statusPending: string;
+  statusCancelled: string;
+  amount: string;
+  pickupPoint: string;
+  shipmentStatus: string;
+  shipped: string;
+  awaitingShipment: string;
+  trackingNumber: string;
+  // chat
+  chatHistories: string;
+  newConversation: string;
+  deleteTitle: string;
+  messagesCount: (n: number) => string;
+  noConversations: string;
+  hideHistory: string;
+  showHistory: string;
+  chatTitle: string;
+  chatSubtitle: string;
+  newChat: string;
+  chatStart: string;
+  chatStartDesc: string;
+  subjMath: string;
+  subjMathLevel: string;
+  subjPhysics: string;
+  subjExtended: string;
+  subjChemistry: string;
+  subjBiology: string;
+  copyAnswer: string;
+  copied: string;
+  copy: string;
+  thinking: string;
+  removeFile: string;
+  chatPlaceholder: string;
+  attachFile: string;
+  send: string;
+  // subscription
+  subHeading: string;
+  subSubtitle: string;
+  status: string;
+  statusTrial: string;
+  statusActive: string;
+  statusInactive: string;
+  assignedLicense: string;
+  daysWord: (n: number) => string;
+  activatedOn: (d: string) => string;
+  notActivated: string;
+  unpinning: string;
+  unpin: string;
+  haveLicenseCode: string;
+  enterCodeToExtend: string;
+  licenseCodePlaceholder: string;
+  redeeming: string;
+  redeem: string;
+  trialPeriod: (n: number) => string;
+  extraTrialDays: string;
+  trialEnds: (d: string) => string;
+  trialExpiredOwner: string;
+  trialExpired: string;
+  choosePlan: string;
+  promo98: string;
+  secondMonth: string;
+  loadingBtn: string;
+  choose1zl: string;
+  fixedPrice: string;
+  nextMonths: string;
+  choose15zl: string;
+  securePayment: string;
+  ownerCanUseChat: string;
+  paidSubActive: string;
+  feeLine: string;
+  perMonthFee: string;
+  savesYou: string;
+  renewsOn: (d: string) => string;
+  cancelSub: string;
+  // ai tab
+  tokenUsage: string;
+  effectiveTokens: string;
+  used: string;
+  remaining: string;
+  tasksLeftLabel: string;
+  maturaTasks: string;
+  monthlyLimit: string;
+  forModel: (m: string) => string;
+  defaultModel: string;
+  modelPerformance: string;
+  tasksAbbr: string;
+  tokenEstimateNote: string;
+  buyTokens: string;
+  buyTokensDesc: string;
+  popular: string;
+  packLabel: (tokens: number) => string;
+  maturaTasksApprox: string;
+  redirecting: string;
+  buy: string;
+  aiModelHeading: string;
+  aiModelDesc: string;
+  aiModeHeading: string;
+  maturaCke: string;
+  maturaCkeTitle: string;
+  rawAi: string;
+  rawAiTitle: string;
+  rawModeDesc: string;
+  maturaModeDesc: string;
+  // calculator
+  pairCalculator: string;
+  addYourDevice: string;
+  deviceWord: string;
+  pairIntro1: string;
+  pairIntro2: string;
+  pairIntro3: string;
+  pairWarning: string;
+  deviceIdLabel: string;
+  unlockCodeLabel: string;
+  pairing: string;
+  pairButton: string;
+  errorLabel: string;
+  paired: string;
+  deviceAdded: string;
+  yourDevice: string;
+  license: string;
+  firmware: string;
+  requests: string;
+  aiModeAndModel: string;
+  aiModeSetInTab: (link: React.ReactNode) => React.ReactNode;
+  photoGallery: string;
+  photosCount: (n: string) => string;
+  noPhotos: string;
+  solutionHistory: string;
+  recordsCount: (n: string) => string;
+  noTasksSolved: string;
+  photo: string;
+  close: string;
+  solution: string;
+  task: string;
+  // notes
+  calcRequired: string;
+  pairFirst: (link: React.ReactNode) => React.ReactNode;
+  notesOffline: (n: number) => string;
+  syncToDevice: string;
+  editNote: string;
+  newNote: string;
+  noteTitlePlaceholder: string;
+  noteContentPlaceholder: string;
+  cancel: string;
+  saving: string;
+  save: string;
+  add: string;
+  noNotes: string;
+  noTitle: string;
+  empty: string;
+  edit: string;
+  delete: string;
+  // tests
+  testsHeading: (n: number) => string;
+  markdownOk: string;
+  editTest: string;
+  newTest: string;
+  testTitlePlaceholder: string;
+  testContentPlaceholder: string;
+  noTests: string;
+  charsCount: (n: number) => string;
+  // settings
+  account: string;
+  loggedInAs: string;
+  changePassword: string;
+  currentPassword: string;
+  newPassword: string;
+  repeatNewPassword: string;
+  changePasswordBtn: string;
+  changeEmail: string;
+  newEmail: string;
+  confirmWithPassword: string;
+  changeEmailBtn: string;
+  emailChangeNote: string;
+  session: string;
+}> = {
+  pl: {
+    logout: "Wyloguj ↗",
+    logoutLong: "Wyloguj się ↗",
+    yourPanel: "[ 00 ] · Twój panel",
+    greeting: (n) => <>Witaj, {n}.</>,
+    sessionActive: "Sesja aktywna",
+    loading: "Ładowanie...",
+    tabsOrders: "Zamówienia",
+    tabsChat: "AI Chat",
+    tabsSubscription: "Subskrypcja",
+    tabsAi: "AI",
+    tabsCalculator: "Kalkulator",
+    tabsNotes: "Notatki",
+    tabsTests: "Sprawdziany",
+    tabsSettings: "Ustawienia konta",
+    alertPaymentStart: "Nie udało się rozpocząć płatności",
+    alertNetwork: "Błąd sieci",
+    alertSaveFailed: "Nie udało się zapisać",
+    errGeneric: "Błąd",
+    pwTooShort: "Nowe hasło musi mieć min. 6 znaków",
+    pwMismatch: "Hasła nie są takie same",
+    pwChanged: "Hasło zostało zmienione.",
+    emailChanged: "Email zmieniony. Za chwilę nastąpi wylogowanie...",
+    alertNoDeviceUnpair: "Brak urzadzenia do odpiecia.",
+    confirmUnpair: (id) => `Odepnac urzadzenie ${id}? Bedziesz mogl je sparowac ponownie.`,
+    alertError: "Blad",
+    confirmDeleteNote: "Usunac notatke?",
+    confirmDeleteTest: "Usunac sprawdzian?",
+    confirmDeleteConversation: "Czy na pewno chcesz usunąć tę konwersację?",
+    errPairFailed: "Nie udalo sie sparowac",
+    errNetwork: "Blad sieci",
+    newConversationTitle: "Nowa konwersacja",
+    fileAttached: "(plik załączony)",
+    serverError: (s) => `Błąd serwera (${s})`,
+    tryAgain: "Spróbuj ponownie.",
+    subCreateFailed: "Nie udało się utworzyć subskrypcji. Spróbuj ponownie.",
+    enterLicenseCode: "Wprowadź kod licencji",
+    licenseRedeemFailed: "Nie udało się zrealizować licencji",
+    licenseRedeemError: "Wystąpił błąd podczas realizacji licencji",
+    confirmCancelSub: "Czy na pewno chcesz anulować subskrypcję?",
+    subCancelled: "Subskrypcja została anulowana.",
+    subCancelFailed: "Nie udało się anulować subskrypcji.",
+    ordersHeading: "Historia zamówień",
+    ordersSubtitle: "Twoje zamówienia i status wysyłek",
+    ordersEmpty: "Nie masz jeszcze żadnych zamówień",
+    ordersCta: "Zamów KalkMate",
+    orderNo: (n) => `Zamówienie #${n}`,
+    statusPaid: "✓ Opłacone",
+    statusPending: "⏳ Oczekuje",
+    statusCancelled: "✗ Anulowane",
+    amount: "Kwota",
+    pickupPoint: "Punkt odbioru",
+    shipmentStatus: "Status wysyłki",
+    shipped: "📦 Wysłane",
+    awaitingShipment: "⏰ Oczekuje",
+    trackingNumber: "Numer przesyłki",
+    chatHistories: "Historie",
+    newConversation: "Nowa konwersacja",
+    deleteTitle: "Usuń",
+    messagesCount: (n) => `${n} wiadomości`,
+    noConversations: "Brak konwersacji",
+    hideHistory: "Ukryj historię",
+    showHistory: "Pokaż historię",
+    chatTitle: "AI Chat - KalkMate Pro",
+    chatSubtitle: "Rozwiązuj zadania z matematyki, fizyki, chemii i biologii",
+    newChat: "Nowy chat",
+    chatStart: "Rozpocznij rozmowę z AI",
+    chatStartDesc: "Wklej treść zadania z matematyki, fizyki, chemii lub biologii, a AI pomoże Ci je rozwiązać zgodnie z zasadami CKE",
+    subjMath: "Matematyka",
+    subjMathLevel: "Podstawowy i rozszerzony",
+    subjPhysics: "Fizyka",
+    subjExtended: "Poziom rozszerzony",
+    subjChemistry: "Chemia",
+    subjBiology: "Biologia",
+    copyAnswer: "Kopiuj odpowiedź",
+    copied: "Skopiowano",
+    copy: "Kopiuj",
+    thinking: "Myślę...",
+    removeFile: "Usuń",
+    chatPlaceholder: "Wklej treść zadania lub dołącz zdjęcie (Ctrl+V działa też dla obrazów)...",
+    attachFile: "Załącz plik (maks. 5 x 10MB)",
+    send: "Wyślij",
+    subHeading: "Subskrypcja AI Chat",
+    subSubtitle: "Zarządzaj dostępem do AI Chat",
+    status: "Status",
+    statusTrial: "🎁 Okres próbny",
+    statusActive: "✓ Aktywna",
+    statusInactive: "✗ Nieaktywna",
+    assignedLicense: "Przypisana licencja",
+    daysWord: (n) => `${n} dni`,
+    activatedOn: (d) => ` · aktywowana ${d}`,
+    notActivated: " · nieaktywowana",
+    unpinning: "Odpinanie...",
+    unpin: "Odepnij",
+    haveLicenseCode: "Masz kod licencji?",
+    enterCodeToExtend: "Wprowadź kod, aby przedłużyć dostęp do AI Chat",
+    licenseCodePlaceholder: "abcd123-+=%abcd",
+    redeeming: "Realizuję...",
+    redeem: "Realizuj",
+    trialPeriod: (n) => `Okres próbny: ${n} dni pozostało`,
+    extraTrialDays: "✨ Dodatkowe 30 dni za zakup kalkulatora!",
+    trialEnds: (d) => `Kończy się: ${d}`,
+    trialExpiredOwner: "Twój okres próbny wygasł. Możesz kontynuować korzystanie z AI Chat aktywując subskrypcję.",
+    trialExpired: "Twój okres próbny wygasł. Aktywuj subskrypcję, aby kontynuować korzystanie z AI Chat.",
+    choosePlan: "Wybierz plan subskrypcji",
+    promo98: "🔥 Promocja -98%",
+    secondMonth: "Drugi miesiąc",
+    loadingBtn: "Ładowanie...",
+    choose1zl: "Wybierz 1 zł",
+    fixedPrice: "💎 Stała cena",
+    nextMonths: "Kolejne miesiące",
+    choose15zl: "Wybierz 15 zł",
+    securePayment: "💳 Bezpieczna płatność przez Stripe • Anuluj w każdej chwili",
+    ownerCanUseChat: "💡 Jako właściciel kalkulatora możesz korzystać z AI Chat przez subskrypcję. To opcjonalne - kalkulator działa niezależnie.",
+    paidSubActive: "✓ Płatna subskrypcja aktywna",
+    feeLine: "Opłata:",
+    perMonthFee: "15 zł/miesiąc",
+    savesYou: "(oszczędzasz 67%)",
+    renewsOn: (d) => `Odnawia się: ${d}`,
+    cancelSub: "Anuluj subskrypcję",
+    tokenUsage: "/ Zużycie tokenów",
+    effectiveTokens: "/ 1 000 000 efektywnych tokenów",
+    used: "ZUŻYTE",
+    remaining: "POZOSTAŁO:",
+    tasksLeftLabel: "Zadań zostało",
+    maturaTasks: "zadań maturalnych",
+    monthlyLimit: "Limit na miesiąc",
+    forModel: (m) => `dla modelu ${m}`,
+    defaultModel: "domyślnego",
+    modelPerformance: "WYDAJNOŚĆ MODELI — ile zadań z 1 mln tokenów",
+    tasksAbbr: "zad.",
+    tokenEstimateNote: "Szacunek dla typowego zadania maturalnego (~800 realnych tokenów wejście + odpowiedź). Tokeny odnawiają się razem z subskrypcją.",
+    buyTokens: "/ Kup tokeny",
+    buyTokensDesc: "Doładuj saldo tokenów. Płatność jednorazowa (karta / BLIK / Przelewy24) — tokeny dodają się od razu po opłaceniu.",
+    popular: "POPULARNY",
+    packLabel: (t) => `${t / 1_000_000} mln tokenów`,
+    maturaTasksApprox: "zadań maturalnych",
+    redirecting: "Przekierowanie...",
+    buy: "Kup",
+    aiModelHeading: "/ Model AI",
+    aiModelDesc: "Wybierz model. Mnożnik (×) pokazuje ile efektywnych tokenów kosztuje jedno zapytanie w stosunku do najtańszego.",
+    aiModeHeading: "/ Tryb AI",
+    maturaCke: "Matura (CKE)",
+    maturaCkeTitle: "Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)",
+    rawAi: "Czysty AI",
+    rawAiTitle: "Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)",
+    rawModeDesc: "Tryb uniwersalny — AI nie zakłada matury. Działa dla elektroniki, informatyki, języków itp.",
+    maturaModeDesc: "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia).",
+    pairCalculator: "Sparuj kalkulator",
+    addYourDevice: "Dodaj swoje",
+    deviceWord: "urządzenie",
+    pairIntro1: "Wpisz ",
+    pairIntro2: " z kalkulatora (Settings → Device ID + QR) oraz ",
+    pairIntro3: " (Settings → Kod AI).",
+    pairWarning: "⚠ Kalkulator musi być najpierw połączony z WiFi i zgłosić się do serwera.",
+    deviceIdLabel: "Device ID (MAC)",
+    unlockCodeLabel: "Kod odblokowania",
+    pairing: "Parowanie...",
+    pairButton: "Sparuj urządzenie",
+    errorLabel: "/ ERROR",
+    paired: "✓ Sparowano",
+    deviceAdded: "Urządzenie dodane do konta.",
+    yourDevice: "Twoje",
+    license: "Licencja",
+    firmware: "Firmware",
+    requests: "Zapytan",
+    aiModeAndModel: "/ Tryb AI i model",
+    aiModeSetInTab: (link) => <>Model AI oraz tryb (Matura / Czysty AI) ustawisz w zakładce {link}.</>,
+    photoGallery: "/ Galeria zdjęć",
+    photosCount: (n) => `${n} ZDJĘĆ`,
+    noPhotos: "Brak zdjęć. Zrób kamerą zdjęcie zadania w kalkulatorze.",
+    solutionHistory: "/ Historia rozwiązań",
+    recordsCount: (n) => `${n} REKORDÓW`,
+    noTasksSolved: "Żadnych zadań jeszcze nie rozwiązano.",
+    photo: "📷 Zdjęcie",
+    close: "Zamknij ×",
+    solution: "/ Rozwiązanie",
+    task: "Zadanie",
+    calcRequired: "/ wymagany kalkulator",
+    pairFirst: (link) => <>Najpierw sparuj kalkulator w zakładce {link}.</>,
+    notesOffline: (n) => `Notatki offline (${n}/50)`,
+    syncToDevice: "Sync do urzadzenia przy WiFi",
+    editNote: "Edytuj notatke",
+    newNote: "Nowa notatka",
+    noteTitlePlaceholder: "Tytul (max 60 znakow)",
+    noteContentPlaceholder: "Tresc (max 4000 znakow - wzory, definicje)",
+    cancel: "Anuluj",
+    saving: "Zapisuje...",
+    save: "Zapisz",
+    add: "Dodaj",
+    noNotes: "Brak notatek.",
+    noTitle: "(bez tytulu)",
+    empty: "(pusta)",
+    edit: "Edytuj",
+    delete: "Usun",
+    testsHeading: (n) => `Sprawdziany (${n}/50)`,
+    markdownOk: "Markdown/LaTeX OK",
+    editTest: "Edytuj sprawdzian",
+    newTest: "Nowy sprawdzian",
+    testTitlePlaceholder: "Tytul (np. Matma 2026 - probna 1)",
+    testContentPlaceholder: "Wklej tutaj rozwiazanie (markdown, LaTeX, $..$, **bold**...)",
+    noTests: "Brak sprawdzianow.",
+    charsCount: (n) => `${n} znakow`,
+    account: "/ Konto",
+    loggedInAs: "Zalogowany jako",
+    changePassword: "/ Zmiana hasła",
+    currentPassword: "Aktualne hasło",
+    newPassword: "Nowe hasło (min. 6 znaków)",
+    repeatNewPassword: "Powtórz nowe hasło",
+    changePasswordBtn: "Zmień hasło",
+    changeEmail: "/ Zmiana adresu email",
+    newEmail: "Nowy adres email",
+    confirmWithPassword: "Potwierdź hasłem",
+    changeEmailBtn: "Zmień email",
+    emailChangeNote: "Po zmianie emaila nastąpi wylogowanie — zaloguj się nowym adresem.",
+    session: "/ Sesja",
+  },
+  en: {
+    logout: "Log out ↗",
+    logoutLong: "Log out ↗",
+    yourPanel: "[ 00 ] · Your panel",
+    greeting: (n) => <>Welcome, {n}.</>,
+    sessionActive: "Session active",
+    loading: "Loading...",
+    tabsOrders: "Orders",
+    tabsChat: "AI Chat",
+    tabsSubscription: "Subscription",
+    tabsAi: "AI",
+    tabsCalculator: "Calculator",
+    tabsNotes: "Notes",
+    tabsTests: "Tests",
+    tabsSettings: "Account settings",
+    alertPaymentStart: "Could not start the payment",
+    alertNetwork: "Network error",
+    alertSaveFailed: "Could not save",
+    errGeneric: "Error",
+    pwTooShort: "New password must be at least 6 characters",
+    pwMismatch: "Passwords do not match",
+    pwChanged: "Password has been changed.",
+    emailChanged: "Email changed. You will be logged out shortly...",
+    alertNoDeviceUnpair: "No device to unpair.",
+    confirmUnpair: (id) => `Unpair device ${id}? You will be able to pair it again.`,
+    alertError: "Error",
+    confirmDeleteNote: "Delete note?",
+    confirmDeleteTest: "Delete test?",
+    confirmDeleteConversation: "Are you sure you want to delete this conversation?",
+    errPairFailed: "Could not pair",
+    errNetwork: "Network error",
+    newConversationTitle: "New conversation",
+    fileAttached: "(file attached)",
+    serverError: (s) => `Server error (${s})`,
+    tryAgain: "Please try again.",
+    subCreateFailed: "Could not create subscription. Please try again.",
+    enterLicenseCode: "Enter a license code",
+    licenseRedeemFailed: "Could not redeem the license",
+    licenseRedeemError: "An error occurred while redeeming the license",
+    confirmCancelSub: "Are you sure you want to cancel the subscription?",
+    subCancelled: "Subscription has been cancelled.",
+    subCancelFailed: "Could not cancel the subscription.",
+    ordersHeading: "Order history",
+    ordersSubtitle: "Your orders and shipping status",
+    ordersEmpty: "You don't have any orders yet",
+    ordersCta: "Order KalkMate",
+    orderNo: (n) => `Order #${n}`,
+    statusPaid: "✓ Paid",
+    statusPending: "⏳ Pending",
+    statusCancelled: "✗ Cancelled",
+    amount: "Amount",
+    pickupPoint: "Pickup point",
+    shipmentStatus: "Shipping status",
+    shipped: "📦 Shipped",
+    awaitingShipment: "⏰ Pending",
+    trackingNumber: "Tracking number",
+    chatHistories: "History",
+    newConversation: "New conversation",
+    deleteTitle: "Delete",
+    messagesCount: (n) => `${n} messages`,
+    noConversations: "No conversations",
+    hideHistory: "Hide history",
+    showHistory: "Show history",
+    chatTitle: "AI Chat - KalkMate Pro",
+    chatSubtitle: "Solve problems in math, physics, chemistry and biology",
+    newChat: "New chat",
+    chatStart: "Start a conversation with the AI",
+    chatStartDesc: "Paste a math, physics, chemistry or biology problem and the AI will help you solve it following CKE standards",
+    subjMath: "Mathematics",
+    subjMathLevel: "Basic and extended",
+    subjPhysics: "Physics",
+    subjExtended: "Extended level",
+    subjChemistry: "Chemistry",
+    subjBiology: "Biology",
+    copyAnswer: "Copy answer",
+    copied: "Copied",
+    copy: "Copy",
+    thinking: "Thinking...",
+    removeFile: "Remove",
+    chatPlaceholder: "Paste your problem or attach a photo (Ctrl+V works for images too)...",
+    attachFile: "Attach file (max 5 x 10MB)",
+    send: "Send",
+    subHeading: "AI Chat subscription",
+    subSubtitle: "Manage access to AI Chat",
+    status: "Status",
+    statusTrial: "🎁 Trial period",
+    statusActive: "✓ Active",
+    statusInactive: "✗ Inactive",
+    assignedLicense: "Assigned license",
+    daysWord: (n) => `${n} days`,
+    activatedOn: (d) => ` · activated ${d}`,
+    notActivated: " · not activated",
+    unpinning: "Unpinning...",
+    unpin: "Unpin",
+    haveLicenseCode: "Have a license code?",
+    enterCodeToExtend: "Enter a code to extend your AI Chat access",
+    licenseCodePlaceholder: "abcd123-+=%abcd",
+    redeeming: "Redeeming...",
+    redeem: "Redeem",
+    trialPeriod: (n) => `Trial period: ${n} days remaining`,
+    extraTrialDays: "✨ Extra 30 days for purchasing the calculator!",
+    trialEnds: (d) => `Ends on: ${d}`,
+    trialExpiredOwner: "Your trial period has expired. You can keep using AI Chat by activating a subscription.",
+    trialExpired: "Your trial period has expired. Activate a subscription to keep using AI Chat.",
+    choosePlan: "Choose a subscription plan",
+    promo98: "🔥 Promo -98%",
+    secondMonth: "Second month",
+    loadingBtn: "Loading...",
+    choose1zl: "Choose 1 zł",
+    fixedPrice: "💎 Fixed price",
+    nextMonths: "Following months",
+    choose15zl: "Choose 15 zł",
+    securePayment: "💳 Secure payment via Stripe • Cancel anytime",
+    ownerCanUseChat: "💡 As a calculator owner you can use AI Chat via subscription. It's optional - the calculator works independently.",
+    paidSubActive: "✓ Paid subscription active",
+    feeLine: "Fee:",
+    perMonthFee: "15 zł/month",
+    savesYou: "(you save 67%)",
+    renewsOn: (d) => `Renews on: ${d}`,
+    cancelSub: "Cancel subscription",
+    tokenUsage: "/ Token usage",
+    effectiveTokens: "/ 1,000,000 effective tokens",
+    used: "USED",
+    remaining: "REMAINING:",
+    tasksLeftLabel: "Tasks left",
+    maturaTasks: "exam problems",
+    monthlyLimit: "Monthly limit",
+    forModel: (m) => `for model ${m}`,
+    defaultModel: "default",
+    modelPerformance: "MODEL EFFICIENCY — tasks per 1M tokens",
+    tasksAbbr: "tasks",
+    tokenEstimateNote: "Estimate for a typical exam problem (~800 real tokens input + answer). Tokens renew with your subscription.",
+    buyTokens: "/ Buy tokens",
+    buyTokensDesc: "Top up your token balance. One-time payment (card / BLIK / Przelewy24) — tokens are added immediately after payment.",
+    popular: "POPULAR",
+    packLabel: (t) => `${t / 1_000_000}M tokens`,
+    maturaTasksApprox: "exam problems",
+    redirecting: "Redirecting...",
+    buy: "Buy",
+    aiModelHeading: "/ AI Model",
+    aiModelDesc: "Choose a model. The multiplier (×) shows how many effective tokens one query costs relative to the cheapest one.",
+    aiModeHeading: "/ AI Mode",
+    maturaCke: "Exam (CKE)",
+    maturaCkeTitle: "Specialized prompt for CKE exam problems (math, physics, chemistry, biology)",
+    rawAi: "Raw AI",
+    rawAiTitle: "No exam restrictions - any subject (electronics, IT, languages...)",
+    rawModeDesc: "Universal mode — the AI doesn't assume an exam context. Works for electronics, IT, languages, etc.",
+    maturaModeDesc: "Exam mode — the AI answers in CKE format (math/physics/chemistry/biology).",
+    pairCalculator: "Pair calculator",
+    addYourDevice: "Add your",
+    deviceWord: "device",
+    pairIntro1: "Enter the ",
+    pairIntro2: " from the calculator (Settings → Device ID + QR) and the ",
+    pairIntro3: " (Settings → AI code).",
+    pairWarning: "⚠ The calculator must first be connected to WiFi and report to the server.",
+    deviceIdLabel: "Device ID (MAC)",
+    unlockCodeLabel: "Unlock code",
+    pairing: "Pairing...",
+    pairButton: "Pair device",
+    errorLabel: "/ ERROR",
+    paired: "✓ Paired",
+    deviceAdded: "Device added to your account.",
+    yourDevice: "Your",
+    license: "License",
+    firmware: "Firmware",
+    requests: "Requests",
+    aiModeAndModel: "/ AI mode and model",
+    aiModeSetInTab: (link) => <>Set the AI model and mode (Exam / Raw AI) in the {link} tab.</>,
+    photoGallery: "/ Photo gallery",
+    photosCount: (n) => `${n} PHOTOS`,
+    noPhotos: "No photos. Take a photo of a problem with the calculator's camera.",
+    solutionHistory: "/ Solution history",
+    recordsCount: (n) => `${n} RECORDS`,
+    noTasksSolved: "No problems solved yet.",
+    photo: "📷 Photo",
+    close: "Close ×",
+    solution: "/ Solution",
+    task: "Problem",
+    calcRequired: "/ calculator required",
+    pairFirst: (link) => <>First pair the calculator in the {link} tab.</>,
+    notesOffline: (n) => `Offline notes (${n}/50)`,
+    syncToDevice: "Syncs to device over WiFi",
+    editNote: "Edit note",
+    newNote: "New note",
+    noteTitlePlaceholder: "Title (max 60 chars)",
+    noteContentPlaceholder: "Content (max 4000 chars - formulas, definitions)",
+    cancel: "Cancel",
+    saving: "Saving...",
+    save: "Save",
+    add: "Add",
+    noNotes: "No notes.",
+    noTitle: "(no title)",
+    empty: "(empty)",
+    edit: "Edit",
+    delete: "Delete",
+    testsHeading: (n) => `Tests (${n}/50)`,
+    markdownOk: "Markdown/LaTeX OK",
+    editTest: "Edit test",
+    newTest: "New test",
+    testTitlePlaceholder: "Title (e.g. Math 2026 - mock 1)",
+    testContentPlaceholder: "Paste the solution here (markdown, LaTeX, $..$, **bold**...)",
+    noTests: "No tests.",
+    charsCount: (n) => `${n} chars`,
+    account: "/ Account",
+    loggedInAs: "Logged in as",
+    changePassword: "/ Change password",
+    currentPassword: "Current password",
+    newPassword: "New password (min. 6 chars)",
+    repeatNewPassword: "Repeat new password",
+    changePasswordBtn: "Change password",
+    changeEmail: "/ Change email address",
+    newEmail: "New email address",
+    confirmWithPassword: "Confirm with password",
+    changeEmailBtn: "Change email",
+    emailChangeNote: "After changing your email you will be logged out — sign in with the new address.",
+    session: "/ Session",
+  },
+  de: {
+    logout: "Abmelden ↗",
+    logoutLong: "Abmelden ↗",
+    yourPanel: "[ 00 ] · Dein Panel",
+    greeting: (n) => <>Willkommen, {n}.</>,
+    sessionActive: "Sitzung aktiv",
+    loading: "Lädt...",
+    tabsOrders: "Bestellungen",
+    tabsChat: "AI Chat",
+    tabsSubscription: "Abonnement",
+    tabsAi: "AI",
+    tabsCalculator: "Rechner",
+    tabsNotes: "Notizen",
+    tabsTests: "Klassenarbeiten",
+    tabsSettings: "Kontoeinstellungen",
+    alertPaymentStart: "Zahlung konnte nicht gestartet werden",
+    alertNetwork: "Netzwerkfehler",
+    alertSaveFailed: "Speichern fehlgeschlagen",
+    errGeneric: "Fehler",
+    pwTooShort: "Das neue Passwort muss mindestens 6 Zeichen haben",
+    pwMismatch: "Die Passwörter stimmen nicht überein",
+    pwChanged: "Passwort wurde geändert.",
+    emailChanged: "E-Mail geändert. Du wirst gleich abgemeldet...",
+    alertNoDeviceUnpair: "Kein Gerät zum Entkoppeln.",
+    confirmUnpair: (id) => `Gerät ${id} entkoppeln? Du kannst es erneut koppeln.`,
+    alertError: "Fehler",
+    confirmDeleteNote: "Notiz löschen?",
+    confirmDeleteTest: "Klassenarbeit löschen?",
+    confirmDeleteConversation: "Möchtest du diese Unterhaltung wirklich löschen?",
+    errPairFailed: "Koppeln fehlgeschlagen",
+    errNetwork: "Netzwerkfehler",
+    newConversationTitle: "Neue Unterhaltung",
+    fileAttached: "(Datei angehängt)",
+    serverError: (s) => `Serverfehler (${s})`,
+    tryAgain: "Bitte versuche es erneut.",
+    subCreateFailed: "Abonnement konnte nicht erstellt werden. Bitte versuche es erneut.",
+    enterLicenseCode: "Lizenzcode eingeben",
+    licenseRedeemFailed: "Lizenz konnte nicht eingelöst werden",
+    licenseRedeemError: "Beim Einlösen der Lizenz ist ein Fehler aufgetreten",
+    confirmCancelSub: "Möchtest du das Abonnement wirklich kündigen?",
+    subCancelled: "Abonnement wurde gekündigt.",
+    subCancelFailed: "Abonnement konnte nicht gekündigt werden.",
+    ordersHeading: "Bestellverlauf",
+    ordersSubtitle: "Deine Bestellungen und der Versandstatus",
+    ordersEmpty: "Du hast noch keine Bestellungen",
+    ordersCta: "KalkMate bestellen",
+    orderNo: (n) => `Bestellung #${n}`,
+    statusPaid: "✓ Bezahlt",
+    statusPending: "⏳ Ausstehend",
+    statusCancelled: "✗ Storniert",
+    amount: "Betrag",
+    pickupPoint: "Abholpunkt",
+    shipmentStatus: "Versandstatus",
+    shipped: "📦 Versandt",
+    awaitingShipment: "⏰ Ausstehend",
+    trackingNumber: "Sendungsnummer",
+    chatHistories: "Verlauf",
+    newConversation: "Neue Unterhaltung",
+    deleteTitle: "Löschen",
+    messagesCount: (n) => `${n} Nachrichten`,
+    noConversations: "Keine Unterhaltungen",
+    hideHistory: "Verlauf ausblenden",
+    showHistory: "Verlauf anzeigen",
+    chatTitle: "AI Chat - KalkMate Pro",
+    chatSubtitle: "Löse Aufgaben in Mathe, Physik, Chemie und Biologie",
+    newChat: "Neuer Chat",
+    chatStart: "Starte ein Gespräch mit der KI",
+    chatStartDesc: "Füge eine Mathe-, Physik-, Chemie- oder Biologieaufgabe ein, und die KI hilft dir, sie nach den CKE-Standards zu lösen",
+    subjMath: "Mathematik",
+    subjMathLevel: "Grund- und Leistungskurs",
+    subjPhysics: "Physik",
+    subjExtended: "Leistungskurs",
+    subjChemistry: "Chemie",
+    subjBiology: "Biologie",
+    copyAnswer: "Antwort kopieren",
+    copied: "Kopiert",
+    copy: "Kopieren",
+    thinking: "Ich denke nach...",
+    removeFile: "Entfernen",
+    chatPlaceholder: "Aufgabe einfügen oder Foto anhängen (Strg+V funktioniert auch für Bilder)...",
+    attachFile: "Datei anhängen (max. 5 x 10MB)",
+    send: "Senden",
+    subHeading: "AI-Chat-Abonnement",
+    subSubtitle: "Zugang zum AI Chat verwalten",
+    status: "Status",
+    statusTrial: "🎁 Testzeitraum",
+    statusActive: "✓ Aktiv",
+    statusInactive: "✗ Inaktiv",
+    assignedLicense: "Zugewiesene Lizenz",
+    daysWord: (n) => `${n} Tage`,
+    activatedOn: (d) => ` · aktiviert ${d}`,
+    notActivated: " · nicht aktiviert",
+    unpinning: "Wird entkoppelt...",
+    unpin: "Entkoppeln",
+    haveLicenseCode: "Hast du einen Lizenzcode?",
+    enterCodeToExtend: "Gib einen Code ein, um deinen AI-Chat-Zugang zu verlängern",
+    licenseCodePlaceholder: "abcd123-+=%abcd",
+    redeeming: "Wird eingelöst...",
+    redeem: "Einlösen",
+    trialPeriod: (n) => `Testzeitraum: ${n} Tage übrig`,
+    extraTrialDays: "✨ Zusätzliche 30 Tage für den Kauf des Rechners!",
+    trialEnds: (d) => `Endet am: ${d}`,
+    trialExpiredOwner: "Dein Testzeitraum ist abgelaufen. Du kannst den AI Chat durch Aktivieren eines Abonnements weiter nutzen.",
+    trialExpired: "Dein Testzeitraum ist abgelaufen. Aktiviere ein Abonnement, um den AI Chat weiter zu nutzen.",
+    choosePlan: "Wähle einen Abonnementplan",
+    promo98: "🔥 Aktion -98%",
+    secondMonth: "Zweiter Monat",
+    loadingBtn: "Lädt...",
+    choose1zl: "1 zł wählen",
+    fixedPrice: "💎 Festpreis",
+    nextMonths: "Folgende Monate",
+    choose15zl: "15 zł wählen",
+    securePayment: "💳 Sichere Zahlung über Stripe • Jederzeit kündbar",
+    ownerCanUseChat: "💡 Als Rechnerbesitzer kannst du den AI Chat per Abonnement nutzen. Das ist optional - der Rechner funktioniert unabhängig.",
+    paidSubActive: "✓ Bezahltes Abonnement aktiv",
+    feeLine: "Gebühr:",
+    perMonthFee: "15 zł/Monat",
+    savesYou: "(du sparst 67%)",
+    renewsOn: (d) => `Verlängert sich am: ${d}`,
+    cancelSub: "Abonnement kündigen",
+    tokenUsage: "/ Token-Verbrauch",
+    effectiveTokens: "/ 1.000.000 effektive Tokens",
+    used: "VERBRAUCHT",
+    remaining: "VERBLEIBEND:",
+    tasksLeftLabel: "Aufgaben übrig",
+    maturaTasks: "Prüfungsaufgaben",
+    monthlyLimit: "Monatslimit",
+    forModel: (m) => `für Modell ${m}`,
+    defaultModel: "Standard",
+    modelPerformance: "MODELLEFFIZIENZ — Aufgaben pro 1 Mio. Tokens",
+    tasksAbbr: "Aufg.",
+    tokenEstimateNote: "Schätzung für eine typische Prüfungsaufgabe (~800 echte Tokens Eingabe + Antwort). Tokens werden mit dem Abonnement erneuert.",
+    buyTokens: "/ Tokens kaufen",
+    buyTokensDesc: "Lade dein Token-Guthaben auf. Einmalzahlung (Karte / BLIK / Przelewy24) — Tokens werden sofort nach der Zahlung gutgeschrieben.",
+    popular: "BELIEBT",
+    packLabel: (t) => `${t / 1_000_000} Mio. Tokens`,
+    maturaTasksApprox: "Prüfungsaufgaben",
+    redirecting: "Weiterleitung...",
+    buy: "Kaufen",
+    aiModelHeading: "/ AI-Modell",
+    aiModelDesc: "Wähle ein Modell. Der Multiplikator (×) zeigt, wie viele effektive Tokens eine Anfrage im Vergleich zum günstigsten kostet.",
+    aiModeHeading: "/ AI-Modus",
+    maturaCke: "Prüfung (CKE)",
+    maturaCkeTitle: "Spezialisierter Prompt für CKE-Prüfungsaufgaben (Mathe, Physik, Chemie, Biologie)",
+    rawAi: "Reines AI",
+    rawAiTitle: "Keine Prüfungsbeschränkungen - beliebiges Fach (Elektronik, Informatik, Sprachen...)",
+    rawModeDesc: "Universeller Modus — die KI setzt keine Prüfung voraus. Funktioniert für Elektronik, Informatik, Sprachen usw.",
+    maturaModeDesc: "Prüfungsmodus — die KI antwortet im CKE-Format (Mathe/Physik/Chemie/Biologie).",
+    pairCalculator: "Rechner koppeln",
+    addYourDevice: "Füge dein",
+    deviceWord: "Gerät",
+    pairIntro1: "Gib die ",
+    pairIntro2: " vom Rechner (Settings → Device ID + QR) sowie den ",
+    pairIntro3: " (Settings → AI-Code) ein.",
+    pairWarning: "⚠ Der Rechner muss zuerst mit dem WLAN verbunden sein und sich beim Server melden.",
+    deviceIdLabel: "Device ID (MAC)",
+    unlockCodeLabel: "Entsperrcode",
+    pairing: "Wird gekoppelt...",
+    pairButton: "Gerät koppeln",
+    errorLabel: "/ ERROR",
+    paired: "✓ Gekoppelt",
+    deviceAdded: "Gerät wurde dem Konto hinzugefügt.",
+    yourDevice: "Dein",
+    license: "Lizenz",
+    firmware: "Firmware",
+    requests: "Anfragen",
+    aiModeAndModel: "/ AI-Modus und Modell",
+    aiModeSetInTab: (link) => <>Das AI-Modell und den Modus (Prüfung / Reines AI) stellst du im Tab {link} ein.</>,
+    photoGallery: "/ Fotogalerie",
+    photosCount: (n) => `${n} FOTOS`,
+    noPhotos: "Keine Fotos. Mach mit der Kamera des Rechners ein Foto einer Aufgabe.",
+    solutionHistory: "/ Lösungsverlauf",
+    recordsCount: (n) => `${n} EINTRÄGE`,
+    noTasksSolved: "Noch keine Aufgaben gelöst.",
+    photo: "📷 Foto",
+    close: "Schließen ×",
+    solution: "/ Lösung",
+    task: "Aufgabe",
+    calcRequired: "/ Rechner erforderlich",
+    pairFirst: (link) => <>Koppel zuerst den Rechner im Tab {link}.</>,
+    notesOffline: (n) => `Offline-Notizen (${n}/50)`,
+    syncToDevice: "Synchronisiert per WLAN mit dem Gerät",
+    editNote: "Notiz bearbeiten",
+    newNote: "Neue Notiz",
+    noteTitlePlaceholder: "Titel (max. 60 Zeichen)",
+    noteContentPlaceholder: "Inhalt (max. 4000 Zeichen - Formeln, Definitionen)",
+    cancel: "Abbrechen",
+    saving: "Wird gespeichert...",
+    save: "Speichern",
+    add: "Hinzufügen",
+    noNotes: "Keine Notizen.",
+    noTitle: "(ohne Titel)",
+    empty: "(leer)",
+    edit: "Bearbeiten",
+    delete: "Löschen",
+    testsHeading: (n) => `Klassenarbeiten (${n}/50)`,
+    markdownOk: "Markdown/LaTeX OK",
+    editTest: "Klassenarbeit bearbeiten",
+    newTest: "Neue Klassenarbeit",
+    testTitlePlaceholder: "Titel (z. B. Mathe 2026 - Probe 1)",
+    testContentPlaceholder: "Füge hier die Lösung ein (Markdown, LaTeX, $..$, **bold**...)",
+    noTests: "Keine Klassenarbeiten.",
+    charsCount: (n) => `${n} Zeichen`,
+    account: "/ Konto",
+    loggedInAs: "Angemeldet als",
+    changePassword: "/ Passwort ändern",
+    currentPassword: "Aktuelles Passwort",
+    newPassword: "Neues Passwort (min. 6 Zeichen)",
+    repeatNewPassword: "Neues Passwort wiederholen",
+    changePasswordBtn: "Passwort ändern",
+    changeEmail: "/ E-Mail-Adresse ändern",
+    newEmail: "Neue E-Mail-Adresse",
+    confirmWithPassword: "Mit Passwort bestätigen",
+    changeEmailBtn: "E-Mail ändern",
+    emailChangeNote: "Nach dem Ändern der E-Mail wirst du abgemeldet — melde dich mit der neuen Adresse an.",
+    session: "/ Sitzung",
+  },
+};
 
 export default function PanelPage() {
+  const { lang, setLang } = usePanelLang();
+  const t = PANEL_DICT[lang];
   const { data: session, status } = useSession();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"orders" | "chat" | "subscription" | "ai" | "calculator" | "notes" | "tests" | "settings">("orders");
@@ -76,9 +964,9 @@ export default function PanelPage() {
       });
       const j = await r.json();
       if (j?.url) { window.location.href = j.url; return; }
-      alert(j?.error || "Nie udało się rozpocząć płatności");
+      alert(j?.error || t.alertPaymentStart);
     } catch {
-      alert("Błąd sieci");
+      alert(t.alertNetwork);
     } finally {
       setBuyingPack(null);
     }
@@ -108,7 +996,7 @@ export default function PanelPage() {
         body: JSON.stringify(patch),
       });
       const j = await r.json();
-      if (!j?.ok) { alert(j?.error || "Nie udało się zapisać"); return; }
+      if (!j?.ok) { alert(j?.error || t.alertSaveFailed); return; }
       if (patch.aiModel !== undefined) setAiModel(patch.aiModel);
       if (patch.aiMode !== undefined) setAiMode(patch.aiMode);
     } finally {
@@ -125,8 +1013,8 @@ export default function PanelPage() {
 
   const changePassword = async () => {
     setPwMsg(null);
-    if (pwNew.length < 6) { setPwMsg({ ok: false, text: "Nowe hasło musi mieć min. 6 znaków" }); return; }
-    if (pwNew !== pwNew2) { setPwMsg({ ok: false, text: "Hasła nie są takie same" }); return; }
+    if (pwNew.length < 6) { setPwMsg({ ok: false, text: t.pwTooShort }); return; }
+    if (pwNew !== pwNew2) { setPwMsg({ ok: false, text: t.pwMismatch }); return; }
     setPwSaving(true);
     try {
       const r = await fetch("/api/user/account/change-password", {
@@ -135,8 +1023,8 @@ export default function PanelPage() {
         body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
       });
       const j = await r.json();
-      if (!j?.ok) { setPwMsg({ ok: false, text: j?.error || "Błąd" }); return; }
-      setPwMsg({ ok: true, text: "Hasło zostało zmienione." });
+      if (!j?.ok) { setPwMsg({ ok: false, text: j?.error || t.errGeneric }); return; }
+      setPwMsg({ ok: true, text: t.pwChanged });
       setPwCurrent(""); setPwNew(""); setPwNew2("");
     } finally { setPwSaving(false); }
   };
@@ -156,8 +1044,8 @@ export default function PanelPage() {
         body: JSON.stringify({ newEmail: emNew, password: emPassword }),
       });
       const j = await r.json();
-      if (!j?.ok) { setEmMsg({ ok: false, text: j?.error || "Błąd" }); return; }
-      setEmMsg({ ok: true, text: "Email zmieniony. Za chwilę nastąpi wylogowanie..." });
+      if (!j?.ok) { setEmMsg({ ok: false, text: j?.error || t.errGeneric }); return; }
+      setEmMsg({ ok: true, text: t.emailChanged });
       setTimeout(() => signOut({ callbackUrl: "/auth/signin" }), 1600);
     } finally { setEmSaving(false); }
   };
@@ -190,7 +1078,7 @@ export default function PanelPage() {
       });
       const j = await r.json();
       if (!j.ok) {
-        setPairError(j.error || "Nie udalo sie sparowac");
+        setPairError(j.error || t.errPairFailed);
       } else {
         setPairOk(true);
         setPairDeviceId("");
@@ -200,7 +1088,7 @@ export default function PanelPage() {
         setCalcInfo(await r2.json());
       }
     } catch (e) {
-      setPairError(e instanceof Error ? e.message : "Blad sieci");
+      setPairError(e instanceof Error ? e.message : t.errNetwork);
     } finally {
       setPairing(false);
     }
@@ -252,10 +1140,10 @@ export default function PanelPage() {
   const calcUnclaim = async () => {
     const deviceId = calcInfo?.device?.deviceId;
     if (!deviceId) {
-      alert("Brak urzadzenia do odpiecia.");
+      alert(t.alertNoDeviceUnpair);
       return;
     }
-    if (!confirm(`Odepnac urzadzenie ${deviceId}? Bedziesz mogl je sparowac ponownie.`)) return;
+    if (!confirm(t.confirmUnpair(deviceId))) return;
     setUnclaiming(true);
     try {
       const r = await fetch(`/api/user/devices?deviceId=${encodeURIComponent(deviceId)}`, {
@@ -267,7 +1155,7 @@ export default function PanelPage() {
         const r2 = await fetch("/api/user/license/claim", { cache: "no-store" });
         setCalcInfo(await r2.json());
       } else {
-        alert(j.error || "Blad");
+        alert(j.error || t.alertError);
       }
     } finally {
       setUnclaiming(false);
@@ -285,7 +1173,7 @@ export default function PanelPage() {
         body: JSON.stringify({ code: calcClaimCode.trim() }),
       });
       const j = await r.json();
-      if (!j.ok) setCalcError(j.error || "Blad");
+      if (!j.ok) setCalcError(j.error || t.alertError);
       else {
         setCalcClaimCode("");
         // reload
@@ -320,7 +1208,7 @@ export default function PanelPage() {
     } finally { setSavingNote(false); }
   };
   const calcDelNote = async (id: string) => {
-    if (!confirm("Usunac notatke?")) return;
+    if (!confirm(t.confirmDeleteNote)) return;
     await fetch(`/api/user/notes?id=${id}`, { method: "DELETE" });
     const r = await fetch("/api/user/notes", { cache: "no-store" });
     setCalcNotes((await r.json()).notes || []);
@@ -349,7 +1237,7 @@ export default function PanelPage() {
     } finally { setSavingTest(false); }
   };
   const calcDelTest = async (id: string) => {
-    if (!confirm("Usunac sprawdzian?")) return;
+    if (!confirm(t.confirmDeleteTest)) return;
     await fetch(`/api/user/tests?id=${id}`, { method: "DELETE" });
     const r = await fetch("/api/user/tests", { cache: "no-store" });
     setCalcTests((await r.json()).tests || []);
@@ -425,7 +1313,7 @@ export default function PanelPage() {
       const res = await fetch("/api/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Nowa konwersacja" }),
+        body: JSON.stringify({ title: t.newConversationTitle }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -439,7 +1327,7 @@ export default function PanelPage() {
   };
 
   const deleteConversation = async (conversationId: string) => {
-    if (!confirm("Czy na pewno chcesz usunąć tę konwersację?")) return;
+    if (!confirm(t.confirmDeleteConversation)) return;
 
     try {
       const res = await fetch(`/api/conversations/${conversationId}`, {
@@ -550,7 +1438,7 @@ export default function PanelPage() {
 
       const newMessage = {
         role: "user",
-        content: userMessage || "(plik załączony)",
+        content: userMessage || t.fileAttached,
         attachments: attachments.length > 0 ? attachments : undefined,
       };
 
@@ -572,7 +1460,7 @@ export default function PanelPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data?.error || `Błąd serwera (${response.status})`);
+        throw new Error(data?.error || t.serverError(response.status));
       }
 
       setMessages([...newMessages, { role: "assistant", content: data.response }]);
@@ -586,7 +1474,7 @@ export default function PanelPage() {
       fetchConversations();
     } catch (error) {
       console.error("Chat error:", error);
-      const msg = error instanceof Error ? error.message : "Spróbuj ponownie.";
+      const msg = error instanceof Error ? error.message : t.tryAgain;
       setMessages([
         ...messages,
         { role: "assistant", content: `⚠️ ${msg}` },
@@ -608,11 +1496,11 @@ export default function PanelPage() {
         const { url } = await res.json();
         window.location.href = url;
       } else {
-        alert("Nie udało się utworzyć subskrypcji. Spróbuj ponownie.");
+        alert(t.subCreateFailed);
       }
     } catch (error) {
       console.error("Failed to create subscription:", error);
-      alert("Nie udało się utworzyć subskrypcji. Spróbuj ponownie.");
+      alert(t.subCreateFailed);
     } finally {
       setIsLoading(false);
     }
@@ -620,7 +1508,7 @@ export default function PanelPage() {
 
   const handleRedeemLicense = async () => {
     if (!licenseCode.trim()) {
-      alert("Wprowadź kod licencji");
+      alert(t.enterLicenseCode);
       return;
     }
 
@@ -639,29 +1527,29 @@ export default function PanelPage() {
         setLicenseCode("");
         fetchSubscriptionStatus();
       } else {
-        alert(data.error || "Nie udało się zrealizować licencji");
+        alert(data.error || t.licenseRedeemFailed);
       }
     } catch (error) {
       console.error("Failed to redeem license:", error);
-      alert("Wystąpił błąd podczas realizacji licencji");
+      alert(t.licenseRedeemError);
     } finally {
       setRedeemingLicense(false);
     }
   };
 
   const handleCancelSubscription = async () => {
-    if (!confirm("Czy na pewno chcesz anulować subskrypcję?")) return;
+    if (!confirm(t.confirmCancelSub)) return;
 
     setIsLoading(true);
     try {
       const res = await fetch("/api/subscription/cancel", { method: "POST" });
       if (res.ok) {
-        alert("Subskrypcja została anulowana.");
+        alert(t.subCancelled);
         fetchSubscriptionStatus();
       }
     } catch (error) {
       console.error("Failed to cancel subscription:", error);
-      alert("Nie udało się anulować subskrypcji.");
+      alert(t.subCancelFailed);
     } finally {
       setIsLoading(false);
     }
@@ -672,7 +1560,7 @@ export default function PanelPage() {
       <div className="min-h-screen bg-[#0B0B0B] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#D8FF3D] border-t-transparent rounded-full animate-spin" />
-          <p className="km-mono-eyebrow text-[#F2EDE3]/55">Ładowanie...</p>
+          <p className="km-mono-eyebrow text-[#F2EDE3]/55">{t.loading}</p>
         </div>
       </div>
     );
@@ -683,14 +1571,14 @@ export default function PanelPage() {
   }
 
   const tabs = [
-    { id: "orders" as const, n: "01", label: "Zamówienia" },
-    { id: "chat" as const, n: "02", label: "AI Chat" },
-    { id: "subscription" as const, n: "03", label: "Subskrypcja" },
-    { id: "ai" as const, n: "04", label: "AI" },
-    { id: "calculator" as const, n: "05", label: "Kalkulator" },
-    { id: "notes" as const, n: "06", label: "Notatki" },
-    { id: "tests" as const, n: "07", label: "Sprawdziany" },
-    { id: "settings" as const, n: "08", label: "Ustawienia konta" },
+    { id: "orders" as const, n: "01", label: t.tabsOrders },
+    { id: "chat" as const, n: "02", label: t.tabsChat },
+    { id: "subscription" as const, n: "03", label: t.tabsSubscription },
+    { id: "ai" as const, n: "04", label: t.tabsAi },
+    { id: "calculator" as const, n: "05", label: t.tabsCalculator },
+    { id: "notes" as const, n: "06", label: t.tabsNotes },
+    { id: "tests" as const, n: "07", label: t.tabsTests },
+    { id: "settings" as const, n: "08", label: t.tabsSettings },
   ];
 
   return (
@@ -712,11 +1600,12 @@ export default function PanelPage() {
                 <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
                 {session.user?.email}
               </span>
+              <PanelLangSwitcher lang={lang} setLang={setLang} />
               <button
                 onClick={() => signOut({ callbackUrl: "/" })}
                 className="km-mono-eyebrow text-[#F2EDE3]/70 hover:text-[#FF4D2E] px-3 py-1.5 border border-[rgba(242,237,227,0.18)] hover:border-[#FF4D2E] transition-colors"
               >
-                Wyloguj ↗
+                {t.logout}
               </button>
             </div>
           </div>
@@ -727,14 +1616,14 @@ export default function PanelPage() {
         {/* Page heading */}
         <div className="mb-10 lg:mb-14 grid lg:grid-cols-12 gap-8 items-end">
           <div className="lg:col-span-8">
-            <p className="km-mono-eyebrow text-[#D8FF3D]">[ 00 ] · Twój panel</p>
+            <p className="km-mono-eyebrow text-[#D8FF3D]">{t.yourPanel}</p>
             <h1 className="km-display text-[clamp(40px,7vw,96px)] mt-3">
-              Witaj, <span className="italic text-[#D8FF3D]">{(session.user?.name || session.user?.email?.split("@")[0] || "user").toString()}</span>.
+              {t.greeting(<span key="name" className="italic text-[#D8FF3D]">{(session.user?.name || session.user?.email?.split("@")[0] || "user").toString()}</span>)}
             </h1>
           </div>
           <div className="lg:col-span-4 km-mono-eyebrow text-[#F2EDE3]/45 lg:text-right">
             <p>PANEL · v0.6.4</p>
-            <p className="mt-1 text-[#F2EDE3]/30">Sesja aktywna</p>
+            <p className="mt-1 text-[#F2EDE3]/30">{t.sessionActive}</p>
           </div>
         </div>
 
@@ -787,10 +1676,10 @@ export default function PanelPage() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-[#F2EDE3]">
-                      Historia zamówień
+                      {t.ordersHeading}
                     </h2>
                     <p className="text-sm text-[#F2EDE3]/60">
-                      Twoje zamówienia i status wysyłek
+                      {t.ordersSubtitle}
                     </p>
                   </div>
                 </div>
@@ -809,7 +1698,7 @@ export default function PanelPage() {
                       </svg>
                     </div>
                     <p className="text-[#F2EDE3]/60 mb-4">
-                      Nie masz jeszcze żadnych zamówień
+                      {t.ordersEmpty}
                     </p>
                     <Link
                       href="/#kup-teraz"
@@ -818,7 +1707,7 @@ export default function PanelPage() {
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M12 5v14M5 12h14" />
                       </svg>
-                      Zamów KalkMate
+                      {t.ordersCta}
                     </Link>
                   </div>
                 ) : (
@@ -834,14 +1723,14 @@ export default function PanelPage() {
                         <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
                           <div>
                             <p className="text-lg font-bold text-[#F2EDE3]">
-                              Zamówienie #{order.orderNumber}
+                              {t.orderNo(order.orderNumber)}
                             </p>
                             <p className="text-sm text-[#F2EDE3]/60 mt-1 flex items-center gap-2">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="10" />
                                 <polyline points="12 6 12 12 16 14" />
                               </svg>
-                              {new Date(order.createdAt).toLocaleDateString("pl-PL", {
+                              {new Date(order.createdAt).toLocaleDateString(DATE_LOCALE[lang], {
                                 year: "numeric",
                                 month: "long",
                                 day: "numeric",
@@ -857,13 +1746,13 @@ export default function PanelPage() {
                               ? "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400"
                               : "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400"
                           }`}>
-                            {order.status === "paid" ? "✓ Opłacone" : order.status === "pending" ? "⏳ Oczekuje" : "✗ Anulowane"}
+                            {order.status === "paid" ? t.statusPaid : order.status === "pending" ? t.statusPending : t.statusCancelled}
                           </span>
                         </div>
 
                         <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
                           <div className="bg-[#141414]  p-4">
-                            <p className="text-xs text-[#F2EDE3]/40 mb-1">Kwota</p>
+                            <p className="text-xs text-[#F2EDE3]/40 mb-1">{t.amount}</p>
                             <p className="text-lg font-bold text-[#F2EDE3]">
                               {(order.amount / 100).toFixed(2)} {order.currency.toUpperCase()}
                             </p>
@@ -871,7 +1760,7 @@ export default function PanelPage() {
 
                           {order.pickupPoint && (
                             <div className="bg-[#141414]  p-4">
-                              <p className="text-xs text-[#F2EDE3]/40 mb-1">Punkt odbioru</p>
+                              <p className="text-xs text-[#F2EDE3]/40 mb-1">{t.pickupPoint}</p>
                               <p className="text-sm font-medium text-[#F2EDE3] truncate">
                                 {order.pickupPoint}
                               </p>
@@ -880,16 +1769,16 @@ export default function PanelPage() {
 
                           {order.fulfillmentStatus && (
                             <div className="bg-[#141414]  p-4">
-                              <p className="text-xs text-[#F2EDE3]/40 mb-1">Status wysyłki</p>
+                              <p className="text-xs text-[#F2EDE3]/40 mb-1">{t.shipmentStatus}</p>
                               <p className="text-sm font-medium text-[#F2EDE3]">
-                                {order.fulfillmentStatus === "fulfilled" ? "📦 Wysłane" : "⏰ Oczekuje"}
+                                {order.fulfillmentStatus === "fulfilled" ? t.shipped : t.awaitingShipment}
                               </p>
                             </div>
                           )}
 
                           {order.trackingNumber && (
                             <div className="bg-[#141414]  p-4">
-                              <p className="text-xs text-[#F2EDE3]/40 mb-1">Numer przesyłki</p>
+                              <p className="text-xs text-[#F2EDE3]/40 mb-1">{t.trackingNumber}</p>
                               <p className="text-sm font-medium text-[#D8FF3D] font-mono">
                                 {order.trackingNumber}
                               </p>
@@ -917,11 +1806,11 @@ export default function PanelPage() {
               <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} border-r border-[rgba(242,237,227,0.10)] flex flex-col transition-all duration-300 overflow-hidden`}>
                 {/* Sidebar header */}
                 <div className="p-4 border-b border-[rgba(242,237,227,0.10)] flex items-center justify-between">
-                  <h3 className="font-semibold text-[#F2EDE3] text-sm">Historie</h3>
+                  <h3 className="font-semibold text-[#F2EDE3] text-sm">{t.chatHistories}</h3>
                   <button
                     onClick={createNewConversation}
                     className="p-1.5  bg-[#D8FF3D] text-[#0B0B0B] hover:opacity-80 transition-opacity"
-                    title="Nowa konwersacja"
+                    title={t.newConversation}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19"/>
@@ -946,7 +1835,7 @@ export default function PanelPage() {
                         {conv.title}
                       </p>
                       <p className="text-xs text-[#F2EDE3]/60 mt-1">
-                        {conv._count?.messages || 0} wiadomości
+                        {t.messagesCount(conv._count?.messages || 0)}
                       </p>
                       <button
                         onClick={(e) => {
@@ -954,7 +1843,7 @@ export default function PanelPage() {
                           deleteConversation(conv.id);
                         }}
                         className="absolute top-2 right-2 p-1 rounded bg-red-500/10 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Usuń"
+                        title={t.deleteTitle}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600 dark:text-red-400">
                           <polyline points="3 6 5 6 21 6"/>
@@ -966,7 +1855,7 @@ export default function PanelPage() {
                   {conversations.length === 0 && (
                     <div className="text-center py-8">
                       <p className="text-xs text-[#F2EDE3]/60">
-                        Brak konwersacji
+                        {t.noConversations}
                       </p>
                     </div>
                   )}
@@ -983,7 +1872,7 @@ export default function PanelPage() {
                     <button
                       onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                       className="p-2  hover:bg-[#141414]/50 transition-colors"
-                      title={isSidebarOpen ? "Ukryj historię" : "Pokaż historię"}
+                      title={isSidebarOpen ? t.hideHistory : t.showHistory}
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="3" y1="12" x2="21" y2="12"/>
@@ -997,9 +1886,9 @@ export default function PanelPage() {
                       </svg>
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-[#F2EDE3]">AI Chat - KalkMate Pro</h2>
+                      <h2 className="text-xl font-bold text-[#F2EDE3]">{t.chatTitle}</h2>
                       <p className="text-sm text-[#F2EDE3]/60">
-                        Rozwiązuj zadania z matematyki, fizyki, chemii i biologii
+                        {t.chatSubtitle}
                       </p>
                     </div>
                   </div>
@@ -1008,7 +1897,7 @@ export default function PanelPage() {
                       onClick={createNewConversation}
                       className="px-4 py-2  bg-[#D8FF3D] text-[#0B0B0B] hover:opacity-80 transition-opacity text-sm font-medium"
                     >
-                      Nowy chat
+                      {t.newChat}
                     </button>
                   )}
                 </div>
@@ -1024,31 +1913,31 @@ export default function PanelPage() {
                       </svg>
                     </div>
                     <h3 className="text-lg font-bold text-[#F2EDE3] mb-2">
-                      Rozpocznij rozmowę z AI
+                      {t.chatStart}
                     </h3>
                     <p className="text-sm text-[#F2EDE3]/60 max-w-md mb-4">
-                      Wklej treść zadania z matematyki, fizyki, chemii lub biologii, a AI pomoże Ci je rozwiązać zgodnie z zasadami CKE
+                      {t.chatStartDesc}
                     </p>
                     <div className="grid grid-cols-2 gap-3 max-w-lg">
                       <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)]">
                         <div className="text-2xl mb-1">📐</div>
-                        <p className="text-xs font-semibold text-[#F2EDE3]">Matematyka</p>
-                        <p className="text-xs text-[#F2EDE3]/60">Podstawowy i rozszerzony</p>
+                        <p className="text-xs font-semibold text-[#F2EDE3]">{t.subjMath}</p>
+                        <p className="text-xs text-[#F2EDE3]/60">{t.subjMathLevel}</p>
                       </div>
                       <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)]">
                         <div className="text-2xl mb-1">⚡</div>
-                        <p className="text-xs font-semibold text-[#F2EDE3]">Fizyka</p>
-                        <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
+                        <p className="text-xs font-semibold text-[#F2EDE3]">{t.subjPhysics}</p>
+                        <p className="text-xs text-[#F2EDE3]/60">{t.subjExtended}</p>
                       </div>
                       <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)]">
                         <div className="text-2xl mb-1">🧪</div>
-                        <p className="text-xs font-semibold text-[#F2EDE3]">Chemia</p>
-                        <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
+                        <p className="text-xs font-semibold text-[#F2EDE3]">{t.subjChemistry}</p>
+                        <p className="text-xs text-[#F2EDE3]/60">{t.subjExtended}</p>
                       </div>
                       <div className="bg-[#0E0E0E] p-3  border border-[rgba(242,237,227,0.15)]">
                         <div className="text-2xl mb-1">🧬</div>
-                        <p className="text-xs font-semibold text-[#F2EDE3]">Biologia</p>
-                        <p className="text-xs text-[#F2EDE3]/60">Poziom rozszerzony</p>
+                        <p className="text-xs font-semibold text-[#F2EDE3]">{t.subjBiology}</p>
+                        <p className="text-xs text-[#F2EDE3]/60">{t.subjExtended}</p>
                       </div>
                     </div>
                   </div>
@@ -1106,14 +1995,14 @@ export default function PanelPage() {
                       <button
                         onClick={() => copyToClipboard(msg.content, i)}
                         className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 km-mono-eyebrow border border-[rgba(242,237,227,0.15)] text-[#F2EDE3]/55 hover:text-[#D8FF3D] hover:border-[#D8FF3D] transition-colors"
-                        title="Kopiuj odpowiedź"
+                        title={t.copyAnswer}
                       >
                         {copiedIdx === i ? (
                           <>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
-                            Skopiowano
+                            {t.copied}
                           </>
                         ) : (
                           <>
@@ -1121,7 +2010,7 @@ export default function PanelPage() {
                               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                             </svg>
-                            Kopiuj
+                            {t.copy}
                           </>
                         )}
                       </button>
@@ -1143,7 +2032,7 @@ export default function PanelPage() {
                           <div className="w-2 h-2 bg-[#D8FF3D] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                           <div className="w-2 h-2 bg-[#D8FF3D] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                         </div>
-                        <span className="text-sm text-[#F2EDE3]/60">Myślę...</span>
+                        <span className="text-sm text-[#F2EDE3]/60">{t.thinking}</span>
                       </div>
                     </div>
                   </motion.div>
@@ -1175,7 +2064,7 @@ export default function PanelPage() {
                           <button
                             onClick={() => removeFile(idx)}
                             className="text-[#F2EDE3]/50 hover:text-[#FF4D2E] transition-colors p-1"
-                            title="Usuń"
+                            title={t.removeFile}
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <line x1="18" y1="6" x2="6" y2="18"/>
@@ -1220,7 +2109,7 @@ export default function PanelPage() {
                           setSelectedFiles((prev) => [...prev, ...pasted].slice(0, 5));
                         }
                       }}
-                      placeholder="Wklej treść zadania lub dołącz zdjęcie (Ctrl+V działa też dla obrazów)..."
+                      placeholder={t.chatPlaceholder}
                       className="flex-1 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] px-4 py-3 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/35 focus:outline-none focus:border-[#D8FF3D] resize-none transition-colors"
                       rows={3}
                       disabled={isSending}
@@ -1243,7 +2132,7 @@ export default function PanelPage() {
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                         </svg>
-                        Załącz plik (maks. 5 x 10MB)
+                        {t.attachFile}
                       </button>
                     </div>
                   </div>
@@ -1252,7 +2141,7 @@ export default function PanelPage() {
                     disabled={(!userMessage.trim() && selectedFiles.length === 0) || isSending}
                     className="self-end bg-[#D8FF3D] text-[#0B0B0B] px-7 py-3 km-mono-eyebrow hover:bg-[#F2EDE3] transition-colors disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-2"
                   >
-                    Wyślij <span>→</span>
+                    {t.send} <span>→</span>
                   </button>
                 </div>
               </div>
@@ -1278,10 +2167,10 @@ export default function PanelPage() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-[#F2EDE3]">
-                      Subskrypcja AI Chat
+                      {t.subHeading}
                     </h2>
                     <p className="text-sm text-[#F2EDE3]/60">
-                      Zarządzaj dostępem do AI Chat
+                      {t.subSubtitle}
                     </p>
                   </div>
                 </div>
@@ -1291,7 +2180,7 @@ export default function PanelPage() {
                     <div className="flex items-center gap-3 p-4 bg-[#141414] ">
                       <div className={`w-4 h-4 rounded-full ${subscriptionStatus.canUseChat ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
                       <span className="text-lg font-bold text-[#F2EDE3]">
-                        Status: {subscriptionStatus.status === "trial" ? "🎁 Okres próbny" : subscriptionStatus.status === "active" ? "✓ Aktywna" : "✗ Nieaktywna"}
+                        {t.status}: {subscriptionStatus.status === "trial" ? t.statusTrial : subscriptionStatus.status === "active" ? t.statusActive : t.statusInactive}
                       </span>
                     </div>
 
@@ -1300,16 +2189,16 @@ export default function PanelPage() {
                       <div className="flex items-center justify-between p-4 bg-[#141414] ">
                         <div>
                           <div className="text-xs text-[#F2EDE3]/60 mb-1">
-                            Przypisana licencja
+                            {t.assignedLicense}
                           </div>
                           <div className="font-mono text-sm text-[#F2EDE3]">
                             {calcInfo.license.code}
                           </div>
                           <div className="text-xs text-[#F2EDE3]/60 mt-1">
-                            {calcInfo.license.durationDays} dni
+                            {t.daysWord(calcInfo.license.durationDays)}
                             {calcInfo.license.activatedAt
-                              ? ` · aktywowana ${new Date(calcInfo.license.activatedAt).toLocaleDateString("pl-PL")}`
-                              : " · nieaktywowana"}
+                              ? ` · ${t.activatedOn(new Date(calcInfo.license.activatedAt).toLocaleDateString(DATE_LOCALE[lang]))}`
+                              : ` · ${t.notActivated}`}
                           </div>
                         </div>
                         <button
@@ -1317,7 +2206,7 @@ export default function PanelPage() {
                           disabled={unclaiming}
                           className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400  disabled:opacity-50"
                         >
-                          {unclaiming ? "Odpinanie..." : "Odepnij"}
+                          {unclaiming ? t.unpinning : t.unpin}
                         </button>
                       </div>
                     )}
@@ -1333,10 +2222,10 @@ export default function PanelPage() {
                         </div>
                         <div>
                           <h3 className="font-bold text-[#F2EDE3]">
-                            Masz kod licencji?
+                            {t.haveLicenseCode}
                           </h3>
                           <p className="text-xs text-[#F2EDE3]/60">
-                            Wprowadź kod, aby przedłużyć dostęp do AI Chat
+                            {t.enterCodeToExtend}
                           </p>
                         </div>
                       </div>
@@ -1345,7 +2234,7 @@ export default function PanelPage() {
                           type="text"
                           value={licenseCode}
                           onChange={(e) => setLicenseCode(e.target.value)}
-                          placeholder="abcd123-+=%abcd"
+                          placeholder={t.licenseCodePlaceholder}
                           className="flex-1 bg-[#0E0E0E] border border-purple-200 dark:border-purple-500/20  px-4 py-3 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/40 placeholder:text-[#F2EDE3]/40 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
                           disabled={redeemingLicense}
                         />
@@ -1354,7 +2243,7 @@ export default function PanelPage() {
                           disabled={!licenseCode.trim() || redeemingLicense}
                           className="px-6 py-3  from-purple-500 to-blue-500 text-white font-medium   transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {redeemingLicense ? "Realizuję..." : "Realizuj"}
+                          {redeemingLicense ? t.redeeming : t.redeem}
                         </button>
                       </div>
                     </div>
@@ -1369,19 +2258,19 @@ export default function PanelPage() {
                           </div>
                           <div className="flex-1">
                             <p className="text-lg font-bold text-blue-900 dark:text-blue-200 mb-2">
-                              Okres próbny: {subscriptionStatus.daysRemaining} dni pozostało
+                              {t.trialPeriod(subscriptionStatus.daysRemaining)}
                             </p>
                             {subscriptionStatus.hasPurchasedCalculator && subscriptionStatus.trialDays === 30 && (
                               <p className="text-sm text-blue-700 dark:text-blue-300">
-                                ✨ Dodatkowe 30 dni za zakup kalkulatora!
+                                {t.extraTrialDays}
                               </p>
                             )}
                             <p className="text-sm text-blue-700 dark:text-blue-300 mt-2">
-                              Kończy się: {new Date(subscriptionStatus.trialEndsAt).toLocaleDateString("pl-PL", {
+                              {t.trialEnds(new Date(subscriptionStatus.trialEndsAt).toLocaleDateString(DATE_LOCALE[lang], {
                                 year: "numeric",
                                 month: "long",
                                 day: "numeric",
-                              })}
+                              }))}
                             </p>
                           </div>
                         </div>
@@ -1392,28 +2281,23 @@ export default function PanelPage() {
                       <div>
                         <p className="text-sm text-[#F2EDE3]/60 mb-6">
                           {subscriptionStatus.hasPurchasedCalculator ? (
-                            <>
-                              Twój {subscriptionStatus.trialDays}-dniowy okres próbny wygasł.
-                              {" "}Możesz kontynuować korzystanie z AI Chat aktywując subskrypcję.
-                            </>
+                            <>{t.trialExpiredOwner}</>
                           ) : (
-                            <>
-                              Twój okres próbny wygasł. Aktywuj subskrypcję, aby kontynuować korzystanie z AI Chat.
-                            </>
+                            <>{t.trialExpired}</>
                           )}
                         </p>
 
                         {/* Pricing Plans */}
                         <div className=" from-[#D8FF3D]/5 to-[#D8FF3D]/5 dark:from-[#D8FF3D]/10 dark:to-[#D8FF3D]/10  p-6 mb-6">
                           <h3 className="text-lg font-bold text-[#F2EDE3] mb-4 text-center">
-                            Wybierz plan subskrypcji
+                            {t.choosePlan}
                           </h3>
 
                           <div className="grid md:grid-cols-2 gap-4 mb-4">
                             {/* Second Month Plan - 1 zł */}
                             <div className="bg-[#0E0E0E]  p-5 border-2 border-[#D8FF3D] relative">
                               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1  from-[#D8FF3D] to-[#D8FF3D] text-[#0B0B0B] text-xs font-bold rounded-full">
-                                🔥 Promocja -98%
+                                {t.promo98}
                               </div>
                               <div className="text-center mt-2 mb-4">
                                 <div className="text-3xl font-bold text-[#D8FF3D] mb-1">
@@ -1423,7 +2307,7 @@ export default function PanelPage() {
                                   44,99 zł
                                 </div>
                                 <div className="text-sm text-[#F2EDE3]/60 mt-1">
-                                  Drugi miesiąc
+                                  {t.secondMonth}
                                 </div>
                               </div>
                               <button
@@ -1431,14 +2315,14 @@ export default function PanelPage() {
                                 disabled={isLoading}
                                 className="w-full  from-[#D8FF3D] to-[#D8FF3D] text-[#0B0B0B] px-4 py-3   transition-all duration-300 disabled:opacity-50 font-bold text-sm"
                               >
-                                {isLoading ? "Ładowanie..." : "Wybierz 1 zł"}
+                                {isLoading ? t.loadingBtn : t.choose1zl}
                               </button>
                             </div>
 
                             {/* Regular Plan - 15 zł */}
                             <div className="bg-[#0E0E0E]  p-5 border-2 border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
                               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow">
-                                💎 Stała cena
+                                {t.fixedPrice}
                               </div>
                               <div className="text-center mt-2 mb-4">
                                 <div className="text-3xl font-bold text-[#F2EDE3] mb-1">
@@ -1448,7 +2332,7 @@ export default function PanelPage() {
                                   44,99 zł
                                 </div>
                                 <div className="text-sm text-[#F2EDE3]/60 mt-1">
-                                  Kolejne miesiące
+                                  {t.nextMonths}
                                 </div>
                               </div>
                               <button
@@ -1456,20 +2340,20 @@ export default function PanelPage() {
                                 disabled={isLoading}
                                 className="w-full bg-[#0E0E0E] bg-[#141414] text-[#F2EDE3] px-4 py-3  hover:bg-[#141414] hover:bg-[#1a1a1a] transition-all duration-300 disabled:opacity-50 font-bold text-sm border border-[rgba(242,237,227,0.15)]"
                               >
-                                {isLoading ? "Ładowanie..." : "Wybierz 15 zł"}
+                                {isLoading ? t.loadingBtn : t.choose15zl}
                               </button>
                             </div>
                           </div>
 
                           <div className="text-center text-xs text-[#F2EDE3]/60">
-                            💳 Bezpieczna płatność przez Stripe • Anuluj w każdej chwili
+                            {t.securePayment}
                           </div>
                         </div>
 
                         {subscriptionStatus.hasPurchasedCalculator && (
                           <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20  p-4">
                             <p className="text-sm text-green-800 dark:text-green-200">
-                              💡 <strong>Jako właściciel kalkulatora</strong> możesz korzystać z AI Chat przez subskrypcję. To opcjonalne - kalkulator działa niezależnie.
+                              {t.ownerCanUseChat}
                             </p>
                           </div>
                         )}
@@ -1480,14 +2364,14 @@ export default function PanelPage() {
                       <div>
                         <div className=" from-green-50 to-emerald-100 dark:from-green-500/10 dark:to-emerald-600/10 border border-green-200 dark:border-green-500/20  p-6 mb-4">
                           <p className="text-lg font-bold text-green-900 dark:text-green-200 mb-2">
-                            ✓ Płatna subskrypcja aktywna
+                            {t.paidSubActive}
                           </p>
                           <p className="text-sm text-green-700 dark:text-green-300">
-                            Opłata: <strong>15 zł/miesiąc</strong> <span className="text-xs">(oszczędzasz 67%)</span>
+                            {t.feeLine} <strong>{t.perMonthFee}</strong> <span className="text-xs">{t.savesYou}</span>
                           </p>
                           {subscriptionStatus.subscriptionEndsAt && (
                             <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                              Odnawia się: {new Date(subscriptionStatus.subscriptionEndsAt).toLocaleDateString("pl-PL")}
+                              {t.renewsOn(new Date(subscriptionStatus.subscriptionEndsAt).toLocaleDateString(DATE_LOCALE[lang]))}
                             </p>
                           )}
                         </div>
@@ -1496,7 +2380,7 @@ export default function PanelPage() {
                           disabled={isLoading}
                           className="text-sm text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
                         >
-                          Anuluj subskrypcję
+                          {t.cancelSub}
                         </button>
                       </div>
                     )}
@@ -1533,7 +2417,7 @@ export default function PanelPage() {
                 const barColor = pct > 80 ? "#FF4D2E" : pct > 50 ? "#FFB800" : "#D8FF3D";
                 return (
                   <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                    <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Zużycie tokenów</div>
+                    <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.tokenUsage}</div>
 
                     {/* Pasek postępu */}
                     <div className="mb-4">
@@ -1546,7 +2430,7 @@ export default function PanelPage() {
                               ? `${(consumed / 1_000).toFixed(1)}K`
                               : consumed}
                           </span>
-                          <span className="text-sm text-[#F2EDE3]/40 ml-1">/ 1 000 000 efektywnych tokenów</span>
+                          <span className="text-sm text-[#F2EDE3]/40 ml-1">{t.effectiveTokens}</span>
                         </div>
                         <span className="km-mono-eyebrow text-[#F2EDE3]/40">{pct.toFixed(1)}%</span>
                       </div>
@@ -1557,9 +2441,9 @@ export default function PanelPage() {
                         />
                       </div>
                       <div className="flex justify-between mt-1">
-                        <span className="km-mono-eyebrow text-[#F2EDE3]/30">ZUŻYTE</span>
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/30">{t.used}</span>
                         <span className="km-mono-eyebrow text-[#F2EDE3]/30">
-                          POZOSTAŁO:{" "}
+                          {t.remaining}{" "}
                           <span className="text-[#F2EDE3]/60">
                             {tokenBalance >= 1_000_000
                               ? `${(tokenBalance / 1_000_000).toFixed(3)}M`
@@ -1574,25 +2458,25 @@ export default function PanelPage() {
                     {/* Szacunkowa liczba zadań */}
                     <div className="grid grid-cols-2 gap-3 mb-4">
                       <div className="bg-[#141414] border border-[rgba(242,237,227,0.08)] p-3">
-                        <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">Zadań zostało</div>
+                        <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">{t.tasksLeftLabel}</div>
                         <div className="text-xl font-bold text-[#D8FF3D]">
-                          ~{tasksLeft.toLocaleString("pl-PL")}
+                          ~{tasksLeft.toLocaleString(DATE_LOCALE[lang])}
                         </div>
-                        <div className="text-xs text-[#F2EDE3]/40 mt-0.5">zadań maturalnych</div>
+                        <div className="text-xs text-[#F2EDE3]/40 mt-0.5">{t.maturaTasks}</div>
                       </div>
                       <div className="bg-[#141414] border border-[rgba(242,237,227,0.08)] p-3">
-                        <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">Limit na miesiąc</div>
+                        <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">{t.monthlyLimit}</div>
                         <div className="text-xl font-bold text-[#F2EDE3]">
-                          ~{tasksTotal.toLocaleString("pl-PL")}
+                          ~{tasksTotal.toLocaleString(DATE_LOCALE[lang])}
                         </div>
-                        <div className="text-xs text-[#F2EDE3]/40 mt-0.5">dla modelu {currentModel?.label ?? "domyślnego"}</div>
+                        <div className="text-xs text-[#F2EDE3]/40 mt-0.5">{t.forModel(currentModel?.label ?? t.defaultModel)}</div>
                       </div>
                     </div>
 
                     {/* Tabelka kosztów modeli */}
                     <div className="border border-[rgba(242,237,227,0.08)] mb-3">
                       <div className="flex items-center gap-2 px-3 py-2 border-b border-[rgba(242,237,227,0.08)] bg-[#141414]">
-                        <span className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px]">WYDAJNOŚĆ MODELI — ile zadań z 1 mln tokenów</span>
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px]">{t.modelPerformance}</span>
                       </div>
                       <div className="divide-y divide-[rgba(242,237,227,0.05)]">
                         {aiModels.map((m) => {
@@ -1631,8 +2515,7 @@ export default function PanelPage() {
                     </div>
 
                     <p className="text-xs text-[#F2EDE3]/30">
-                      Szacunek dla typowego zadania maturalnego (~800 realnych tokenów wejście + odpowiedź).
-                      Tokeny odnawiają się razem z subskrypcją.
+                      {t.tokenEstimateNote}
                     </p>
                   </div>
                 );
@@ -1640,9 +2523,9 @@ export default function PanelPage() {
 
               {/* === SKLEP: KUP TOKENY === */}
               <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ Kup tokeny</div>
+                <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">{t.buyTokens}</div>
                 <p className="text-sm text-[#F2EDE3]/55 mb-4">
-                  Doładuj saldo tokenów. Płatność jednorazowa (karta / BLIK / Przelewy24) — tokeny dodają się od razu po opłaceniu.
+                  {t.buyTokensDesc}
                 </p>
                 <div className="grid sm:grid-cols-3 gap-3">
                   {TOKEN_PACKS.map((p) => (
@@ -1654,22 +2537,22 @@ export default function PanelPage() {
                     >
                       {p.popular && (
                         <span className="absolute -top-2 left-3 km-mono-eyebrow text-[10px] bg-[#D8FF3D] text-[#0B0B0B] px-1.5 py-0.5">
-                          POPULARNY
+                          {t.popular}
                         </span>
                       )}
-                      <div className="text-lg font-bold text-[#F2EDE3]">{p.label}</div>
+                      <div className="text-lg font-bold text-[#F2EDE3]">{t.packLabel(p.tokens)}</div>
                       <div className="text-3xl font-bold text-[#D8FF3D] mt-1">
                         {(p.priceGrosze / 100).toFixed(0)}<span className="text-base text-[#F2EDE3]/50"> zł</span>
                       </div>
                       <div className="text-xs text-[#F2EDE3]/40 mt-1 mb-3">
-                        ~{Math.floor(p.tokens / 3200).toLocaleString("pl-PL")} zadań maturalnych
+                        ~{Math.floor(p.tokens / 3200).toLocaleString(DATE_LOCALE[lang])} {t.maturaTasksApprox}
                       </div>
                       <button
                         onClick={() => buyTokens(p.id)}
                         disabled={buyingPack !== null}
                         className="mt-auto px-4 py-2 km-mono-eyebrow bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] disabled:opacity-50 transition-colors"
                       >
-                        {buyingPack === p.id ? "Przekierowanie..." : "Kup"}
+                        {buyingPack === p.id ? t.redirecting : t.buy}
                       </button>
                     </div>
                   ))}
@@ -1678,9 +2561,9 @@ export default function PanelPage() {
 
               {/* === MODEL AI === */}
               <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ Model AI</div>
+                <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">{t.aiModelHeading}</div>
                 <p className="text-sm text-[#F2EDE3]/55 mb-4">
-                  Wybierz model. Mnożnik (×) pokazuje ile efektywnych tokenów kosztuje jedno zapytanie w stosunku do najtańszego.
+                  {t.aiModelDesc}
                 </p>
                 <div className="grid sm:grid-cols-2 gap-2">
                   {aiModels.map((m) => (
@@ -1717,7 +2600,7 @@ export default function PanelPage() {
 
               {/* === TRYB AI === */}
               <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Tryb AI</div>
+                <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.aiModeHeading}</div>
                 <div className="flex gap-2 mb-2">
                   <button
                     onClick={() => saveAiSettings({ aiMode: "matura" })}
@@ -1727,9 +2610,9 @@ export default function PanelPage() {
                         ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
                         : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
                     }`}
-                    title="Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)"
+                    title={t.maturaCkeTitle}
                   >
-                    Matura (CKE)
+                    {t.maturaCke}
                   </button>
                   <button
                     onClick={() => saveAiSettings({ aiMode: "raw" })}
@@ -1739,15 +2622,13 @@ export default function PanelPage() {
                         ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
                         : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
                     }`}
-                    title="Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)"
+                    title={t.rawAiTitle}
                   >
-                    Czysty AI
+                    {t.rawAi}
                   </button>
                 </div>
                 <div className="text-xs text-[#F2EDE3]/45">
-                  {aiMode === "raw"
-                    ? "Tryb uniwersalny — AI nie zakłada matury. Działa dla elektroniki, informatyki, języków itp."
-                    : "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia)."}
+                  {aiMode === "raw" ? t.rawModeDesc : t.maturaModeDesc}
                 </div>
               </div>
             </motion.div>
@@ -1763,7 +2644,7 @@ export default function PanelPage() {
               className="space-y-6"
             >
               {calcLoading && (
-                <div className="text-[#F2EDE3]/60">Ladowanie...</div>
+                <div className="text-[#F2EDE3]/60">{t.loading}</div>
               )}
 
               {!calcLoading && calcInfo && !calcInfo.device && (
@@ -1776,28 +2657,26 @@ export default function PanelPage() {
                   <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
                     <span className="km-mono-eyebrow text-[#D8FF3D] flex items-center gap-2">
                       <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
-                      Sparuj kalkulator
+                      {t.pairCalculator}
                     </span>
                     <span className="km-mono-eyebrow text-[#F2EDE3]/40">/PAIR</span>
                   </div>
 
                   <div className="p-6 lg:p-8">
                     <h2 className="km-display text-3xl text-[#F2EDE3]">
-                      Dodaj swoje <span className="italic text-[#D8FF3D]">urządzenie</span>.
+                      {t.addYourDevice} <span className="italic text-[#D8FF3D]">{t.deviceWord}</span>.
                     </h2>
                     <p className="mt-3 text-[14px] text-[#F2EDE3]/65 leading-[1.6]">
-                      Wpisz <strong className="text-[#F2EDE3]">Device ID</strong> z kalkulatora
-                      (Settings → Device ID + QR) oraz <strong className="text-[#F2EDE3]">kod
-                      odblokowania</strong> (Settings → Kod AI).
+                      {t.pairIntro1}<strong className="text-[#F2EDE3]">Device ID</strong>{t.pairIntro2}<strong className="text-[#F2EDE3]">{t.unlockCodeLabel}</strong>{t.pairIntro3}
                     </p>
                     <p className="mt-2 km-mono-eyebrow text-[#F2EDE3]/40">
-                      ⚠ Kalkulator musi być najpierw połączony z WiFi i zgłosić się do serwera.
+                      {t.pairWarning}
                     </p>
 
                     <div className="mt-6 space-y-4">
                       <div>
                         <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
-                          Device ID (MAC)
+                          {t.deviceIdLabel}
                         </label>
                         <input
                           type="text"
@@ -1809,7 +2688,7 @@ export default function PanelPage() {
                       </div>
                       <div>
                         <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
-                          Kod odblokowania
+                          {t.unlockCodeLabel}
                         </label>
                         <input
                           type="text"
@@ -1826,7 +2705,7 @@ export default function PanelPage() {
                       >
                         <span className="flex items-center gap-2">
                           {!pairing && <span className="w-1.5 h-1.5 bg-[#0B0B0B] rounded-full km-blink" />}
-                          {pairing ? "Parowanie..." : "Sparuj urządzenie"}
+                          {pairing ? t.pairing : t.pairButton}
                         </span>
                         {!pairing && <span>→</span>}
                       </button>
@@ -1840,8 +2719,8 @@ export default function PanelPage() {
                     )}
                     {pairOk && (
                       <div className="mt-4 border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.06] p-3">
-                        <p className="km-mono-eyebrow text-[#D8FF3D]">✓ Sparowano</p>
-                        <p className="text-sm text-[#F2EDE3]/80 mt-1">Urządzenie dodane do konta.</p>
+                        <p className="km-mono-eyebrow text-[#D8FF3D]">{t.paired}</p>
+                        <p className="text-sm text-[#F2EDE3]/80 mt-1">{t.deviceAdded}</p>
                       </div>
                     )}
                   </div>
@@ -1854,33 +2733,33 @@ export default function PanelPage() {
                   <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-start mb-3">
                       <h2 className="km-display text-2xl text-[#F2EDE3]">
-                        Twoje <span className="italic text-[#D8FF3D]">urządzenie</span>
+                        {t.yourDevice} <span className="italic text-[#D8FF3D]">{t.deviceWord}</span>
                       </h2>
                       <button
                         onClick={calcUnclaim}
                         disabled={unclaiming}
                         className="km-mono-eyebrow px-3 py-1.5 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 disabled:opacity-50 transition-colors"
                       >
-                        {unclaiming ? "Odpinanie..." : "Odepnij"}
+                        {unclaiming ? t.unpinning : t.unpin}
                       </button>
                     </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
-                        <div className="text-[#F2EDE3]/60">Licencja</div>
+                        <div className="text-[#F2EDE3]/60">{t.license}</div>
                         <div className="font-mono text-[#F2EDE3]">{calcInfo.license?.code}</div>
                       </div>
                       {calcInfo.device && (
                         <>
                           <div>
-                            <div className="text-[#F2EDE3]/60">Device ID (MAC)</div>
+                            <div className="text-[#F2EDE3]/60">{t.deviceIdLabel}</div>
                             <div className="font-mono text-[#F2EDE3]">{calcInfo.device.deviceId}</div>
                           </div>
                           <div>
-                            <div className="text-[#F2EDE3]/60">Firmware</div>
+                            <div className="text-[#F2EDE3]/60">{t.firmware}</div>
                             <div className="font-mono text-[#F2EDE3]">{calcInfo.device.firmwareVersion || "—"}</div>
                           </div>
                           <div>
-                            <div className="text-[#F2EDE3]/60">Zapytan</div>
+                            <div className="text-[#F2EDE3]/60">{t.requests}</div>
                             <div className="font-bold text-[#D8FF3D]">{calcInfo.device.requestCount}</div>
                           </div>
                         </>
@@ -1889,10 +2768,11 @@ export default function PanelPage() {
 
                     {/* Tryb AI + model — przeniesione do zakładki "AI" */}
                     <div className="mt-5 pt-5 border-t border-[rgba(242,237,227,0.10)]">
-                      <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ Tryb AI i model</div>
+                      <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">{t.aiModeAndModel}</div>
                       <div className="text-xs text-[#F2EDE3]/45">
-                        Model AI oraz tryb (Matura / Czysty AI) ustawisz w zakładce{" "}
-                        <button onClick={() => setActiveTab("ai")} className="text-[#D8FF3D] underline hover:no-underline">AI</button>.
+                        {t.aiModeSetInTab(
+                          <button onClick={() => setActiveTab("ai")} className="text-[#D8FF3D] underline hover:no-underline">AI</button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1900,18 +2780,18 @@ export default function PanelPage() {
                   {/* Galeria zdjec z kamery */}
                   <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)]">
                     <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
-                      <span className="km-mono-eyebrow text-[#D8FF3D]">/ Galeria zdjęć</span>
+                      <span className="km-mono-eyebrow text-[#D8FF3D]">{t.photoGallery}</span>
                       <span className="km-mono-eyebrow text-[#F2EDE3]/45">
-                        {String(captures.length).padStart(2, "0")} ZDJĘĆ
+                        {t.photosCount(String(captures.length).padStart(2, "0"))}
                       </span>
                     </div>
                     {capturesLoading ? (
                       <div className="px-6 py-10 text-center km-mono-eyebrow text-[#F2EDE3]/45">
-                        Ładowanie…
+                        {t.loading}
                       </div>
                     ) : captures.length === 0 ? (
                       <div className="px-6 py-10 text-center km-mono-eyebrow text-[#F2EDE3]/45">
-                        Brak zdjęć. Zrób kamerą zdjęcie zadania w kalkulatorze.
+                        {t.noPhotos}
                       </div>
                     ) : (
                       <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -1920,7 +2800,7 @@ export default function PanelPage() {
                             key={c.filename}
                             onClick={() => setOpenedCapture(c.filename)}
                             className="group relative aspect-[4/3] bg-[#1A1A1A] overflow-hidden border border-[rgba(242,237,227,0.10)] hover:border-[#D8FF3D] transition-colors"
-                            title={`${new Date(c.timestamp).toLocaleString("pl-PL")} · ${c.sizeKB} kB`}
+                            title={`${new Date(c.timestamp).toLocaleString(DATE_LOCALE[lang])} · ${c.sizeKB} kB`}
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -1931,7 +2811,7 @@ export default function PanelPage() {
                             />
                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5">
                               <div className="km-mono-eyebrow text-[10px] text-[#F2EDE3]/80 truncate">
-                                {new Date(c.timestamp).toLocaleString("pl-PL", {
+                                {new Date(c.timestamp).toLocaleString(DATE_LOCALE[lang], {
                                   day: "2-digit",
                                   month: "2-digit",
                                   hour: "2-digit",
@@ -1962,7 +2842,7 @@ export default function PanelPage() {
                         onClick={() => setOpenedCapture(null)}
                         className="absolute top-4 right-4 km-mono-eyebrow text-[#F2EDE3]/80 hover:text-[#D8FF3D] border border-[rgba(242,237,227,0.20)] px-3 py-1.5"
                       >
-                        Zamknij ×
+                        {t.close} ×
                       </button>
                     </div>
                   )}
@@ -1970,14 +2850,14 @@ export default function PanelPage() {
                   {/* Historia rozmów */}
                   <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)]">
                     <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
-                      <span className="km-mono-eyebrow text-[#D8FF3D]">/ Historia rozwiązań</span>
+                      <span className="km-mono-eyebrow text-[#D8FF3D]">{t.solutionHistory}</span>
                       <span className="km-mono-eyebrow text-[#F2EDE3]/45">
-                        {String(calcConvs.length).padStart(2, "0")} REKORDÓW
+                        {t.recordsCount(String(calcConvs.length).padStart(2, "0"))}
                       </span>
                     </div>
                     {calcConvs.length === 0 ? (
                       <div className="px-6 py-10 text-center km-mono-eyebrow text-[#F2EDE3]/45">
-                        Żadnych zadań jeszcze nie rozwiązano.
+                        {t.noTasksSolved}
                       </div>
                     ) : (
                       <div className="divide-y divide-[rgba(242,237,227,0.08)]">
@@ -1993,14 +2873,14 @@ export default function PanelPage() {
                               </span>
                               <div className="flex-1 min-w-0">
                                 <div className="text-[15px] text-[#F2EDE3] truncate">
-                                  {it.mode === "image" ? "📷 Zdjęcie" : it.question}
+                                  {it.mode === "image" ? t.photo : it.question}
                                 </div>
                                 <div className="text-[13px] text-[#F2EDE3]/55 mt-1 line-clamp-1">
                                   {it.answer.slice(0, 140)}…
                                 </div>
                               </div>
                               <span className="km-mono-eyebrow text-[#F2EDE3]/40 whitespace-nowrap tabular-nums">
-                                {new Date(it.createdAt).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                {new Date(it.createdAt).toLocaleString(DATE_LOCALE[lang], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                               </span>
                             </div>
                           </button>
@@ -2022,9 +2902,9 @@ export default function PanelPage() {
 
                     <div className="flex justify-between items-center px-6 py-4 border-b border-[rgba(242,237,227,0.10)] sticky top-0 bg-[#0B0B0B] z-10">
                       <div className="flex flex-col">
-                        <span className="km-mono-eyebrow text-[#D8FF3D]">/ Rozwiązanie</span>
+                        <span className="km-mono-eyebrow text-[#D8FF3D]">{t.solution}</span>
                         <span className="km-mono-eyebrow text-[#F2EDE3]/45 mt-1">
-                          {new Date(calcOpenedConv.createdAt).toLocaleString("pl-PL")} · {calcOpenedConv.deviceId}
+                          {new Date(calcOpenedConv.createdAt).toLocaleString(DATE_LOCALE[lang])} · {calcOpenedConv.deviceId}
                         </span>
                       </div>
                       <button
@@ -2037,13 +2917,13 @@ export default function PanelPage() {
 
                     <div className="p-6 lg:p-8 space-y-5">
                       <div>
-                        <p className="km-mono-eyebrow text-[#F2EDE3]/55 mb-2">Zadanie</p>
+                        <p className="km-mono-eyebrow text-[#F2EDE3]/55 mb-2">{t.task}</p>
                         <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] p-4 text-[14.5px] text-[#F2EDE3] whitespace-pre-wrap leading-relaxed">
                           {calcOpenedConv.question}
                         </div>
                       </div>
                       <div>
-                        <p className="km-mono-eyebrow text-[#D8FF3D] mb-2">Rozwiązanie</p>
+                        <p className="km-mono-eyebrow text-[#D8FF3D] mb-2">{t.solution}</p>
                         <div className="bg-[#0E0E0E] border border-[#D8FF3D]/30 border-l-2 p-4 text-[14px] text-[#F2EDE3] whitespace-pre-wrap font-mono leading-relaxed">
                           {calcOpenedConv.answer}
                         </div>
@@ -2065,13 +2945,13 @@ export default function PanelPage() {
               transition={{ duration: 0.3, ease: "easeOut" as const }}
             >
               {calcLoading && (
-                <div className="text-[#F2EDE3]/60">Ladowanie...</div>
+                <div className="text-[#F2EDE3]/60">{t.loading}</div>
               )}
               {!calcLoading && calcInfo && !calcInfo.device && (
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                  <p className="km-mono-eyebrow text-[#D8FF3D]">/ wymagany kalkulator</p>
+                  <p className="km-mono-eyebrow text-[#D8FF3D]">{t.calcRequired}</p>
                   <p className="text-sm text-[#F2EDE3]/70 mt-2">
-                    Najpierw sparuj kalkulator w zakładce <strong className="text-[#F2EDE3]">Kalkulator</strong>.
+                    {t.pairFirst(<strong className="text-[#F2EDE3]">{t.tabsCalculator}</strong>)}
                   </p>
                 </div>
               )}
@@ -2079,29 +2959,29 @@ export default function PanelPage() {
                   <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-xl font-bold text-[#F2EDE3]">
-                        Notatki offline ({calcNotes.length}/50)
+                        {t.notesOffline(calcNotes.length)}
                       </h2>
                       <span className="text-xs text-[#F2EDE3]/60">
-                        Sync do urzadzenia przy WiFi
+                        {t.syncToDevice}
                       </span>
                     </div>
                     <div className="bg-[#141414] p-5 mb-5 border border-[rgba(242,237,227,0.10)]">
                       <div className="km-mono-eyebrow text-[#D8FF3D] mb-3 flex items-center gap-2">
                         <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
-                        {editingNote ? "Edytuj notatke" : "Nowa notatka"}
+                        {editingNote ? t.editNote : t.newNote}
                       </div>
                       <input
                         type="text"
                         value={noteTitle}
                         onChange={(e) => setNoteTitle(e.target.value)}
-                        placeholder="Tytul (max 60 znakow)"
+                        placeholder={t.noteTitlePlaceholder}
                         maxLength={60}
                         className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] mb-2 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors"
                       />
                       <textarea
                         value={noteContent}
                         onChange={(e) => setNoteContent(e.target.value)}
-                        placeholder="Tresc (max 4000 znakow - wzory, definicje)"
+                        placeholder={t.noteContentPlaceholder}
                         maxLength={4000}
                         rows={4}
                         className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors resize-none"
@@ -2113,19 +2993,19 @@ export default function PanelPage() {
                             <button
                               onClick={() => { setEditingNote(null); setNoteTitle(""); setNoteContent(""); }}
                               className="px-3 py-1.5 km-mono-eyebrow bg-[#1a1a1a] border border-[rgba(242,237,227,0.20)] hover:border-[#F2EDE3] text-[#F2EDE3]/80 hover:text-[#F2EDE3] transition-colors"
-                            >Anuluj</button>
+                            >{t.cancel}</button>
                           )}
                           <button
                             onClick={calcSaveNote}
                             disabled={savingNote || (!noteTitle.trim() && !noteContent.trim())}
                             className="px-4 py-1.5 km-mono-eyebrow bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] disabled:opacity-30 transition-colors"
-                          >{savingNote ? "Zapisuje..." : editingNote ? "Zapisz" : "Dodaj"}</button>
+                          >{savingNote ? t.saving : editingNote ? t.save : t.add}</button>
                         </div>
                       </div>
                     </div>
                     {calcNotes.length === 0 ? (
                       <div className="text-[#F2EDE3]/60 text-sm text-center py-4">
-                        Brak notatek.
+                        {t.noNotes}
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -2133,14 +3013,14 @@ export default function PanelPage() {
                           <div key={n.id} className="border border-[rgba(242,237,227,0.10)] p-4 hover:bg-[#141414] hover:border-[rgba(242,237,227,0.20)] transition-colors">
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-[#F2EDE3]">{n.title || "(bez tytulu)"}</div>
-                                <div className="text-xs text-[#F2EDE3]/60 mt-1 line-clamp-2 whitespace-pre-wrap">{n.content || "(pusta)"}</div>
+                                <div className="font-medium text-[#F2EDE3]">{n.title || t.noTitle}</div>
+                                <div className="text-xs text-[#F2EDE3]/60 mt-1 line-clamp-2 whitespace-pre-wrap">{n.content || t.empty}</div>
                               </div>
                               <div className="ml-2 flex gap-1">
                                 <button onClick={() => { setEditingNote(n); setNoteTitle(n.title); setNoteContent(n.content); }}
-                                  className="text-xs px-2 py-1 border border-[#D8FF3D]/40 text-[#D8FF3D] hover:bg-[#D8FF3D]/10 km-mono-eyebrow">Edytuj</button>
+                                  className="text-xs px-2 py-1 border border-[#D8FF3D]/40 text-[#D8FF3D] hover:bg-[#D8FF3D]/10 km-mono-eyebrow">{t.edit}</button>
                                 <button onClick={() => calcDelNote(n.id)}
-                                  className="text-xs px-2 py-1 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 km-mono-eyebrow">Usun</button>
+                                  className="text-xs px-2 py-1 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 km-mono-eyebrow">{t.delete}</button>
                               </div>
                             </div>
                           </div>
@@ -2160,13 +3040,13 @@ export default function PanelPage() {
               transition={{ duration: 0.3, ease: "easeOut" as const }}
             >
               {calcLoading && (
-                <div className="text-[#F2EDE3]/60">Ladowanie...</div>
+                <div className="text-[#F2EDE3]/60">{t.loading}</div>
               )}
               {!calcLoading && calcInfo && !calcInfo.device && (
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                  <p className="km-mono-eyebrow text-[#D8FF3D]">/ wymagany kalkulator</p>
+                  <p className="km-mono-eyebrow text-[#D8FF3D]">{t.calcRequired}</p>
                   <p className="text-sm text-[#F2EDE3]/70 mt-2">
-                    Najpierw sparuj kalkulator w zakładce <strong className="text-[#F2EDE3]">Kalkulator</strong>.
+                    {t.pairFirst(<strong className="text-[#F2EDE3]">{t.tabsCalculator}</strong>)}
                   </p>
                 </div>
               )}
@@ -2174,27 +3054,27 @@ export default function PanelPage() {
                   <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-xl font-bold text-[#F2EDE3]">
-                        Sprawdziany ({calcTests.length}/50)
+                        {t.testsHeading(calcTests.length)}
                       </h2>
-                      <span className="text-xs text-[#F2EDE3]/60">Markdown/LaTeX OK</span>
+                      <span className="text-xs text-[#F2EDE3]/60">{t.markdownOk}</span>
                     </div>
                     <div className="bg-[#141414] p-5 mb-5 border border-[rgba(242,237,227,0.10)]">
                       <div className="km-mono-eyebrow text-[#D8FF3D] mb-3 flex items-center gap-2">
                         <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
-                        {editingTest ? "Edytuj sprawdzian" : "Nowy sprawdzian"}
+                        {editingTest ? t.editTest : t.newTest}
                       </div>
                       <input
                         type="text"
                         value={testTitle}
                         onChange={(e) => setTestTitle(e.target.value)}
-                        placeholder="Tytul (np. Matma 2026 - probna 1)"
+                        placeholder={t.testTitlePlaceholder}
                         maxLength={100}
                         className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] mb-2 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors"
                       />
                       <textarea
                         value={testContent}
                         onChange={(e) => setTestContent(e.target.value)}
-                        placeholder="Wklej tutaj rozwiazanie (markdown, LaTeX, $..$, **bold**...)"
+                        placeholder={t.testContentPlaceholder}
                         maxLength={30000}
                         rows={8}
                         className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors resize-none"
@@ -2206,34 +3086,34 @@ export default function PanelPage() {
                             <button
                               onClick={() => { setEditingTest(null); setTestTitle(""); setTestContent(""); }}
                               className="px-3 py-1.5 km-mono-eyebrow bg-[#1a1a1a] border border-[rgba(242,237,227,0.20)] hover:border-[#F2EDE3] text-[#F2EDE3]/80 hover:text-[#F2EDE3] transition-colors"
-                            >Anuluj</button>
+                            >{t.cancel}</button>
                           )}
                           <button
                             onClick={calcSaveTest}
                             disabled={savingTest || (!testTitle.trim() && !testContent.trim())}
                             className="px-3 py-1 text-sm bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50"
-                          >{savingTest ? "Zapisuje..." : editingTest ? "Zapisz" : "Dodaj"}</button>
+                          >{savingTest ? t.saving : editingTest ? t.save : t.add}</button>
                         </div>
                       </div>
                     </div>
                     {calcTests.length === 0 ? (
                       <div className="text-[#F2EDE3]/60 text-sm text-center py-4">
-                        Brak sprawdzianow.
+                        {t.noTests}
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {calcTests.map((t: any) => (
-                          <div key={t.id} className="border border-[rgba(242,237,227,0.10)] p-4 hover:bg-[#141414] hover:border-[rgba(242,237,227,0.20)] transition-colors">
+                        {calcTests.map((test: any) => (
+                          <div key={test.id} className="border border-[rgba(242,237,227,0.10)] p-4 hover:bg-[#141414] hover:border-[rgba(242,237,227,0.20)] transition-colors">
                             <div className="flex justify-between items-start">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-[#F2EDE3]">{t.title || "(bez tytulu)"}</div>
-                                <div className="text-xs text-[#F2EDE3]/60 mt-1">{t.content.length} znakow</div>
+                                <div className="font-medium text-[#F2EDE3]">{test.title || t.noTitle}</div>
+                                <div className="text-xs text-[#F2EDE3]/60 mt-1">{t.charsCount(test.content.length)}</div>
                               </div>
                               <div className="ml-2 flex gap-1">
-                                <button onClick={() => { setEditingTest(t); setTestTitle(t.title); setTestContent(t.content); }}
-                                  className="text-xs px-2 py-1 border border-[#D8FF3D]/40 text-[#D8FF3D] hover:bg-[#D8FF3D]/10 km-mono-eyebrow">Edytuj</button>
-                                <button onClick={() => calcDelTest(t.id)}
-                                  className="text-xs px-2 py-1 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 km-mono-eyebrow">Usun</button>
+                                <button onClick={() => { setEditingTest(test); setTestTitle(test.title); setTestContent(test.content); }}
+                                  className="text-xs px-2 py-1 border border-[#D8FF3D]/40 text-[#D8FF3D] hover:bg-[#D8FF3D]/10 km-mono-eyebrow">{t.edit}</button>
+                                <button onClick={() => calcDelTest(test.id)}
+                                  className="text-xs px-2 py-1 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 km-mono-eyebrow">{t.delete}</button>
                               </div>
                             </div>
                           </div>
@@ -2255,39 +3135,39 @@ export default function PanelPage() {
               <div className="max-w-2xl space-y-6">
                 {/* Profil */}
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Konto</div>
-                  <div className="text-sm text-[#F2EDE3]/55">Zalogowany jako</div>
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.account}</div>
+                  <div className="text-sm text-[#F2EDE3]/55">{t.loggedInAs}</div>
                   <div className="text-[#F2EDE3] font-medium break-all">{session.user?.email}</div>
                 </div>
 
                 {/* Zmiana hasła */}
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-4">/ Zmiana hasła</div>
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-4">{t.changePassword}</div>
                   <div className="space-y-2">
-                    <input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} placeholder="Aktualne hasło" autoComplete="current-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
-                    <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder="Nowe hasło (min. 6 znaków)" autoComplete="new-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
-                    <input type="password" value={pwNew2} onChange={(e) => setPwNew2(e.target.value)} placeholder="Powtórz nowe hasło" autoComplete="new-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                    <input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} placeholder={t.currentPassword} autoComplete="current-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                    <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder={t.newPassword} autoComplete="new-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                    <input type="password" value={pwNew2} onChange={(e) => setPwNew2(e.target.value)} placeholder={t.repeatNewPassword} autoComplete="new-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
                   </div>
                   {pwMsg && <div className={`text-xs mt-2 ${pwMsg.ok ? "text-[#D8FF3D]" : "text-[#FF4D2E]"}`}>{pwMsg.text}</div>}
-                  <button onClick={changePassword} disabled={pwSaving} className="mt-3 px-4 py-2 bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50 transition-colors">{pwSaving ? "Zapisuje..." : "Zmień hasło"}</button>
+                  <button onClick={changePassword} disabled={pwSaving} className="mt-3 px-4 py-2 bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50 transition-colors">{pwSaving ? t.saving : t.changePasswordBtn}</button>
                 </div>
 
                 {/* Zmiana emaila */}
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-4">/ Zmiana adresu email</div>
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-4">{t.changeEmail}</div>
                   <div className="space-y-2">
-                    <input type="email" value={emNew} onChange={(e) => setEmNew(e.target.value)} placeholder="Nowy adres email" autoComplete="email" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
-                    <input type="password" value={emPassword} onChange={(e) => setEmPassword(e.target.value)} placeholder="Potwierdź hasłem" autoComplete="current-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                    <input type="email" value={emNew} onChange={(e) => setEmNew(e.target.value)} placeholder={t.newEmail} autoComplete="email" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
+                    <input type="password" value={emPassword} onChange={(e) => setEmPassword(e.target.value)} placeholder={t.confirmWithPassword} autoComplete="current-password" className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors" />
                   </div>
                   {emMsg && <div className={`text-xs mt-2 ${emMsg.ok ? "text-[#D8FF3D]" : "text-[#FF4D2E]"}`}>{emMsg.text}</div>}
-                  <button onClick={changeEmail} disabled={emSaving} className="mt-3 px-4 py-2 bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50 transition-colors">{emSaving ? "Zapisuje..." : "Zmień email"}</button>
-                  <p className="text-xs text-[#F2EDE3]/40 mt-2">Po zmianie emaila nastąpi wylogowanie — zaloguj się nowym adresem.</p>
+                  <button onClick={changeEmail} disabled={emSaving} className="mt-3 px-4 py-2 bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50 transition-colors">{emSaving ? t.saving : t.changeEmailBtn}</button>
+                  <p className="text-xs text-[#F2EDE3]/40 mt-2">{t.emailChangeNote}</p>
                 </div>
 
                 {/* Wyloguj */}
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">/ Sesja</div>
-                  <button onClick={() => signOut({ callbackUrl: "/" })} className="px-4 py-2 border border-[rgba(242,237,227,0.20)] hover:border-[#FF4D2E] text-[#F2EDE3]/80 hover:text-[#FF4D2E] km-mono-eyebrow transition-colors">Wyloguj się ↗</button>
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.session}</div>
+                  <button onClick={() => signOut({ callbackUrl: "/" })} className="px-4 py-2 border border-[rgba(242,237,227,0.20)] hover:border-[#FF4D2E] text-[#F2EDE3]/80 hover:text-[#FF4D2E] km-mono-eyebrow transition-colors">{t.logoutLong}</button>
                 </div>
               </div>
             </motion.div>

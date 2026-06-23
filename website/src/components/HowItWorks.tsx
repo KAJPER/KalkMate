@@ -1,56 +1,162 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { type ReactNode } from "react";
+import { type Locale } from "@/lib/i18n";
 
-const steps = [
-  {
-    n: "01",
-    title: "Wyceluj",
-    head: "Kierujesz kamerę.",
-    desc: "Ukryta kamera 2MP ostrzy automatycznie. Wszystko od jednego polecenia: zadanie z arkusza, zeszytu, ekranu — wystarczy że widać tekst.",
-    tag: "OV2640 · AF",
-  },
-  {
-    n: "02",
-    title: "Analiza",
-    head: "AI rozpoznaje treść.",
-    desc: "Model wytrenowany na arkuszach CKE z lat 2014–2025 czyta zadanie, klasyfikuje przedmiot i typ, dobiera metodę rozwiązania.",
-    tag: "OCR + LLM",
-  },
-  {
-    n: "03",
-    title: "Odpowiedź",
-    head: "Rozwiązanie na OLED.",
-    desc: "Kompletne rozwiązanie krok po kroku z wzorami w formacie LaTeX. Wynik w mniej niż 1.2 sekundy.",
-    tag: "256×64 OLED",
-  },
-];
+type Step = {
+  n: string;
+  title: string;
+  head: string;
+  desc: string;
+  tag: string;
+};
 
-export default function HowItWorks() {
+type HowItWorksContent = {
+  eyebrow: string;
+  h2: ReactNode;
+  side: string;
+  avg: string;
+  stepLabel: string;
+  steps: Step[];
+};
+
+const content: Record<Locale, HowItWorksContent> = {
+  pl: {
+    eyebrow: "[ 02 ] · Workflow",
+    h2: (
+      <>
+        Trzy ruchy. <span className="italic">Zero</span><br />
+        wpisywania.
+      </>
+    ),
+    side:
+      "Cała interakcja zamyka się w jednym geście. Nie tłumaczysz zadania, nie literujesz wzoru, nie szukasz przycisku.",
+    avg: "[ Avg. czas użycia: 5.4 sek ]",
+    stepLabel: "STEP",
+    steps: [
+      {
+        n: "01",
+        title: "Wyceluj",
+        head: "Kierujesz kamerę.",
+        desc: "Ukryta kamera 2MP ostrzy automatycznie. Wszystko od jednego polecenia: zadanie z arkusza, zeszytu, ekranu — wystarczy że widać tekst.",
+        tag: "OV2640 · AF",
+      },
+      {
+        n: "02",
+        title: "Analiza",
+        head: "AI rozpoznaje treść.",
+        desc: "Model wytrenowany na arkuszach CKE z lat 2014–2025 czyta zadanie, klasyfikuje przedmiot i typ, dobiera metodę rozwiązania.",
+        tag: "OCR + LLM",
+      },
+      {
+        n: "03",
+        title: "Odpowiedź",
+        head: "Rozwiązanie na OLED.",
+        desc: "Kompletne rozwiązanie krok po kroku z wzorami w formacie LaTeX. Wynik w mniej niż 1.2 sekundy.",
+        tag: "256×64 OLED",
+      },
+    ],
+  },
+  en: {
+    eyebrow: "[ 02 ] · Workflow",
+    h2: (
+      <>
+        Three moves. <span className="italic">Zero</span><br />
+        typing.
+      </>
+    ),
+    side:
+      "The whole interaction fits into a single gesture. No spelling out the problem, no keying in the formula, no hunting for a button.",
+    avg: "[ Avg. time in use: 5.4 sec ]",
+    stepLabel: "STEP",
+    steps: [
+      {
+        n: "01",
+        title: "Aim",
+        head: "Point the camera.",
+        desc: "The hidden 2MP camera focuses automatically. One command handles it all: a problem from an exam paper, a notebook or a screen — as long as the text is visible.",
+        tag: "OV2640 · AF",
+      },
+      {
+        n: "02",
+        title: "Analysis",
+        head: "AI reads it.",
+        desc: "A model trained on Polish national matura exam papers (CKE) from 2014–2025 reads the problem, classifies the subject and type, and picks the right method.",
+        tag: "OCR + LLM",
+      },
+      {
+        n: "03",
+        title: "Answer",
+        head: "Solution on OLED.",
+        desc: "A complete step-by-step solution with formulas in LaTeX format. The result in under 1.2 seconds.",
+        tag: "256×64 OLED",
+      },
+    ],
+  },
+  de: {
+    eyebrow: "[ 02 ] · Workflow",
+    h2: (
+      <>
+        Drei Gesten. <span className="italic">Null</span><br />
+        Tippen.
+      </>
+    ),
+    side:
+      "Die gesamte Interaktion passt in eine einzige Geste. Kein Abtippen der Aufgabe, kein Buchstabieren der Formel, kein Suchen nach einer Taste.",
+    avg: "[ Durchschn. Nutzungsdauer: 5,4 Sek ]",
+    stepLabel: "STEP",
+    steps: [
+      {
+        n: "01",
+        title: "Zielen",
+        head: "Kamera draufhalten.",
+        desc: "Die versteckte 2-MP-Kamera fokussiert automatisch. Ein Befehl genügt: eine Aufgabe aus dem Prüfungsbogen, dem Heft oder vom Bildschirm — Hauptsache, der Text ist sichtbar.",
+        tag: "OV2640 · AF",
+      },
+      {
+        n: "02",
+        title: "Analyse",
+        head: "KI erkennt alles.",
+        desc: "Ein Modell, trainiert auf polnischen Abiturprüfungen (CKE) der Jahre 2014–2025, liest die Aufgabe, klassifiziert Fach und Typ und wählt die passende Methode.",
+        tag: "OCR + LLM",
+      },
+      {
+        n: "03",
+        title: "Antwort",
+        head: "Lösung auf OLED.",
+        desc: "Eine vollständige Schritt-für-Schritt-Lösung mit Formeln im LaTeX-Format. Das Ergebnis in unter 1,2 Sekunden.",
+        tag: "256×64 OLED",
+      },
+    ],
+  },
+};
+
+export default function HowItWorks({ lang = "pl" }: { lang?: Locale }) {
+  const t = content[lang];
+
   return (
     <section id="jak-dziala" className="relative py-24 lg:py-36">
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
         <div className="grid lg:grid-cols-12 gap-8 items-end mb-16">
           <div className="lg:col-span-7">
-            <p className="km-mono-eyebrow text-[#D8FF3D]">[ 02 ] · Workflow</p>
+            <p className="km-mono-eyebrow text-[#D8FF3D]">{t.eyebrow}</p>
             <h2 className="km-display text-[clamp(40px,7vw,108px)] text-[#F2EDE3] mt-4">
-              Trzy ruchy. <span className="italic">Zero</span><br />
-              wpisywania.
+              {t.h2}
             </h2>
           </div>
           <div className="lg:col-span-4 lg:col-start-9">
             <p className="text-[15px] leading-[1.65] text-[#F2EDE3]/65">
-              Cała interakcja zamyka się w jednym geście. Nie tłumaczysz zadania,
-              nie literujesz wzoru, nie szukasz przycisku.
+              {t.side}
             </p>
             <div className="km-mono-eyebrow text-[#F2EDE3]/40 mt-4">
-              [ Avg. czas użycia: 5.4 sek ]
+              {t.avg}
             </div>
           </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-px bg-[rgba(242,237,227,0.10)] border border-[rgba(242,237,227,0.10)]">
-          {steps.map((s, i) => (
+          {t.steps.map((s, i) => (
             <motion.div
               key={s.n}
               initial={{ opacity: 0, y: 24 }}
@@ -81,7 +187,7 @@ export default function HowItWorks() {
               </p>
 
               <p className="km-mono-eyebrow text-[#F2EDE3]/35 mt-10">
-                STEP / {s.title.toUpperCase()}
+                {t.stepLabel} / {s.title.toUpperCase()}
               </p>
             </motion.div>
           ))}

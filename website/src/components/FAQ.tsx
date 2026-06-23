@@ -2,41 +2,33 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { type Locale } from "@/lib/i18n";
+import { faqs } from "@/lib/content/faq";
 
-const faqs = [
+const content: Record<
+  Locale,
   {
-    q: "Czy nauczyciel może zauważyć, że to nie zwykły kalkulator?",
-    a: "Nie. Obudowa, klawiatura i ekran są identyczne ze standardowymi kalkulatorami graficznymi. Tryb AI uruchamiasz ukrytą kombinacją klawiszy — nie ma żadnych ikon ani wskaźników, które by Cię zdradzały.",
+    eyebrow: string;
+    h2: { before: string; italic: string; after: string };
+    sideParagraph: string;
+  }
+> = {
+  pl: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Pytania, ", italic: "które", after: "każdy ma." },
+    sideParagraph: "Nie znalazłeś odpowiedzi? Napisz — odpowiadam w ciągu 24h.",
   },
-  {
-    q: "Jakie przedmioty obsługuje AI?",
-    a: "Matematyka (poziom podstawowy i rozszerzony), fizyka, chemia i biologia. Model jest trenowany na arkuszach CKE z lat 2014–2025. Sukcesywnie dodajemy kolejne przedmioty.",
+  en: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Questions ", italic: "everyone", after: "has." },
+    sideParagraph: "Didn't find your answer? Drop me a line — I reply within 24h.",
   },
-  {
-    q: "Czy potrzebuję WiFi?",
-    a: "Tryb AI wymaga WiFi (konfigurujesz raz, w panelu użytkownika). Tryb klasycznego kalkulatora działa offline przez cały czas.",
+  de: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Fragen, ", italic: "die", after: "jeder hat." },
+    sideParagraph: "Keine Antwort gefunden? Schreib mir — ich antworte innerhalb von 24h.",
   },
-  {
-    q: "Jak długo działa na baterii?",
-    a: "Około 6 godzin w trybie mieszanym (AI + kalkulator). Sam tryb kalkulatora wytrzymuje znacznie dłużej. Ładowanie USB-C ~ 2 godziny.",
-  },
-  {
-    q: "Czy moje dane są bezpieczne?",
-    a: "Zdjęcia i zapytania przesyłamy szyfrowanym HTTPS. Po przetworzeniu nie przechowujemy zdjęć — są usuwane z serwera natychmiast po wysłaniu odpowiedzi.",
-  },
-  {
-    q: "Czy mogę zwrócić produkt?",
-    a: "Tak. Masz 14 dni na zwrot bez podania przyczyny, zgodnie z prawem konsumenckim. Zwracamy pełną kwotę po otrzymaniu urządzenia.",
-  },
-  {
-    q: "Kiedy dostanę zamówienie?",
-    a: "Wysyłka w ciągu 3–5 dni roboczych. Dostawa Paczkomatem InPost 1–2 dni robocze. Numer przesyłki dostajesz mailem.",
-  },
-  {
-    q: "Jaka jest gwarancja?",
-    a: "24 miesiące gwarancji producenta na wszystkie elementy. Naprawiamy lub wymieniamy urządzenie w razie usterki.",
-  },
-];
+};
 
 function Item({ item, n }: { item: { q: string; a: string }; n: number }) {
   const [open, setOpen] = useState(false);
@@ -79,22 +71,23 @@ function Item({ item, n }: { item: { q: string; a: string }; n: number }) {
   );
 }
 
-export default function FAQ() {
+export default function FAQ({ lang = "pl" }: { lang?: Locale }) {
+  const t = content[lang];
+  const items = faqs[lang];
   return (
     <section id="faq" className="relative py-24 lg:py-36">
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
         <div className="grid lg:grid-cols-12 gap-8 items-end mb-12 lg:mb-16">
           <div className="lg:col-span-8">
-            <p className="km-mono-eyebrow text-[#D8FF3D]">[ 06 ] · FAQ</p>
+            <p className="km-mono-eyebrow text-[#D8FF3D]">{t.eyebrow}</p>
             <h2 className="km-display text-[clamp(40px,7vw,108px)] text-[#F2EDE3] mt-4">
-              Pytania, <span className="italic">które</span><br />
-              każdy ma.
+              {t.h2.before}<span className="italic">{t.h2.italic}</span><br />
+              {t.h2.after}
             </h2>
           </div>
           <div className="lg:col-span-4">
             <p className="text-[15px] leading-[1.65] text-[#F2EDE3]/60">
-              Nie znalazłeś odpowiedzi? Napisz —
-              odpowiadam w ciągu 24h.
+              {t.sideParagraph}
             </p>
             <a
               href="mailto:kontakt@kalkmate.pl"
@@ -106,7 +99,7 @@ export default function FAQ() {
         </div>
 
         <div className="border-t border-[rgba(242,237,227,0.10)]">
-          {faqs.map((f, i) => (
+          {items.map((f, i) => (
             <Item key={i} item={f} n={i + 1} />
           ))}
         </div>

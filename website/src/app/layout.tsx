@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
-import HeadSEO from "./head-seo";
 import SessionProvider from "@/components/SessionProvider";
 import CookieBanner from "@/components/CookieBanner";
 import { CartProvider } from "@/components/CartContext";
@@ -96,25 +95,6 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: "KalkMate — Kalkulator AI",
-    image: "https://kalkmate.pl/KalkMate.png",
-    description:
-      "Inteligentny kalkulator z wbudowaną kamerą i AI. Rozwiązuje zadania z matematyki, fizyki, chemii i biologii.",
-    brand: { "@type": "Brand", name: "KalkMate" },
-    offers: {
-      "@type": "Offer",
-      url: "https://kalkmate.pl",
-      priceCurrency: "PLN",
-      price: "699",
-      priceValidUntil: "2026-12-31",
-      availability: "https://schema.org/InStock",
-      seller: { "@type": "Organization", name: "KalkMate" },
-    },
-  };
-
   return (
     <html lang="pl" className="dark">
       <head>
@@ -126,12 +106,6 @@ export default function RootLayout({
         <meta name="theme-color" content="#0B0B0B" />
         <link rel="manifest" href="/site.webmanifest" />
         <meta name="geo.region" content="PL" />
-        <meta name="language" content="Polish" />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-        <HeadSEO />
       </head>
       <body
         className={`${geist.variable} ${instrument.variable} ${jetbrains.variable} antialiased km-grain bg-[#0B0B0B] text-[#F2EDE3]`}

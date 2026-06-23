@@ -3,8 +3,126 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { type Locale } from "@/lib/i18n";
+import { usePanelLang } from "@/lib/usePanelLang";
+import PanelLangSwitcher from "@/components/PanelLangSwitcher";
+
+const DICT: Record<Locale, {
+  noToken: string;
+  invalidLink: string;
+  networkError: string;
+  genericFail: string;
+  eyebrowStep: string;
+  asideHeading1: string;
+  asideHeadingItalic: string;
+  asideHeading2: string;
+  asideBody: string;
+  panelEyebrow: string;
+  panelTag: string;
+  headingPre: string;
+  headingEmail: string;
+  headingDot: string;
+  checking: string;
+  invalidTag: string;
+  goToSignin: string;
+  alreadyTag: string;
+  alreadyBody: string;
+  signin: string;
+  validBody: string;
+  activating: string;
+  confirmEmail: string;
+  doneTag: string;
+  doneBody: string;
+}> = {
+  pl: {
+    noToken: "Brak tokenu w linku",
+    invalidLink: "Link nieprawidłowy",
+    networkError: "Błąd sieci",
+    genericFail: "Nie udało się",
+    eyebrowStep: "[ 04 ] · Weryfikacja",
+    asideHeading1: "Jedno ",
+    asideHeadingItalic: "kliknięcie",
+    asideHeading2: ".",
+    asideBody:
+      "Potwierdź swój email żeby aktywować konto. Bez weryfikacji nie zalogujesz się ani nie złożysz zamówienia.",
+    panelEyebrow: "Weryfikacja email",
+    panelTag: "/VERIFY",
+    headingPre: "Potwierdź ",
+    headingEmail: "email",
+    headingDot: ".",
+    checking: "SPRAWDZAM LINK...",
+    invalidTag: "/ LINK NIEWAŻNY",
+    goToSignin: "Idź do logowania →",
+    alreadyTag: "/ JUŻ ZWERYFIKOWANE",
+    alreadyBody: "Konto było już aktywowane.",
+    signin: "Zaloguj się →",
+    validBody: "Klik poniżej aby aktywować swoje konto KalkMate.",
+    activating: "AKTYWUJĘ...",
+    confirmEmail: "POTWIERDŹ EMAIL",
+    doneTag: "/ KONTO AKTYWNE",
+    doneBody: "Twoje konto jest aktywne. Możesz się teraz zalogować.",
+  },
+  en: {
+    noToken: "No token in the link",
+    invalidLink: "Invalid link",
+    networkError: "Network error",
+    genericFail: "Something went wrong",
+    eyebrowStep: "[ 04 ] · Verification",
+    asideHeading1: "One ",
+    asideHeadingItalic: "click",
+    asideHeading2: ".",
+    asideBody:
+      "Confirm your email to activate your account. Without verification you can't sign in or place an order.",
+    panelEyebrow: "Email verification",
+    panelTag: "/VERIFY",
+    headingPre: "Confirm your ",
+    headingEmail: "email",
+    headingDot: ".",
+    checking: "CHECKING LINK...",
+    invalidTag: "/ INVALID LINK",
+    goToSignin: "Go to sign in →",
+    alreadyTag: "/ ALREADY VERIFIED",
+    alreadyBody: "This account was already activated.",
+    signin: "Sign in →",
+    validBody: "Click below to activate your KalkMate account.",
+    activating: "ACTIVATING...",
+    confirmEmail: "CONFIRM EMAIL",
+    doneTag: "/ ACCOUNT ACTIVE",
+    doneBody: "Your account is active. You can sign in now.",
+  },
+  de: {
+    noToken: "Kein Token im Link",
+    invalidLink: "Ungültiger Link",
+    networkError: "Netzwerkfehler",
+    genericFail: "Etwas ist schiefgelaufen",
+    eyebrowStep: "[ 04 ] · Verifizierung",
+    asideHeading1: "Ein ",
+    asideHeadingItalic: "Klick",
+    asideHeading2: ".",
+    asideBody:
+      "Bestätige deine E-Mail, um dein Konto zu aktivieren. Ohne Verifizierung kannst du dich nicht anmelden und keine Bestellung aufgeben.",
+    panelEyebrow: "E-Mail-Verifizierung",
+    panelTag: "/VERIFY",
+    headingPre: "Bestätige deine ",
+    headingEmail: "E-Mail",
+    headingDot: ".",
+    checking: "LINK WIRD GEPRÜFT...",
+    invalidTag: "/ LINK UNGÜLTIG",
+    goToSignin: "Zur Anmeldung →",
+    alreadyTag: "/ BEREITS VERIFIZIERT",
+    alreadyBody: "Dieses Konto wurde bereits aktiviert.",
+    signin: "Anmelden →",
+    validBody: "Klicke unten, um dein KalkMate-Konto zu aktivieren.",
+    activating: "AKTIVIERE...",
+    confirmEmail: "E-MAIL BESTÄTIGEN",
+    doneTag: "/ KONTO AKTIV",
+    doneBody: "Dein Konto ist aktiv. Du kannst dich jetzt anmelden.",
+  },
+};
 
 function VerifyInner() {
+  const { lang, setLang } = usePanelLang();
+  const t = DICT[lang];
   const params = useSearchParams();
   const token = params.get("token") || "";
   const [state, setState] = useState<"checking" | "valid" | "invalid" | "done" | "already">("checking");
@@ -12,18 +130,19 @@ function VerifyInner() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!token) { setState("invalid"); setError("Brak tokenu w linku"); return; }
+    if (!token) { setState("invalid"); setError(t.noToken); return; }
     (async () => {
       try {
         const r = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
         const j = await r.json();
         if (j.alreadyVerified) { setState("already"); return; }
-        if (!j.valid) { setState("invalid"); setError(j.error || "Link nieprawidłowy"); return; }
+        if (!j.valid) { setState("invalid"); setError(j.error || t.invalidLink); return; }
         setState("valid");
       } catch {
-        setState("invalid"); setError("Błąd sieci");
+        setState("invalid"); setError(t.networkError);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const confirm = async () => {
@@ -36,9 +155,9 @@ function VerifyInner() {
       });
       const j = await r.json();
       if (j.ok) setState("done");
-      else { setState("invalid"); setError(j.error || "Nie udało się"); }
+      else { setState("invalid"); setError(j.error || t.genericFail); }
     } catch {
-      setError("Błąd sieci");
+      setError(t.networkError);
     } finally {
       setSubmitting(false);
     }
@@ -56,19 +175,21 @@ function VerifyInner() {
           <span className="km-mono-eyebrow text-[#F2EDE3]/40">/AUTH</span>
         </div>
         <div className="relative z-10">
-          <p className="km-mono-eyebrow text-[#D8FF3D]">[ 04 ] · Weryfikacja</p>
+          <p className="km-mono-eyebrow text-[#D8FF3D]">{t.eyebrowStep}</p>
           <h2 className="km-display text-[clamp(48px,5.4vw,84px)] mt-6">
-            Jedno <span className="italic">kliknięcie</span>.
+            {t.asideHeading1}<span className="italic">{t.asideHeadingItalic}</span>{t.asideHeading2}
           </h2>
           <p className="mt-6 text-[15px] leading-[1.6] text-[#F2EDE3]/65 max-w-md">
-            Potwierdź swój email żeby aktywować konto. Bez weryfikacji nie zalogujesz się
-            ani nie złożysz zamówienia.
+            {t.asideBody}
           </p>
         </div>
         <div />
       </div>
 
       <div className="flex-1 flex items-center justify-center p-6 lg:p-10 relative">
+        <div className="absolute top-6 right-6 z-20">
+          <PanelLangSwitcher lang={lang} setLang={setLang} />
+        </div>
         <div className="w-full max-w-md relative">
           <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-l border-t border-[#D8FF3D]" />
           <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-r border-t border-[#D8FF3D]" />
@@ -83,28 +204,28 @@ function VerifyInner() {
             <div className="flex items-center justify-between border-b border-[rgba(242,237,227,0.10)] pb-4">
               <span className="km-mono-eyebrow text-[#D8FF3D] flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
-                Weryfikacja email
+                {t.panelEyebrow}
               </span>
-              <span className="km-mono-eyebrow text-[#F2EDE3]/40">/VERIFY</span>
+              <span className="km-mono-eyebrow text-[#F2EDE3]/40">{t.panelTag}</span>
             </div>
 
             <h1 className="km-display text-4xl lg:text-5xl mt-6 leading-[0.95]">
-              Potwierdź <span className="italic text-[#D8FF3D]">email</span>.
+              {t.headingPre}<span className="italic text-[#D8FF3D]">{t.headingEmail}</span>{t.headingDot}
             </h1>
 
             {state === "checking" && (
-              <p className="mt-6 km-mono-eyebrow text-[#F2EDE3]/55">SPRAWDZAM LINK...</p>
+              <p className="mt-6 km-mono-eyebrow text-[#F2EDE3]/55">{t.checking}</p>
             )}
 
             {state === "invalid" && (
               <>
                 <div className="mt-6 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-4">
-                  <p className="km-mono-eyebrow text-[#FF4D2E]">/ LINK NIEWAŻNY</p>
+                  <p className="km-mono-eyebrow text-[#FF4D2E]">{t.invalidTag}</p>
                   <p className="text-sm text-[#FF4D2E]/90 mt-2">{error}</p>
                 </div>
                 <div className="mt-6 pt-4 border-t border-[rgba(242,237,227,0.10)] text-center">
                   <Link href="/auth/signin" className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
-                    Idź do logowania →
+                    {t.goToSignin}
                   </Link>
                 </div>
               </>
@@ -113,12 +234,12 @@ function VerifyInner() {
             {state === "already" && (
               <>
                 <div className="mt-6 border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.05] p-4">
-                  <p className="km-mono-eyebrow text-[#D8FF3D]">/ JUŻ ZWERYFIKOWANE</p>
-                  <p className="text-sm text-[#F2EDE3]/80 mt-2">Konto było już aktywowane.</p>
+                  <p className="km-mono-eyebrow text-[#D8FF3D]">{t.alreadyTag}</p>
+                  <p className="text-sm text-[#F2EDE3]/80 mt-2">{t.alreadyBody}</p>
                 </div>
                 <div className="mt-6 text-center">
                   <Link href="/auth/signin" className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
-                    Zaloguj się →
+                    {t.signin}
                   </Link>
                 </div>
               </>
@@ -127,7 +248,7 @@ function VerifyInner() {
             {state === "valid" && (
               <>
                 <p className="mt-3 text-[14.5px] text-[#F2EDE3]/55">
-                  Klik poniżej aby aktywować swoje konto KalkMate.
+                  {t.validBody}
                 </p>
                 <button
                   onClick={confirm}
@@ -138,7 +259,7 @@ function VerifyInner() {
                       : "bg-[#D8FF3D] text-[#0B0B0B] hover:bg-[#F2EDE3]"
                   }`}
                 >
-                  <span>{submitting ? "AKTYWUJĘ..." : "POTWIERDŹ EMAIL"}</span>
+                  <span>{submitting ? t.activating : t.confirmEmail}</span>
                   <span>→</span>
                 </button>
               </>
@@ -147,14 +268,14 @@ function VerifyInner() {
             {state === "done" && (
               <>
                 <div className="mt-6 border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.05] p-4">
-                  <p className="km-mono-eyebrow text-[#D8FF3D]">/ KONTO AKTYWNE</p>
+                  <p className="km-mono-eyebrow text-[#D8FF3D]">{t.doneTag}</p>
                   <p className="text-sm text-[#F2EDE3]/80 mt-2">
-                    Twoje konto jest aktywne. Możesz się teraz zalogować.
+                    {t.doneBody}
                   </p>
                 </div>
                 <div className="mt-6 text-center">
                   <Link href="/auth/signin" className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
-                    Zaloguj się →
+                    {t.signin}
                   </Link>
                 </div>
               </>

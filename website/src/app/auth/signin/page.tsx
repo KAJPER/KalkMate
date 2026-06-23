@@ -1,13 +1,213 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { usePanelLang } from "@/lib/usePanelLang";
+import PanelLangSwitcher from "@/components/PanelLangSwitcher";
+import { type Locale } from "@/lib/i18n";
+
+const DICT: Record<
+  Locale,
+  {
+    oauthCallback: string;
+    oauthNotLinked: string;
+    accessDenied: string;
+    errorPrefix: (e: string) => string;
+    registerError: string;
+    genericError: string;
+    badgeLogin: string;
+    badgeRegister: string;
+    brandEyebrow: string;
+    brandHeading: ReactNode;
+    brandDesc: string;
+    statSubjects: string;
+    statResponse: string;
+    statWarranty: string;
+    warrantyUnit: string;
+    h1Login: ReactNode;
+    h1Register: ReactNode;
+    subLogin: string;
+    subRegister: string;
+    errorLabel: string;
+    resendSending: string;
+    resendLink: string;
+    checkInbox: string;
+    verificationSentText: (email: string) => ReactNode;
+    continueGoogle: string;
+    or: string;
+    nameLabel: string;
+    nameOptional: string;
+    namePlaceholder: string;
+    emailLabel: string;
+    emailPlaceholder: string;
+    passwordLabel: string;
+    minChars: string;
+    forgotPassword: string;
+    submitLoadingLogin: string;
+    submitLoadingRegister: string;
+    submitLogin: string;
+    submitRegister: string;
+    toggleToRegister: string;
+    toggleToLogin: string;
+    backHome: string;
+  }
+> = {
+  pl: {
+    oauthCallback: "Błąd logowania przez Google. Spróbuj ponownie.",
+    oauthNotLinked: "Ten email jest już zarejestrowany hasłem. Zaloguj się emailem i hasłem.",
+    accessDenied: "Dostęp odmówiony przez Google.",
+    errorPrefix: (e) => `Błąd: ${e}`,
+    registerError: "Błąd rejestracji",
+    genericError: "Wystąpił błąd",
+    badgeLogin: "Logowanie",
+    badgeRegister: "Rejestracja",
+    brandEyebrow: "[ 01 ] · Panel klienta",
+    brandHeading: (<>Twój sprzęt.<br /><span className="italic">Twoje</span> rozwiązania.</>),
+    brandDesc:
+      "Zaloguj się, żeby skonfigurować WiFi w kalkulatorze, przeglądać historię rozwiązań, zarządzać licencjami AI Chat i aktywować nowe urządzenia.",
+    statSubjects: "Przedmiotów",
+    statResponse: "Odpowiedź",
+    statWarranty: "Gwarancja",
+    warrantyUnit: "mc",
+    h1Login: (<>Wejdź na <span className="italic text-[#D8FF3D]">panel</span>.</>),
+    h1Register: (<>Załóż <span className="italic text-[#D8FF3D]">konto</span>.</>),
+    subLogin: "Zaloguj się i przejmij kontrolę nad swoim KalkMate.",
+    subRegister: "Utwórz konto, żeby zacząć aktywować urządzenia.",
+    errorLabel: "/ ERROR",
+    resendSending: "WYSYŁAM...",
+    resendLink: "WYŚLIJ NOWY LINK WERYFIKACYJNY →",
+    checkInbox: "/ SPRAWDŹ SKRZYNKĘ",
+    verificationSentText: (email) => (
+      <>
+        Wysłaliśmy link aktywacyjny na <strong className="text-[#F2EDE3]">{email}</strong>.
+        Kliknij go żeby aktywować konto (link wygasa za 24h). Sprawdź też SPAM.
+      </>
+    ),
+    continueGoogle: "Kontynuuj z Google",
+    or: "lub",
+    nameLabel: "Imię",
+    nameOptional: "· opcjonalne",
+    namePlaceholder: "Jan Kowalski",
+    emailLabel: "Email",
+    emailPlaceholder: "twoj@email.pl",
+    passwordLabel: "Hasło",
+    minChars: "Min. 6 znaków",
+    forgotPassword: "Zapomniałem hasła",
+    submitLoadingLogin: "Logowanie...",
+    submitLoadingRegister: "Tworzenie konta...",
+    submitLogin: "Zaloguj się",
+    submitRegister: "Zarejestruj się",
+    toggleToRegister: "Nie masz konta? → Załóż konto",
+    toggleToLogin: "Masz już konto? → Zaloguj się",
+    backHome: "← Powrót do strony głównej",
+  },
+  en: {
+    oauthCallback: "Google sign-in failed. Please try again.",
+    oauthNotLinked: "This email is already registered with a password. Sign in with email and password.",
+    accessDenied: "Access denied by Google.",
+    errorPrefix: (e) => `Error: ${e}`,
+    registerError: "Registration error",
+    genericError: "An error occurred",
+    badgeLogin: "Sign in",
+    badgeRegister: "Register",
+    brandEyebrow: "[ 01 ] · Client panel",
+    brandHeading: (<>Your hardware.<br /><span className="italic">Your</span> solutions.</>),
+    brandDesc:
+      "Sign in to set up WiFi on your calculator, browse your solution history, manage AI Chat licenses and activate new devices.",
+    statSubjects: "Subjects",
+    statResponse: "Response",
+    statWarranty: "Warranty",
+    warrantyUnit: "mo",
+    h1Login: (<>Enter the <span className="italic text-[#D8FF3D]">panel</span>.</>),
+    h1Register: (<>Create an <span className="italic text-[#D8FF3D]">account</span>.</>),
+    subLogin: "Sign in and take control of your KalkMate.",
+    subRegister: "Create an account to start activating devices.",
+    errorLabel: "/ ERROR",
+    resendSending: "SENDING...",
+    resendLink: "SEND A NEW VERIFICATION LINK →",
+    checkInbox: "/ CHECK YOUR INBOX",
+    verificationSentText: (email) => (
+      <>
+        We sent an activation link to <strong className="text-[#F2EDE3]">{email}</strong>.
+        Click it to activate your account (the link expires in 24h). Check your SPAM folder too.
+      </>
+    ),
+    continueGoogle: "Continue with Google",
+    or: "or",
+    nameLabel: "Name",
+    nameOptional: "· optional",
+    namePlaceholder: "John Smith",
+    emailLabel: "Email",
+    emailPlaceholder: "you@email.com",
+    passwordLabel: "Password",
+    minChars: "Min. 6 characters",
+    forgotPassword: "Forgot password",
+    submitLoadingLogin: "Signing in...",
+    submitLoadingRegister: "Creating account...",
+    submitLogin: "Sign in",
+    submitRegister: "Sign up",
+    toggleToRegister: "No account? → Create one",
+    toggleToLogin: "Already have an account? → Sign in",
+    backHome: "← Back to homepage",
+  },
+  de: {
+    oauthCallback: "Google-Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
+    oauthNotLinked: "Diese E-Mail ist bereits mit einem Passwort registriert. Melde dich mit E-Mail und Passwort an.",
+    accessDenied: "Zugriff von Google verweigert.",
+    errorPrefix: (e) => `Fehler: ${e}`,
+    registerError: "Registrierungsfehler",
+    genericError: "Ein Fehler ist aufgetreten",
+    badgeLogin: "Anmeldung",
+    badgeRegister: "Registrierung",
+    brandEyebrow: "[ 01 ] · Kundenbereich",
+    brandHeading: (<>Deine Hardware.<br /><span className="italic">Deine</span> Lösungen.</>),
+    brandDesc:
+      "Melde dich an, um WiFi auf deinem Rechner einzurichten, deinen Lösungsverlauf einzusehen, AI-Chat-Lizenzen zu verwalten und neue Geräte zu aktivieren.",
+    statSubjects: "Fächer",
+    statResponse: "Antwort",
+    statWarranty: "Garantie",
+    warrantyUnit: "Mon",
+    h1Login: (<>Zum <span className="italic text-[#D8FF3D]">Panel</span>.</>),
+    h1Register: (<>Konto <span className="italic text-[#D8FF3D]">erstellen</span>.</>),
+    subLogin: "Melde dich an und übernimm die Kontrolle über dein KalkMate.",
+    subRegister: "Erstelle ein Konto, um Geräte zu aktivieren.",
+    errorLabel: "/ ERROR",
+    resendSending: "SENDE...",
+    resendLink: "NEUEN BESTÄTIGUNGSLINK SENDEN →",
+    checkInbox: "/ POSTFACH PRÜFEN",
+    verificationSentText: (email) => (
+      <>
+        Wir haben einen Aktivierungslink an <strong className="text-[#F2EDE3]">{email}</strong> gesendet.
+        Klicke darauf, um dein Konto zu aktivieren (der Link läuft in 24h ab). Prüfe auch deinen SPAM-Ordner.
+      </>
+    ),
+    continueGoogle: "Mit Google fortfahren",
+    or: "oder",
+    nameLabel: "Name",
+    nameOptional: "· optional",
+    namePlaceholder: "Max Mustermann",
+    emailLabel: "E-Mail",
+    emailPlaceholder: "du@email.de",
+    passwordLabel: "Passwort",
+    minChars: "Mind. 6 Zeichen",
+    forgotPassword: "Passwort vergessen",
+    submitLoadingLogin: "Anmeldung...",
+    submitLoadingRegister: "Konto wird erstellt...",
+    submitLogin: "Anmelden",
+    submitRegister: "Registrieren",
+    toggleToRegister: "Kein Konto? → Konto erstellen",
+    toggleToLogin: "Schon ein Konto? → Anmelden",
+    backHome: "← Zurück zur Startseite",
+  },
+};
 
 function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { lang, setLang } = usePanelLang();
+  const t = DICT[lang];
   const callbackUrl = searchParams.get("callbackUrl") || "/panel";
   // Tryb formularza: ?mode=register | ?mode=signup | ?signup=1 -> rejestracja, domyslnie login
   const initialMode = searchParams.get("mode") || (searchParams.get("signup") ? "register" : "");
@@ -15,13 +215,13 @@ function SignInForm() {
 
   const urlError = searchParams.get("error");
   const urlErrorMsg = urlError === "OAuthCallback" || urlError === "OAuthSignin"
-    ? "Błąd logowania przez Google. Spróbuj ponownie."
+    ? t.oauthCallback
     : urlError === "OAuthAccountNotLinked"
-    ? "Ten email jest już zarejestrowany hasłem. Zaloguj się emailem i hasłem."
+    ? t.oauthNotLinked
     : urlError === "AccessDenied"
-    ? "Dostęp odmówiony przez Google."
+    ? t.accessDenied
     : urlError
-    ? `Błąd: ${urlError}`
+    ? t.errorPrefix(urlError)
     : "";
 
   const [isLogin, setIsLogin] = useState(!startAsRegister);
@@ -58,14 +258,14 @@ function SignInForm() {
           body: JSON.stringify({ email, password, name }),
         });
         const data = await res.json();
-        if (!res.ok) setError(data.error || "Błąd rejestracji");
+        if (!res.ok) setError(data.error || t.registerError);
         else {
           // Konto utworzone — NIE logujemy automatycznie. User musi zweryfikowac email.
           setVerificationSent(true);
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Wystąpił błąd");
+      setError(err instanceof Error ? err.message : t.genericError);
     } finally {
       setIsLoading(false);
     }
@@ -107,30 +307,27 @@ function SignInForm() {
         </div>
 
         <div className="relative z-10">
-          <p className="km-mono-eyebrow text-[#D8FF3D]">[ 01 ] · Panel klienta</p>
+          <p className="km-mono-eyebrow text-[#D8FF3D]">{t.brandEyebrow}</p>
           <h2 className="km-display text-[clamp(48px,5.4vw,84px)] mt-6">
-            Twój sprzęt.<br />
-            <span className="italic">Twoje</span> rozwiązania.
+            {t.brandHeading}
           </h2>
           <p className="mt-6 text-[15px] leading-[1.6] text-[#F2EDE3]/65 max-w-md">
-            Zaloguj się, żeby skonfigurować WiFi w kalkulatorze,
-            przeglądać historię rozwiązań, zarządzać licencjami AI Chat
-            i aktywować nowe urządzenia.
+            {t.brandDesc}
           </p>
         </div>
 
         <div className="relative z-10 grid grid-cols-3 gap-6">
           <div>
             <p className="km-display text-3xl text-[#F2EDE3]">04</p>
-            <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">Przedmiotów</p>
+            <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">{t.statSubjects}</p>
           </div>
           <div>
             <p className="km-display text-3xl text-[#F2EDE3]">1.2<span className="text-[#F2EDE3]/40 text-lg">s</span></p>
-            <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">Odpowiedź</p>
+            <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">{t.statResponse}</p>
           </div>
           <div>
-            <p className="km-display text-3xl text-[#F2EDE3]">24<span className="text-[#F2EDE3]/40 text-lg">mc</span></p>
-            <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">Gwarancja</p>
+            <p className="km-display text-3xl text-[#F2EDE3]">24<span className="text-[#F2EDE3]/40 text-lg">{t.warrantyUnit}</span></p>
+            <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-1">{t.statWarranty}</p>
           </div>
         </div>
       </div>
@@ -145,17 +342,22 @@ function SignInForm() {
           <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-r border-b border-[#D8FF3D]" />
 
           <div className="border border-[rgba(242,237,227,0.18)] bg-[#0B0B0B] p-6 lg:p-8">
-            {/* Mobile brand */}
-            <Link href="/" className="lg:hidden inline-flex items-center gap-2 mb-6">
-              <span className="km-display text-2xl">
-                Kalk<span className="italic text-[#D8FF3D]">Mate</span>
-              </span>
-            </Link>
+            {/* Mobile brand + language switcher */}
+            <div className="flex items-center justify-between mb-6">
+              <Link href="/" className="lg:hidden inline-flex items-center gap-2">
+                <span className="km-display text-2xl">
+                  Kalk<span className="italic text-[#D8FF3D]">Mate</span>
+                </span>
+              </Link>
+              <div className="ml-auto">
+                <PanelLangSwitcher lang={lang} setLang={setLang} compact />
+              </div>
+            </div>
 
             <div className="flex items-center justify-between border-b border-[rgba(242,237,227,0.10)] pb-4">
               <span className="km-mono-eyebrow text-[#D8FF3D] flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
-                {isLogin ? "Logowanie" : "Rejestracja"}
+                {isLogin ? t.badgeLogin : t.badgeRegister}
               </span>
               <span className="km-mono-eyebrow text-[#F2EDE3]/40">
                 /AUTH · v0.6.4
@@ -163,21 +365,15 @@ function SignInForm() {
             </div>
 
             <h1 className="km-display text-4xl lg:text-5xl mt-6 leading-[0.95]">
-              {isLogin ? (
-                <>Wejdź na <span className="italic text-[#D8FF3D]">panel</span>.</>
-              ) : (
-                <>Załóż <span className="italic text-[#D8FF3D]">konto</span>.</>
-              )}
+              {isLogin ? t.h1Login : t.h1Register}
             </h1>
             <p className="mt-3 text-[14.5px] text-[#F2EDE3]/55">
-              {isLogin
-                ? "Zaloguj się i przejmij kontrolę nad swoim KalkMate."
-                : "Utwórz konto, żeby zacząć aktywować urządzenia."}
+              {isLogin ? t.subLogin : t.subRegister}
             </p>
 
             {error && (
               <div className="mt-6 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
-                <p className="km-mono-eyebrow text-[#FF4D2E]">/ ERROR</p>
+                <p className="km-mono-eyebrow text-[#FF4D2E]">{t.errorLabel}</p>
                 <p className="text-sm text-[#FF4D2E] mt-1">{error}</p>
                 {showResend && (
                   <button
@@ -186,7 +382,7 @@ function SignInForm() {
                     disabled={resending || !email}
                     className="mt-3 km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] disabled:opacity-50 transition-colors"
                   >
-                    {resending ? "WYSYŁAM..." : "WYŚLIJ NOWY LINK WERYFIKACYJNY →"}
+                    {resending ? t.resendSending : t.resendLink}
                   </button>
                 )}
               </div>
@@ -194,10 +390,9 @@ function SignInForm() {
 
             {verificationSent && (
               <div className="mt-6 border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.05] p-4">
-                <p className="km-mono-eyebrow text-[#D8FF3D]">/ SPRAWDŹ SKRZYNKĘ</p>
+                <p className="km-mono-eyebrow text-[#D8FF3D]">{t.checkInbox}</p>
                 <p className="text-sm text-[#F2EDE3]/80 mt-2 leading-relaxed">
-                  Wysłaliśmy link aktywacyjny na <strong className="text-[#F2EDE3]">{email}</strong>.
-                  Kliknij go żeby aktywować konto (link wygasa za 24h). Sprawdź też SPAM.
+                  {t.verificationSentText(email)}
                 </p>
               </div>
             )}
@@ -215,14 +410,14 @@ function SignInForm() {
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
                   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
-                Kontynuuj z Google
+                {t.continueGoogle}
               </button>
               <div className="relative my-5">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-[rgba(242,237,227,0.10)]" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-3 bg-[#0B0B0B] km-mono-eyebrow text-[#F2EDE3]/30 text-[11px]">lub</span>
+                  <span className="px-3 bg-[#0B0B0B] km-mono-eyebrow text-[#F2EDE3]/30 text-[11px]">{t.or}</span>
                 </div>
               </div>
             </div>
@@ -231,14 +426,14 @@ function SignInForm() {
               {!isLogin && (
                 <div>
                   <label htmlFor="name" className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
-                    Imię <span className="text-[#F2EDE3]/30">· opcjonalne</span>
+                    {t.nameLabel} <span className="text-[#F2EDE3]/30">{t.nameOptional}</span>
                   </label>
                   <input
                     id="name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Jan Kowalski"
+                    placeholder={t.namePlaceholder}
                     className={inputClass}
                   />
                 </div>
@@ -246,14 +441,14 @@ function SignInForm() {
 
               <div>
                 <label htmlFor="email" className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
-                  Email
+                  {t.emailLabel}
                 </label>
                 <input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="twoj@email.pl"
+                  placeholder={t.emailPlaceholder}
                   required
                   className={inputClass}
                 />
@@ -261,7 +456,7 @@ function SignInForm() {
 
               <div>
                 <label htmlFor="password" className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
-                  Hasło
+                  {t.passwordLabel}
                 </label>
                 <input
                   id="password"
@@ -275,7 +470,7 @@ function SignInForm() {
                 />
                 {!isLogin && (
                   <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-2">
-                    Min. 6 znaków
+                    {t.minChars}
                   </p>
                 )}
                 {isLogin && (
@@ -284,7 +479,7 @@ function SignInForm() {
                       href="/auth/forgot-password"
                       className="km-mono-eyebrow text-[#F2EDE3]/55 hover:text-[#D8FF3D] transition-colors"
                     >
-                      Zapomniałem hasła
+                      {t.forgotPassword}
                     </a>
                   </div>
                 )}
@@ -302,8 +497,8 @@ function SignInForm() {
                 <span className="flex items-center gap-2">
                   {!isLoading && <span className="w-1.5 h-1.5 bg-[#0B0B0B] rounded-full km-blink" />}
                   {isLoading
-                    ? isLogin ? "Logowanie..." : "Tworzenie konta..."
-                    : isLogin ? "Zaloguj się" : "Zarejestruj się"}
+                    ? isLogin ? t.submitLoadingLogin : t.submitLoadingRegister
+                    : isLogin ? t.submitLogin : t.submitRegister}
                 </span>
                 {!isLoading && <span>→</span>}
               </button>
@@ -314,13 +509,13 @@ function SignInForm() {
                 onClick={() => { setIsLogin(!isLogin); setError(""); }}
                 className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors text-left"
               >
-                {isLogin ? "Nie masz konta? → Załóż konto" : "Masz już konto? → Zaloguj się"}
+                {isLogin ? t.toggleToRegister : t.toggleToLogin}
               </button>
               <Link
                 href="/"
                 className="km-mono-eyebrow text-[#F2EDE3]/45 hover:text-[#F2EDE3] transition-colors"
               >
-                ← Powrót do strony głównej
+                {t.backHome}
               </Link>
             </div>
           </div>
