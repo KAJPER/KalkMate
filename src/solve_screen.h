@@ -76,7 +76,7 @@ inline String _solUtf8ToAscii(String s) {
     s.replace("÷", "/");
     return s;
 }
-#define _SOL_SOLUTION_MAX    16384  // max znakow odpowiedzi AI (16 KB)
+#define _SOL_SOLUTION_MAX    24576  // max znakow odpowiedzi AI (24 KB, RAM)
 #define _SOL_HTTP_TIMEOUT_MS 45000  // 45s timeout HTTP
 
 // ---------------------------------------------------------------------------
@@ -319,7 +319,7 @@ static void _solFormatMath(const char* src, char* dst, int dstSize) {
 // Wyswietlanie rozwiazania (przewijane UP/DOWN, wyjscie LEFT)
 // Tekst jest zawijany reczne co ~40 znakow na linie ekranu 6x10
 // ---------------------------------------------------------------------------
-#define _SOL_LINES_MAX    64
+#define _SOL_LINES_MAX    150   // wiecej linii dla dlugich, szczegolowych rozwiazan
 #define _SOL_LINE_LEN     160   // bajty/linie (UTF-8: polskie znaki i symbole 2-3 B)
 
 // Rysuje linie UTF-8 (font 6x12_te przez drawUTF8 — ma polskie glyphy/greke/

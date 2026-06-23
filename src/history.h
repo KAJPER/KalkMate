@@ -21,7 +21,7 @@
 #define HIST_NS         "kalkhist"
 #define HIST_LIMIT      5
 #define HIST_Q_MAX      500    // pytanie do 500 znakow
-#define HIST_A_MAX      2500   // odpowiedz do 2.5 KB (pelne kroki rozwiazania)
+#define HIST_A_MAX      3000   // odpowiedz do 3 KB (NVS ~20KB, limit przy 5 wpisach)
 
 struct HistoryEntry {
     String question;
