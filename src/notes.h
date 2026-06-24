@@ -18,6 +18,8 @@
 #include <HTTPClient.h>
 #include <FS.h>
 #include <SPIFFS.h>
+#include "kalkmate_certs.h"
+#include "wifi_persist.h"
 
 #ifndef KALK_SERVER_URL
 #error "notes.h wymaga KALK_SERVER_URL"
@@ -213,14 +215,13 @@ inline int notesSync(const char* licenseCode, const char* apiKey) {
     if (WiFi.status() != WL_CONNECTED) return -1;
 
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(30);
     HTTPClient http;
     http.begin(client, _NOTES_ENDPOINT);
     http.addHeader("x-api-key", apiKey);
     if (licenseCode && licenseCode[0])
         http.addHeader("x-license-key", licenseCode);
-    // Device ID (MAC) — uzywane w nowym modelu konta (Device.userId)
     {
         uint8_t mac[6];
         esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -229,6 +230,7 @@ inline int notesSync(const char* licenseCode, const char* apiKey) {
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         http.addHeader("x-device-id", did);
     }
+    { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); }
     http.setTimeout(_NOTES_HTTP_TIMEOUT);
 
     Serial.printf("[NOTES] sync GET %s\n", _NOTES_ENDPOINT);

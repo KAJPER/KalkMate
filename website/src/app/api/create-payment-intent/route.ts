@@ -59,6 +59,19 @@ export async function POST(request: NextRequest) {
 
     // Pricing
     const productAmount = resolvedCurrency === "eur" ? 16900 : 69900;
+
+    // H10: walidacja shippingCents od klienta — max 5000 groszy (50 zł), tylko integer >= 0
+    const MAX_SHIPPING = 5000;
+    if (
+      shippingCents !== undefined &&
+      shippingCents !== null &&
+      (typeof shippingCents !== "number" ||
+        !Number.isInteger(shippingCents) ||
+        shippingCents < 0 ||
+        shippingCents > MAX_SHIPPING)
+    ) {
+      return NextResponse.json({ error: "Nieprawidłowa kwota wysyłki." }, { status: 400 });
+    }
     const resolvedShipping = typeof shippingCents === "number" ? shippingCents : 0;
 
     // Kupon rabatowy — autorytatywna walidacja po stronie serwera (nie ufamy klientowi).

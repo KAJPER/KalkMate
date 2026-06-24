@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import { COOKIE_NAME } from "@/lib/admin-auth";
 
-const COOKIE_NAME = process.env.NODE_ENV === "production" ? "__Secure-admin_session" : "admin_session";
 const ADMIN_SESSION_TOKEN = process.env.ADMIN_SESSION_TOKEN;
 
 export async function GET(request: NextRequest) {

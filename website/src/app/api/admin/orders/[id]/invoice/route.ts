@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { stripe } from "@/lib/stripe";
 import { sendMail } from "@/lib/mailer";
 
@@ -36,6 +37,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authErr = requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
 
   try {

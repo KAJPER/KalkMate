@@ -1,34 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { verifyDeviceAuth } from "@/lib/device-auth";
 
 // GET /api/device/account-status
-// Headers: x-api-key, x-device-id
-//
-// Zwraca informacje czy device jest sparowany z kontem + status licencji.
-// Kalkulator uzywa tego do wyswietlenia "Konto: X" lub "Niepodlaczone".
+// Headers: x-api-key, x-device-id, x-device-token
 export async function GET(request: NextRequest) {
   try {
-    const apiKey = request.headers.get("x-api-key");
-    if (!apiKey || apiKey !== process.env.CALCULATOR_API_KEY) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    const auth = await verifyDeviceAuth(request);
+    if (!auth.ok) {
+      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
+    const { deviceId } = auth;
 
-    const deviceId = request.headers.get("x-device-id")?.trim().toUpperCase();
-    if (!deviceId) {
-      return NextResponse.json({ ok: false, error: "Missing x-device-id" }, { status: 400 });
-    }
-
-    const device = await prisma.device.findUnique({
-      where: { deviceId },
-    });
+    const device = await prisma.device.findUnique({ where: { deviceId } });
 
     if (!device || !device.userId) {
-      return NextResponse.json({
-        ok: true,
-        paired: false,
-        userEmail: null,
-        license: null,
-      });
+      return NextResponse.json({ ok: true, paired: false, userEmail: null, license: null });
     }
 
     const user = await prisma.user.findUnique({ where: { id: device.userId } });
@@ -41,7 +28,6 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
 
-    // Priorytet: claimed License > active Subscription > trial Subscription
     let outCode: string | null = null;
     let outStatus: string | null = null;
     let outDays: number | null = null;
@@ -64,10 +50,9 @@ export async function GET(request: NextRequest) {
           );
         }
       } else {
-        outStatus = "trial";   // nieaktywowana licencja
+        outStatus = "trial";
       }
     } else if (subscription) {
-      // Brak License -> uzyj Subscription jako zrodla "dostepu"
       if (subscription.status === "active") {
         outStatus = "active";
         outCode = "(subscription)";
@@ -99,12 +84,7 @@ export async function GET(request: NextRequest) {
       paired: true,
       userEmail: user?.email || null,
       license: outCode
-        ? {
-            code: outCode,
-            status: outStatus,
-            daysLeft: outDays,
-            durationDays: outDuration,
-          }
+        ? { code: outCode, status: outStatus, daysLeft: outDays, durationDays: outDuration }
         : null,
     });
   } catch (e) {

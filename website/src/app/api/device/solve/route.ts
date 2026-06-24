@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { AI_MODEL_IDS, getCostMultiplier, modelSupportsVision } from "@/lib/aiModels";
+import { rateLimit } from "@/lib/rate-limit";
 
 // Endpoint dla kalkulatora ESP32 — rozwiązywanie zadań przez AI
 // POST /api/device/solve
@@ -218,6 +219,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Nieprawidlowy klucz licencji" },
         { status: 403 }
+      );
+    }
+
+    // H6: rate limit per licencja — 30 zadań/minutę
+    const rl = rateLimit(`solve:${license.code}`, 30, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { ok: false, error: "Za duzo zadan. Poczekaj chwile." },
+        { status: 429 }
       );
     }
 

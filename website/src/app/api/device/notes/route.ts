@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { verifyDeviceAuth } from "@/lib/device-auth";
 
 // GET /api/device/notes
-// Headers: x-api-key + (x-device-id [paired] LUB x-license-key [legacy])
+// Headers: x-api-key + (x-device-id + x-device-token [paired] LUB x-license-key [legacy])
 export async function GET(request: NextRequest) {
   try {
     const apiKey = request.headers.get("x-api-key");
@@ -10,18 +11,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    // Najpierw sprobuj device pairing
-    const deviceIdHeader = request.headers.get("x-device-id");
     let userId: string | null = null;
 
+    const deviceIdHeader = request.headers.get("x-device-id");
     if (deviceIdHeader) {
+      const auth = await verifyDeviceAuth(request);
+      if (!auth.ok) {
+        return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+      }
       const dev = await prisma.device.findUnique({
-        where: { deviceId: deviceIdHeader.trim().toUpperCase() },
+        where: { deviceId: auth.deviceId },
+        select: { userId: true },
       });
       if (dev?.userId) userId = dev.userId;
     }
 
-    // Fallback: license header
+    // Fallback: license header (legacy — nie wymaga tokenu urządzenia)
     if (!userId) {
       const licenseKey = request.headers.get("x-license-key")?.trim().toLowerCase();
       if (licenseKey) {

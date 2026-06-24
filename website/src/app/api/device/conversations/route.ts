@@ -1,23 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { verifyDeviceAuth } from "@/lib/device-auth";
 
 // GET /api/device/conversations?limit=20&before=<id>
-// Header: x-api-key, x-device-id
-// Zwraca historie zadan dla urzadzenia (od najnowszych)
+// Headers: x-api-key, x-device-id, x-device-token
 export async function GET(request: NextRequest) {
   try {
-    const apiKey = request.headers.get("x-api-key");
-    if (!apiKey || apiKey !== process.env.CALCULATOR_API_KEY) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    const auth = await verifyDeviceAuth(request);
+    if (!auth.ok) {
+      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
-    const deviceId = request.headers.get("x-device-id");
-    if (!deviceId) {
-      return NextResponse.json({ ok: false, error: "Missing x-device-id" }, { status: 400 });
-    }
+    const { deviceId } = auth;
 
     const url = new URL(request.url);
     const limitRaw = url.searchParams.get("limit");
-    const before = url.searchParams.get("before"); // id starszego rekordu (paging)
+    const before = url.searchParams.get("before");
     const limit = Math.min(50, Math.max(1, parseInt(limitRaw || "20", 10)));
 
     const where: any = { deviceId };
@@ -30,13 +27,7 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: { createdAt: "desc" },
       take: limit,
-      select: {
-        id: true,
-        mode: true,
-        question: true,
-        answer: true,
-        createdAt: true,
-      },
+      select: { id: true, mode: true, question: true, answer: true, createdAt: true },
     });
 
     return NextResponse.json({ ok: true, items, count: items.length });

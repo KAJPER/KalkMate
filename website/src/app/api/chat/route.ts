@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AI_MODEL_IDS, getCostMultiplier } from "@/lib/aiModels";
+import { rateLimit } from "@/lib/rate-limit";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_DEFAULT_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || "google/gemini-2.5-pro";
@@ -1230,6 +1231,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // H6: rate limit per user — 20 żądań/minutę
+    const rl = rateLimit(`chat:${session.user.email}`, 20, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: "Za dużo żądań. Poczekaj chwilę przed kolejnym pytaniem." },
+        { status: 429 }
+      );
+    }
+
     // Sprawdź użytkownika i subskrypcję
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
@@ -1305,7 +1315,11 @@ export async function POST(request: NextRequest) {
       { role: "system", content: systemPrompt },
     ];
 
+    // M8: tylko role user/assistant od klienta — blokuje prompt injection przez role: "system"
+    const ALLOWED_ROLES = new Set(["user", "assistant"]);
     messages.forEach((msg: any) => {
+      if (!ALLOWED_ROLES.has(msg.role)) return;
+
       const content: any[] = [];
 
       if (msg.content) {

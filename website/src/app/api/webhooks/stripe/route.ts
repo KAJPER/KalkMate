@@ -114,6 +114,17 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     return;
   }
 
+  // M3: Weryfikacja kwoty — oblicz oczekiwany total z metadanych i porównaj z faktycznie zapłaconą kwotą.
+  const currency = (meta.currency || pi.currency || "pln").toLowerCase();
+  const productAmount = currency === "eur" ? 16900 : 69900;
+  const discountAmount = parseInt(meta.discount_amount || "0", 10);
+  const shippingAmount = parseInt(meta.shipping_amount || "0", 10);
+  const expectedTotal = (productAmount - discountAmount) + shippingAmount;
+  if (pi.amount !== expectedTotal) {
+    console.error(`[WEBHOOK] ❌ KWOTA NIESPÓJNA: zapłacono ${pi.amount}, oczekiwano ${expectedTotal} (PI: ${pi.id})`);
+    return;
+  }
+
   const email = meta.customer_email;
   const name = meta.customer_name || "";
   const phone = meta.customer_phone || "";

@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { stripe } from "@/lib/stripe";
 
 const PRODUCT_NAME = "__kalkmate_analytics";
@@ -33,8 +34,9 @@ export async function POST() {
   }
 }
 
-// GET: read (admin only, protected by middleware)
-export async function GET() {
+// GET: read (admin only)
+export async function GET(request: NextRequest) {
+  const authErr = requireAdminAuth(request); if (authErr) return authErr;
   try {
     const product = await getOrCreateProduct();
     return NextResponse.json({

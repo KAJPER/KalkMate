@@ -42,6 +42,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // M5: plan second_month (-98%) dostępny tylko dla kupujących KalkMate
+    if (plan === "second_month") {
+      const order = await prisma.order.findFirst({ where: { userId: user.id } });
+      if (!order) {
+        return NextResponse.json(
+          { error: "Plan dostępny wyłącznie dla klientów KalkMate." },
+          { status: 403 }
+        );
+      }
+    }
+
     // Get user's subscription
     let subscription = await prisma.subscription.findUnique({
       where: { userId: user.id },

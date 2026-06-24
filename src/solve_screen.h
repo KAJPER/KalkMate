@@ -19,6 +19,7 @@
 #include "input.h"
 #include "settings_screen.h"
 #include "wifi_persist.h"
+#include "kalkmate_certs.h"
 #include "wifi_settings.h"  // klawiatura (_runKeyboard, itp.)
 #include "panic.h"
 #include "power.h"
@@ -564,7 +565,7 @@ static void _solSendText(U8G2 &d, const char* taskText) {
     jsonBody += "\"}";
 
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(60);
     HTTPClient http;
     http.begin(client, _SOL_SOLVE_ENDPOINT);
@@ -573,7 +574,8 @@ static void _solSendText(U8G2 &d, const char* taskText) {
     http.addHeader("x-device-id", _solDeviceId());
     http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
-    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));  // 0=szczeg,1=oblicz,2=wynik
+    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
+    { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); }
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
     Serial.printf("[SOL] POST text %d B\n", jsonBody.length());
@@ -664,7 +666,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     memcpy(bodyBuf + hdrLen + jpegLen, _mpFtr, ftrLen);
 
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(60);
     HTTPClient http;
     http.begin(client, _SOL_SOLVE_ENDPOINT);
@@ -673,7 +675,8 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     http.addHeader("x-device-id", _solDeviceId());
     http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
-    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));  // 0=szczeg,1=oblicz,2=wynik
+    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
+    { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); }
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
     d.clearBuffer();

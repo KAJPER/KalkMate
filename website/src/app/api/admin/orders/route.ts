@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { stripe } from "@/lib/stripe";
 
 export async function GET(request: NextRequest) {
+  const authErr = requireAdminAuth(request); if (authErr) return authErr;
   const searchParams = request.nextUrl.searchParams;
   const limit = parseInt(searchParams.get("limit") || "50");
   const starting_after = searchParams.get("starting_after") || undefined;

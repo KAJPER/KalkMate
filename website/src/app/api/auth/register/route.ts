@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendMail } from "@/lib/mailer";
 import { verificationEmail } from "@/lib/email-templates";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const VERIFY_EXPIRY_HOURS = 24;
 
@@ -41,6 +42,14 @@ async function sendVerification(email: string, name: string | null, userId: stri
 
 export async function POST(req: NextRequest) {
   try {
+    const rl = rateLimit(`register:${clientIp(req)}`, 5, 15 * 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Za dużo prób rejestracji. Spróbuj za ${Math.ceil(rl.resetMs / 60000)} min.` },
+        { status: 429 }
+      );
+    }
+
     const { email: rawEmail, password, name } = await req.json();
     const email = String(rawEmail || "").trim().toLowerCase();
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { stripe } from "@/lib/stripe";
 import { sendMail } from "@/lib/mailer";
 import {
@@ -8,9 +9,10 @@ import {
 } from "@/lib/email-templates";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authErr = requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
 
   try {
@@ -74,6 +76,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authErr = requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
   const body = await request.json();
   const { fulfillment_status, tracking_number, notes } = body;

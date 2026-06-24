@@ -2,12 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 import { passwordResetEmail } from "@/lib/email-templates";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
 
 const EXPIRY_MINUTES = 60;
 
 export async function POST(req: NextRequest) {
   try {
+    const rl = rateLimit(`forgot-pw:${clientIp(req)}`, 3, 15 * 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { ok: false, error: `Za dużo prób. Spróbuj za ${Math.ceil(rl.resetMs / 60000)} min.` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const email = String(body?.email || "").trim().toLowerCase();
     if (!email) {

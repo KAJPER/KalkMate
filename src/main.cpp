@@ -1,18 +1,18 @@
-// =====================================================================
-//  main.cpp — integracja UI + OLED SSD1322 + klawiatura matrycowa MCP23017
+﻿// =====================================================================
+//  main.cpp â€” integracja UI + OLED SSD1322 + klawiatura matrycowa MCP23017
 //
-//  Łączy:
+//  ĹÄ…czy:
 //   - OLED SSD1322 256x64 4W SPI (HW VSPI: SCK=18, MOSI=23, CS=15, DC=2, RST=4)
 //   - Klawiatura matrycowa kalkulatora 27 klawiszy przez MCP23017 (input.h)
-//   - Cały istniejący UI (splash/menu/wifi/info/about/settings/solve)
+//   - CaĹ‚y istniejÄ…cy UI (splash/menu/wifi/info/about/settings/solve)
 //
 //  Mapowanie klawisze fizyczne -> przyciski UI:
 //   "+" / "8"    -> BTN_UP
 //   "-" / "2"    -> BTN_DOWN
 //   "+/-" / "4"  -> BTN_LEFT
-//   "▶" / "6"    -> BTN_RIGHT
+//   "â–¶" / "6"    -> BTN_RIGHT
 //   "=" / "5"    -> BTN_OK
-//   "C/CE"       -> BTN_BACK (póki co nieużywany w UI, gotowe na przyszłość)
+//   "C/CE"       -> BTN_BACK (pĂłki co nieuĹĽywany w UI, gotowe na przyszĹ‚oĹ›Ä‡)
 // =====================================================================
 
 #include <Arduino.h>
@@ -27,20 +27,20 @@
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 
-// Konfiguracja serwera AI — ustaw przed kompilacja
+// Konfiguracja serwera AI â€” ustaw przed kompilacja
 #define KALK_SERVER_URL "https://kalkmate.pl"
 // API key NIE jest w plaintexcie binarki - dekoduje sie z XOR runtime.
 // Patrz key_obfuscate.h dla mechanizmu.
 #include "key_obfuscate.h"
 #define KALK_API_KEY    kalkApiKey()
 
-// Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
+// Wersja firmware â€” INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
 #define FW_VERSION "1.6.7"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
-// input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
-// (>=200) i funkcję inputBtn(). UI files ze swoimi `#ifndef BTN_xx`
-// pominą ponowną definicję.
+// input.h MUSI byÄ‡ przed UI files â€” definiuje BTN_xx jako wirtualne ID
+// (>=200) i funkcjÄ™ inputBtn(). UI files ze swoimi `#ifndef BTN_xx`
+// pominÄ… ponownÄ… definicjÄ™.
 #include "input.h"
 
 #include "settings_screen.h"   // kalkSettings
@@ -54,7 +54,7 @@
 #include "splash_screen.h"     // Ekran powitalny
 #include "calculator.h"        // Tryb kalkulatora + unlock code
 #include "panic.h"             // Globalny panic button (powrot do kalkulatora)
-#include "power.h"             // Auto-sleep OLED — globalny dla wszystkich ekranow
+#include "power.h"             // Auto-sleep OLED â€” globalny dla wszystkich ekranow
 #include "notes.h"             // Offline notatki uzytkownika
 #include "tests.h"             // Sprawdziany (dev mode)
 #include "battery.h"           // Pomiar baterii LiPo (PCB v4)
@@ -63,11 +63,11 @@
 // Implementacja helpera z device_account.h (potrzebuje pelnej def kalkSettings).
 const char* _accGetUnlockCode() { return kalkSettings.aiUnlockCode; }
 
-// === OLED — piny PCB v4 (ESP32-S3) ===
+// === OLED â€” piny PCB v4 (ESP32-S3) ===
 //   Legacy (WROVER):  SCK=18, MOSI=23, CS=15, DC=2, RST=4
 //   S3 (nowy PCB):    SCK=18, MOSI=11, CS=15, DC=2, RST=4
 // U8g2 hardware SPI uzywa domyslnego SPI peripheral. Na ESP32-S3 musimy
-// zmusic SPI.begin() do wlasciwych pinow PRZED u8g2.begin() — patrz setup().
+// zmusic SPI.begin() do wlasciwych pinow PRZED u8g2.begin() â€” patrz setup().
 #ifdef KALK_HW_LEGACY
   // Stary PCB: MOSI=23
   #define OLED_PIN_MOSI 23
@@ -123,7 +123,7 @@ unsigned long lastPress = 0;
 // Forward declaration
 void drawMenu();
 
-// === Lazy WiFi auto-connect — state (definicje pozniej) ===
+// === Lazy WiFi auto-connect â€” state (definicje pozniej) ===
 static uint32_t _wifiAutoStart = 0;
 static bool     _wifiAutoTried = false;
 static void _wifiAutoConnectLazy();
@@ -132,8 +132,8 @@ static void _wifiAutoConnectLazy();
 // Te helpery zostawione jako kompat alias.
 inline void resetActivity() { inputActivityReset(); }
 
-// Drop-in replacement dla btnPressed z test_ui.cpp — z debouncem na poziomie
-// menu. Wirtualne BTN_xx są aktualizowane przez inputScan() w loop().
+// Drop-in replacement dla btnPressed z test_ui.cpp â€” z debouncem na poziomie
+// menu. Wirtualne BTN_xx sÄ… aktualizowane przez inputScan() w loop().
 bool btnPressed(int pin) {
     if (inputBtn(pin) == LOW) {
         if (millis() - lastPress > DEBOUNCE_MS) {
@@ -191,7 +191,7 @@ void showSelected() {
 }
 
 // =====================================================================
-//  Ekran Notatki — lista offline + sync z serwera
+//  Ekran Notatki â€” lista offline + sync z serwera
 // =====================================================================
 static void showNotesScreen() {
     inputWaitRelease();
@@ -253,7 +253,7 @@ static void showNotesScreen() {
     };
 
     auto drawDetail = [&](const NoteEntry& n) {
-        powerSetInhibit(true);   // user czyta — bez sleep
+        powerSetInhibit(true);   // user czyta â€” bez sleep
         // Strony scrollowane
         int scrollLine = 0;
         // Rozbij content na linie po 40 znakow
@@ -388,7 +388,7 @@ static void showNotesScreen() {
         }
         if (btnPressed(BTN_DOWN)) {
             if (count == 0) {
-                // gdy lista pusta i naciskasz DOWN — sync
+                // gdy lista pusta i naciskasz DOWN â€” sync
                 syncFromServer();
                 count = (int)notesCount();
                 cursor = 0;
@@ -424,7 +424,7 @@ static void showNotesScreen() {
 }
 
 // =====================================================================
-//  Ekran "Device ID + QR" — w ustawieniach pozycja "Device ID + QR"
+//  Ekran "Device ID + QR" â€” w ustawieniach pozycja "Device ID + QR"
 //  Pokazuje MAC ESP32 jako device ID + QR code z linkiem do claim'u.
 //  Skanowanie -> /claim?d=<MAC>&c=<licencja>
 // =====================================================================
@@ -584,7 +584,7 @@ void showDeviceIdQrScreen(U8G2 &d) {
     String deviceId = _mainDeviceMac();
 
     // Sprobuj zarejestrowac device na serwerze (zapisac unlockCode).
-    // Robi sie raz — jesli WiFi off, ladujemy zapisane creds i probujemy.
+    // Robi sie raz â€” jesli WiFi off, ladujemy zapisane creds i probujemy.
     {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
@@ -615,7 +615,7 @@ void showDeviceIdQrScreen(U8G2 &d) {
     // user na stronie wpisze unlockCode)
     String url = String(KALK_SERVER_URL) + "/claim?d=" + deviceId;
 
-    // Generuj QR code (wersja 4 = 33x33 modules, mieści się 70+ znakow ASCII)
+    // Generuj QR code (wersja 4 = 33x33 modules, mieĹ›ci siÄ™ 70+ znakow ASCII)
     QRCode qrcode;
     uint8_t qrcodeBytes[qrcode_getBufferSize(4)];
     qrcode_initText(&qrcode, qrcodeBytes, 4, ECC_LOW, url.c_str());
@@ -641,7 +641,7 @@ void showDeviceIdQrScreen(U8G2 &d) {
             : "OK / < = exit");
 
         // Prawa strona: QR (po prawej, 64x64 px max)
-        // QR wersja 4 = 33 modules, kazdy 1px = 33x33. Mieści się prawo.
+        // QR wersja 4 = 33 modules, kazdy 1px = 33x33. MieĹ›ci siÄ™ prawo.
         int qrSize = qrcode.size;   // 33
         int scale = 1;              // 1px per module
         int qrPx = qrSize * scale;
@@ -669,7 +669,7 @@ void showDeviceIdQrScreen(U8G2 &d) {
 }
 
 // =====================================================================
-//  Ekran "Sprawdzian" (dev mode) — analogiczny do Notatek ale z formatowaniem
+//  Ekran "Sprawdzian" (dev mode) â€” analogiczny do Notatek ale z formatowaniem
 // =====================================================================
 static void showTestsScreen() {
     inputWaitRelease();
@@ -885,7 +885,7 @@ void setup() {
     // Wylacz brownout detector
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
 
-    // Serial wcześniej (przed cokolwiek co może crashnac) — żeby zlapac log
+    // Serial wczeĹ›niej (przed cokolwiek co moĹĽe crashnac) â€” ĹĽeby zlapac log
     // jeszcze przed init OLED/boost
     Serial.begin(115200);
     delay(150);  // pozwol USB-CDC enumeracji u hosta
@@ -907,10 +907,10 @@ void setup() {
     }
 
 #if KALK_BOOST_EN_PIN >= 0
-    // === EARLY BATTERY CHECK — przed włączeniem boost (12V/~150mA) ===
+    // === EARLY BATTERY CHECK â€” przed wĹ‚Ä…czeniem boost (12V/~150mA) ===
     // Boost ssie spory pradu i razem z reszta moze przyciagnac LiPo
     // ponizej progu pracy chipu => brownout/POWERON loop.
-    // Stąd: czytamy VBAT bez boost, i jezeli za niskie -> pokazujemy
+    // StÄ…d: czytamy VBAT bez boost, i jezeli za niskie -> pokazujemy
     // splash "NISKA BATERIA" przez 3s i wchodzimy w deep sleep.
     //
     // Threshold:
@@ -939,7 +939,7 @@ void setup() {
             SPI.begin(OLED_PIN_SCK, -1, OLED_PIN_MOSI, OLED_PIN_CS);
             u8g2.setBusClock(8000000);
             u8g2.begin();
-            u8g2.setContrast(40);   // zmniejsz jasność -> mniej pradu OLED
+            u8g2.setContrast(40);   // zmniejsz jasnoĹ›Ä‡ -> mniej pradu OLED
 
             u8g2.clearBuffer();
             u8g2.setFont(u8g2_font_10x20_tf);
@@ -959,13 +959,13 @@ void setup() {
             digitalWrite(KALK_BOOST_EN_PIN, LOW);
             delay(20);
 
-            // Deep sleep — chip wybudzi się dopiero po resecie (lub podlaczeniu USB
+            // Deep sleep â€” chip wybudzi siÄ™ dopiero po resecie (lub podlaczeniu USB
             // jezeli host enumeruje, ale to nie jest configured wakeup)
             Serial.println("[EARLY] deep sleep");
             Serial.flush();
             esp_deep_sleep_start();
         }
-        // else: bateria OK albo brak (USB-only) -> idź dalej
+        // else: bateria OK albo brak (USB-only) -> idĹş dalej
     }
 
     // === Boost EN przez bezposredni GPIO ESP32-S3 ===
@@ -981,12 +981,12 @@ void setup() {
     // bo U8G2 _4W_HW_SPI uzywa globalnego SPI bez kontroli pinow.
     SPI.begin(OLED_PIN_SCK, /*MISO=*/-1, OLED_PIN_MOSI, OLED_PIN_CS);
 
-    // OLED najpierw — to jedyne co user widzi w pierwszej chwili.
+    // OLED najpierw â€” to jedyne co user widzi w pierwszej chwili.
     u8g2.setBusClock(8000000);
     u8g2.begin();
     // PCB v4: OLED przez MT3608 ssie bezposrednio z VBAT. Kontrast 60 to
-    // sprawdzony "sweet spot" — wystarczajaco jasny do czytania, jednoczesnie
-    // pobor pradu boost mieści się w peakowym budżecie LiPo razem z WiFi.
+    // sprawdzony "sweet spot" â€” wystarczajaco jasny do czytania, jednoczesnie
+    // pobor pradu boost mieĹ›ci siÄ™ w peakowym budĹĽecie LiPo razem z WiFi.
     // Wyzej (>=100) widzielismy brownouty przy WiFi.begin nawet na pelnej baterii.
     u8g2.setContrast(60);
     powerSetU8g2(&u8g2);  // power.h dostaje pointer do auto-sleep
@@ -1001,28 +1001,28 @@ void setup() {
     u8g2.sendBuffer();
 
     // === FAZA 2: reszta init w tle (user juz widzi "0") ===
-    // (Serial.begin + reset reason zrobione na początku setup, przed boost EN)
+    // (Serial.begin + reset reason zrobione na poczÄ…tku setup, przed boost EN)
 
     esp_log_level_set("nvs", ESP_LOG_NONE);
 
-    // NVS init z obsługa bledu — konieczne po wlaczeniu flash encryption
+    // NVS init z obsĹ‚uga bledu â€” konieczne po wlaczeniu flash encryption
     // (stare dane w NVS sa "szyfrowane" innym kluczem i wygladaja jak smieci).
     // Bez erase+reinit Preferences.putString() cicho nie zapisuje niczego.
     {
         esp_err_t nvs_ret = nvs_flash_init();
         if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-            Serial.println("[NVS] korupcja — czyszcze i reinicjalizuje");
+            Serial.println("[NVS] korupcja â€” czyszcze i reinicjalizuje");
             nvs_flash_erase();
             nvs_flash_init();
         }
     }
 
-    // OTA rollback check — wykrywa boot loop po aktualizacji (>= 3 proby = rollback)
+    // OTA rollback check â€” wykrywa boot loop po aktualizacji (>= 3 proby = rollback)
     otaBootCheck();
 
     // Klawiatura matrycowa
     if (!inputBegin()) {
-        Serial.println("[FATAL] MCP23017 brak — klawiatura nie dziala");
+        Serial.println("[FATAL] MCP23017 brak â€” klawiatura nie dziala");
     }
 
     // Wczytaj wszystkie zapisane ustawienia z NVS
@@ -1034,7 +1034,7 @@ void setup() {
         kalkSettings.panicKey = loadPanicKey(KEY_MU);
         // Brightness / language / solveMode / autoSleep / sleepMinutes
         kalkLoadSettings();
-        // Aplikuj wczytaną jasność do OLED.
+        // Aplikuj wczytanÄ… jasnoĹ›Ä‡ do OLED.
         // Na PCB v4 (boost ssie z VBAT) cap przy ~100 - powyzej widzimy
         // brownout pod WiFi peakiem. Skalowanie: 0-15 -> 0-100 (zamiast 0-255).
         uint16_t c = (uint16_t)kalkSettings.brightness * 7;  // max 15*7=105
@@ -1074,7 +1074,7 @@ static void _wifiAutoConnectLazy() {
         Serial.println("[WiFi-auto] brak zapisanych credentials, pomijam");
         return;
     }
-    Serial.printf("[WiFi-auto] lacze: %s\n", ssid);
+    Serial.println("[WiFi-auto] lacze z zapisanymi danymi");
     Serial.flush();
     WiFi.mode(WIFI_STA);
     WiFi.setTxPower(WIFI_POWER_8_5dBm);  // anty-brownout
@@ -1087,7 +1087,7 @@ static void _wifiAutoConnectLazy() {
 // Definicja globalnej flagi panic (extern w panic.h)
 volatile bool _panicRequested = false;
 
-// Obsluz panic — wywolywane w loop() po wyjsciu z UI screen.
+// Obsluz panic â€” wywolywane w loop() po wyjsciu z UI screen.
 // Jesli flaga ustawiona (przez panicCheck() ktore woluje sie automatycznie
 // w powerCheckSleep i przez sprawdzanie w petlach UI), uruchom kalkulator.
 static void handlePanicIfRequested() {
@@ -1100,7 +1100,7 @@ static void handlePanicIfRequested() {
     }
 }
 
-// v1.1.5: VBAT watchdog w loop — co 2s sprawdza czy LiPo nie ssie sie
+// v1.1.5: VBAT watchdog w loop â€” co 2s sprawdza czy LiPo nie ssie sie
 // pod boost. Jezeli pada ponizej 3.2V to grafully wylacza boost +
 // pokazuje komunikat + deep sleep, zeby nie uszkodzic OLED przez
 // niestabilne 12V (i nie spalic VDD ESP).
@@ -1151,14 +1151,14 @@ static void _otaValidateLoop() {
 }
 
 void loop() {
-    inputScan();        // skanuj matrycę co iterację (max raz na 30 ms)
-    panicCheck();       // sprawdz panic key, ustaw flagę gdy nacisnięty
+    inputScan();        // skanuj matrycÄ™ co iteracjÄ™ (max raz na 30 ms)
+    panicCheck();       // sprawdz panic key, ustaw flagÄ™ gdy nacisniÄ™ty
     handlePanicIfRequested();  // jesli flaga -> kalkulator
     _vbatWatchdogLoop();    // anti-brownout: shutdown przy VBAT<3.2V
     _wifiAutoConnectLazy(); // auto-WiFi 3s po wejsciu w AI menu
     _otaValidateLoop();     // OTA health-check: waliduj po polaczeniu WiFi
     if (powerCheckSleep()) {
-        // Po wybudzeniu — przerysuj menu
+        // Po wybudzeniu â€” przerysuj menu
         drawMenu();
     }
 
@@ -1209,3 +1209,4 @@ void loop() {
 
     if (changed) drawMenu();
 }
+

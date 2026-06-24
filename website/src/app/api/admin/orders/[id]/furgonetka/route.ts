@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { stripe } from "@/lib/stripe";
 import {
   createFurgonetkaPackage,
@@ -32,6 +33,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authErr = requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const { action = "create", commandUuid, serviceId } = body;
@@ -177,9 +179,10 @@ export async function POST(
  * Returns current Furgonetka status for this order.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authErr = requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
 
   try {

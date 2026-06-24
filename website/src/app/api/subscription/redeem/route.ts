@@ -63,7 +63,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (license.isUsed) {
-      // Ten sam komunikat co dla "nieprawidlowy" — anty-enumeracja
+      return NextResponse.json({ error: INVALID_CODE_MSG }, { status: 400 });
+    }
+
+    // M6: atomowe oznaczenie licencji — zapobiega TOCTOU (podwójnemu użyciu
+    // przy równoczesnych żądaniach). UPDATE zwraca 0 wierszy jeśli już użyta.
+    const now = new Date();
+    const marked = await prisma.$executeRaw`
+      UPDATE "License"
+      SET "isUsed" = 1, "usedBy" = ${user.id}, "usedAt" = ${now.toISOString()}
+      WHERE "id" = ${license.id} AND "isUsed" = 0
+    `;
+    if (Number(marked) === 0) {
       return NextResponse.json({ error: INVALID_CODE_MSG }, { status: 400 });
     }
 
@@ -71,8 +82,6 @@ export async function POST(request: NextRequest) {
     let subscription = await prisma.subscription.findUnique({
       where: { userId: user.id },
     });
-
-    const now = new Date();
 
     if (!subscription) {
       // Create new subscription with license duration
@@ -101,16 +110,6 @@ export async function POST(request: NextRequest) {
         },
       });
     }
-
-    // Mark license as used
-    await prisma.license.update({
-      where: { id: license.id },
-      data: {
-        isUsed: true,
-        usedBy: user.id,
-        usedAt: now,
-      },
-    });
 
     return NextResponse.json({
       success: true,

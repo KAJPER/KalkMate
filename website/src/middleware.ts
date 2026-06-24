@@ -1,5 +1,15 @@
 import { withAuth } from "next-auth/middleware";
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
+
+function isValidAdminSession(value: string | undefined): boolean {
+  const expected = process.env.ADMIN_SESSION_TOKEN;
+  if (!expected || !value) return false;
+  const a = Buffer.from(value);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 export default withAuth(
   function middleware(request: NextRequest) {
@@ -8,7 +18,7 @@ export default withAuth(
     // Protect /admin pages (except login)
     if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
       const session = request.cookies.get("admin_session");
-      if (!session || session.value !== process.env.ADMIN_SESSION_TOKEN) {
+      if (!session || !isValidAdminSession(session?.value)) {
         return NextResponse.redirect(new URL("/admin/login", request.url));
       }
     }
@@ -20,7 +30,7 @@ export default withAuth(
       !pathname.startsWith("/api/admin/visits")
     ) {
       const session = request.cookies.get("admin_session");
-      if (!session || session.value !== process.env.ADMIN_SESSION_TOKEN) {
+      if (!session || !isValidAdminSession(session?.value)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }

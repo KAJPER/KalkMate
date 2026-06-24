@@ -118,12 +118,16 @@ export function computeDiscount(
   };
 }
 
-// Zlicza uzycie kuponu (po oplaceniu). Bezpieczne gdy kod nie istnieje.
+// Zlicza uzycie kuponu po oplaceniu. H11: atomowe — nie przekroczy maxUses
+// nawet przy równoczesnych żądaniach (wyścig CHECK→webhook).
 export async function incrementCouponUsage(code: string): Promise<void> {
   const norm = normalizeCode(code);
   if (!norm) return;
   await ensureCouponTable();
   await prisma.$executeRaw`
-    UPDATE Coupon SET usedCount = usedCount + 1 WHERE code = ${norm}
+    UPDATE Coupon
+    SET usedCount = usedCount + 1
+    WHERE code = ${norm}
+      AND (maxUses IS NULL OR usedCount < maxUses)
   `;
 }

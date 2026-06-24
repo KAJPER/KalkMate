@@ -27,6 +27,7 @@
 #include <Preferences.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
+#include "kalkmate_certs.h"  // KALKMATE_CA_CERT
 
 #ifndef KALK_SERVER_URL
 #error "ota_update.h wymaga zdefiniowania KALK_SERVER_URL przed include"
@@ -99,7 +100,7 @@ inline OtaInfo otaCheck() {
     }
 
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(30);
     HTTPClient http;
     String url = String(_OTA_CHECK_ENDPOINT) + "?current=" + FW_VERSION;
@@ -311,10 +312,18 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
     }
 #endif
 
+    // C5: walidacja domeny przed pobraniem — zapobiega przekierowaniu na obcy serwer
+    if (!binUrl.startsWith("https://kalkmate.pl/")) {
+        Serial.printf("[OTA] ODRZUCONO: zly URL firmware: %s\n", binUrl.c_str());
+        _otaDrawProgress(d, "BLAD: zly URL!", 0);
+        delay(3000);
+        return false;
+    }
+
     _otaDrawProgress(d, "Laczenie z serwerem...", 0);
 
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(60);
     HTTPClient http;
     http.begin(client, binUrl);

@@ -168,6 +168,7 @@ model Device {
   requestCount    Int           @default(0)
   firmwareVersion String?
   lastIp          String?
+  deviceToken     String?       @unique
   Solves          DeviceSolve[]
 
   @@index([deviceId])

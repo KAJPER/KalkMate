@@ -12,7 +12,8 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include "wifi_persist.h"   // wifiSaveLicense — auto-sync licencji do NVS
+#include "wifi_persist.h"    // wifiSaveLicense, wifiSaveDeviceToken
+#include "kalkmate_certs.h"  // KALKMATE_CA_CERT
 
 // Forward decl struktury kalkSettings — definicja w settings_screen.h, ale
 // nie includujemy go zeby uniknac cyklu. Wymagamy tylko pola aiUnlockCode.
@@ -58,12 +59,13 @@ struct AccountStatus {
 };
 
 // POST /api/device/register — kalkulator zglasza swoj unlockCode i fwVersion.
-// Powinno byc wolane raz po polaczeniu z WiFi (np. lazy z flagą).
+// Przy pierwszej rejestracji serwer zwraca deviceToken, ktory zapisujemy w NVS
+// i wysylamy przy kazdej kolejnej probie (weryfikacja tozsamosci urzadzenia).
 inline bool accountRegister() {
     if (WiFi.status() != WL_CONNECTED) return false;
 
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(8000);
 
     HTTPClient http;
@@ -76,6 +78,11 @@ inline bool accountRegister() {
     http.addHeader("Content-Type", "application/json");
     http.addHeader("x-api-key", KALK_API_KEY);
 
+    // Wyslij token jesli mamy go w NVS (weryfikacja tozsamosci)
+    char devToken[68] = "";
+    wifiLoadDeviceToken(devToken, sizeof(devToken));
+    if (devToken[0]) http.addHeader("x-device-token", devToken);
+
     String body = "{\"deviceId\":\"" + _accDeviceId()
                 + "\",\"unlockCode\":\"" + String(_accGetUnlockCode())
                 + "\",\"firmwareVersion\":\"" + String(FW_VERSION)
@@ -85,7 +92,24 @@ inline bool accountRegister() {
     String resp = http.getString();
     http.end();
 
-    return (code == 200 && resp.indexOf("\"ok\":true") >= 0);
+    if (code != 200 || resp.indexOf("\"ok\":true") < 0) return false;
+
+    // Zapisz/zaktualizuj token jesli serwer go zwrocil
+    auto extractStr = [&](const char* key) -> String {
+        String pat = String("\"") + key + "\":\"";
+        int s = resp.indexOf(pat);
+        if (s < 0) return "";
+        s += pat.length();
+        int e = resp.indexOf("\"", s);
+        return (e > s) ? resp.substring(s, e) : "";
+    };
+    String newToken = extractStr("deviceToken");
+    if (newToken.length() == 64) {
+        wifiSaveDeviceToken(newToken.c_str());
+        Serial.printf("[account] deviceToken zapisany w NVS\n");
+    }
+
+    return true;
 }
 
 // GET /api/device/account-status — pobierz status sparowania.
@@ -103,7 +127,7 @@ inline bool accountFetchStatus(AccountStatus& out) {
     }
 
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(8000);
 
     HTTPClient http;
@@ -118,6 +142,11 @@ inline bool accountFetchStatus(AccountStatus& out) {
 
     http.addHeader("x-api-key", KALK_API_KEY);
     http.addHeader("x-device-id", _accDeviceId());
+    {
+        char devToken[68] = "";
+        wifiLoadDeviceToken(devToken, sizeof(devToken));
+        if (devToken[0]) http.addHeader("x-device-token", devToken);
+    }
 
     int code = http.GET();
     String resp = http.getString();
@@ -168,8 +197,7 @@ inline bool accountFetchStatus(AccountStatus& out) {
         wifiLoadLicense(saved, sizeof(saved));
         if (strcmp(saved, out.licenseCode.c_str()) != 0) {
             wifiSaveLicense(out.licenseCode.c_str());
-            Serial.printf("[account] licencja zapisana w NVS: %s\n",
-                          out.licenseCode.c_str());
+            Serial.println("[account] licencja zapisana w NVS");
         }
     }
     out.daysLeft = extractInt("daysLeft", -1);

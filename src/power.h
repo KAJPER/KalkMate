@@ -113,7 +113,7 @@ inline bool powerCheckSleep() {
             WiFi.setTxPower(WIFI_POWER_8_5dBm);
             delay(30);
             wifiFastBegin(ssid, pass);
-            Serial.printf("[POWER] wake -> WiFi reconnect: %s\n", ssid);
+            Serial.println("[POWER] wake -> WiFi reconnect");
         }
     }
     Serial.println("[POWER] wake");

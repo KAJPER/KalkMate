@@ -101,8 +101,10 @@ function deliveredHtml(name: string, tracking: string, pickupPoint: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret") || new URL(req.url).searchParams.get("secret");
-  if (CRON_SECRET && secret !== CRON_SECRET) {
+  // M4: fail-secure — odrzucaj gdy CRON_SECRET nie skonfigurowany lub nie pasuje
+  // Tylko nagłówek (nie URL param) — sekrety w URL trafiają do logów serwera
+  const secret = req.headers.get("x-cron-secret");
+  if (!CRON_SECRET || secret !== CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -144,7 +146,7 @@ export async function GET(req: NextRequest) {
             html: pickupHtml(name, tracking),
           });
           emailsSent++;
-          results.push(`[PICKUP] ${pi.id} → ${email}`);
+          results.push(`[PICKUP] ${pi.id}`);
         }
       }
 
@@ -158,7 +160,7 @@ export async function GET(req: NextRequest) {
             html: deliveredHtml(name, tracking, pi.metadata.pickup_point || ""),
           });
           emailsSent++;
-          results.push(`[DELIVERED] ${pi.id} → ${email}`);
+          results.push(`[DELIVERED] ${pi.id}`);
         }
       }
 

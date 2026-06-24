@@ -6,10 +6,11 @@
 
 #include <Preferences.h>
 
-#define _WP_NS   "kalkmate"   // przestrzen nazw NVS
-#define _WP_SSID "wifi_ssid"
-#define _WP_PASS "wifi_pass"
-#define _WP_LIC  "license"
+#define _WP_NS        "kalkmate"   // przestrzen nazw NVS
+#define _WP_SSID      "wifi_ssid"
+#define _WP_PASS      "wifi_pass"
+#define _WP_LIC       "license"
+#define _WP_DEV_TOKEN "dev_token"  // unikalny token urzadzenia (64 znaki hex)
 
 // Zapisz SSID i haslo WiFi do NVS
 static void wifiSaveCreds(const char* ssid, const char* pass) {
@@ -159,6 +160,24 @@ static void wifiLoadLicense(char* keyBuf, int keySize) {
     prefs.end();
     strncpy(keyBuf, k.c_str(), keySize - 1);
     keyBuf[keySize - 1] = '\0';
+}
+
+// === Unikalny token urzadzenia (przydzielany przez serwer przy rejestracji) ===
+static void wifiSaveDeviceToken(const char* token) {
+    Preferences prefs;
+    prefs.begin(_WP_NS, false);
+    prefs.putString(_WP_DEV_TOKEN, token);
+    prefs.end();
+}
+
+// buf musi miec min. 65 bajtow (64 znaki hex + \0)
+static void wifiLoadDeviceToken(char* buf, int size) {
+    Preferences prefs;
+    prefs.begin(_WP_NS, true);
+    String t = prefs.getString(_WP_DEV_TOKEN, "");
+    prefs.end();
+    strncpy(buf, t.c_str(), size - 1);
+    buf[size - 1] = '\0';
 }
 
 // === Kod odblokowujacy tryb AI ===
