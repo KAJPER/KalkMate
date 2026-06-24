@@ -1,50 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { verifyDeviceAuth } from "@/lib/device-auth";
 
-// API endpoint dla kalkulatora do synchronizacji wiadomości
-// Kalkulator będzie wysyłał zapytania z API key
+// H2: userId wyprowadzany z uwierzytelnionego urządzenia (x-device-id + x-device-token),
+// nie z body/query — zapobiega IDOR (zapis/odczyt wiadomości dowolnego użytkownika).
+async function resolveUserId(request: NextRequest): Promise<
+  { ok: true; userId: string } | { ok: false; status: number; error: string }
+> {
+  const auth = await verifyDeviceAuth(request);
+  if (!auth.ok) return auth;
 
-const CALCULATOR_API_KEY = process.env.CALCULATOR_API_KEY;
+  const deviceRow = await prisma.$queryRaw<{ userId: string | null }[]>`
+    SELECT "userId" FROM "Device" WHERE "deviceId" = ${auth.deviceId} LIMIT 1
+  `;
+  const userId = deviceRow[0]?.userId ?? null;
+  if (!userId) {
+    return { ok: false, status: 403, error: "Device not paired with any account" };
+  }
+  return { ok: true, userId };
+}
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify API key
-    const apiKey = request.headers.get("x-api-key");
+    const resolved = await resolveUserId(request);
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
+    }
+    const { userId } = resolved;
 
-    if (!apiKey || apiKey !== CALCULATOR_API_KEY) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    const body = await request.json();
+    const { messages } = body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { userId, messages } = await request.json();
-
-    if (!userId || !messages || !Array.isArray(messages)) {
-      return NextResponse.json(
-        { error: "Invalid request body" },
-        { status: 400 }
-      );
-    }
-
-    // Verify user exists
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
-    }
-
-    // Find or create a conversation for this sync (use a default title for calculator syncs)
+    // Znajdź lub utwórz konwersację dla tego urządzenia
     let conversation = await prisma.conversation.findFirst({
-      where: {
-        userId,
-        title: "Calculator Sync",
-      },
+      where: { userId, title: "Calculator Sync" },
     });
 
     if (!conversation) {
@@ -58,7 +51,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Save messages to the conversation
     await prisma.chatMessage.createMany({
       data: messages.map((msg: any) => ({
         id: require("crypto").randomUUID(),
@@ -71,68 +63,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, conversationId: conversation.id });
   } catch (error) {
     console.error("Sync messages error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify API key
-    const apiKey = request.headers.get("x-api-key");
-
-    if (!apiKey || apiKey !== CALCULATOR_API_KEY) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    const resolved = await resolveUserId(request);
+    if (!resolved.ok) {
+      return NextResponse.json({ error: resolved.error }, { status: resolved.status });
     }
+    const { userId } = resolved;
 
-    const userId = request.nextUrl.searchParams.get("userId");
     const limit = parseInt(request.nextUrl.searchParams.get("limit") || "50");
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: "Missing userId parameter" },
-        { status: 400 }
-      );
-    }
-
-    // Get user's chat history from all their conversations
     const conversations = await prisma.conversation.findMany({
       where: { userId },
       include: {
         ChatMessage: {
           orderBy: { createdAt: "desc" },
           take: limit,
-          select: {
-            role: true,
-            content: true,
-            createdAt: true,
-          },
+          select: { role: true, content: true, createdAt: true },
         },
       },
       orderBy: { updatedAt: "desc" },
     });
 
-    // Flatten all messages from all conversations
     const allMessages = conversations.flatMap((conv) => conv.ChatMessage);
-
-    // Sort by date and limit
     const messages = allMessages
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit);
 
-    return NextResponse.json({
-      messages: messages.reverse(), // Return in chronological order
-    });
+    return NextResponse.json({ messages: messages.reverse() });
   } catch (error) {
     console.error("Get messages error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

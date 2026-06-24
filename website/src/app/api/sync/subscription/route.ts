@@ -1,42 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { verifyDeviceAuth } from "@/lib/device-auth";
 
-// API endpoint dla kalkulatora do sprawdzania statusu subskrypcji
-// Kalkulator będzie sprawdzał czy użytkownik ma aktywny dostęp do AI
-
-const CALCULATOR_API_KEY = process.env.CALCULATOR_API_KEY;
-
+// H2: userId wyprowadzany z uwierzytelnionego urządzenia (x-device-id + x-device-token),
+// nie z parametru żądania — zapobiega IDOR (odczyt subskrypcji dowolnego użytkownika).
 export async function GET(request: NextRequest) {
   try {
-    // Verify API key
-    const apiKey = request.headers.get("x-api-key");
-
-    if (!apiKey || apiKey !== CALCULATOR_API_KEY) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+    const auth = await verifyDeviceAuth(request);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const userId = request.nextUrl.searchParams.get("userId");
-
+    // Pobierz userId powiązane z urządzeniem (nie z query param)
+    const deviceRow = await prisma.$queryRaw<{ userId: string | null }[]>`
+      SELECT "userId" FROM "Device" WHERE "deviceId" = ${auth.deviceId} LIMIT 1
+    `;
+    const userId = deviceRow[0]?.userId ?? null;
     if (!userId) {
-      return NextResponse.json(
-        { error: "Missing userId parameter" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Device not paired with any account" }, { status: 403 });
     }
 
-    // Get user's subscription
     const subscription = await prisma.subscription.findUnique({
       where: { userId },
     });
 
     if (!subscription) {
-      return NextResponse.json(
-        { error: "Subscription not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
     }
 
     const now = new Date();
@@ -53,9 +42,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Get subscription error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

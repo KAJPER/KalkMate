@@ -10,11 +10,12 @@
 | H1 | High | Device API | Brak tożsamości per-urządzenie (współdzielony klucz + spoofowalny MAC) | ✅ Naprawione |
 | H2 | High | Device API | `/device/register` nadpisuje `unlockCode` dowolnego urządzenia | ✅ Naprawione |
 | H3 | High | Device API | Endpointy `/device/*` przyjmują dowolny `x-device-id` (IDOR) | ✅ Naprawione |
+| H2a | High | Device API | `/sync/subscription` i `/sync/messages` — IDOR przez `userId` z parametru | ✅ Naprawione |
 | H4 | High | Backend | 7 tras admin bez własnego sprawdzenia auth | ✅ Naprawione |
 | H6 | High | Backend | Brak rate-limit na `/chat` i `/device/solve` | ✅ Naprawione |
 | H7 | High | Backend | Brak rate-limit na login/register/reset/2FA | ✅ Naprawione |
-| H8 | High | Firmware | Klucz API tylko XOR-obfuskowany | ⚠️ Dokumentacja (wymaga Flash Encryption) |
-| H9 | High | Firmware | Brak Flash Encryption / Secure Boot | ⚠️ Dokumentacja (sprzętowe) |
+| H8 | High | Firmware | Klucz API tylko XOR-obfuskowany | ✅ Obsługiwane przez flasher (PROD_DEV/PROD_REL) |
+| H9 | High | Firmware | Brak Flash Encryption / Secure Boot | ✅ Obsługiwane przez flasher (PROD_DEV/PROD_REL) |
 | H10 | High | Backend | `shippingCents` od klienta nie walidowane | ✅ Naprawione |
 | H11 | High | Backend | Single-use kupony podatne na TOCTOU | ✅ Naprawione |
 | M1 | Medium | Backend | Statyczny token admina, porównanie nie-timing-safe | ✅ Naprawione |
@@ -24,7 +25,8 @@
 | M5 | Medium | Backend | Plan `second_month` dostępny dla każdego | ✅ Naprawione |
 | M6 | Medium | Backend | Realizacja licencji podatna na TOCTOU | ✅ Naprawione |
 | M7 | Medium | Backend | Brak nagłówków bezpieczeństwa HTTP | ✅ Naprawione |
-| M8 | Medium | Backend | Rola w `/chat` forgowalny z klienta | ✅ Naprawione |
+| M8a | Medium | Backend | Rola w `/chat` forgowalny z klienta | ✅ Naprawione |
+| M8b | Medium | Backend | `change-email` zmienia email bez weryfikacji nowego adresu | ✅ Naprawione |
 | M9 | Medium | Firmware | Sekrety w logach szeregowych | ✅ Naprawione |
 
 ---
@@ -257,20 +259,38 @@ if (!rl.ok) return NextResponse.json({ error: `Za dużo prób. Spróbuj za ${Mat
 
 ## H8 + H9 — XOR obfuskacja klucza API / Brak Flash Encryption
 
-**Ryzyko:** Klucz API zapisany w firmware może być wyekstrahowany z binarki w ~5 min. Flash Encryption ESP32 chroni przed fizycznym odczytem pamięci Flash.
+**Ryzyko:** Klucz API zapisany w firmware może być wyekstrahowany z binarki w ~5 min. Flash Encryption ESP32 chroni przed fizycznym odczytem pamięci Flash i NVS (SSID, hasło, licencja, device token).
 
-**Naprawa (sprzętowa, jednorazowa):**
-```bash
-# Włącz Flash Encryption w trybie Development (odwracalne):
-esptool.py --port COM4 burn_efuse FLASH_CRYPT_CNT
+**Status: już zaimplementowane w `tools/flasher/flasher.py`.**
 
-# Lub przez IDF (produkcja — nieodwracalne):
-idf.py -p COM4 efuse-burn FLASH_ENCRYPTION_MODE RELEASE
+Flasher produkcyjny ma 3 tryby — wybiera się radiobutton w GUI:
+
+| Tryb | Kiedy używać | Co robi |
+|---|---|---|
+| `DEV` | Prototypy, debug | Tylko firmware, bez Flash Encryption |
+| `PROD_DEV` | QC test przed wysyłką | FE Development — można jeszcze reflashować (do ~4×) |
+| `PROD_REL` | Tuż przed włożeniem do pudełka | FE Release — **permanentnie zablokowane** |
+
+**Szczegóły procesu `PROD_DEV` / `PROD_REL`:**
+1. Jeśli `tools/flasher/keys/flash_encryption_key.bin` nie istnieje — generuje nowy 64-bajtowy klucz AES-XTS-256
+2. `espsecure encrypt-flash-data` — pre-szyfruje bootloader, partitions i firmware przed wgraniem
+3. `esptool write-flash` — wgrywa zaszyfrowane pliki
+4. `espefuse burn-key BLOCK_KEY0` — wypala klucz do eFuse
+5. `espefuse burn-efuse SPI_BOOT_CRYPT_CNT 1` — włącza Flash Encryption
+6. (tylko `PROD_REL`) `espefuse burn-efuse DIS_DOWNLOAD_MANUAL_ENCRYPT 1` — blokuje na zawsze
+
+**Workflow produkcyjny** (patrz `tools/flasher/SHIPPING_CHECKLIST.md`):
+```
+1. pio run -e esp32s3          ← build
+2. .\deploy.ps1 X.Y.Z "..."   ← upload + podpis ECDSA na serwerze
+3. python flasher.py           ← GUI flasher
+   → PROD_DEV → FLASH → QC test
+   → PROD_REL → FLASH → pudełko → wysyłka
 ```
 
-Po włączeniu Flash Encryption: NVS (SSID, hasło, licencja, device token) jest automatycznie szyfrowany sprzętowo.
+**Klucz FE:** `tools/flasher/keys/flash_encryption_key.bin` — gitignored (`.gitignore` zawiera `tools/flasher/keys/`). Backup obowiązkowo na osobnym nośniku offline — bez niego żadna płytka tej serii nie da się reflashować przez USB.
 
-**Uwaga:** H8/H9 nie zostały naprawione programistycznie — wymagają jednorazowej operacji sprzętowej na każdym urządzeniu przed shipmentem.
+**Uwaga C2:** Plik `tools/flasher/Klucze kalkmate/flash_encryption_key.bin` jest innym, starszym kluczem który trafił do historii gita (commit `495122d`). Traktować jako skompromitowany — nie używać do produkcji. Klucz produkcyjny to tylko ten z `tools/flasher/keys/`.
 
 ---
 
@@ -502,16 +522,20 @@ Serial.println("[POWER] wake -> WiFi reconnect");
 ```bash
 cd /home/ubuntu/kalkulator/website
 
-# Zastosuj migrację bazy danych
+# Zastosuj migracje bazy danych (dwie nowe: deviceToken + targetEmail)
 npx prisma migrate deploy
 
-# Zregeneruj klienta Prisma (zna teraz pole deviceToken)
+# Zregeneruj klienta Prisma
 npx prisma generate
 
 # Zbuduj i zrestartuj
 npm run build
 sudo systemctl restart kalkulator
 ```
+
+**Co robią migracje:**
+- `20260624000001_add_device_token` — dodaje kolumnę `deviceToken TEXT UNIQUE` do tabeli `Device`
+- `20260624000002_add_email_verification_target` — dodaje kolumnę `targetEmail TEXT` do tabeli `EmailVerification` (potrzebne dla M8b — change-email z weryfikacją)
 
 ### 2. Firmware
 
@@ -523,24 +547,51 @@ Po pierwszym połączeniu urządzenia z WiFi:
 - Urządzenie zapisze go w NVS pod kluczem `dev_token`
 - Kolejne żądania będą już autoryzowane tokenem
 
-### 3. Weryfikacja
+### 3. Weryfikacja po wdrożeniu
 
 ```bash
-# Sprawdź czy kolumna istnieje w bazie
+# Sprawdź czy kolumny istnieją w bazie
 sqlite3 /home/ubuntu/kalkulator/website/prisma/dev.db \
   "SELECT deviceId, deviceToken FROM Device LIMIT 5;"
 
+sqlite3 /home/ubuntu/kalkulator/website/prisma/dev.db \
+  "PRAGMA table_info(EmailVerification);"
+# Powinna być widoczna kolumna targetEmail
+
 # Sprawdź logi serwera po połączeniu urządzenia
 journalctl -u kalkulator -f | grep "device/register"
+
+# Sprawdź nagłówki bezpieczeństwa HTTP (M7)
+curl -sI https://kalkmate.pl | grep -E "X-Frame|Content-Security|Strict-Transport|X-Content-Type"
+
+# Sprawdź rate-limiting na logowaniu (H7)
+for i in {1..6}; do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST https://kalkmate.pl/api/auth/register \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@test.com","password":"test"}';
+done
+# Szóste żądanie powinno zwrócić 429
 ```
+
+### 4. Weryfikacja zmiany emaila (M8b)
+
+Nowy flow dla użytkownika:
+1. Użytkownik wchodzi w ustawienia → zmiana emaila → podaje nowy adres + hasło
+2. Backend wysyła email weryfikacyjny **na nowy adres** (nie zmienia od razu)
+3. Użytkownik klika link `/auth/verify?token=...`
+4. Dopiero wtedy email zostaje zmieniony + `emailVerified` ustawiony
+5. Użytkownik musi się zalogować ponownie (sesja trzyma stary email)
+
+Jeśli frontend wyświetlał po `change-email` komunikat „zaloguj się ponownie" (`relogin: true`) — teraz odpowiedź to `{ ok: true, verificationSent: true }`. **Sprawdź czy UI obsługuje nową odpowiedź.**
 
 ---
 
-## Pozostałe kwestie (wymagają działań sprzętowych)
+## Pozostałe kwestie
 
-| ID | Problem | Rekomendacja |
-|---|---|---|
-| H8 | Klucz API w firmware tylko XOR-obfuskowany | Flash Encryption ESP32 (`idf.py efuse-burn FLASH_ENCRYPTION_MODE RELEASE`) — jednorazowe na każdym urządzeniu |
-| H9 | Brak Flash Encryption / Secure Boot | jw. — po włączeniu szyfruje cały Flash + NVS sprzętowo |
-| — | WiFi hasło i licencja w NVS plaintext | Covered przez Flash Encryption (H8/H9) |
-| — | Licencja jako jedyne auth w trybie legacy | Stopniowo wymuszać przejście na device token; usunąć fallback licencji po pełnym wdrożeniu firmware |
+| ID | Problem | Status | Rekomendacja |
+|---|---|---|---|
+| H8/H9 | Flash Encryption | ✅ Zaimplementowane w flasher | Używać trybu `PROD_DEV` → QC → `PROD_REL` → wysyłka. Klucz backupować offline. |
+| C1/C2 | Klucze kryptograficzne w historii gita | ⚠️ Nie usunięto | `git filter-repo --path "tools/flasher/Klucze kalkmate" --invert-paths`. Traktować klucz z gita jako skompromitowany — nie używać do produkcji. |
+| H5 | `dev.db` z PII w repozytorium | ⚠️ Nie usunięto | `git rm --cached website/prisma/dev.db website/prisma/prisma/dev.db`, dodać `*.db` do `.gitignore`, scrub historii. |
+| — | WiFi hasło i licencja w NVS | ✅ Covered przez Flash Encryption | Po wdrożeniu PROD_DEV/PROD_REL NVS jest szyfrowany sprzętowo. |
+| — | Licencja jako fallback auth | Przejściowe | Usunąć fallback licencji w `/device/notes` i `/device/tests` po pełnym wdrożeniu nowego firmware z device token. |

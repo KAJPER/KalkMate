@@ -6,6 +6,7 @@ interface VerifyRow {
   userId: string;
   expiresAt: string;
   verifiedAt: string | null;
+  targetEmail: string | null;
 }
 
 // GET sprawdza status (przed pokazaniem przycisku)
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ ok: false, error: "Brak tokenu" }, { status: 400 });
 
     const rows = await prisma.$queryRaw<VerifyRow[]>`
-      SELECT "id","userId","expiresAt","verifiedAt"
+      SELECT "id","userId","expiresAt","verifiedAt","targetEmail"
       FROM "EmailVerification" WHERE "token" = ${token} LIMIT 1
     `;
     if (!rows || rows.length === 0) {
@@ -52,16 +53,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Link wygasl" }, { status: 400 });
     }
 
-    // Mark user emailVerified + token used
-    await prisma.user.update({
-      where: { id: r.userId },
-      data: { emailVerified: new Date() },
-    });
+    // M8: jeśli targetEmail ustawiony — to jest potwierdzenie zmiany emaila.
+    // Zaktualizuj email i ustaw emailVerified; w przeciwnym razie tylko emailVerified.
+    if (r.targetEmail) {
+      await prisma.user.update({
+        where: { id: r.userId },
+        data: { email: r.targetEmail, emailVerified: new Date() },
+      });
+    } else {
+      await prisma.user.update({
+        where: { id: r.userId },
+        data: { emailVerified: new Date() },
+      });
+    }
     await prisma.$executeRaw`
       UPDATE "EmailVerification" SET "verifiedAt" = CURRENT_TIMESTAMP WHERE "id" = ${r.id}
     `;
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, emailChanged: !!r.targetEmail });
   } catch (e) {
     console.error("[verify-email]", e);
     return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
