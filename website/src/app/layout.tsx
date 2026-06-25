@@ -107,10 +107,6 @@ export default function RootLayout({
         <meta name="theme-color" content="#0B0B0B" />
         <link rel="manifest" href="/site.webmanifest" />
         <meta name="geo.region" content="PL" />
-        <link rel="preconnect" href="https://js.stripe.com" />
-        <link rel="preconnect" href="https://m.stripe.network" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://r.stripe.com" />
-        <link rel="preconnect" href="https://ppm.stripe.com" />
       </head>
       <body
         className={`${geist.variable} ${instrument.variable} ${jetbrains.variable} antialiased km-grain bg-[#0B0B0B] text-[#F2EDE3]`}
