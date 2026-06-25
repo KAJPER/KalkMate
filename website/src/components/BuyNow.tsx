@@ -106,7 +106,7 @@ const content: Record<Locale, {
     badges: ["Bezpieczna płatność", "14 dni na zwrot", "Gwarancja 24 mc", "Wysyłka międzynarodowa"],
     stockAvailable: (n) => `${n} szt. dostępnych`,
     preSalePrice: "Cena przedsprzedażowa",
-    discountPln: "-77% · darmowa wysyłka InPost",
+    discountPln: "Przedsprzedaż · darmowa wysyłka InPost",
     shippingEur: "InPost PL free · EU 20€ · World 35€",
     production: "/ produkcja",
     productionNote1: "Urządzenia są ", productionNoteHand: "ręcznie składane", productionNote2: ". Czas realizacji do ", productionNoteWeeks: "4 tygodni",
@@ -151,7 +151,7 @@ const content: Record<Locale, {
     badges: ["Secure payment", "14-day returns", "24-month warranty", "International shipping"],
     stockAvailable: (n) => `${n} in stock`,
     preSalePrice: "Pre-sale price",
-    discountPln: "-77% · free InPost shipping",
+    discountPln: "Pre-sale · free InPost shipping",
     shippingEur: "InPost PL free · EU 20€ · World 35€",
     production: "/ production",
     productionNote1: "Devices are ", productionNoteHand: "hand-assembled", productionNote2: ". Lead time up to ", productionNoteWeeks: "4 weeks",
@@ -196,7 +196,7 @@ const content: Record<Locale, {
     badges: ["Sichere Zahlung", "14 Tage Rückgaberecht", "24 Monate Garantie", "Internationaler Versand"],
     stockAvailable: (n) => `${n} auf Lager`,
     preSalePrice: "Vorverkaufspreis",
-    discountPln: "-77% · kostenloser InPost-Versand",
+    discountPln: "Vorverkauf · kostenloser InPost-Versand",
     shippingEur: "InPost PL gratis · EU 20€ · Welt 35€",
     production: "/ Produktion",
     productionNote1: "Die Geräte werden ", productionNoteHand: "handmontiert", productionNote2: ". Lieferzeit bis zu ", productionNoteWeeks: "4 Wochen",
@@ -538,9 +538,6 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                     <span className="km-display text-3xl text-[#F2EDE3]/45">
                       {showEUR ? "€" : "zł"}
                     </span>
-                    {!showEUR && (
-                      <span className="km-mono-eyebrow text-[#F2EDE3]/30 line-through ml-2">2199 zł</span>
-                    )}
                   </div>
                   <p className="mt-3 km-mono-eyebrow text-[#D8FF3D]">
                     {showEUR ? t.shippingEur : t.discountPln}
