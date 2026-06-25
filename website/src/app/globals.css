@@ -108,6 +108,14 @@ body {
   width: 100%;
 }
 
+/* Hero above-fold fade — CSS so LCP isn't blocked by JS animation */
+@keyframes km-fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.km-fade-up         { animation: km-fade-up 0.7s cubic-bezier(0.22,1,0.36,1) both; }
+.km-fade-up-delayed { animation: km-fade-up 0.9s cubic-bezier(0.22,1,0.36,1) 0.15s both; }
+
 /* Marquee */
 @keyframes km-marquee {
   from { transform: translateX(0); }

@@ -1,6 +1,3 @@
-"use client";
-
-import { motion } from "framer-motion";
 import Image from "next/image";
 import { type ReactNode } from "react";
 import { type Locale } from "@/lib/i18n";
@@ -172,12 +169,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
       {/* Headline + device */}
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10 mt-10 lg:mt-16 grid lg:grid-cols-12 gap-10 items-start">
         {/* Left: Headline */}
-        <motion.div
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="lg:col-span-7 relative"
-        >
+        <div className="lg:col-span-7 relative km-fade-up">
           <p className="km-mono-eyebrow text-[#D8FF3D]">
             {t.section}
           </p>
@@ -226,15 +218,10 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
               <p className="km-display text-3xl text-[#F2EDE3] mt-1">04</p>
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Right: Device + floating data */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
-          className="lg:col-span-5 relative"
-        >
+        <div className="lg:col-span-5 relative km-fade-up-delayed">
           <div className="relative aspect-[4/5] w-full max-w-[460px] mx-auto">
             {/* Frame ticks */}
             <div className="absolute -top-2 -left-2 w-5 h-5 border-l border-t border-[#D8FF3D]" />
@@ -248,8 +235,8 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
                 alt={t.imageAlt}
                 fill
                 priority
-                quality={92}
-                sizes="(max-width: 1024px) 100vw, 460px"
+                quality={80}
+                sizes="(max-width: 640px) 460px, (max-width: 1024px) 50vw, 460px"
                 className="object-cover grayscale-[10%] contrast-[1.05]"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0B] via-transparent to-transparent" />
@@ -273,7 +260,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
               <p className="km-mono-eyebrow">KM v1.0</p>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
 
       {/* Marquee ticker */}
