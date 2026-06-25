@@ -29,9 +29,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  experimental: {
-    browsersListForSwc: true,
-  },
   images: {
     formats: ["image/webp", "image/avif"],
     deviceSizes: [640, 828, 1200, 1920, 2048],

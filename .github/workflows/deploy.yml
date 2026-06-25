@@ -1,0 +1,45 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 57.131.30.57 >> ~/.ssh/known_hosts
+
+      - name: Sync files
+        run: |
+          rsync -az --delete \
+            --exclude='.next/' \
+            --exclude='node_modules/' \
+            --exclude='.env*' \
+            --exclude='prisma/*.db' \
+            --exclude='prisma/*.db-shm' \
+            --exclude='prisma/*.db-wal' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            website/ \
+            ubuntu@57.131.30.57:/home/ubuntu/kalkulator/website/
+
+      - name: Build & restart
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@57.131.30.57 << 'ENDSSH'
+            set -e
+            cd /home/ubuntu/kalkulator/website
+            npm ci
+            set -a && . .env.production.local ; set +a
+            npx prisma migrate deploy
+            npm run build
+            pm2 restart kalkmate --update-env
+            echo "=== Deploy OK ==="
+          ENDSSH

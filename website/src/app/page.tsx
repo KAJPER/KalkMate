@@ -2,11 +2,11 @@ import dynamic from "next/dynamic";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
+import VisitTracker from "@/components/VisitTracker";
 import { homeJsonLd } from "@/lib/seo";
 import type { Metadata } from "next";
 import { SITE_URL, languageAlternates } from "@/lib/i18n";
 
-const VisitTracker  = dynamic(() => import("@/components/VisitTracker"),  { ssr: false });
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
 const ExamBenefits = dynamic(() => import("@/components/ExamBenefits"));
 const Specs        = dynamic(() => import("@/components/Specs"));
