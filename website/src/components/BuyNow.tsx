@@ -337,6 +337,20 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
   }, [status]);
 
   const gcsSurveyRendered = useRef(false);
+  const stripeMessagingRef = useRef<HTMLDivElement>(null);
+  const [stripeInView, setStripeInView] = useState(false);
+
+  useEffect(() => {
+    const el = stripeMessagingRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setStripeInView(true); observer.disconnect(); } },
+      { rootMargin: "300px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     if (stage !== "success" || gcsSurveyRendered.current) return;
     gcsSurveyRendered.current = true;
@@ -532,30 +546,32 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                     {showEUR ? t.shippingEur : t.discountPln}
                   </p>
 
-                  <div className="mt-6 [&_iframe]:!min-h-0 opacity-80">
-                    <Elements
-                      stripe={getStripe()}
-                      options={{
-                        appearance: {
-                          theme: "night",
-                          variables: {
-                            colorText: "#a0a0a0",
-                            colorTextSecondary: "#7a7a7a",
-                            colorPrimary: "#D8FF3D",
-                            colorBackground: "#0B0B0B",
-                            fontFamily: "var(--font-geist), system-ui, sans-serif",
-                          },
-                        },
-                      } as StripeElementsOptions}
-                    >
-                      <PaymentMethodMessagingElement
+                  <div ref={stripeMessagingRef} className="mt-6 [&_iframe]:!min-h-0 opacity-80">
+                    {stripeInView && (
+                      <Elements
+                        stripe={getStripe()}
                         options={{
-                          amount: showEUR ? 16900 : 69900,
-                          currency: showEUR ? "EUR" : "PLN",
-                          countryCode: showEUR ? "DE" : "PL",
-                        }}
-                      />
-                    </Elements>
+                          appearance: {
+                            theme: "night",
+                            variables: {
+                              colorText: "#a0a0a0",
+                              colorTextSecondary: "#7a7a7a",
+                              colorPrimary: "#D8FF3D",
+                              colorBackground: "#0B0B0B",
+                              fontFamily: "var(--font-geist), system-ui, sans-serif",
+                            },
+                          },
+                        } as StripeElementsOptions}
+                      >
+                        <PaymentMethodMessagingElement
+                          options={{
+                            amount: showEUR ? 16900 : 69900,
+                            currency: showEUR ? "EUR" : "PLN",
+                            countryCode: showEUR ? "DE" : "PL",
+                          }}
+                        />
+                      </Elements>
+                    )}
                   </div>
                 </div>
 

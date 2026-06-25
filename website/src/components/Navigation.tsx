@@ -112,7 +112,7 @@ export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
 
           <div className="hidden lg:flex items-center gap-5">
             <span className="km-mono-eyebrow text-[#F2EDE3]/40 tabular-nums">
-              {localeLabel[lang]} · {clock}
+              {`${localeLabel[lang]} · ${clock}`}
             </span>
             <LanguageSwitcher current={lang} />
             <a
@@ -214,7 +214,7 @@ export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
               onClick={() => setMenuOpen(false)}
               className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow"
             >
-              {t.cartMobile} {totalItems > 0 && `(${totalItems})`}
+              {totalItems > 0 ? `${t.cartMobile} (${totalItems})` : t.cartMobile}
             </a>
             <div className="mt-2">
               <LanguageSwitcher current={lang} compact />
