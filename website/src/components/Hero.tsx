@@ -169,7 +169,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
       {/* Headline + device */}
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10 mt-10 lg:mt-16 grid lg:grid-cols-12 gap-10 items-start">
         {/* Left: Headline */}
-        <div className="lg:col-span-7 relative km-fade-up">
+        <div className="lg:col-span-7 relative">
           <p className="km-mono-eyebrow text-[#D8FF3D]">
             {t.section}
           </p>
@@ -221,7 +221,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
         </div>
 
         {/* Right: Device + floating data */}
-        <div className="lg:col-span-5 relative km-fade-up-delayed">
+        <div className="lg:col-span-5 relative">
           <div className="relative aspect-[4/5] w-full max-w-[460px] mx-auto">
             {/* Frame ticks */}
             <div className="absolute -top-2 -left-2 w-5 h-5 border-l border-t border-[#D8FF3D]" />
