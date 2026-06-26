@@ -4,6 +4,7 @@ import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 
+const VideoScroll  = dynamic(() => import("@/components/VideoScroll"));
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
 const ExamBenefits = dynamic(() => import("@/components/ExamBenefits"));
 const Specs        = dynamic(() => import("@/components/Specs"));
@@ -84,6 +85,7 @@ export default function EnglishPage() {
       <Navigation lang={lang} />
       <main className="relative overflow-x-clip">
         <Hero lang={lang} />
+        <VideoScroll lang={lang} />
         <HowItWorks lang={lang} />
         <ExamBenefits lang={lang} />
         <Specs lang={lang} />
