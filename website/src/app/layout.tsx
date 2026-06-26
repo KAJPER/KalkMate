@@ -27,22 +27,18 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KalkMate — Kalkulator AI na Maturę 2026 | Matematyka, Fizyka, Chemia, Biologia",
+  title: "KalkMate — Kalkulator AI | Matematyka, Fizyka, Chemia, Biologia",
   description:
-    "Kalkulator z AI do matury. Zrób zdjęcie zadania — dostaniesz rozwiązanie. Matematyka, fizyka, chemia, biologia. Polska produkcja. 699 zł.",
+    "Kalkulator z AI. Zrób zdjęcie zadania — dostaniesz rozwiązanie. Matematyka, fizyka, chemia, biologia. Polska produkcja. 699 zł.",
   keywords: [
     "kalkulator ai",
-    "kalkulator na maturę",
     "kalkulator z ai",
-    "kalkulator ai matura",
     "inteligentny kalkulator",
     "kalkulator z kamerą",
-    "kalkulator do matury 2026",
     "kalkulator naukowy ai",
     "kalkmate",
     "calculator ai",
     "ai calculator",
-    "ai exam calculator",
     "KI Taschenrechner",
     "calculator ai kaufen",
   ],
@@ -62,7 +58,7 @@ export const metadata: Metadata = {
   // itd. (Google traktowałby je jako duplikaty strony głównej). Canonical + hreflang
   // ustawiamy per-strona (/, /en, /de, /pomoc, /regulamin, /polityka-prywatnosci).
   openGraph: {
-    title: "KalkMate — Kalkulator AI na Maturę",
+    title: "KalkMate — Kalkulator AI",
     description:
       "Kalkulator z wbudowaną sztuczną inteligencją. Zrób zdjęcie zadania — AI rozwiąże je za Ciebie.",
     type: "website",
@@ -70,12 +66,12 @@ export const metadata: Metadata = {
     url: "https://kalkmate.pl",
     siteName: "KalkMate",
     images: [
-      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — Kalkulator AI na Maturę" },
+      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — Kalkulator AI" },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "KalkMate — Kalkulator AI na Maturę",
+    title: "KalkMate — Kalkulator AI",
     description:
       "Kalkulator z AI. Zrób zdjęcie zadania — dostaniesz rozwiązanie. Matematyka, fizyka, chemia, biologia.",
     images: ["/KalkMate.png"],

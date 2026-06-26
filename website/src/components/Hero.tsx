@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import { type ReactNode } from "react";
 import { type Locale } from "@/lib/i18n";
@@ -22,7 +24,7 @@ type HeroContent = {
 
 const content: Record<Locale, HeroContent> = {
   pl: {
-    eyebrow: "Edycja przedmaturalna · Polska, 2026",
+    eyebrow: "Edycja 2026 · Polska",
     section: "[ 01 ] · Kalkulator. Z mózgiem.",
     h1: (
       <>
@@ -35,7 +37,7 @@ const content: Record<Locale, HeroContent> = {
       <>
         KalkMate wygląda <em className="font-serif not-italic text-[#F2EDE3]">dokładnie</em>
         {" "}jak zwykły kalkulator graficzny. Ma jednak coś, czego nie ma żaden inny —
-        ukrytą kamerę i model AI trenowany na arkuszach CKE z ostatnich 10 lat.
+        ukrytą kamerę i model AI trenowany na tysiącach zadań z ostatnich 10 lat.
       </>
     ),
     para2:
@@ -51,8 +53,8 @@ const content: Record<Locale, HeroContent> = {
     labelOled: "OLED · 256×64",
     ticker: [
       "MATEMATYKA · ROZSZ.",
-      "FIZYKA · CKE",
-      "CHEMIA · ARKUSZE 2014–2025",
+      "FIZYKA",
+      "CHEMIA · 2014–2025",
       "BIOLOGIA",
       "OCR < 1.2s",
       "OLED 256×64",
@@ -61,7 +63,7 @@ const content: Record<Locale, HeroContent> = {
     ],
   },
   en: {
-    eyebrow: "Pre-matura edition · Poland, 2026",
+    eyebrow: "Edition 2026 · Poland",
     section: "[ 01 ] · A calculator. With a brain.",
     h1: (
       <>
@@ -74,8 +76,8 @@ const content: Record<Locale, HeroContent> = {
       <>
         KalkMate looks <em className="font-serif not-italic text-[#F2EDE3]">exactly</em>
         {" "}like an ordinary graphing calculator. But it hides something no other one has —
-        a concealed camera and an AI model trained on Polish national matura exam papers (CKE)
-        from the last 10 years.
+        a concealed camera and an AI model trained on thousands of problems
+        from the last decade.
       </>
     ),
     para2:
@@ -91,8 +93,8 @@ const content: Record<Locale, HeroContent> = {
     labelOled: "OLED · 256×64",
     ticker: [
       "MATHEMATICS · ADV.",
-      "PHYSICS · CKE",
-      "CHEMISTRY · PAPERS 2014–2025",
+      "PHYSICS",
+      "CHEMISTRY · 2014–2025",
       "BIOLOGY",
       "OCR < 1.2s",
       "OLED 256×64",
@@ -101,7 +103,7 @@ const content: Record<Locale, HeroContent> = {
     ],
   },
   de: {
-    eyebrow: "Vor-Abitur-Edition · Polen, 2026",
+    eyebrow: "Edition 2026 · Polen",
     section: "[ 01 ] · Ein Taschenrechner. Mit Verstand.",
     h1: (
       <>
@@ -114,7 +116,7 @@ const content: Record<Locale, HeroContent> = {
       <>
         KalkMate sieht <em className="font-serif not-italic text-[#F2EDE3]">exakt</em>
         {" "}wie ein gewöhnlicher Grafikrechner aus. Doch er hat etwas, das kein anderer besitzt —
-        eine versteckte Kamera und ein KI-Modell, trainiert auf polnischen Abiturprüfungen (CKE)
+        eine versteckte Kamera und ein KI-Modell, trainiert auf Tausenden von Aufgaben
         der letzten 10 Jahre.
       </>
     ),
@@ -131,8 +133,8 @@ const content: Record<Locale, HeroContent> = {
     labelOled: "OLED · 256×64",
     ticker: [
       "MATHEMATIK · ERW.",
-      "PHYSIK · CKE",
-      "CHEMIE · PRÜFUNGEN 2014–2025",
+      "PHYSIK",
+      "CHEMIE · 2014–2025",
       "BIOLOGIE",
       "OCR < 1.2s",
       "OLED 256×64",

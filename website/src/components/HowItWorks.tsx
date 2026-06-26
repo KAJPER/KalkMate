@@ -46,7 +46,7 @@ const content: Record<Locale, HowItWorksContent> = {
         n: "02",
         title: "Analiza",
         head: "AI rozpoznaje treść.",
-        desc: "Model wytrenowany na arkuszach CKE z lat 2014–2025 czyta zadanie, klasyfikuje przedmiot i typ, dobiera metodę rozwiązania.",
+        desc: "Model AI czyta zadanie, klasyfikuje przedmiot i typ, dobiera metodę rozwiązania.",
         tag: "OCR + LLM",
       },
       {
@@ -82,7 +82,7 @@ const content: Record<Locale, HowItWorksContent> = {
         n: "02",
         title: "Analysis",
         head: "AI reads it.",
-        desc: "A model trained on Polish national matura exam papers (CKE) from 2014–2025 reads the problem, classifies the subject and type, and picks the right method.",
+        desc: "The AI model reads the problem, classifies the subject and type, and picks the right solving method.",
         tag: "OCR + LLM",
       },
       {
@@ -118,7 +118,7 @@ const content: Record<Locale, HowItWorksContent> = {
         n: "02",
         title: "Analyse",
         head: "KI erkennt alles.",
-        desc: "Ein Modell, trainiert auf polnischen Abiturprüfungen (CKE) der Jahre 2014–2025, liest die Aufgabe, klassifiziert Fach und Typ und wählt die passende Methode.",
+        desc: "Das KI-Modell liest die Aufgabe, klassifiziert Fach und Typ und wählt die passende Lösungsmethode.",
         tag: "OCR + LLM",
       },
       {
@@ -200,7 +200,7 @@ export default function HowItWorks({ lang = "pl" }: { lang?: Locale }) {
           </p>
           <p className="text-[#F2EDE3]/45">[ok] zdjęcie · 1632×1232 · 218 KB</p>
           <p className="text-[#F2EDE3]/45">[ok] klasyfikator: matematyka / całki / oznaczone</p>
-          <p className="text-[#F2EDE3]/45">[ok] model: ckematura-r1</p>
+          <p className="text-[#F2EDE3]/45">[ok] model: kalkmate-r1</p>
           <p>
             <span className="text-[#D8FF3D]">→</span> ∫₀¹ (3x² + 2x) dx ={" "}
             <span className="text-[#D8FF3D]">2</span>

@@ -13,7 +13,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Jakie przedmioty obsługuje AI?",
-      a: "Matematyka (poziom podstawowy i rozszerzony), fizyka, chemia i biologia. Model jest trenowany na arkuszach CKE z lat 2014–2025. Sukcesywnie dodajemy kolejne przedmioty.",
+      a: "Matematyka (poziom podstawowy i rozszerzony), fizyka, chemia i biologia. Model jest trenowany na tysiącach zadań z ostatnich 10 lat. Sukcesywnie dodajemy kolejne przedmioty.",
     },
     {
       q: "Czy potrzebuję WiFi?",
@@ -47,7 +47,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Which subjects does the AI support?",
-      a: "Mathematics (basic and extended level), physics, chemistry and biology. The model is trained on Polish matura (CKE) exam papers from 2014–2025. We keep adding more subjects.",
+      a: "Mathematics (basic and extended level), physics, chemistry and biology. The model is trained on thousands of problems from the last 10 years. We keep adding more subjects.",
     },
     {
       q: "Do I need WiFi?",
@@ -81,7 +81,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Welche Fächer unterstützt die KI?",
-      a: "Mathematik (Grund- und Leistungskurs), Physik, Chemie und Biologie. Das Modell ist auf polnische Abiturprüfungen (CKE) der Jahre 2014–2025 trainiert. Wir ergänzen laufend weitere Fächer.",
+      a: "Mathematik (Grund- und Leistungskurs), Physik, Chemie und Biologie. Das Modell ist auf Tausende von Aufgaben der letzten 10 Jahre trainiert. Wir ergänzen laufend weitere Fächer.",
     },
     {
       q: "Brauche ich WLAN?",

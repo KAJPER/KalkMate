@@ -17,13 +17,11 @@ import { SITE_URL, languageAlternates } from "@/lib/i18n";
 const lang = "en" as const;
 
 export const metadata: Metadata = {
-  title: "KalkMate — AI Calculator for Exams | Smart Photo Calculator",
+  title: "KalkMate — AI Calculator | Smart Photo Calculator",
   description:
-    "KalkMate is the AI exam calculator that solves math, physics, chemistry and biology problems. Point the built-in camera at a question — get the full step-by-step solution on its OLED screen. 169 EUR, no subscription.",
+    "KalkMate is the AI calculator that solves math, physics, chemistry and biology problems. Point the built-in camera at a problem — get the full step-by-step solution on its OLED screen. 169 EUR, no subscription.",
   keywords: [
     "AI calculator",
-    "AI exam calculator",
-    "smart calculator for exams",
     "photo calculator AI",
     "calculator with AI",
     "AI math solver",
@@ -41,20 +39,20 @@ export const metadata: Metadata = {
     languages: languageAlternates(),
   },
   openGraph: {
-    title: "KalkMate — AI Calculator for Exams",
+    title: "KalkMate — AI Calculator",
     description:
-      "Point the camera at your exam question. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, no subscription.",
+      "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, no subscription.",
     type: "website",
     locale: "en_US",
     url: `${SITE_URL}/en`,
     siteName: "KalkMate",
     images: [
-      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — AI Calculator for Exams" },
+      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — AI Calculator" },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "KalkMate — AI Calculator for Exams",
+    title: "KalkMate — AI Calculator",
     description:
       "Photo → AI → Solution. The smart calculator that solves math, physics, chemistry and biology problems.",
     images: ["/KalkMate.png"],

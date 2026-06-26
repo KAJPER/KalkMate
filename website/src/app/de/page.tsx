@@ -17,16 +17,16 @@ import { SITE_URL, languageAlternates } from "@/lib/i18n";
 const lang = "de" as const;
 
 export const metadata: Metadata = {
-  title: "KalkMate — KI-Taschenrechner für Abitur & Prüfungen",
+  title: "KalkMate — KI-Taschenrechner | Foto-Rechner mit KI",
   description:
     "KalkMate ist der intelligente KI-Taschenrechner für Prüfungen. Fotografiere die Aufgabe — die KI analysiert sie und zeigt die vollständige Lösung Schritt für Schritt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. 169 EUR, kein Abo.",
   keywords: [
     "KI Taschenrechner",
     "AI Taschenrechner",
     "KI Rechner Prüfung",
-    "intelligenter Taschenrechner Abitur",
+    "intelligenter Taschenrechner",
     "AI Rechner Schule",
-    "KI Mathe Abitur",
+    "KI Mathe Aufgaben",
     "Taschenrechner mit KI",
     "AI Prüfungsrechner",
     "KalkMate",
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     languages: languageAlternates(),
   },
   openGraph: {
-    title: "KalkMate — KI-Taschenrechner für Abitur & Prüfungen",
+    title: "KalkMate — KI-Taschenrechner",
     description:
       "Fotografiere deine Aufgabe — KalkMate löst sie mit KI direkt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. Jetzt für 169 EUR, kein Abo.",
     type: "website",
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "KalkMate — KI-Taschenrechner für Abitur & Prüfungen",
+    title: "KalkMate — KI-Taschenrechner",
     description:
       "Foto → KI → Lösung. Der intelligente Taschenrechner, der Mathe-, Physik-, Chemie- und Biologie-Aufgaben löst.",
     images: ["/KalkMate.png"],

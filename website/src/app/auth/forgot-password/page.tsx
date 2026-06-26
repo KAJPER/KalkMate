@@ -68,7 +68,7 @@ const DICT: Record<
     sentMessage:
       "Jeśli konto istnieje, wysłaliśmy link resetujący na podany email. Sprawdź skrzynkę (również SPAM). Link wygasa za 60 minut.",
     backToSignin: "← Powrót do logowania",
-    footerTagline: "KalkMate · Maturalny kalkulator z AI",
+    footerTagline: "KalkMate · Kalkulator z AI",
     genericError: "Coś poszło nie tak",
     networkError: "Błąd sieci",
   },
@@ -99,7 +99,7 @@ const DICT: Record<
     sentMessage:
       "If the account exists, we've sent a reset link to the given email. Check your inbox (including SPAM). The link expires in 60 minutes.",
     backToSignin: "← Back to sign in",
-    footerTagline: "KalkMate · AI-powered exam calculator",
+    footerTagline: "KalkMate · AI-powered calculator",
     genericError: "Something went wrong",
     networkError: "Network error",
   },
@@ -130,7 +130,7 @@ const DICT: Record<
     sentMessage:
       "Falls das Konto existiert, haben wir einen Reset-Link an die angegebene E-Mail gesendet. Prüfe dein Postfach (auch SPAM). Der Link läuft in 60 Minuten ab.",
     backToSignin: "← Zurück zur Anmeldung",
-    footerTagline: "KalkMate · KI-gestützter Abiturrechner",
+    footerTagline: "KalkMate · KI-Taschenrechner",
     genericError: "Etwas ist schiefgelaufen",
     networkError: "Netzwerkfehler",
   },

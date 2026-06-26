@@ -99,15 +99,15 @@ const DICT: Record<
     lastContact: "Ostatni kontakt:",
     aiMode: "Tryb AI:",
     maturaTitle:
-      "Wyspecjalizowany prompt pod zadania CKE (matematyka, fizyka, chemia, biologia)",
-    maturaLabel: "Matura (CKE)",
+      "Tryb egzaminacyjny (matematyka, fizyka, chemia, biologia)",
+    maturaLabel: "Egzamin",
     rawTitle:
-      "Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)",
+      "Tryb uniwersalny — dowolny przedmiot (elektronika, informatyka, języki...)",
     rawLabel: "Czysty AI",
     rawDesc:
-      "Tryb uniwersalny — AI nie zaklada matury. Dziala dla elektroniki, informatyki, jezykow itp.",
+      "Tryb uniwersalny — AI działa dla elektroniki, informatyki, języków i innych.",
     maturaDesc:
-      "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia).",
+      "Tryb egzaminacyjny — AI odpowiada krok po kroku (matematyka/fizyka/chemia/biologia).",
     notesHeading: (n) => `Notatki offline (${n}/50)`,
     notesSync: "Synchronizowane do urządzenia przy WiFi",
     editNote: "Edytuj notatkę",
@@ -165,15 +165,15 @@ const DICT: Record<
     lastContact: "Last contact:",
     aiMode: "AI mode:",
     maturaTitle:
-      "Specialized prompt for Polish CKE exam tasks (math, physics, chemistry, biology)",
-    maturaLabel: "Matura (CKE)",
+      "Exam mode (math, physics, chemistry, biology)",
+    maturaLabel: "Exam",
     rawTitle:
-      "No exam restrictions - any subject (electronics, computer science, languages...)",
+      "Universal mode — any subject (electronics, computer science, languages...)",
     rawLabel: "Raw AI",
     rawDesc:
-      "Universal mode — the AI doesn't assume an exam context. Works for electronics, computer science, languages, etc.",
+      "Universal mode — the AI works for electronics, computer science, languages and more.",
     maturaDesc:
-      "Exam mode — the AI answers in CKE format (math/physics/chemistry/biology).",
+      "Exam mode — the AI answers step by step (math/physics/chemistry/biology).",
     notesHeading: (n) => `Offline notes (${n}/50)`,
     notesSync: "Synced to the device over WiFi",
     editNote: "Edit note",
@@ -232,15 +232,15 @@ const DICT: Record<
     lastContact: "Letzter Kontakt:",
     aiMode: "KI-Modus:",
     maturaTitle:
-      "Spezialisierter Prompt für polnische CKE-Abituraufgaben (Mathe, Physik, Chemie, Biologie)",
-    maturaLabel: "Matura (CKE)",
+      "Prüfungsmodus (Mathe, Physik, Chemie, Biologie)",
+    maturaLabel: "Prüfung",
     rawTitle:
-      "Keine Abitur-Einschränkungen - beliebiges Fach (Elektronik, Informatik, Sprachen...)",
+      "Universeller Modus — beliebiges Fach (Elektronik, Informatik, Sprachen...)",
     rawLabel: "Reine KI",
     rawDesc:
-      "Universeller Modus — die KI setzt keinen Abiturkontext voraus. Funktioniert für Elektronik, Informatik, Sprachen usw.",
+      "Universeller Modus — die KI funktioniert für Elektronik, Informatik, Sprachen und mehr.",
     maturaDesc:
-      "Abiturmodus — die KI antwortet im CKE-Format (Mathe/Physik/Chemie/Biologie).",
+      "Prüfungsmodus — die KI antwortet Schritt für Schritt (Mathe/Physik/Chemie/Biologie).",
     notesHeading: (n) => `Offline-Notizen (${n}/50)`,
     notesSync: "Über WiFi mit dem Gerät synchronisiert",
     editNote: "Notiz bearbeiten",
@@ -620,15 +620,15 @@ export default function KalkulatorPage() {
                                 ? "bg-[#3B82F6] border-[#3B82F6] text-white"
                                 : "bg-transparent border-[rgba(242,237,227,0.20)] text-gray-400 hover:text-gray-200"
                             } disabled:opacity-50`}
-                            title="Bez ograniczen do matury - dowolny przedmiot (elektronika, informatyka, jezyki...)"
+                            title="Tryb uniwersalny — dowolny przedmiot (elektronika, informatyka, języki...)"
                           >
                             Czysty AI
                           </button>
                         </div>
                         <div className="text-[11px] text-gray-500 mt-2">
                           {info.device.promptMode === "raw"
-                            ? "Tryb uniwersalny — AI nie zaklada matury. Dziala dla elektroniki, informatyki, jezykow itp."
-                            : "Tryb maturalny — AI odpowiada w formacie CKE (matematyka/fizyka/chemia/biologia)."}
+                            ? "Tryb uniwersalny — AI działa dla elektroniki, informatyki, języków i innych."
+                            : "Tryb egzaminacyjny — AI odpowiada krok po kroku (matematyka/fizyka/chemia/biologia)."}
                         </div>
                       </div>
                     </>

@@ -255,7 +255,7 @@ export default function OpenRouterPage() {
                             ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
                             : "bg-blue-500/10 text-blue-400 border-blue-500/20"
                         }`}>
-                          {u.aiMode === "raw" ? "Czysty AI" : "Matura"}
+                          {u.aiMode === "raw" ? "Czysty AI" : "Egzamin"}
                         </span>
                       </div>
 

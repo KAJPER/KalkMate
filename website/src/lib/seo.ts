@@ -3,7 +3,7 @@ import { faqs } from "@/lib/content/faq";
 
 const productName: Record<Locale, string> = {
   pl: "KalkMate — Kalkulator AI",
-  en: "KalkMate — AI Calculator for Exams",
+  en: "KalkMate — AI Calculator",
   de: "KalkMate — KI-Taschenrechner",
 };
 

@@ -40,7 +40,7 @@ const shots: Record<Locale, Shot[]> = {
     {
       src: "/galeria/inteligentny-kalkulator-rozwiazywanie-zadan.jpg",
       label: "05 · Test",
-      caption: "Rozwiązywanie matury 2024",
+      caption: "Rozwiązywanie zadania 2024",
       span: "md:col-span-6 aspect-[4/3]",
     },
   ],
@@ -72,7 +72,7 @@ const shots: Record<Locale, Shot[]> = {
     {
       src: "/galeria/inteligentny-kalkulator-rozwiazywanie-zadan.jpg",
       label: "05 · Test",
-      caption: "Solving the 2024 matura exam",
+      caption: "Solving a 2024 exam problem",
       span: "md:col-span-6 aspect-[4/3]",
     },
   ],
@@ -104,7 +104,7 @@ const shots: Record<Locale, Shot[]> = {
     {
       src: "/galeria/inteligentny-kalkulator-rozwiazywanie-zadan.jpg",
       label: "05 · Test",
-      caption: "Lösung der Abiturprüfung 2024",
+      caption: "Lösung einer Aufgabe aus 2024",
       span: "md:col-span-6 aspect-[4/3]",
     },
   ],

@@ -269,8 +269,7 @@ export default function PomocPage() {
             <p className="text-[15px] leading-[1.65] text-[#F2EDE3]/65 mb-6">
               KalkMate wysyła Twoje zadanie do AI (model Gemini przez nasz
               serwer) i zwraca rozwiązanie krok po kroku. Działa dla
-              <strong className="text-[#F2EDE3]"> matematyki, fizyki, chemii, biologii</strong> —
-              poziom maturalny.
+              <strong className="text-[#F2EDE3]"> matematyki, fizyki, chemii, biologii</strong>.
             </p>
 
             <Step n={1} title="Wpisz kod AI">
@@ -542,7 +541,7 @@ export default function PomocPage() {
             <Link href="/" className="km-display text-2xl">
               Kalk<span className="italic text-[#D8FF3D]">Mate</span>
             </Link>
-            <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-2">Maturalny kalkulator z AI</p>
+            <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-2">Kalkulator z AI</p>
           </div>
           <div className="km-mono-eyebrow text-[#F2EDE3]/55 space-y-1">
             <Link href="/regulamin" className="block hover:text-[#D8FF3D] transition-colors">Regulamin</Link>

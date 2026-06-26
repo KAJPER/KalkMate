@@ -32,12 +32,12 @@ const content: Record<Locale, Content> = {
     eyebrow: "[ 03 ] · Pokrycie przedmiotów",
     heading: (
       <>
-        Cztery <span className="italic">maturalne</span><br />
-        kierunki.
+        Cztery <span className="italic">kierunki</span><br />
+        naukowe.
       </>
     ),
     side:
-      "Trenowany na arkuszach CKE z lat 2014–2025. Rozpoznaje typ zadania, stosuje metodę z klucza odpowiedzi, pokazuje pełne rozumowanie.",
+      "Trenowany na tysiącach zadań z ostatnich 10 lat. Rozpoznaje typ zadania, dobiera metodę rozwiązania, pokazuje pełne rozumowanie.",
     exampleLabel: "Przykład",
     subjects: [
       {
@@ -77,7 +77,7 @@ const content: Record<Locale, Content> = {
             <span className="text-[#D8FF3D]">10</span> lat
           </>
         ),
-        label: "Arkuszy CKE w treningu",
+        label: "lat danych treningowych",
       },
       {
         value: (
@@ -85,7 +85,7 @@ const content: Record<Locale, Content> = {
             <span className="text-[#D8FF3D]">94</span>%
           </>
         ),
-        label: "Trafność na zadaniach maturalnych",
+        label: "Trafność rozwiązywania zadań",
       },
       {
         value: (
@@ -101,12 +101,12 @@ const content: Record<Locale, Content> = {
     eyebrow: "[ 03 ] · Subject coverage",
     heading: (
       <>
-        Four <span className="italic">matura</span> exam<br />
+        Four <span className="italic">science</span><br />
         subjects.
       </>
     ),
     side:
-      "Trained on Polish matura (CKE) exam papers from 2014–2025. It recognises the task type, applies the answer-key method and shows the full reasoning.",
+      "Trained on thousands of problems from the last 10 years. It recognises the task type, picks the right method and shows the full reasoning.",
     exampleLabel: "Example",
     subjects: [
       {
@@ -146,7 +146,7 @@ const content: Record<Locale, Content> = {
             <span className="text-[#D8FF3D]">10</span> years
           </>
         ),
-        label: "Years of CKE papers in training",
+        label: "years of training data",
       },
       {
         value: (
@@ -154,7 +154,7 @@ const content: Record<Locale, Content> = {
             <span className="text-[#D8FF3D]">94</span>%
           </>
         ),
-        label: "Accuracy on matura exam tasks",
+        label: "Accuracy on exam problems",
       },
       {
         value: (
@@ -170,12 +170,12 @@ const content: Record<Locale, Content> = {
     eyebrow: "[ 03 ] · Fächerabdeckung",
     heading: (
       <>
-        Vier <span className="italic">Abitur</span>-<br />
-        Fächer.
+        Vier <span className="italic">natur</span>-<br />
+        wissenschaftliche Fächer.
       </>
     ),
     side:
-      "Trainiert mit polnischen Abiturprüfungen (CKE) der Jahre 2014–2025. Er erkennt den Aufgabentyp, wendet die Methode aus dem Lösungsschlüssel an und zeigt den vollständigen Lösungsweg.",
+      "Trainiert auf Tausenden von Aufgaben der letzten 10 Jahre. Er erkennt den Aufgabentyp, wählt die passende Methode und zeigt den vollständigen Lösungsweg.",
     exampleLabel: "Beispiel",
     subjects: [
       {
@@ -215,7 +215,7 @@ const content: Record<Locale, Content> = {
             <span className="text-[#D8FF3D]">10</span> Jahre
           </>
         ),
-        label: "Jahre CKE-Prüfungen im Training",
+        label: "Jahre Trainingsdaten",
       },
       {
         value: (
@@ -223,7 +223,7 @@ const content: Record<Locale, Content> = {
             <span className="text-[#D8FF3D]">94</span>%
           </>
         ),
-        label: "Trefferquote bei Abituraufgaben",
+        label: "Trefferquote bei Aufgaben",
       },
       {
         value: (
