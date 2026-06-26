@@ -24,6 +24,7 @@ const content: Record<Locale, {
     seller: string;
     nip: string;
     regon: string;
+    bdo: string;
     address: string;
     email: string;
     phone: string;
@@ -54,6 +55,7 @@ const content: Record<Locale, {
       seller: "Sprzedawca",
       nip: "NIP",
       regon: "REGON",
+      bdo: "Nr BDO",
       address: "Adres siedziby",
       email: "E-mail",
       phone: "Telefon",
@@ -84,6 +86,7 @@ const content: Record<Locale, {
       seller: "Seller",
       nip: "Tax ID (NIP)",
       regon: "REGON",
+      bdo: "BDO No.",
       address: "Registered address",
       email: "E-mail",
       phone: "Phone",
@@ -114,6 +117,7 @@ const content: Record<Locale, {
       seller: "Verkäufer",
       nip: "Steuer-ID (NIP)",
       regon: "REGON",
+      bdo: "BDO-Nr.",
       address: "Geschäftssitz",
       email: "E-Mail",
       phone: "Telefon",
@@ -188,6 +192,10 @@ export default function Footer({ lang = "pl" }: { lang?: Locale }) {
             <div>
               <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.regon}</p>
               <p className="font-mono text-[#F2EDE3]">545011444</p>
+            </div>
+            <div>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.bdo}</p>
+              <p className="font-mono text-[#F2EDE3]">000727998</p>
             </div>
             <div>
               <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.address}</p>

@@ -237,8 +237,8 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
                 alt={t.imageAlt}
                 fill
                 priority
-                quality={80}
-                sizes="(max-width: 640px) 460px, (max-width: 1024px) 50vw, 460px"
+                quality={60}
+                sizes="(max-width: 640px) 276px, (max-width: 1024px) 50vw, 460px"
                 className="object-cover grayscale-[10%] contrast-[1.05]"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0B] via-transparent to-transparent" />

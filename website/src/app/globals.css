@@ -118,12 +118,7 @@ body {
   will-change: transform;
 }
 
-/* Blink for live indicators */
-@keyframes km-blink {
-  0%, 65% { opacity: 1; }
-  70%, 100% { opacity: 0; }
-}
-.km-blink { animation: km-blink 1.6s steps(2, end) infinite; }
+.km-blink {}
 
 /* Soft scan-line on screen renderings */
 .km-scanlines {
