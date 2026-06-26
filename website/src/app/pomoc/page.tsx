@@ -220,16 +220,24 @@ export default function PomocPage() {
             </Step>
             <Step n={2} title="Włącz">
               Przesuń przełącznik suwakowy na boku w pozycję ON.
-              Po ~2s zobaczysz ekran powitalny i menu główne.
+              Po ~2s zobaczysz ekran powitalny KalkMate, a następnie{" "}
+              <strong className="text-[#F2EDE3]">ekran kalkulatora</strong> (cyfrowy wyświetlacz).
             </Step>
-            <Step n={3} title="Skonfiguruj WiFi">
+            <Step n={3} title="Wejdź do menu AI">
+              Na klawiaturze kalkulatora wpisz <strong className="text-[#F2EDE3]">kod odblokowujący</strong>{" "}
+              (domyślnie <code className="km-mono-eyebrow text-[#D8FF3D]">1111</code>) — same cyfry, bez operatorów między nimi.
+              Ekran na chwilę pokaże „AI" i otworzy menu główne.
+              Dopiero teraz dostępne są Ustawienia i inne funkcje.
+            </Step>
+            <Step n={4} title="Skonfiguruj WiFi">
               Ustawienia → WiFi → wybierz sieć z listy → wpisz hasło (klawiatura
               ekranowa). To wymagane do działania AI, sync notatek i OTA.
             </Step>
-            <Step n={4} title="Sparuj konto">
-              Załóż konto na kalkmate.pl (potwierdź email), wpisz Device ID
-              w panelu. Sparuje automatycznie. Bez tego — kalkulator działa
-              w trybie offline (kalkulator, notatki/sprawdziany z poprzedniego sync).
+            <Step n={5} title="Sparuj konto">
+              Załóż konto na kalkmate.pl (potwierdź email). Na kalkulatorze:{" "}
+              Ustawienia → Device ID + QR — zarejestruje się na serwerze i wyświetli
+              QR do skanowania. W panelu kalkmate.pl potwierdź sparowanie.
+              Bez tego — kalkulator działa w trybie offline.
             </Step>
 
             <VideoPlaceholder label="Wideo: pierwsze uruchomienie (1:30)" />
@@ -277,9 +285,15 @@ export default function PomocPage() {
               bez żadnej operacji między cyframi. Otworzy się menu AI.
             </Step>
             <Step n={2} title="Wybierz tryb">
-              <strong>Tekst</strong> — klawiatura ekranowa do wpisania treści zadania.
-              <br />
+              <strong>Zdjęcie</strong> — skieruj kamerę na zadanie. Podgląd live na ekranie
+              (wskaźnik ostrości po prawej), wciśnij <code className="km-mono-eyebrow text-[#D8FF3D]">5 (OK)</code> żeby
+              zrobić zdjęcie i wysłać do AI.
+              <br /><br />
+              <strong>Tekst</strong> — klawiatura ekranowa QWERTY: 8/4/6/2 = nawigacja,
+              5 = wybierz znak, zatwierdź przyciskiem ZADANIE (maks. 2000 znaków).
+              <br /><br />
               <strong>Historia</strong> — przeglądaj poprzednie rozwiązania (offline).
+              Przycisk → (prawo) otwiera edycję pytania i ponowne wysłanie do AI.
             </Step>
             <Step n={3} title="Tryb rozwiązania">
               W Ustawienia → Tryb wybierz:
@@ -546,6 +560,7 @@ export default function PomocPage() {
           <div className="km-mono-eyebrow text-[#F2EDE3]/55 space-y-1">
             <Link href="/regulamin" className="block hover:text-[#D8FF3D] transition-colors">Regulamin</Link>
             <Link href="/polityka-prywatnosci" className="block hover:text-[#D8FF3D] transition-colors">Polityka prywatności</Link>
+            <a href="/docs/ce-declaration.pdf" target="_blank" rel="noopener noreferrer" className="block hover:text-[#D8FF3D] transition-colors">Deklaracja zgodności CE</a>
             <a href="mailto:kontakt@kalkmate.pl" className="block hover:text-[#D8FF3D] transition-colors">kontakt@kalkmate.pl</a>
           </div>
         </div>

@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>KalkMate — Instrukcja obsługi</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --black:#0a0a0a;
+  --white:#ffffff;
+  --gray1:#1a1a1a;
+  --gray2:#333;
+  --gray3:#555;
+  --gray4:#888;
+  --gray5:#bbb;
+  --gray6:#e8e8e8;
+  --gray7:#f5f5f5;
+  --accent:#000;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+}
+
+body{
+  font-family:var(--sans);
+  background:#fff;
+  color:var(--black);
+  font-size:10px;
+  line-height:1.5;
+}
+
+/* PAGE SETUP */
+.page{
+  width:210mm;
+  min-height:297mm;
+  padding:14mm 16mm 12mm 16mm;
+  position:relative;
+  page-break-after:always;
+}
+
+/* ═══ PAGE 1 ═══ */
+
+/* HEADER */
+.p1-header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  border-bottom:3px solid var(--black);
+  padding-bottom:7px;
+  margin-bottom:16px;
+}
+.p1-brand{
+  font-family:var(--mono);
+  font-size:28px;
+  font-weight:700;
+  letter-spacing:-1px;
+  line-height:1;
+}
+.p1-brand span{
+  font-size:11px;
+  font-weight:400;
+  color:var(--gray3);
+  display:block;
+  letter-spacing:1px;
+  margin-top:2px;
+  font-family:var(--sans);
+  text-transform:uppercase;
+}
+.p1-tagline{
+  font-size:9px;
+  color:var(--gray3);
+  text-align:right;
+  letter-spacing:0.5px;
+  line-height:1.6;
+}
+
+/* QUICK START BOX */
+.qs-box{
+  border:2px solid var(--black);
+  border-radius:6px;
+  padding:10px 14px;
+  margin-bottom:14px;
+  display:flex;
+  gap:16px;
+  align-items:flex-start;
+  background:var(--gray7);
+}
+.qs-title{
+  font-family:var(--mono);
+  font-size:8px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:1.5px;
+  color:var(--gray3);
+  margin-bottom:8px;
+}
+.qs-steps{
+  flex:1;
+}
+.qs-step{
+  display:flex;
+  gap:8px;
+  align-items:flex-start;
+  margin-bottom:5px;
+}
+.qs-num{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  background:var(--black);
+  color:var(--white);
+  width:16px;
+  height:16px;
+  border-radius:3px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  line-height:1;
+  margin-top:0px;
+}
+.qs-text{
+  font-size:9.5px;
+  line-height:1.5;
+  color:var(--gray1);
+}
+.qs-text strong{font-weight:700}
+
+/* TWO COLUMN LAYOUT */
+.two-col{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  margin-bottom:14px;
+}
+.three-col{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+/* SECTION */
+.section{margin-bottom:14px}
+.sec-title{
+  font-family:var(--mono);
+  font-size:8px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:1.5px;
+  border-bottom:1.5px solid var(--black);
+  padding-bottom:3px;
+  margin-bottom:8px;
+}
+
+/* KEYPAD DIAGRAM */
+.kp-wrap{
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+}
+.calc-body{
+  flex-shrink:0;
+  width:168px;
+  background:var(--gray1);
+  border-radius:10px;
+  border:2px solid var(--black);
+  padding:8px 8px 10px 8px;
+  box-shadow:3px 3px 0 var(--black);
+}
+.calc-screen{
+  background:#000;
+  border:1px solid #333;
+  border-radius:4px;
+  height:28px;
+  margin-bottom:7px;
+  display:flex;
+  align-items:center;
+  padding:0 8px;
+  position:relative;
+}
+.cs-label{
+  font-family:var(--mono);
+  font-size:5.5px;
+  color:#444;
+  letter-spacing:0.5px;
+  position:absolute;
+  top:2px;left:5px;
+  text-transform:uppercase;
+}
+.cs-text{
+  font-family:var(--mono);
+  font-size:11px;
+  color:#00d090;
+  letter-spacing:2px;
+  margin-top:5px;
+  margin-left:auto;
+  padding-right:2px;
+}
+.keypad{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:3px;
+}
+.k{
+  height:24px;
+  border-radius:3px;
+  border:1px solid #444;
+  background:#222;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:0;
+}
+.k .ml{
+  font-family:var(--mono);
+  font-size:7px;
+  font-weight:700;
+  color:#ccc;
+  line-height:1;
+}
+.k .sl{
+  font-family:var(--sans);
+  font-size:4.5px;
+  color:#555;
+  line-height:1;
+  letter-spacing:0.2px;
+}
+.k.num{background:#2e2e2e;border-color:#555}
+.k.num .ml{color:#fff;font-size:8px}
+.k.nav{background:#071210;border:1.5px solid #008060}
+.k.nav .ml{color:#00c080;font-size:7.5px}
+.k.nav .sl{color:#005040}
+.k.ok{background:#070c1a;border:1.5px solid #2050a0}
+.k.ok .ml{color:#4070d0;font-size:6.5px}
+.k.ok .sl{color:#203060}
+.k.back{background:#140808;border:1.5px solid #902020}
+.k.back .ml{color:#d04040;font-size:6.5px}
+.k.back .sl{color:#602020}
+.k.panic{background:#131000;border:1.5px solid #907000}
+.k.panic .ml{color:#d0a020;font-size:6px}
+.k.ghost{background:transparent;border-color:transparent}
+
+/* NUMPAD MINI */
+.nd-wrap{flex:1}
+.nd-title{
+  font-family:var(--mono);
+  font-size:7px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  color:var(--gray3);
+  margin-bottom:6px;
+  border-bottom:1px solid var(--gray5);
+  padding-bottom:3px;
+}
+.nd-grid{
+  display:grid;
+  grid-template-columns:repeat(3,32px);
+  gap:3px;
+  margin-bottom:8px;
+}
+.ndk{
+  height:28px;
+  border-radius:3px;
+  border:1px solid var(--gray5);
+  background:var(--white);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  font-family:var(--mono);
+  font-size:9px;
+  font-weight:700;
+}
+.ndk .ns{font-size:5.5px;font-weight:400;color:var(--gray4);line-height:1.2}
+.ndk.nav{border-color:#008060;background:#f0fdf8}
+.ndk.nav .ns{color:#005040}
+.ndk.ok{border-color:#2050a0;background:#f0f4ff}
+.ndk.ok .ns{color:#2050a0}
+.ndk.empty{background:transparent;border-color:transparent}
+
+/* KEY REF ROWS */
+.kref{display:flex;gap:6px;align-items:flex-start;margin-bottom:5px}
+.kref-keys{display:flex;gap:2px;flex-shrink:0;padding-top:1px}
+.rk{
+  font-family:var(--mono);
+  font-size:7.5px;
+  font-weight:700;
+  padding:1px 4px;
+  border-radius:2px;
+  background:var(--gray1);
+  color:#ccc;
+  border:1px solid #444;
+  white-space:nowrap;
+}
+.rk.nav{border-color:#008060;color:#00c080}
+.rk.ok{border-color:#2050a0;color:#4070d0}
+.rk.back{border-color:#902020;color:#d04040}
+.rk.panic{border-color:#907000;color:#d0a020}
+.kref-desc{font-size:8.5px;line-height:1.5;color:var(--gray1)}
+.kref-desc strong{font-weight:700}
+.kref-desc em{color:var(--gray3);font-style:normal;font-size:8px}
+
+/* COLOR DOT LEGEND */
+.dot-legend{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:6px;
+}
+.dl-item{display:flex;align-items:center;gap:4px;font-size:7.5px;color:var(--gray2)}
+.dl-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+
+/* FLOW BOXES */
+.flow{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+}
+.flow-step{
+  display:flex;
+  gap:6px;
+  align-items:flex-start;
+}
+.flow-arrow{
+  font-family:var(--mono);
+  font-size:8px;
+  color:var(--gray4);
+  padding-top:1px;
+  flex-shrink:0;
+}
+.flow-text{font-size:8.5px;line-height:1.45;color:var(--gray1)}
+.flow-text strong{font-weight:700}
+.flow-text code{
+  font-family:var(--mono);
+  font-size:7.5px;
+  background:var(--gray6);
+  padding:0 2px;
+  border-radius:2px;
+}
+
+/* INFOBOX */
+.infobox{
+  border-left:3px solid var(--black);
+  padding:5px 8px;
+  background:var(--gray7);
+  margin-top:4px;
+}
+.infobox p{font-size:8px;line-height:1.5;color:var(--gray2)}
+.infobox strong{font-weight:700;color:var(--black)}
+
+/* PANIC HIGHLIGHT */
+.panic-box{
+  border:2px solid var(--black);
+  border-radius:5px;
+  padding:8px 10px;
+  background:var(--black);
+  color:var(--white);
+}
+.panic-box .pb-title{
+  font-family:var(--mono);
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  margin-bottom:4px;
+}
+.panic-box p{font-size:8.5px;line-height:1.5;color:#ccc}
+.panic-box strong{color:#fff}
+.panic-box code{
+  font-family:var(--mono);
+  background:#333;
+  padding:0 3px;
+  border-radius:2px;
+  font-size:8px;
+  color:#e0c030;
+}
+
+/* MODES TABLE */
+.mt{width:100%;border-collapse:collapse;font-size:8.5px}
+.mt th{
+  background:var(--black);
+  color:var(--white);
+  padding:3px 6px;
+  font-family:var(--mono);
+  font-size:7px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  text-align:left;
+}
+.mt td{
+  padding:3px 6px;
+  border-bottom:1px solid var(--gray6);
+  vertical-align:top;
+  line-height:1.4;
+}
+.mt tr:last-child td{border:none}
+.mt tr:nth-child(even) td{background:var(--gray7)}
+
+/* BATTERY / STATUS */
+.status-row{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  margin-bottom:4px;
+  font-size:8.5px;
+}
+.bat-icon{
+  font-family:var(--mono);
+  font-size:9px;
+  width:16px;
+  text-align:center;
+  flex-shrink:0;
+}
+
+/* PAGE 2 */
+.p2-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom:2px solid var(--black);
+  padding-bottom:6px;
+  margin-bottom:14px;
+}
+.p2-title{
+  font-family:var(--mono);
+  font-size:13px;
+  font-weight:700;
+}
+.p2-sub{
+  font-size:8.5px;
+  color:var(--gray3);
+  font-family:var(--mono);
+}
+
+/* QR BLOCK */
+.qr-block{
+  display:flex;
+  gap:14px;
+  align-items:center;
+  border:2px solid var(--black);
+  border-radius:6px;
+  padding:10px 14px;
+  background:var(--gray7);
+  margin-bottom:14px;
+}
+.qr-img{
+  width:80px;
+  height:80px;
+  flex-shrink:0;
+  image-rendering:pixelated;
+}
+.qr-text h3{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  margin-bottom:4px;
+}
+.qr-text p{font-size:8.5px;line-height:1.55;color:var(--gray2)}
+.qr-url{
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:700;
+  display:block;
+  margin-top:5px;
+  border-bottom:1.5px solid var(--black);
+  padding-bottom:2px;
+  letter-spacing:0.5px;
+}
+
+/* TROUBLESHOOT */
+.ts-item{
+  display:flex;
+  gap:8px;
+  align-items:flex-start;
+  margin-bottom:6px;
+  padding-bottom:6px;
+  border-bottom:1px dashed var(--gray5);
+}
+.ts-item:last-child{border:none}
+.ts-q{
+  font-family:var(--mono);
+  font-size:8px;
+  font-weight:700;
+  color:var(--gray1);
+  flex-shrink:0;
+  width:130px;
+  line-height:1.4;
+}
+.ts-a{font-size:8.5px;line-height:1.5;color:var(--gray2)}
+.ts-a code{
+  font-family:var(--mono);
+  font-size:7.5px;
+  background:var(--gray6);
+  padding:0 2px;
+  border-radius:2px;
+}
+
+/* SETTINGS TABLE */
+.st{width:100%;border-collapse:collapse;font-size:8px}
+.st th{
+  background:var(--black);color:var(--white);
+  padding:2px 5px;font-family:var(--mono);
+  font-size:6.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.5px;
+  text-align:left;
+}
+.st td{
+  padding:2px 5px;border-bottom:1px solid var(--gray6);
+  vertical-align:top;line-height:1.4;
+}
+.st tr:nth-child(even) td{background:var(--gray7)}
+
+/* FOOTER */
+.page-footer{
+  position:absolute;
+  bottom:10mm;
+  left:16mm;right:16mm;
+  display:flex;
+  justify-content:space-between;
+  font-family:var(--mono);
+  font-size:7px;
+  color:var(--gray4);
+  border-top:1px solid var(--gray6);
+  padding-top:4px;
+}
+
+@media print{
+  body{background:white}
+  .page{padding:12mm 14mm 10mm 14mm}
+  @page{margin:0;size:A4}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     STRONA 1 — PRZÓD
+═══════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="p1-header">
+    <div class="p1-brand">
+      KalkMate
+      <span>Instrukcja obsługi · v1.0</span>
+    </div>
+    <div class="p1-tagline">
+      Kalkulator z asystentem AI<br>
+      Matematyka · Fizyka · Chemia · Biologia
+    </div>
+  </div>
+
+  <!-- QUICK START -->
+  <div class="section">
+    <div class="sec-title">Pierwsze uruchomienie</div>
+    <div class="qs-box">
+      <div class="qs-steps">
+        <div class="qs-step">
+          <div class="qs-num">1</div>
+          <div class="qs-text"><strong>Naładuj kalkulator</strong> — podłącz kabel USB-C. Czerwona dioda LED miga podczas ładowania, gaśnie gdy pełny (ok. 2&nbsp;h).</div>
+        </div>
+        <div class="qs-step">
+          <div class="qs-num">2</div>
+          <div class="qs-text"><strong>Włącz</strong> — przesuń przełącznik z boku urządzenia do góry. Na ekranie pojawi się ekran startowy KalkMate, a następnie kalkulator.</div>
+        </div>
+        <div class="qs-step">
+          <div class="qs-num">3</div>
+          <div class="qs-text"><strong>Wejdź do menu AI</strong> — na klawiaturze kalkulatora wpisz <strong>kod odblokowujący</strong> (domyślnie&nbsp;<code>1111</code>) samymi cyframi, bez operatorów pomiędzy. Ekran na chwilę pokaże „AI" i otworzy menu główne.</div>
+        </div>
+        <div class="qs-step">
+          <div class="qs-num">4</div>
+          <div class="qs-text"><strong>Podłącz WiFi</strong> — <code>Ustawienia → WiFi</code>, wybierz sieć (klawisz <strong>8/2</strong>), zatwierdź <strong>5</strong>, wpisz hasło klawiaturą ekranową.</div>
+        </div>
+        <div class="qs-step">
+          <div class="qs-num">5</div>
+          <div class="qs-text"><strong>Sparuj z kontem</strong> — wejdź na <strong>kalkmate.pl</strong>, utwórz konto i podaj Device ID z <code>Ustawienia → Device ID + QR</code>. Po sparowaniu otrzymasz indywidualny kod odblokowujący do zmiany domyślnego <code>1111</code>.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TWO COL: KLAWISZE + KALKULATOR -->
+  <div class="two-col">
+
+    <!-- KLAWIATURA -->
+    <div class="section">
+      <div class="sec-title">Klawiatura — sterowanie</div>
+      <div class="kp-wrap">
+        <div class="calc-body">
+          <div class="calc-screen">
+            <span class="cs-label">OLED 256×64</span>
+            <span class="cs-text">0_</span>
+          </div>
+          <div class="keypad">
+            <div class="k ghost"></div>
+            <div class="k"><span class="ml">√</span></div>
+            <div class="k"><span class="ml">%</span></div>
+            <div class="k panic"><span class="ml">PANIC</span><span class="sl">MU</span></div>
+            <div class="k ghost"></div>
+            <div class="k"><span class="ml">MC</span></div>
+            <div class="k"><span class="ml">MR</span></div>
+            <div class="k"><span class="ml">M−</span></div>
+            <div class="k"><span class="ml">M+</span></div>
+            <div class="k num"><span class="ml">×</span></div>
+            <div class="k"><span class="ml">±</span></div>
+            <div class="k num"><span class="ml">7</span></div>
+            <div class="k nav"><span class="ml">8</span><span class="sl">GÓRA</span></div>
+            <div class="k num"><span class="ml">9</span></div>
+            <div class="k num"><span class="ml">÷</span></div>
+            <div class="k"><span class="ml"></span><span class="sl">BKSP</span></div>
+            <div class="k nav"><span class="ml">4</span><span class="sl">LEWO</span></div>
+            <div class="k ok"><span class="ml">5/OK</span></div>
+            <div class="k nav"><span class="ml">6</span><span class="sl">PRAWO</span></div>
+            <div class="k num"><span class="ml">−</span></div>
+            <div class="k back"><span class="ml">C/CE</span><span class="sl">WSTECZ</span></div>
+            <div class="k num"><span class="ml">1</span></div>
+            <div class="k nav"><span class="ml">2</span><span class="sl">DÓŁ</span></div>
+            <div class="k num"><span class="ml">3</span></div>
+            <div class="k num"><span class="ml">+</span></div>
+            <div class="k num"><span class="ml">0</span></div>
+            <div class="k num"><span class="ml">00</span></div>
+            <div class="k num"><span class="ml">.</span></div>
+            <div class="k ok"><span class="ml">=</span><span class="sl">OK</span></div>
+            <div class="k ghost"></div>
+          </div>
+        </div>
+        <div class="nd-wrap">
+          <div class="nd-title">Numpad nawigacyjny</div>
+          <div class="nd-grid">
+            <div class="ndk empty"></div>
+            <div class="ndk nav"><span>8</span><span class="ns"> GÓRA</span></div>
+            <div class="ndk empty"></div>
+            <div class="ndk nav"><span>4</span><span class="ns"> LEWO</span></div>
+            <div class="ndk ok"><span>5</span><span class="ns">OK</span></div>
+            <div class="ndk nav"><span>6</span><span class="ns">PRAWO </span></div>
+            <div class="ndk empty"></div>
+            <div class="ndk nav"><span>2</span><span class="ns"> DÓŁ</span></div>
+            <div class="ndk empty"></div>
+          </div>
+          <div class="dot-legend">
+            <div class="dl-item"><div class="dl-dot" style="background:#071210;border:1px solid #008060"></div>Nawigacja</div>
+            <div class="dl-item"><div class="dl-dot" style="background:#070c1a;border:1px solid #2050a0"></div>OK</div>
+            <div class="dl-item"><div class="dl-dot" style="background:#140808;border:1px solid #902020"></div>Wstecz</div>
+            <div class="dl-item"><div class="dl-dot" style="background:#131000;border:1px solid #907000"></div>Panic</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KALKULATOR + PANIC -->
+    <div>
+      <div class="section">
+        <div class="sec-title">Tryb kalkulatora</div>
+        <div class="kref"><div class="kref-keys"><span class="rk">0–9</span><span class="rk">+</span><span class="rk">−</span><span class="rk">×</span><span class="rk">÷</span></div><div class="kref-desc">Standardowe działania</div></div>
+        <div class="kref"><div class="kref-keys"><span class="rk ok">=</span></div><div class="kref-desc"><strong>Oblicz</strong> — kolejne <code style="font-family:IBM Plex Mono,monospace;background:#e8e8e8;padding:0 2px;border-radius:2px;font-size:7.5px">=</code> powtarza ostatnią operację</div></div>
+        <div class="kref"><div class="kref-keys"><span class="rk"></span></div><div class="kref-desc">Backspace — usuwa ostatnią cyfrę</div></div>
+        <div class="kref"><div class="kref-keys"><span class="rk back">C/CE</span></div><div class="kref-desc"><strong>CE</strong> = kasuje bieżący wpis &nbsp;|&nbsp; <strong>C</strong> (2×) = reset całości</div></div>
+        <div class="kref"><div class="kref-keys"><span class="rk">±</span></div><div class="kref-desc">Zmiana znaku liczby</div></div>
+        <div class="kref"><div class="kref-keys"><span class="rk">√</span>&nbsp;<span class="rk">%</span></div><div class="kref-desc">Pierwiastek, procent</div></div>
+        <div class="kref"><div class="kref-keys"><span class="rk">MC</span><span class="rk">MR</span><span class="rk">M+</span><span class="rk">M−</span></div><div class="kref-desc">Pamięć kalkulatora</div></div>
+      </div>
+
+      <div class="panic-box">
+        <div class="pb-title">Tryb bezpieczny (Panic)</div>
+        <p>Klawisz <code>MU</code> natychmiast przełącza na widok kalkulatora z <strong>każdego ekranu</strong> — AI, historii, notatek, ustawień.<br><br>
+        Zmiana klawisza: <code>Settings → Panic key → wciśnij nowy klawisz</code></p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROZWIĄZYWANIE ZADAŃ AI -->
+  <div class="section">
+    <div class="sec-title">Rozwiązywanie zadań AI</div>
+    <div class="three-col">
+      <div>
+        <div class="nd-title" style="font-family:IBM Plex Mono,monospace;font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:5px;border-bottom:1px solid #bbb;padding-bottom:2px;">1 — Wejście</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Na klawiaturze kalkulatora wpisz <strong>kod odblokowujący</strong> (np. <code>1111</code>) — same cyfry, bez operatorów. Ekran pokaże „AI" i przejdzie do menu.</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Menu główne: wybierz <strong>Rozwiąż zadanie</strong> klawiszem <strong>8/2</strong>, zatwierdź <strong>5</strong></div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Wybierz tryb: <strong> Zdjęcie</strong>, <strong>⌨ Tekst</strong> lub <strong> Historia</strong></div></div>
+        </div>
+      </div>
+      <div>
+        <div class="nd-title" style="font-family:IBM Plex Mono,monospace;font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:5px;border-bottom:1px solid #bbb;padding-bottom:2px;">2a — Zdjęcie zadania </div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Wybierz <strong> Zdjęcie</strong> — uruchamia kamerę</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Ustaw kalkulator nad treścią zadania, podgląd na ekranie</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Wciśnij <strong>5 (OK)</strong> — robi zdjęcie i wysyła do AI</div></div>
+        </div>
+        <div class="nd-title" style="font-family:IBM Plex Mono,monospace;font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;margin-top:6px;margin-bottom:5px;border-bottom:1px solid #bbb;padding-bottom:2px;">2b — Wpisz tekst ⌨</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Klawiatura ekranowa QWERTY: <strong>8/4/6/2</strong> = nawigacja, <strong>5</strong> = wybierz literę</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">CAPS = wielkie litery / cyfry i znaki specjalne</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Wciśnij <strong>ZADANIE</strong> — wysyła do AI</div></div>
+        </div>
+        <div class="infobox" style="margin-top:4px">
+          <p><strong>Wskazówka (tekst):</strong> Przepisuj tylko kluczowe dane — np. <em>„2x²+3x−5=0, pierwiastki"</em></p>
+        </div>
+      </div>
+      <div>
+        <div class="nd-title" style="font-family:IBM Plex Mono,monospace;font-size:7px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:5px;border-bottom:1px solid #bbb;padding-bottom:2px;">3 — Czytaj odpowiedź</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Odpowiedź wyświetla się linia po linii</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Przewijaj: <strong>8</strong> = w górę, <strong>2</strong> = w dół</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Zadanie zapisuje się automatycznie w <strong>Historii</strong></div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text"><strong>C/CE</strong> = powrót do menu</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRYBY + BATERIA -->
+  <div class="two-col">
+    <div class="section">
+      <div class="sec-title">Tryby rozwiązań AI</div>
+      <table class="mt">
+        <tr><th>Tryb</th><th>Co dostajesz</th><th>Kiedy</th></tr>
+        <tr><td><strong>Szczegółowy</strong></td><td>Krok po kroku + wyjaśnienia</td><td>Nauka</td></tr>
+        <tr><td><strong>Tylko obliczenia</strong></td><td>Wzory, przejścia, wynik</td><td>Powtórka</td></tr>
+        <tr><td><strong>Tylko wynik</strong></td><td>Sama odpowiedź końcowa</td><td>Weryfikacja</td></tr>
+      </table>
+      <div class="infobox" style="margin-top:6px">
+        <p>Zmiana: <strong>Settings → Tryb rozwiązań</strong></p>
+      </div>
+    </div>
+    <div class="section">
+      <div class="sec-title">Bateria i ładowanie</div>
+      <div class="kref"><div class="kref-keys"><span class="rk">BAT</span></div><div class="kref-desc">Poziom baterii widoczny w prawym górnym rogu ekranu głównego</div></div>
+      <div class="kref"><div class="kref-keys"><span class="rk">USB</span></div><div class="kref-desc">Ładowanie przez <strong>USB-C</strong> — działa też przy włączonym urządzeniu</div></div>
+      <div class="kref"><div class="kref-keys"><span class="rk">LED</span></div><div class="kref-desc">Czerwona LED miga = ładowanie &nbsp;/&nbsp; świeci ciągłe = pełny</div></div>
+      <div class="kref"><div class="kref-keys"><span class="rk">~8h</span></div><div class="kref-desc">Czas pracy: ok. 8–12 h (zależy od liczby zapytań AI)</div></div>
+      <div class="kref"><div class="kref-keys"><span class="rk">ZZZ</span></div><div class="kref-desc">Auto-sleep po bezczynności — czas: <strong>Settings → Auto-sleep</strong></div></div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>KalkMate v1.0</span>
+    <span>Strona 1 / 2</span>
+    <span>kalkmate.pl/pomoc</span>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     STRONA 2 — TYŁ
+═══════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="p2-header">
+    <div class="p2-title">KalkMate — ustawienia, notatki, pomoc</div>
+    <div class="p2-sub">v1.0 · kalkmate.pl</div>
+  </div>
+
+  <!-- QR + FULL DOCS -->
+  <div class="qr-block">
+    <img class="qr-img" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMjIgMjIyIiB3aWR0aD0iMjIyIiBoZWlnaHQ9IjIyMiIgc2hhcGUtcmVuZGVyaW5nPSJjcmlzcEVkZ2VzIj48cmVjdCB3aWR0aD0iMjIyIiBoZWlnaHQ9IjIyMiIgZmlsbD0id2hpdGUiLz48cmVjdCB4PSIyNCIgeT0iMjQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzAiIHk9IjI0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjM2IiB5PSIyNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0MiIgeT0iMjQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDgiIHk9IjI0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjU0IiB5PSIyNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iMjQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzgiIHk9IjI0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijg0IiB5PSIyNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDgiIHk9IjI0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEyNiIgeT0iMjQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTMyIiB5PSIyNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzgiIHk9IjI0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE1NiIgeT0iMjQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTYyIiB5PSIyNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjgiIHk9IjI0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE3NCIgeT0iMjQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTgwIiB5PSIyNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxODYiIHk9IjI0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE5MiIgeT0iMjQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMjQiIHk9IjMwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjYwIiB5PSIzMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MiIgeT0iMzAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzgiIHk9IjMwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjkwIiB5PSIzMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5NiIgeT0iMzAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSIzMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjYiIHk9IjMwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iMzAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTM4IiB5PSIzMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNDQiIHk9IjMwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE1NiIgeT0iMzAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTkyIiB5PSIzMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIyNCIgeT0iMzYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzYiIHk9IjM2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQyIiB5PSIzNiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0OCIgeT0iMzYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjM2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijc4IiB5PSIzNiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI4NCIgeT0iMzYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTE0IiB5PSIzNiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzgiIHk9IjM2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE1NiIgeT0iMzYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTY4IiB5PSIzNiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNzQiIHk9IjM2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE4MCIgeT0iMzYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTkyIiB5PSIzNiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIyNCIgeT0iNDIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzYiIHk9IjQyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQyIiB5PSI0MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0OCIgeT0iNDIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjQyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijg0IiB5PSI0MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5MCIgeT0iNDIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSI0MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjAiIHk9IjQyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iNDIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTU2IiB5PSI0MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjgiIHk9IjQyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE3NCIgeT0iNDIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTgwIiB5PSI0MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxOTIiIHk9IjQyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjI0IiB5PSI0OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNiIgeT0iNDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDIiIHk9IjQ4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQ4IiB5PSI0OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iNDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzIiIHk9IjQ4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijg0IiB5PSI0OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5MCIgeT0iNDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTYiIHk9IjQ4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEwMiIgeT0iNDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSI0OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjYiIHk9IjQ4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iNDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTM4IiB5PSI0OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNTYiIHk9IjQ4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE2OCIgeT0iNDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTc0IiB5PSI0OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxODAiIHk9IjQ4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE5MiIgeT0iNDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMjQiIHk9IjU0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjYwIiB5PSI1NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDgiIHk9IjU0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjExNCIgeT0iNTQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSI1NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzIiIHk9IjU0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzOCIgeT0iNTQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTU2IiB5PSI1NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxOTIiIHk9IjU0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjI0IiB5PSI2MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iNjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzYiIHk9IjYwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQyIiB5PSI2MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0OCIgeT0iNjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNTQiIHk9IjYwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjYwIiB5PSI2MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MiIgeT0iNjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODQiIHk9IjYwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijk2IiB5PSI2MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDgiIHk9IjYwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEyMCIgeT0iNjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTMyIiB5PSI2MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNDQiIHk9IjYwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE1NiIgeT0iNjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTYyIiB5PSI2MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjgiIHk9IjYwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE3NCIgeT0iNjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTgwIiB5PSI2MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxODYiIHk9IjYwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE5MiIgeT0iNjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODQiIHk9IjY2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjkwIiB5PSI2NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5NiIgeT0iNjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTE0IiB5PSI2NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjYiIHk9IjY2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iNjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTM4IiB5PSI2NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIyNCIgeT0iNzIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzYiIHk9IjcyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQ4IiB5PSI3MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iNzIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTYiIHk9IjcyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEyMCIgeT0iNzIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTI2IiB5PSI3MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjgiIHk9IjcyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE4NiIgeT0iNzIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMjQiIHk9Ijc4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjM2IiB5PSI3OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0OCIgeT0iNzgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNTQiIHk9Ijc4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjcyIiB5PSI3OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI4NCIgeT0iNzgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSI3OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTQiIHk9Ijc4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEyMCIgeT0iNzgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTI2IiB5PSI3OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNDQiIHk9Ijc4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE1MCIgeT0iNzgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTU2IiB5PSI3OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNzQiIHk9Ijc4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE5MiIgeT0iNzgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzAiIHk9Ijg0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjM2IiB5PSI4NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1NCIgeT0iODQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9Ijg0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjY2IiB5PSI4NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3OCIgeT0iODQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODQiIHk9Ijg0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijk2IiB5PSI4NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDgiIHk9Ijg0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjExNCIgeT0iODQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSI4NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjYiIHk9Ijg0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iODQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTUwIiB5PSI4NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjIiIHk9Ijg0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE4MCIgeT0iODQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTg2IiB5PSI4NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxOTIiIHk9Ijg0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjI0IiB5PSI5MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNiIgeT0iOTAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDIiIHk9IjkwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQ4IiB5PSI5MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2NiIgeT0iOTAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzgiIHk9IjkwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijg0IiB5PSI5MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDIiIHk9IjkwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEwOCIgeT0iOTAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSI5MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjYiIHk9IjkwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iOTAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTQ0IiB5PSI5MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjIiIHk9IjkwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE2OCIgeT0iOTAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTg2IiB5PSI5MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIyNCIgeT0iOTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzYiIHk9Ijk2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjYwIiB5PSI5NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MiIgeT0iOTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTAiIHk9Ijk2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijk2IiB5PSI5NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDgiIHk9Ijk2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjExNCIgeT0iOTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTMyIiB5PSI5NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzgiIHk9Ijk2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE0NCIgeT0iOTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTUwIiB5PSI5NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNTYiIHk9Ijk2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE3NCIgeT0iOTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTg2IiB5PSI5NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxOTIiIHk9Ijk2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjI0IiB5PSIxMDIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDgiIHk9IjEwMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1NCIgeT0iMTAyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjcyIiB5PSIxMDIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTAiIHk9IjEwMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDgiIHk9IjEwMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTQiIHk9IjEwMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNTAiIHk9IjEwMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNTYiIHk9IjEwMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNzQiIHk9IjEwMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxOTIiIHk9IjEwMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIyNCIgeT0iMTA4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjMwIiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzYiIHk9IjEwOCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0OCIgeT0iMTA4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjU0IiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjEwOCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI4NCIgeT0iMTA4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjkwIiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTI2IiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTQ0IiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTU2IiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTY4IiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTc0IiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTg2IiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTkyIiB5PSIxMDgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzAiIHk9IjExNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNiIgeT0iMTE0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQ4IiB5PSIxMTQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTYiIHk9IjExNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTQiIHk9IjExNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzgiIHk9IjExNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNDQiIHk9IjExNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjgiIHk9IjExNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNzQiIHk9IjExNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxODYiIHk9IjExNCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNiIgeT0iMTIwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQyIiB5PSIxMjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2NiIgeT0iMTIwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijc4IiB5PSIxMjAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTYiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjAiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzgiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNDQiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNTAiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNTYiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNzQiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxODYiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxOTIiIHk9IjEyMCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNiIgeT0iMTI2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQyIiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjYiIHk9IjEyNiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5MCIgeT0iMTI2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijk2IiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTE0IiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTI2IiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTQ0IiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTU2IiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTc0IiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTgwIiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTkyIiB5PSIxMjYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMjQiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNiIgeT0iMTMyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQ4IiB5PSIxMzIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2NiIgeT0iMTMyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijg0IiB5PSIxMzIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTAiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDgiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTQiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjAiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzIiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNDQiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNTAiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNTYiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjIiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjgiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxODYiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxOTIiIHk9IjEzMiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjY2IiB5PSIxMzgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzIiIHk9IjEzOCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5NiIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEwMiIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEwOCIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEyMCIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEyNiIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzOCIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE1MCIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE2MiIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE3NCIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE4NiIgeT0iMTM4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjI0IiB5PSIxNDQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNTQiIHk9IjE0NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjcyIiB5PSIxNDQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTAiIHk9IjE0NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5NiIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEwOCIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjExNCIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE0NCIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE1MCIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE1NiIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE2MiIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE2OCIgeT0iMTQ0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjcyIiB5PSIxNTAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iODQiIHk9IjE1MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI5MCIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEwOCIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjExNCIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjEzMiIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE0NCIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE2OCIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE4MCIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE4NiIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjE5MiIgeT0iMTUwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjI0IiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMzAiIHk9IjE1NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNiIgeT0iMTU2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQyIiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDgiIHk9IjE1NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI1NCIgeT0iMTU2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjYwIiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTI2IiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTM4IiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTQ0IiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTU2IiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTY4IiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTc0IiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTg2IiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTkyIiB5PSIxNTYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMjQiIHk9IjE2MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iMTYyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijc4IiB5PSIxNjIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTYiIHk9IjE2MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTQiIHk9IjE2MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNDQiIHk9IjE2MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjgiIHk9IjE2MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNzQiIHk9IjE2MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIyNCIgeT0iMTY4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjM2IiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDIiIHk9IjE2OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0OCIgeT0iMTY4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjYwIiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzIiIHk9IjE2OCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI4NCIgeT0iMTY4IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjkwIiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTQ0IiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTUwIiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTU2IiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTYyIiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTY4IiB5PSIxNjgiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMjQiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzNiIgeT0iMTc0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjQyIiB5PSIxNzQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDgiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iMTc0IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijg0IiB5PSIxNzQiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iOTAiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMDIiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMTQiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjAiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMjYiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxMzgiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNDQiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjIiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxNjgiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIxODAiIHk9IjE3NCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIyNCIgeT0iMTgwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjM2IiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDIiIHk9IjE4MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0OCIgeT0iMTgwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjYwIiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNzIiIHk9IjE4MCIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3OCIgeT0iMTgwIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijg0IiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTE0IiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTMyIiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTM4IiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTYyIiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTY4IiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTc0IiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTkyIiB5PSIxODAiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMjQiIHk9IjE4NiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI2MCIgeT0iMTg2IiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9Ijg0IiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTIwIiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTI2IiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTMyIiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTM4IiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTQ0IiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTY4IiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTg2IiB5PSIxODYiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMjQiIHk9IjE5MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSIzMCIgeT0iMTkyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjM2IiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNDIiIHk9IjE5MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI0OCIgeT0iMTkyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjU0IiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iNjAiIHk9IjE5MiIgd2lkdGg9IjYiIGhlaWdodD0iNiIgZmlsbD0iYmxhY2siLz48cmVjdCB4PSI3MiIgeT0iMTkyIiB3aWR0aD0iNiIgaGVpZ2h0PSI2IiBmaWxsPSJibGFjayIvPjxyZWN0IHg9IjkwIiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTAyIiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTA4IiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTE0IiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTMyIiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTQ0IiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTUwIiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTU2IiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTg2IiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+PHJlY3QgeD0iMTkyIiB5PSIxOTIiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIGZpbGw9ImJsYWNrIi8+Cjwvc3ZnPg==" alt="QR kalkmate.pl/pomoc">
+    <div class="qr-text">
+      <h3>Pełna instrukcja online</h3>
+      <p>Zeskanuj kod lub wejdź na stronę — znajdziesz tam szczegółowe opisy wszystkich funkcji, instrukcję parowania konta, FAQ i kontakt z pomocą techniczną.</p>
+      <span class="qr-url">kalkmate.pl/pomoc</span>
+    </div>
+  </div>
+
+  <!-- TWO COL: SETTINGS + NOTATKI/SPRAWDZIANY -->
+  <div class="two-col">
+
+    <div class="section">
+      <div class="sec-title">Ustawienia (Settings)</div>
+      <table class="st">
+        <tr><th>Pozycja</th><th>Opis</th></tr>
+        <tr><td><strong>Jasność</strong></td><td>Jasność wyświetlacza OLED</td></tr>
+        <tr><td><strong>Język</strong></td><td>PL / EN — język interfejsu</td></tr>
+        <tr><td><strong>Tryb rozwiązań</strong></td><td>Szczegółowy / Obliczenia / Wynik</td></tr>
+        <tr><td><strong>Auto-sleep</strong></td><td>Czas do wygaszenia (30s – 10min)</td></tr>
+        <tr><td><strong>Kod AI</strong></td><td>Kod odblokowujący tryb AI — wpisywany na klawiaturze kalkulatora (domyślnie <code>1111</code>). Zmień tutaj lub w panelu konta na kalkmate.pl.</td></tr>
+        <tr><td><strong>Panic key</strong></td><td>Klawisz trybu bezpiecznego (domyślnie MU)</td></tr>
+        <tr><td><strong>WiFi</strong></td><td>Skanowanie i łączenie z siecią</td></tr>
+        <tr><td><strong>Status konta</strong></td><td>Sprawdza połączenie z kontem</td></tr>
+        <tr><td><strong>Device ID + QR</strong></td><td>Identyfikator do parowania z kontem</td></tr>
+        <tr><td><strong>OTA Aktualizacje</strong></td><td>Sprawdź i zainstaluj nową wersję firmware</td></tr>
+        <tr><td><strong>Reset fabryczny</strong></td><td>Usuwa wszystkie dane i ustawienia</td></tr>
+        <tr><td><strong>Diagnostyka</strong></td><td>Test ekranu, klawiszy, skanera sieci</td></tr>
+      </table>
+    </div>
+
+    <div>
+      <div class="section">
+        <div class="sec-title">Notatki</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Notatki <strong>dodaje się z komputera</strong> przez panel na kalkmate.pl</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Na urządzeniu: tylko <strong>odczyt</strong> — przeglądanie przez Menu → Notatki</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Nawigacja: <strong>8/2</strong> = góra/dół, <strong>5</strong> = otwórz, <strong>C/CE</strong> = wstecz</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Synchronizacja po połączeniu z WiFi (automatyczna)</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Sprawdziany</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Tworzone i dodawane z panelu konta — dostępne na urządzeniu po sync</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Wzory matematyczne wyświetlane w formacie tekstowym (LaTeX → ASCII)</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Nawigacja jak w notatkach</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Historia zadań</div>
+        <div class="flow">
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Ostatnie zapytania AI zapisane w pamięci urządzenia (NVS)</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Menu → Historia — przeglądaj pytania i odpowiedzi</div></div>
+          <div class="flow-step"><div class="flow-arrow">→</div><div class="flow-text">Możliwość ponownego wysłania pytania (edycja przed wysłaniem)</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AKTUALIZACJE OTA -->
+  <div class="section">
+    <div class="sec-title">Aktualizacje firmware (OTA)</div>
+    <div class="two-col" style="margin-bottom:0">
+      <div class="flow">
+        <div class="flow-step"><div class="flow-arrow">1.</div><div class="flow-text">Podłącz kalkulator do WiFi</div></div>
+        <div class="flow-step"><div class="flow-arrow">2.</div><div class="flow-text">Wejdź w <code style="font-family:IBM Plex Mono,monospace;font-size:7.5px;background:#e8e8e8;padding:0 2px;border-radius:2px">Settings → OTA Aktualizacje</code></div></div>
+        <div class="flow-step"><div class="flow-arrow">3.</div><div class="flow-text">Wybierz <strong>Sprawdź i zainstaluj</strong> — urządzenie samo pobiera i instaluje nową wersję, a następnie restartuje się</div></div>
+      </div>
+      <div class="infobox">
+        <p><strong>Nie wyłączaj urządzenia</strong> podczas aktualizacji. Jeśli pojawi się błąd — spróbuj ponownie. Aktualizacja nie kasuje notatek ani ustawień.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TROUBLESHOOTING -->
+  <div class="section">
+    <div class="sec-title">Rozwiązywanie problemów</div>
+    <div class="ts-item">
+      <div class="ts-q">Ekran nie włącza się</div>
+      <div class="ts-a">Sprawdź czy przełącznik zasilania jest w górnej pozycji. Podłącz USB-C i poczekaj kilka minut — może być głęboko rozładowany. Sprawdź poziom baterii po ładowaniu.</div>
+    </div>
+    <div class="ts-item">
+      <div class="ts-q">AI nie odpowiada / błąd połączenia</div>
+      <div class="ts-a">Sprawdź połączenie WiFi (<code>Settings → WiFi</code>). Zweryfikuj poprawność kodu AI (<code>Settings → Status konta</code>). Sprawdź czy konto na kalkmate.pl jest aktywne.</div>
+    </div>
+    <div class="ts-item">
+      <div class="ts-q">Brak notatek / sprawdzianów</div>
+      <div class="ts-a">Notatki wymagają aktywnego WiFi do synchronizacji. Dodaj notatki przez panel na kalkmate.pl, a następnie połącz się z WiFi na urządzeniu — sync nastąpi automatycznie.</div>
+    </div>
+    <div class="ts-item">
+      <div class="ts-q">Kalkulator zawiesił się</div>
+      <div class="ts-a">Wyłącz i włącz przełącznikiem zasilania. Jeśli problem się powtarza, użyj <code>Settings → Diagnostyka</code> lub wykonaj <code>Settings → Reset fabryczny</code> (usuwa dane lokalne).</div>
+    </div>
+    <div class="ts-item">
+      <div class="ts-q">Zapomniałem kodu AI</div>
+      <div class="ts-a">Zaloguj się na konto na kalkmate.pl — kod AI jest widoczny w panelu urządzenia. W razie problemów z kontem skontaktuj się przez kalkmate.pl/pomoc.</div>
+    </div>
+  </div>
+
+  <!-- DANE TECHNICZNE -->
+  <div class="two-col">
+    <div class="section">
+      <div class="sec-title">Dane techniczne</div>
+      <table class="st">
+        <tr><th>Parametr</th><th>Wartość</th></tr>
+        <tr><td>Procesor</td><td>ESP32-S3, 240 MHz, WiFi 2.4 GHz</td></tr>
+        <tr><td>Wyświetlacz</td><td>OLED SSD1322, 256×64 px</td></tr>
+        <tr><td>Klawiatura</td><td>27 klawiszy membranowych</td></tr>
+        <tr><td>Bateria</td><td>Li-Po, ładowanie USB-C 5V</td></tr>
+        <tr><td>Pamięć</td><td>16 MB Flash</td></tr>
+        <tr><td>Łączność</td><td>WiFi 802.11 b/g/n</td></tr>
+      </table>
+    </div>
+    <div class="section">
+      <div class="sec-title">Kontakt i pomoc</div>
+      <div class="flow">
+        <div class="flow-step"><div class="flow-arrow">www</div><div class="flow-text"><strong>kalkmate.pl/pomoc</strong> — pełna dokumentacja online</div></div>
+        <div class="flow-step"><div class="flow-arrow">konto</div><div class="flow-text"><strong>kalkmate.pl</strong> — panel konta, notatki, sprawdziany</div></div>
+        <div class="flow-step"><div class="flow-arrow">mail</div><div class="flow-text">Kontakt przez formularz na stronie</div></div>
+      </div>
+      <div class="infobox" style="margin-top:8px">
+        <p>Device ID urządzenia: <strong>Settings → Device ID + QR</strong><br>
+        Wersja firmware: widoczna na ekranie startowym i w Ustawieniach</p>
+        <p style="margin-top:5px">Deklaracja zgodności CE: <strong>kalkmate.pl/docs/ce-declaration.pdf</strong></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span>KalkMate v1.0</span>
+    <span>Strona 2 / 2</span>
+    <span>© kalkmate.pl — produkt na licencji prywatnej</span>
+  </div>
+
+</div>
+</body>
+</html>
