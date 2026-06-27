@@ -58,25 +58,39 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
   const framesRef = useRef<HTMLImageElement[]>([]);
   const currentFrameRef = useRef(-1);
   const deskRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const mobRefs  = useRef<(HTMLDivElement | null)[]>([]);
 
-  // Preload frames
+  // Lazy-load frames only when section is near viewport
   useEffect(() => {
-    const imgs: HTMLImageElement[] = [];
-    for (let i = 1; i <= FRAME_COUNT; i++) {
-      const img = new window.Image();
-      img.src = `/frames/frame_${String(i).padStart(3, "0")}.webp`;
-      imgs.push(img);
-    }
-    framesRef.current = imgs;
+    const section = sectionRef.current;
+    if (!section) return;
 
-    imgs[0].onload = () => {
-      for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
-        if (!canvas) continue;
-        canvas.width = imgs[0].naturalWidth;
-        canvas.height = imgs[0].naturalHeight;
-        canvas.getContext("2d")?.drawImage(imgs[0], 0, 0);
+    const startLoading = () => {
+      if (framesRef.current.length > 0) return;
+      const imgs: HTMLImageElement[] = [];
+      for (let i = 1; i <= FRAME_COUNT; i++) {
+        const img = new window.Image();
+        img.src = `/frames/frame_${String(i).padStart(3, "0")}.webp`;
+        imgs.push(img);
       }
+      framesRef.current = imgs;
+
+      imgs[0].onload = () => {
+        for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
+          if (!canvas) continue;
+          canvas.width = imgs[0].naturalWidth;
+          canvas.height = imgs[0].naturalHeight;
+          canvas.getContext("2d")?.drawImage(imgs[0], 0, 0);
+        }
+      };
     };
+
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) { startLoading(); observer.disconnect(); } },
+      { rootMargin: "400px" }
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
   }, []);
 
   // Scroll + rAF loop
@@ -129,6 +143,32 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
           const r = (p - zStart) / fade;
           opacity = r;
           ty = 22 * (1 - r);
+        } else if (p >= zStart + fade && p <= zEnd - fade) {
+          opacity = 1;
+          ty = 0;
+        } else if (p > zEnd - fade && p <= zEnd) {
+          const r = (zEnd - p) / fade;
+          opacity = r;
+          ty = 0;
+        }
+
+        el.style.opacity = String(Math.max(0, Math.min(1, opacity)));
+        el.style.transform = `translateY(${ty.toFixed(1)}px)`;
+      });
+
+      mobRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const zone = 1 / num;
+        const zStart = i * zone;
+        const zEnd = (i + 1) * zone;
+        const fade = zone * 0.4;
+        let opacity = 0;
+        let ty = 16;
+
+        if (p >= zStart && p < zStart + fade) {
+          const r = (p - zStart) / fade;
+          opacity = r;
+          ty = 16 * (1 - r);
         } else if (p >= zStart + fade && p <= zEnd - fade) {
           opacity = 1;
           ty = 0;
@@ -229,12 +269,17 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
               className="w-full h-auto block"
             />
           </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-5 w-full max-w-sm">
+          <div className="relative w-full max-w-sm" style={{ height: "80px" }}>
             {t.benefits.map((b, i) => (
-              <div key={i}>
-                <p className="km-mono-eyebrow text-[#D8FF3D] text-[10px] mb-0.5">{b.label}</p>
-                <p className="text-[14px] text-[#F2EDE3] font-medium leading-tight">{b.title}</p>
-                <p className="text-[12px] text-[#F2EDE3]/45 mt-1 leading-snug">{b.desc}</p>
+              <div
+                key={i}
+                ref={el => { mobRefs.current[i] = el; }}
+                className="absolute inset-0 flex flex-col items-center text-center px-4"
+                style={{ opacity: 0, transform: "translateY(16px)" }}
+              >
+                <p className="km-mono-eyebrow text-[#D8FF3D] text-[10px] mb-1">{b.label}</p>
+                <p className="text-[15px] text-[#F2EDE3] font-medium leading-tight">{b.title}</p>
+                <p className="text-[12px] text-[#F2EDE3]/50 mt-1 leading-snug">{b.desc}</p>
               </div>
             ))}
           </div>

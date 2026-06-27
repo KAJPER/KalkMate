@@ -223,7 +223,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
         </div>
 
         {/* Right: Device + floating data */}
-        <div className="lg:col-span-5 relative">
+        <div className="hidden lg:block lg:col-span-5 relative">
           <div className="relative aspect-[4/5] w-full max-w-[460px] mx-auto">
             {/* Frame ticks */}
             <div className="absolute -top-2 -left-2 w-5 h-5 border-l border-t border-[#D8FF3D]" />
@@ -241,7 +241,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
                 sizes="(max-width: 640px) 276px, (max-width: 1024px) 50vw, 460px"
                 className="object-cover grayscale-[10%] contrast-[1.05]"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0B] via-transparent to-transparent" />
+              <div className="hidden lg:block absolute inset-0 bg-gradient-to-t from-[#0B0B0B] via-transparent to-transparent" />
             </div>
 
             {/* Floating labels */}
