@@ -149,8 +149,8 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
 
   return (
     <section id="top" className="relative pt-28 lg:pt-32 pb-16 lg:pb-24 overflow-hidden">
-      {/* Backdrop atmosphere */}
-      <div className="pointer-events-none absolute inset-0 -z-10">
+      {/* Backdrop atmosphere — hidden on mobile (expensive GPU blur) */}
+      <div className="hidden lg:block pointer-events-none absolute inset-0 -z-10">
         <div className="absolute -top-40 right-[-10%] w-[680px] h-[680px] rounded-full bg-[#D8FF3D] opacity-[0.06] blur-[140px]" />
         <div className="absolute top-[40%] left-[-10%] w-[480px] h-[480px] rounded-full bg-[#FF4D2E] opacity-[0.05] blur-[140px]" />
       </div>
@@ -236,9 +236,8 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
                 src="/KalkMate3.png"
                 alt={t.imageAlt}
                 fill
-                priority
                 quality={60}
-                sizes="(max-width: 640px) 276px, (max-width: 1024px) 50vw, 460px"
+                sizes="(min-width: 1400px) 460px, 40vw"
                 className="object-cover grayscale-[10%] contrast-[1.05]"
               />
               <div className="hidden lg:block absolute inset-0 bg-gradient-to-t from-[#0B0B0B] via-transparent to-transparent" />

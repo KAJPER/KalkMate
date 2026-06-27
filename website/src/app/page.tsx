@@ -12,6 +12,7 @@ const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
 const ExamBenefits = dynamic(() => import("@/components/ExamBenefits"));
 const Specs        = dynamic(() => import("@/components/Specs"));
 const Gallery      = dynamic(() => import("@/components/Gallery"));
+const Reviews      = dynamic(() => import("@/components/Reviews"));
 const FAQ          = dynamic(() => import("@/components/FAQ"));
 const BuyNow       = dynamic(() => import("@/components/BuyNow"));
 
@@ -45,6 +46,7 @@ export default function Home() {
         <ExamBenefits lang={lang} />
         <Specs lang={lang} />
         <Gallery lang={lang} />
+        <Reviews lang={lang} />
         <FAQ lang={lang} />
         <BuyNow lang={lang} />
       </main>

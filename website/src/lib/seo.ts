@@ -1,5 +1,6 @@
 import { type Locale, SITE_URL, localeHomeUrl } from "@/lib/i18n";
 import { faqs } from "@/lib/content/faq";
+import { reviews, aggregateRating } from "@/lib/content/reviews";
 
 const productName: Record<Locale, string> = {
   pl: "KalkMate — Kalkulator AI",
@@ -33,6 +34,24 @@ export function productJsonLd(locale: Locale) {
       availability: "https://schema.org/InStock",
       seller: { "@type": "Organization", name: "KalkMate" },
     },
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: aggregateRating.ratingValue,
+      reviewCount: aggregateRating.reviewCount,
+      bestRating: aggregateRating.bestRating,
+      worstRating: aggregateRating.worstRating,
+    },
+    review: reviews[locale].map((r) => ({
+      "@type": "Review",
+      author: { "@type": "Person", name: r.author },
+      reviewRating: {
+        "@type": "Rating",
+        ratingValue: String(r.rating),
+        bestRating: "5",
+      },
+      reviewBody: r.body,
+      datePublished: r.date,
+    })),
   };
 }
 
