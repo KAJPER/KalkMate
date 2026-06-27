@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
+import dynamic from "next/dynamic";
 import SessionProvider from "@/components/SessionProvider";
-import CookieBanner from "@/components/CookieBanner";
 import { CartProvider } from "@/components/CartContext";
-import CartDrawer from "@/components/CartDrawer";
+
+const CartDrawer  = dynamic(() => import("@/components/CartDrawer"),  { ssr: false });
+const CookieBanner = dynamic(() => import("@/components/CookieBanner"), { ssr: false });
 
 const geist = Geist({
   variable: "--font-geist",

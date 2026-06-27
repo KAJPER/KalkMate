@@ -7,7 +7,7 @@ import { homeJsonLd } from "@/lib/seo";
 import type { Metadata } from "next";
 import { SITE_URL, languageAlternates } from "@/lib/i18n";
 
-const VideoScroll  = dynamic(() => import("@/components/VideoScroll"));
+const VideoScroll  = dynamic(() => import("@/components/VideoScroll"), { ssr: false });
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
 const ExamBenefits = dynamic(() => import("@/components/ExamBenefits"));
 const Specs        = dynamic(() => import("@/components/Specs"));

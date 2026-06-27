@@ -24,7 +24,7 @@ const dict: Record<Locale, { eyebrow: string; heading: string; sub: string; veri
 
 function Stars({ rating }: { rating: number }) {
   return (
-    <div className="flex gap-0.5" aria-label={`${rating} z 5 gwiazdek`}>
+    <div role="img" className="flex gap-0.5" aria-label={`${rating} z 5 gwiazdek`}>
       {Array.from({ length: 5 }, (_, i) => (
         <svg
           key={i}
