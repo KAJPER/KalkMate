@@ -52,6 +52,7 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
   const t = dict[lang];
   const sectionRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasMobileRef = useRef<HTMLCanvasElement>(null);
   const progressRef = useRef(0);
   const rafRef = useRef<number>(0);
   const framesRef = useRef<HTMLImageElement[]>([]);
@@ -69,11 +70,12 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
     framesRef.current = imgs;
 
     imgs[0].onload = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      canvas.width = imgs[0].naturalWidth;
-      canvas.height = imgs[0].naturalHeight;
-      canvas.getContext("2d")?.drawImage(imgs[0], 0, 0);
+      for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
+        if (!canvas) continue;
+        canvas.width = imgs[0].naturalWidth;
+        canvas.height = imgs[0].naturalHeight;
+        canvas.getContext("2d")?.drawImage(imgs[0], 0, 0);
+      }
     };
   }, []);
 
@@ -84,6 +86,7 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
       if (!section) return;
       const rect = section.getBoundingClientRect();
       const scrollable = section.offsetHeight - window.innerHeight;
+      if (scrollable <= 0) { progressRef.current = 0; return; }
       progressRef.current = Math.min(1, Math.max(0, -rect.top / scrollable));
     };
 
@@ -95,8 +98,8 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
       if (idx !== currentFrameRef.current) {
         const frame = framesRef.current[idx];
         if (frame?.complete && frame.naturalWidth > 0) {
-          const canvas = canvasRef.current;
-          if (canvas) {
+          for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
+            if (!canvas) continue;
             if (canvas.width !== frame.naturalWidth) {
               canvas.width = frame.naturalWidth;
               canvas.height = frame.naturalHeight;
@@ -106,8 +109,8 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
               ctx.clearRect(0, 0, canvas.width, canvas.height);
               ctx.drawImage(frame, 0, 0);
             }
-            currentFrameRef.current = idx;
           }
+          currentFrameRef.current = idx;
         }
       }
 
@@ -154,7 +157,7 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
   const rightBenefits = t.benefits.filter(b => b.side === "right");
 
   return (
-    <section ref={sectionRef} className="relative bg-[#0B0B0B]" style={{ height: "400vh" }}>
+    <section ref={sectionRef} className="relative bg-[#0B0B0B] h-[220vh] lg:h-[400vh]">
       <div className="sticky top-0 h-screen flex flex-col items-center justify-center">
 
         {/* Heading */}
@@ -221,10 +224,8 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
         {/* Mobile: first frame as img + static grid */}
         <div className="lg:hidden flex flex-col items-center w-full px-5 gap-6">
           <div className="w-full max-w-sm overflow-hidden" style={{ borderRadius: "2px" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/frames/frame_001.png"
-              alt="KalkMate demo"
+            <canvas
+              ref={canvasMobileRef}
               className="w-full h-auto block"
             />
           </div>
