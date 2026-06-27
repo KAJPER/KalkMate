@@ -9,7 +9,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
   pl: [
     {
       q: "Czy nauczyciel może zauważyć, że to nie zwykły kalkulator?",
-      a: "Nie. Obudowa, klawiatura i ekran są identyczne ze standardowymi kalkulatorami graficznymi. Tryb AI uruchamiasz ukrytą kombinacją klawiszy — nie ma żadnych ikon ani wskaźników, które by Cię zdradzały.",
+      a: "Nie. Obudowa, klawiatura i ekran są identyczne ze standardowymi kalkulatorami prostymi. Tryb AI uruchamiasz ukrytą kombinacją klawiszy — nie ma żadnych ikon ani wskaźników, które by Cię zdradzały.",
     },
     {
       q: "Jakie przedmioty obsługuje AI?",
@@ -43,7 +43,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
   en: [
     {
       q: "Can a teacher tell it's not a regular calculator?",
-      a: "No. The casing, keypad and screen are identical to standard graphing calculators. You launch AI mode with a hidden key combination — there are no icons or indicators that could give you away.",
+      a: "No. The casing, keypad and screen are identical to standard simple calculators. You launch AI mode with a hidden key combination — there are no icons or indicators that could give you away.",
     },
     {
       q: "Which subjects does the AI support?",
@@ -77,7 +77,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
   de: [
     {
       q: "Kann eine Lehrkraft erkennen, dass es kein gewöhnlicher Taschenrechner ist?",
-      a: "Nein. Gehäuse, Tastatur und Display sind identisch mit handelsüblichen Grafikrechnern. Den KI-Modus startest du mit einer versteckten Tastenkombination — es gibt keine Symbole oder Anzeigen, die dich verraten könnten.",
+      a: "Nein. Gehäuse, Tastatur und Display sind identisch mit handelsüblichen einfachen Taschenrechnern. Den KI-Modus startest du mit einer versteckten Tastenkombination — es gibt keine Symbole oder Anzeigen, die dich verraten könnten.",
     },
     {
       q: "Welche Fächer unterstützt die KI?",

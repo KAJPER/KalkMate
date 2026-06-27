@@ -36,7 +36,7 @@ const content: Record<Locale, HeroContent> = {
     para1: (
       <>
         KalkMate wygląda <em className="font-serif not-italic text-[#F2EDE3]">dokładnie</em>
-        {" "}jak zwykły kalkulator graficzny. Ma jednak coś, czego nie ma żaden inny —
+        {" "}jak zwykły kalkulator prosty. Ma jednak coś, czego nie ma żaden inny —
         ukrytą kamerę i model AI trenowany na tysiącach zadań z ostatnich 10 lat.
       </>
     ),
@@ -47,7 +47,7 @@ const content: Record<Locale, HeroContent> = {
     specBattery: "Bateria",
     specAnswer: "Odpowiedź",
     specSubjects: "Przedmioty",
-    imageAlt: "KalkMate — kalkulator graficzny z ukrytą kamerą i AI",
+    imageAlt: "KalkMate — kalkulator prosty z ukrytą kamerą i AI",
     labelCamera: "Kamera OV2640",
     labelCameraSub: "UKRYTA · 2MP",
     labelOled: "OLED · 256×64",
@@ -75,7 +75,7 @@ const content: Record<Locale, HeroContent> = {
     para1: (
       <>
         KalkMate looks <em className="font-serif not-italic text-[#F2EDE3]">exactly</em>
-        {" "}like an ordinary graphing calculator. But it hides something no other one has —
+        {" "}like an ordinary simple calculator. But it hides something no other one has —
         a concealed camera and an AI model trained on thousands of problems
         from the last decade.
       </>
@@ -87,7 +87,7 @@ const content: Record<Locale, HeroContent> = {
     specBattery: "Battery",
     specAnswer: "Answer",
     specSubjects: "Subjects",
-    imageAlt: "KalkMate — a graphing calculator with a hidden camera and AI",
+    imageAlt: "KalkMate — a simple calculator with a hidden camera and AI",
     labelCamera: "OV2640 camera",
     labelCameraSub: "HIDDEN · 2MP",
     labelOled: "OLED · 256×64",
@@ -115,7 +115,7 @@ const content: Record<Locale, HeroContent> = {
     para1: (
       <>
         KalkMate sieht <em className="font-serif not-italic text-[#F2EDE3]">exakt</em>
-        {" "}wie ein gewöhnlicher Grafikrechner aus. Doch er hat etwas, das kein anderer besitzt —
+        {" "}wie ein gewöhnlicher einfacher Taschenrechner aus. Doch er hat etwas, das kein anderer besitzt —
         eine versteckte Kamera und ein KI-Modell, trainiert auf Tausenden von Aufgaben
         der letzten 10 Jahre.
       </>
@@ -127,7 +127,7 @@ const content: Record<Locale, HeroContent> = {
     specBattery: "Akku",
     specAnswer: "Antwort",
     specSubjects: "Fächer",
-    imageAlt: "KalkMate — ein Grafikrechner mit versteckter Kamera und KI",
+    imageAlt: "KalkMate — ein einfacher Taschenrechner mit versteckter Kamera und KI",
     labelCamera: "Kamera OV2640",
     labelCameraSub: "VERSTECKT · 2MP",
     labelOled: "OLED · 256×64",

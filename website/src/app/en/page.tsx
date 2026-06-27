@@ -21,7 +21,7 @@ const lang = "en" as const;
 export const metadata: Metadata = {
   title: "KalkMate — AI Calculator | Smart Photo Calculator",
   description:
-    "KalkMate is the AI calculator that solves math, physics, chemistry and biology problems. Point the built-in camera at a problem — get the full step-by-step solution on its OLED screen. 169 EUR, no subscription.",
+    "KalkMate is the AI calculator that solves math, physics, chemistry and biology problems. Point the built-in camera at a problem — get the full step-by-step solution on its OLED screen. 169 EUR, then from 4 EUR/month.",
   keywords: [
     "AI calculator",
     "photo calculator AI",
@@ -43,7 +43,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "KalkMate — AI Calculator",
     description:
-      "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, no subscription.",
+      "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, subscription from 4 EUR/month.",
     type: "website",
     locale: "en_US",
     url: `${SITE_URL}/en`,

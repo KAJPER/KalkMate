@@ -21,7 +21,7 @@ const lang = "de" as const;
 export const metadata: Metadata = {
   title: "KalkMate — KI-Taschenrechner | Foto-Rechner mit KI",
   description:
-    "KalkMate ist der intelligente KI-Taschenrechner für Prüfungen. Fotografiere die Aufgabe — die KI analysiert sie und zeigt die vollständige Lösung Schritt für Schritt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. 169 EUR, kein Abo.",
+    "KalkMate ist der intelligente KI-Taschenrechner für Prüfungen. Fotografiere die Aufgabe — die KI analysiert sie und zeigt die vollständige Lösung Schritt für Schritt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. 169 EUR, danach ab 4 EUR/Monat.",
   keywords: [
     "KI Taschenrechner",
     "AI Taschenrechner",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "KalkMate — KI-Taschenrechner",
     description:
-      "Fotografiere deine Aufgabe — KalkMate löst sie mit KI direkt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. Jetzt für 169 EUR, kein Abo.",
+      "Fotografiere deine Aufgabe — KalkMate löst sie mit KI direkt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. Jetzt für 169 EUR, danach ab 4 EUR/Monat.",
     type: "website",
     locale: "de_DE",
     url: `${SITE_URL}/de`,
