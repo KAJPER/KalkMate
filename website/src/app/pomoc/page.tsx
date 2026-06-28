@@ -240,7 +240,7 @@ export default function PomocPage() {
               Bez tego — kalkulator działa w trybie offline.
             </Step>
 
-            <VideoPlaceholder label="Wideo: pierwsze uruchomienie (1:30)" />
+            <VideoPlayer src="/instrukacja-kalkmate-bez-napisow.mp4" label="Wideo: pierwsze uruchomienie" />
           </Section>
 
           {/* 02 Klawiatura */}
@@ -269,7 +269,7 @@ export default function PomocPage() {
               Numpad jako nawigacja działa tylko w menu i ustawieniach.
             </Note>
 
-            <GifPlaceholder label="GIF: nawigacja klawiaturą ekranową AI" />
+            <AutoplayVideo src="/pokaz-klawiszy.mp4" label="Nawigacja klawiaturą ekranową AI" />
           </Section>
 
           {/* 03 AI */}
@@ -614,17 +614,36 @@ function Note({ children }: { children: React.ReactNode }) {
   );
 }
 
-function VideoPlaceholder({ label }: { label: string }) {
+function VideoPlayer({ src, label }: { src: string; label: string }) {
   return (
-    <div className="mt-6 aspect-video border border-[rgba(242,237,227,0.18)] bg-[#0B0B0B] flex items-center justify-center relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-[#D8FF3D]/[0.03] to-transparent" />
-      <div className="text-center relative z-10">
-        <div className="w-16 h-16 mx-auto rounded-full border-2 border-[#D8FF3D] flex items-center justify-center mb-3">
-          <span className="text-[#D8FF3D] text-2xl ml-1">▶</span>
-        </div>
-        <p className="km-mono-eyebrow text-[#F2EDE3]/55">{label}</p>
-        <p className="km-mono-eyebrow text-[#F2EDE3]/30 mt-1">/ WKRÓTCE</p>
-      </div>
+    <div className="mt-6 border border-[rgba(242,237,227,0.18)] bg-[#0B0B0B] overflow-hidden">
+      <p className="km-mono-eyebrow text-[#F2EDE3]/55 px-4 pt-3 pb-2">/ {label}</p>
+      <video
+        controls
+        preload="metadata"
+        className="w-full block"
+        style={{ maxHeight: "560px" }}
+      >
+        <source src={src} type="video/mp4" />
+      </video>
+    </div>
+  );
+}
+
+function AutoplayVideo({ src, label }: { src: string; label: string }) {
+  return (
+    <div className="mt-6 border border-[rgba(242,237,227,0.18)] bg-[#0B0B0B] overflow-hidden">
+      <p className="km-mono-eyebrow text-[#F2EDE3]/55 px-4 pt-3 pb-2">/ {label}</p>
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="w-full block"
+        style={{ maxHeight: "480px" }}
+      >
+        <source src={src} type="video/mp4" />
+      </video>
     </div>
   );
 }
