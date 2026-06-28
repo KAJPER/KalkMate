@@ -19,9 +19,6 @@ src/key_obfuscate.h
 # Cache analizatora kodu
 src/graphify-out/
 
-# Filmiki instruktażowe — za duże na GitHub (>100MB), serwowane z VPS
-website/public/*.mp4
-
 # Captured photos z urzadzen (debug, mogą być pełne)
 website/captures/
 update.tar.gz  
