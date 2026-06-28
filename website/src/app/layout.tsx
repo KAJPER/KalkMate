@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
 import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
-import dynamic from "next/dynamic";
 import SessionProvider from "@/components/SessionProvider";
 import { CartProvider } from "@/components/CartContext";
-
-const CartDrawer  = dynamic(() => import("@/components/CartDrawer"),  { ssr: false });
-const CookieBanner = dynamic(() => import("@/components/CookieBanner"), { ssr: false });
+import { ClientCartDrawer, ClientCookieBanner } from "@/components/ClientShell";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -112,10 +109,10 @@ export default function RootLayout({
         <SessionProvider>
           <CartProvider>
             {children}
-            <CartDrawer />
+            <ClientCartDrawer />
           </CartProvider>
         </SessionProvider>
-        <CookieBanner />
+        <ClientCookieBanner />
       </body>
     </html>
   );

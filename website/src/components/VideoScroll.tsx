@@ -67,20 +67,26 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
 
     const startLoading = () => {
       if (framesRef.current.length > 0) return;
-      const imgs: HTMLImageElement[] = [];
-      for (let i = 1; i <= FRAME_COUNT; i++) {
-        const img = new window.Image();
-        img.src = `/frames/frame_${String(i).padStart(3, "0")}.webp`;
-        imgs.push(img);
-      }
+      const imgs: HTMLImageElement[] = new Array(FRAME_COUNT);
+
+      // Load frame 1 first — draw it immediately so canvas has content fast
+      const first = new window.Image();
+      first.src = `/frames/frame_001.webp`;
+      imgs[0] = first;
       framesRef.current = imgs;
 
-      imgs[0].onload = () => {
+      first.onload = () => {
         for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
           if (!canvas) continue;
-          canvas.width = imgs[0].naturalWidth;
-          canvas.height = imgs[0].naturalHeight;
-          canvas.getContext("2d")?.drawImage(imgs[0], 0, 0);
+          canvas.width = first.naturalWidth;
+          canvas.height = first.naturalHeight;
+          canvas.getContext("2d")?.drawImage(first, 0, 0);
+        }
+        // Load remaining frames only after first is drawn
+        for (let i = 2; i <= FRAME_COUNT; i++) {
+          const img = new window.Image();
+          img.src = `/frames/frame_${String(i).padStart(3, "0")}.webp`;
+          imgs[i - 1] = img;
         }
       };
     };
