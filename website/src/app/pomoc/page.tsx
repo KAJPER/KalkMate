@@ -620,6 +620,7 @@ function VideoPlayer({ src, label }: { src: string; label: string }) {
       <p className="km-mono-eyebrow text-[#F2EDE3]/55 px-4 pt-3 pb-2">/ {label}</p>
       <video
         controls
+        playsInline
         preload="metadata"
         className="w-full block"
         style={{ maxHeight: "560px" }}
