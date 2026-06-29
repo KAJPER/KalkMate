@@ -97,6 +97,9 @@ export default function Reviews({ lang = "pl" }: { lang?: Locale }) {
                 <meta itemProp="ratingValue" content={String(r.rating)} />
                 <meta itemProp="bestRating" content="5" />
               </div>
+              <div itemProp="itemReviewed" itemScope itemType="https://schema.org/Product">
+                <meta itemProp="name" content="KalkMate" />
+              </div>
             </article>
           ))}
         </div>

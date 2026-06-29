@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
-import { passwordResetEmail } from "@/lib/email-templates";
+import { passwordResetEmail, detectLocale, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
 
@@ -46,10 +46,11 @@ export async function POST(req: NextRequest) {
       const baseUrl = process.env.NEXTAUTH_URL || "https://kalkmate.pl";
       const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
 
+      const locale = detectLocale(req.headers.get("accept-language"));
       const r = await sendMail({
         to: email,
-        subject: "Reset hasla - KalkMate",
-        html: passwordResetEmail({ resetUrl, expiresMinutes: EXPIRY_MINUTES }),
+        subject: EMAIL_SUBJECTS.passwordReset[locale],
+        html: passwordResetEmail({ resetUrl, expiresMinutes: EXPIRY_MINUTES }, locale),
       });
       if (!r.ok) {
         console.error("[forgot-password] mail send failed:", r.error);

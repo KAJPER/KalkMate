@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendMail } from "@/lib/mailer";
-import { verificationEmail } from "@/lib/email-templates";
+import { verificationEmail, detectLocale, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const VERIFY_EXPIRY_HOURS = 24;
@@ -24,18 +24,19 @@ async function createVerification(userId: string): Promise<string> {
   return token;
 }
 
-async function sendVerification(email: string, name: string | null, userId: string) {
+async function sendVerification(email: string, name: string | null, userId: string, acceptLanguage?: string | null) {
   const token = await createVerification(userId);
   const baseUrl = process.env.NEXTAUTH_URL || "https://kalkmate.pl";
   const verifyUrl = `${baseUrl}/auth/verify?token=${token}`;
+  const locale = detectLocale(acceptLanguage);
   const r = await sendMail({
     to: email,
-    subject: "Potwierdz adres email - KalkMate",
+    subject: EMAIL_SUBJECTS.verify[locale],
     html: verificationEmail({
       verifyUrl,
       expiresHours: VERIFY_EXPIRY_HOURS,
       customerName: name || undefined,
-    }),
+    }, locale),
   });
   if (!r.ok) console.error("[register] verification mail send failed:", r.error);
 }
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
     await prisma.$executeRaw`UPDATE "User" SET "tokenBalance" = 1000000 WHERE "id" = ${user.id}`;
 
     // Wyslij mail weryfikacyjny
-    await sendVerification(email, name || user.name, user.id);
+    await sendVerification(email, name || user.name, user.id, req.headers.get("accept-language"));
 
     return NextResponse.json(
       {

@@ -8,8 +8,8 @@ export interface FaqItem {
 export const faqs: Record<Locale, FaqItem[]> = {
   pl: [
     {
-      q: "Czy nauczyciel może zauważyć, że to nie zwykły kalkulator?",
-      a: "Nie. Obudowa, klawiatura i ekran są identyczne ze standardowymi kalkulatorami prostymi. Tryb AI uruchamiasz ukrytą kombinacją klawiszy — nie ma żadnych ikon ani wskaźników, które by Cię zdradzały.",
+      q: "Czy KalkMate to kalkulator do ściągania?",
+      a: "Tak — to kalkulator z aparatem (kamerą), który robi zdjęcie zadania i wyświetla pełne rozwiązanie krok po kroku na ekranie. Obudowa, klawiatura i ekran są identyczne ze standardowymi kalkulatorami prostymi. Tryb AI uruchamiasz ukrytą kombinacją klawiszy — nie ma żadnych ikon ani wskaźników, które by Cię zdradzały.",
     },
     {
       q: "Jakie przedmioty obsługuje AI?",
@@ -33,7 +33,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Kiedy dostanę zamówienie?",
-      a: "Wysyłka w ciągu 3–5 dni roboczych. Dostawa Paczkomatem InPost 1–2 dni robocze. Numer przesyłki dostajesz mailem.",
+      a: "Standardowy czas realizacji to 1–2 tygodnie od zaksięgowania płatności (maksymalnie 4 tygodnie). Po wysyłce dostawa Paczkomatem InPost zajmuje 1–2 dni robocze. Numer przesyłki dostajesz mailem.",
     },
     {
       q: "Jaka jest gwarancja?",
@@ -42,8 +42,8 @@ export const faqs: Record<Locale, FaqItem[]> = {
   ],
   en: [
     {
-      q: "Can a teacher tell it's not a regular calculator?",
-      a: "No. The casing, keypad and screen are identical to standard simple calculators. You launch AI mode with a hidden key combination — there are no icons or indicators that could give you away.",
+      q: "Is KalkMate an AI camera calculator for exams?",
+      a: "Yes — KalkMate is an AI camera calculator: it photographs the problem and shows the full step-by-step solution on screen. The casing, keypad and screen are identical to standard simple calculators. You launch AI mode with a hidden key combination — there are no icons or indicators that could give you away.",
     },
     {
       q: "Which subjects does the AI support?",
@@ -67,7 +67,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "When will I get my order?",
-      a: "We ship within 3–5 business days. InPost parcel-locker delivery takes 1–2 business days. You'll get your tracking number by email.",
+      a: "Standard processing time is 1–2 weeks from payment confirmation (up to 4 weeks maximum). After dispatch, InPost parcel-locker delivery takes 1–2 business days. You'll get your tracking number by email.",
     },
     {
       q: "What's the warranty?",
@@ -76,8 +76,8 @@ export const faqs: Record<Locale, FaqItem[]> = {
   ],
   de: [
     {
-      q: "Kann eine Lehrkraft erkennen, dass es kein gewöhnlicher Taschenrechner ist?",
-      a: "Nein. Gehäuse, Tastatur und Display sind identisch mit handelsüblichen einfachen Taschenrechnern. Den KI-Modus startest du mit einer versteckten Tastenkombination — es gibt keine Symbole oder Anzeigen, die dich verraten könnten.",
+      q: "Ist KalkMate ein KI Taschenrechner mit Kamera?",
+      a: "Ja — KalkMate ist ein KI Taschenrechner mit Kamera: Du fotografierst die Aufgabe und siehst die vollständige Schritt-für-Schritt-Lösung auf dem Display. Gehäuse, Tastatur und Display sind identisch mit handelsüblichen einfachen Taschenrechnern. Den KI-Modus startest du mit einer versteckten Tastenkombination — es gibt keine Symbole oder Anzeigen, die dich verraten könnten.",
     },
     {
       q: "Welche Fächer unterstützt die KI?",
@@ -101,7 +101,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Wann erhalte ich meine Bestellung?",
-      a: "Versand innerhalb von 3–5 Werktagen. Die Lieferung per InPost-Paketstation dauert 1–2 Werktage. Die Sendungsnummer erhältst du per E-Mail.",
+      a: "Die Standardbearbeitungszeit beträgt 1–2 Wochen ab Zahlungseingang (maximal 4 Wochen). Nach dem Versand dauert die Lieferung per InPost-Paketstation 1–2 Werktage. Die Sendungsnummer erhältst du per E-Mail.",
     },
     {
       q: "Wie sieht die Garantie aus?",
