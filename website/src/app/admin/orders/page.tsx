@@ -8,6 +8,7 @@ import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
 interface Order {
   id: string;
   amount: number;
+  currency: string;
   status: string;
   created: number;
   customer_name: string;
@@ -15,6 +16,12 @@ interface Order {
   customer_phone: string;
   pickup_point: string;
   fulfillment_status: string;
+}
+
+function formatAmount(amount: number, currency: string): string {
+  const value = (amount / 100).toFixed(2);
+  const symbol = currency?.toLowerCase() === "eur" ? "€" : "zł";
+  return `${value} ${symbol}`;
 }
 
 export default function OrdersPage() {
@@ -136,7 +143,7 @@ export default function OrdersPage() {
                     {order.pickup_point || "—"}
                   </td>
                   <td className="px-4 py-3 text-[#E0E0E0] font-medium whitespace-nowrap">
-                    {(order.amount / 100).toFixed(2)} zł
+                    {formatAmount(order.amount, order.currency)}
                   </td>
                   <td className="px-4 py-3">
                     <OrderStatusBadge status={order.status} type="payment" />

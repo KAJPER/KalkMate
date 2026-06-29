@@ -4,6 +4,7 @@ import "./globals.css";
 import SessionProvider from "@/components/SessionProvider";
 import { CartProvider } from "@/components/CartContext";
 import { ClientCartDrawer, ClientCookieBanner } from "@/components/ClientShell";
+import PageTracker from "@/components/PageTracker";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -117,6 +118,7 @@ export default function RootLayout({
             <ClientCartDrawer />
           </CartProvider>
         </SessionProvider>
+        <PageTracker />
         <ClientCookieBanner />
       </body>
     </html>
