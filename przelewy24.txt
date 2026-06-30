@@ -1,0 +1,2293 @@
+English' Polski'
+LogoP24
+Search...
+Integracja
+System płatności
+Authentication
+Środowisko produkcyjne i sandbox
+Wytyczne API
+Przypadki użycia
+Definicje
+Materiały graficzne
+Obsługa transakcji
+Obsługa transakcji API
+Notyfikacja
+Wyliczanie sumy kontrolnej
+Dodatkowe usługi
+Dodatkowa funkcjonalność API
+Notyfikacja o zwrocie
+Przypadki użycia metod płatności
+Płatność kartą
+Karty API
+Dodatkowa notyfikacja kartowa
+BLIK
+Przypadki użycia BLIK
+BLIK API
+Dodatkowa notyfikacja BLIK
+Notyfikacja uaktualnienia aliasu
+Raporty
+Raport API
+get
+Historia transakcji
+get
+Informacje o paczce (batch)
+Jak zintegrować raty?
+Buttony i bannery
+Widget
+Symulator
+Przelewy24 REST API Dokumentacja (1.0.17)
+URL: https://www.przelewy24.pl/support
+System płatności
+Serwis Przelewy24 prowadzi system autoryzacji i rozliczeń oraz świadczy usługi płatnicze w charakterze krajowej instytucji płatniczej.
+
+Poprzez API Przelewy24 możesz uzyskać dostęp do wszystkich usług oferowanych przez system. Poniższa dokumentacja zawiera najczęściej wykorzystywane funkcjonalności. Skontaktuj się z Działem Handlowym, aby poznać inne funkcjonalności.
+
+Aby uzyskać dostęp do API Przelewy24, w pierwszej kolejności załóż konto w Panelu Administracyjnym P24. Po dokonanej rejestracji, sprzedawca ma możliwość śledzenia w panelu administracyjnym stanu swojego konta, wszystkich płatności klientów oraz wykonanych zwrotów na bieżąco.
+
+Przebieg transakcji
+Klient po skompletowaniu zamówienia klika na przycisk "zapłać". System Sprzedawcy przesyła żądanie rejestracji transakcji do systemu P24 i otrzymuje zwrotnie unikalny TOKEN. Następnie klient jest przekierowany na panel transakcyjny P24.
+
+W przypadku anulowania płatności klient jest przekierowany na adres “urlReturn".
+
+Po poprawnej transakcji Klient jest kierowany na adres podany w parametrze “urlReturn”. System P24 wysyła potwierdzenie transakcji na adres podany w parametrze "urlStatus". Notyfikacja z potwierdzeniem transakcji jest wysyłana w sposób asynchroniczny.
+
+Dla potwierdzenia wiarygodności otrzymanego potwierdzenia w odpowiedzi na potwierdzenie wpłaty system sprzedawcy weryfikuje wynik żądaniem zwrotnym.
+
+Payment process
+
+Wymagania programowe
+Aby prawidłowo przeprowadzić transakcję sprzedawca na swoich stronach WWW musi wprowadzić niżej opisaną obsługę wysyłania żądania transakcji oraz odbiór odpowiedzi o wyniku transakcji.
+
+Cały proces przebiega w sposób automatyczny bez konieczności ingerencji obsługi sklepu w proces płatności.
+
+Po poprawnie zakończonym procesie płatności status danego zamówienia w sklepie powinien automatycznie zmienić się na zapłacone/przyjęte do realizacji. W tym momencie obsługa sklepu może przystąpić do realizowania zamówienia.
+
+
+
+Environment
+
+Authentication
+P24 wspiera mechanizmy Basic Authentication.
+
+basicAuth
+Jest to podstawowa metoda uwierzytelnienia. User i secretId dostępne są w panelu:
+- "User" odpowiada tej samej wartości, co posId,
+- secretId, odpowiada tej samej wartości co klucz do raportów (klucz do API).
+
+Security Scheme Type: HTTP
+HTTP Authorization Scheme: basic
+Środowisko produkcyjne i sandbox
+Rejestracja konta produkcyjnego
+Zarejestruj swoje konto w serwisie Przelewy24 - link
+
+Rejestracja konta produkcyjnego
+
+Konfiguracja konta testowego (sandbox)
+Skonfiguruj konto sandbox. Jedynie mając dostęp do serwisu produkcyjnego masz możliwość uruchomienia konta sandbox. Z menu głównego wybierz 'Moje konto', a następnie 'Konto w SANDBOX'.
+
+Konfiguracja konta testowego (sandbox)
+
+Konfiguracja konta użytkownika i członków zespołu
+Jeżeli zachodzi potrzeba, skonfiguruj konta członków zespołu - pozwoli to na odrębny dostęp do serwisu Przelewy24 z nadaniem odpowiednich ról użytkownikom w zależności od potrzeb.
+
+Konfiguracja konta użytkownika
+
+Integracja API
+Skonfiguruj dostęp do konta, korzystając z danych uwierzytelniających API (wersja produkcyjna i sandbox serwisu Przelewy24):
+- user (posId/login) - ID konta Przelewy24 - wysyłane w mailu potwierdzającym pomyślną rejestrację konta
+- CRC - klucz CRC używany do wyliczania sign
+- secretId (klucz API) - 'klucz do raportów'.
+
+(wersja produkcyjna Przelewy24)Dane uwierzytelniające - wersja produkcyjna Przelewy24(wersja sandbox Przelewy24)Dane uwierzytelniające - wersja sandbox Przelewy24
+
+Testowanie połączenia API
+Korzystając z endpointu TestAccess oraz danych dostępu (user oraz secretId), przetestuj połączenie.
+
+Adres IP i domyślne Web Service
+Uzupełnij pole 'Adres IP' ('Moje konto' - 'Moje dane' - 'Dane API i konfiguracja'), pod którym znajdują się Twoje zasoby, celem dostępu do Web Service Przelewy24.
+Domyślne serwisy to:
+
+TransactionRegister
+TransactionVerify
+TransactionRefund
+PaymentsMethods
+GetTransactionBySessionId.
+By włączyć inne niż domyślne, wymienione w specyfikacji, prośba o kontakt z opiekunem klienta.
+Wytyczne API
+Prosimy o wykonanie poniższych kroków w celu zagwarantowania sprawnego działania płatności Przelewy24.
+
+Zweryfikowanie konfiguracji hostingu
+Zalecamy korzystanie z systemu operacyjnego oraz PHP w wersji 64 bit, ze względu na większe możliwości obliczeniowe oraz większą wydajność. W celu zweryfikowania wersji systemu operacyjnego, wersji PHP można wykorzystać m.in. kod phpinfo https://www.php.net/manual/en/function.phpinfo.php#refsect1-function.phpinfo-examples
+
+    <?php
+    // Show all information, defaults to INFO_ALL
+      phpinfo();
+
+    // Show just the module information.
+    // phpinfo(8) yields identical results.
+      phpinfo(INFO_MODULES);
+    ?>
+Następnie należy zapisać plik jako rozszerzenie PHP i wejść w ścieżkę / adres URL, na którym jest hostowany plik. Tak utworzony plik musi zostać umieszczony na Państwa hostingu internetowym - adres tego pliku nie powinien być nikomu udostępniany. PAMIĘTAJ!
+Po weryfikacji umieszczony plik powinien zostać usunięty z serwera.
+
+Zakresy graniczne typu INT signed / unsigned
+Zakres INT signed = -2,147,483,648 do 2,147,483,647
+
+Zakres INT unsigned = 0 do 4294 967 295
+
+Zakres BIGINT singed = -9223372036854775808 do 9223372036854775807
+
+Zakres BIGINT unsigned = 0 do 18446744073709551615
+
+
+PAMIĘTAJ!
+Jeśli korzystają Państwo z OS lub PHP w wersji 32bit, to kod aplikacji może interpretować wartość większą niż (2147483647 - maksymalna wartość INT signed) jako typ float - co może spowodować problemy w procesowaniu płatności.
+
+    $large_number = 2147483648;
+    var_dump($large_number); // float(2147483648)
+
+W takim przypadku należy zmienić zakres na BIGINT, w celu dopuszczenia wartości większej niż maksymalna wartość zakresu INT signed.
+
+Baza danych
+Jeśli przechowują Państwo w bazie danych wartość order_id - ID zamówienia z systemu Przelewy24, prosimy o zweryfikowanie, czy ustawiony typ kolumny dopuści zapis/odczyt wartości większej niż maksymalna wartość INT signed = 2147483647.
+
+
+W takim przypadku należy zmienić zakres na BIGINT, w celu dopuszczenia wartości większej niż maksymalna wartość zakresu INT signed.
+
+Rzutowanie parametru order_id
+Należy sprawdzić, czy Państwa kod aplikacji dopuści do zapisu/odczytu wartość większą niż maksymalną wartość tj. INT signed = 2147483647.
+
+
+W takim przypadku należy zmienić zakres na BIGINT, w celu dopuszczenia wartości większej niż maksymalna wartość zakresu INT signed
+
+Środowiska programistyczne
+Środowisko produkcyjne
+Każde żądanie rozróżnione jest swoim własnym, unikalnym adresem URL. W ten sposób system P24 wie, z której funkcji API chcesz skorzystać. W połączeniu z bazowym adresem URL, dla za równo produkcyjnego jak i testowego środowiska, otrzymasz kompletny adres API-URL.
+Bazowy URL systemu produkcyjnego:
+https://secure.przelewy24.pl/api/v1
+
+Transakcje produkcyjne będą widoczne w panelu
+https://panel.przelewy24.pl/index.php
+
+Środowisko testowe
+Podczas implementowania mechanizmów w Twoim systemie możesz skorzystać ze środowiska testowego. Środowisko to umożliwia zweryfikowanie poprawności instalacji bez konieczności dokonywania przelewów.
+
+Adresy URL do połączeń do środowiska testowego:
+https://sandbox.przelewy24.pl/api/v1
+
+Transakcje testowe będą widoczne w panelu testowym:
+https://sandbox.przelewy24.pl/panel/index.php
+
+Środowisko testowe nie może być wykorzystywane do realizacji transakcji produkcyjnych.
+Adresy IP serwerów
+Zalecamy zabezpieczenie skryptów przed podejrzanymi wywołaniami, stosując filtrację adresów IP dla przychodzących połączeń. Zakresy IP serwerów Przelewy24 to:
+
+5.252.202.255 , 5.252.202.254
+20.215.81.124
+193.178.213.0/24
+91.220.177.0/24
+20.215.183.48/28
+134.112.88.8/29
+
+Wymagania środowiskowe
+Transport Layer Security - TLS 1.2 (wymagane minimum)
+
+https://wiki.mozilla.org/Security/Server_Side_TLS
+https://en.wikipedia.org/wiki/Transport_Layer_Security
+
+OpenSSL 1.0.1 (wymagane minimum)
+
+https://www.openssl.org/news/changelog.html#x31
+
+cURL 7.34.0
+
+https://curl.haxx.se/docs/manpage.html#--tlsv12
+
+Możliwe kody błędów
+ErrorCode	Opis
+err00	Nieprawidłowe wywołanie skryptu
+err01	Nie uzyskano od sklepu potwierdzenia odebrania odpowiedzi autoryzacyjnej
+err02	Nie uzyskano odpowiedzi autoryzacyjnej
+err03	To zapytanie było już przetwarzane
+err04	Zapytanie autoryzacyjne niekompletne lub niepoprawne
+err05	Nie udało się odczytać konfiguracji sklepu internetowego
+err06	Nieudany zapis zapytania autoryzacyjnego
+err07	Inna osoba dokonuje płatności
+err08	Nieustalony status połączenia ze sklepem.
+err09	Przekroczono dozwoloną liczbę poprawek danych.
+err10	Nieprawidłowa kwota transakcji!
+err49	Zbyt wysoki wynik oceny ryzyka transakcji.
+err51	Nieprawidłowe wywołanie strony
+err52	Błędna informacja zwrotna o sesji!
+err53	Błąd transakcji !
+err54	Niezgodność kwoty transakcji!
+err55	Nieprawidłowy kod odpowiedzi!
+err56	Nieprawidłowa karta
+err57	Niezgodność flagi TEST!
+err58	Nieprawidłowy numer sekwencji!
+err59	Nieprawidłowa waluta transakcji!
+err101	Błąd wywołania strony W żądaniu transakcji brakuje któregoś z wymaganych parametrów lub pojawiła się niedopuszczalna wartość.
+err102	Minął czas na dokonanie transakcji
+err103	Nieprawidłowa kwota przelewu
+err104	Transakcja oczekuje na potwierdzenie.
+err105	Transakcja dokonana po dopuszczalnym czasie
+err161	Żądanie transakcji przerwane przez użytkownika Klient przerwał procedurę płatności wybierając przycisk "Powrót" na stronie wyboru formy płatności.
+err162	Żądanie transakcji przerwane przez użytkownika Klient przerwał procedurę płatności wybierając przycisk "Rezygnuj" na stronie z instrukcją płatności.
+Przypadki użycia
+Jak wyświetlić w sklepie pełen wybór metod płatności?
+Aby uprościć proces płatności, możliwe jest przeniesienie wyboru formy płatności przez klienta już na etapie składania zamówienia w sklepie. Jeżeli dodatkowo w sklepie klient zaakceptuje warunki regulaminu Przelewy24 (w żądaniu należy ustawić regulationAccept = true), zostanie on po kliknięciu przycisku „zapłać”, przeniesiony bezpośrednio ze strony sklepu do banku / formularza kart płatniczych. Na stronie sklepu należy umieścić i wyświetlić klientowi następującą treść: „Oświadczam, że zapoznałem się z regulaminem i obowiązkiem informacyjnym serwisu Przelewy24”. Pod słowem regulamin i obowiązek informacyjny musi być link do stron z tymi dokumentami. Checkbox nie może być odgórnie zaznaczony.
+
+Aby pobrać liste płatności, skorzystaj z metody PaymentMethods, opisanej w Dodatkowych Usługach.Payment Methods
+Pobraną listę można w dowolny sposób zaprezentować na swojej stronie.
+
+Jak przekierować klienta do konkretnej metody płatności?
+W celu przekierowania klienta bezpośrednio do wybranej metody płatności, należy przekazać identyfikator danej metody w polu method w żądaniu rejestracji transakcji. Dla przykładu, przy przekierowaniu do metody mTransfer, żądanie wygląda w ten sposób:
+
+    {
+      "merchantId": {{merchantId}},
+      "posId": {{posId}},
+      "sessionId": "{{sessionId}}",
+      "amount": {{amount}},
+      "currency": "{{currency}}",
+      "description": "{{description}}",
+      "email": "{{email}}",
+      "country": "PL",
+      "language": "pl",
+      "method": {{method}},
+      "urlReturn": "{{urlReturn}}",
+      "sign": "{{sign}}",
+    }
+Jak ograniczyć klientowi czas dostępny na zrealizowanie płatności?
+W zależności od specyfiki danego systemu, może zachodzić potrzeba ograniczenia czasu, jaki klient ma na zrealizowanie płatności. Do sterowania tym elementem służy parametr timeLimit. Ustawienie tego parametru na wartości z zakresu 1 - 99 określi limit czasu w minutach. Ustawienie parametru na 0 oznacza brak limitu.
+
+Jak umożliwić płynny powrót klienta do sklepu, bez konieczności oczekiwania na synchroniczne potwierdzenie płatności?
+W przypadku niektórych metod płatności, w szczególności e-przelewów, wykonana płatność zostaje potwierdzona w ciągu kilku minut. Istnieje możliwość "pozostawienia" klienta w serwisie transakcyjnym w celu oczekiwania na wynik transakcji i przekierowania go z powrotem do sklepu dopiero po otrzymaniu potwierdzenia (w ten sposób sklep będzie już posiadał potwierdzenie płatności) lub można od razu przekierować klienta do sklepu, bez oczekiwania na wynik transakcji. Wybór jednego z dwóch wariantów jest sterowany parametrem waitForResult. Wariant pierwszy wymaga ustawienia tego parametru na "true", wariant drugi na "false".
+
+Jak zrealizować zwrot transakcji do klienta?
+Realizacja zwrotów, jak wszystkie inne usługi w Przelewy24 jest w pełni automatyczna i realizowana jest poprzez narzędzie w panelu administracyjnym Przelewy24 lub przez metodę transaction/refund.
+
+Do jednej transakcji można zlecić wiele żądań zwrotu, jednak sumaryczna wartość zwrotów nie może przekroczyć pierwotnej wartości transakcji.
+
+Czy po wygaśnięciu sesji klient może dokończyć proces płatności?
+W sytuacji, gdy klient porzuci proces płatności, np. po przejściu na stronę banku, aby ułatwić mu dokończenie transakcji system Przelewy24 oferuje możliwość automatycznego wysłania do klienta maila z linkiem do dokończenia rozpoczętego procesu. Jeżeli klient skorzysta z tej opcji z punktu widzenia sklepu nie będzie różniło się to niczym od transakcji zrealizowanej w trybie on-line.
+
+Aby włączyć taką funkcjonalność należy skontaktować się z opiekunem handlowym poprzez formularz kontaktowy.
+
+Definicje
+CVV – kod zabezpieczający karty.
+
+Cyclic Redundancy Check (CRC) – unikatowy klucz (String) otrzymany od Przelewy24 służący do generowania przesyłanej sumy kontrolnej.
+
+Dynamic Currency Conversion (DCC) – proces, w którym kwota transakcji jest przeliczana na walutę karty płatnika.
+
+Merchant – firma lub osoba prywatna korzystająca z serwisu Przelewy24.
+
+Session ID – unikalny identyfikator służący do zidentyfikowania pojedynczej transakcji w systemie partnera.
+
+Web Service – endpoint, protokół, standard struktury informacji stosowany do wymiany danych między systemami.
+
+Materiały graficzne
+P24 logo i bannery dostępne sa pod adresem: https://www.przelewy24.pl/do-pobrania#materialy-graficzne
+
+Obsługa transakcji API
+Rejestracja transakcji
+Authorizations:
+basicAuth
+Request Body schema: application/json
+required
+Przed wysłaniem żądania transakcji należy zapisać jej dane do lokalnej bazy danych sprzedawcy. W szczególności należy zachować informacje o identyfikatorze sesji i kwocie transakcji.
+
+
+Przekierowanie do panelu transakcyjnego
+Adres URL https://secure.przelewy24.pl/trnRequest/{TOKEN}
+
+gdzie {TOKEN} został pobrany w wyniku zarejestrowania transakcji.
+
+Po poprawnej transakcji zostaje wywoływany adres URL przekazany w procesie rejestracji transakcji w parametrze "urlStatus". Powiadomienie następuje niezależnie od tego, czy Klient został przekierowany na "urlReturn", czy też nie. Powiadomienie zostaje wysłane tylko i wyłącznie dla poprawnej wpłaty. System nie wysyła informacji o transakcjach, które nie zostały wykonane, bądź zostały wykonane niepoprawnie. Notyfikacja wysyłana jest w formacie JSON.
+
+Zobacz JSON wyniku transakcji
+merchantId
+required
+integer
+ID Sklepu
+
+posId
+required
+integer
+ID Sklepu (domyślnie ID Sprzedawcy)
+
+sessionId
+required
+string <= 100 characters
+Unikalny identyfikator z systemu sprzedawcy
+
+amount
+required
+integer
+Kwota transakcji wyrażona w groszach, np. 1.23 PLN = 123
+
+currency
+required
+string <= 3 characters
+Wartość zgodna z ISO np. PLN
+
+description
+required
+string <= 1024 characters
+Opis transakcji
+
+email
+required
+string <= 50 characters
+Email Klienta
+
+client	
+string <= 40 characters
+Imię i nazwisko Klienta
+
+address	
+string <= 80 characters
+Adres Klienta
+
+zip	
+string <= 10 characters
+Kod pocztowy Klienta
+
+city	
+string <= 50 characters
+Miasto Klienta
+
+country
+required
+string <= 2 characters
+Default: "PL"
+Kody krajów zgodnie ISO, np. PL, DE itp
+
+phone	
+string <= 12 characters
+Telefon klienta w formacie 481321132123
+
+language
+required
+string <= 2 characters
+Default: "pl"
+Jeden z następujących kodów krajów zgodnie z normą ISO 639-1: bg, cs, de, en, es, fr, hr, hu, it, nl, pl, pt, se, sk, ro
+
+method	
+integer
+Identyfikator metody płatności. Lista metod płatności widoczna w panelu lub dostępna przez API
+
+urlReturn
+required
+string <= 250 characters
+Adres powrotny po zakończeniu transakcji
+
+urlStatus	
+string <= 250 characters
+Adres do przekazania statusu transakcji
+
+timeLimit	
+integer
+Limit czasu na wykonanie transakcji, 0 - brak limitu, maks. 99 (w minutach)
+
+channel	
+integer
+Enum: 1 2 4 8 16 32 64 128 256 4096 8192 16384
+1 - karty + ApplePay + GooglePay, 2 - przelewy, 4 - przelew tradycyjny, 8 - N/A, 16 - wszystkie 24/7 – udostępnia wszystkie metody płatności, 32 - użyj przedpłatę, 64 – tylko metody pay-by-link, 128 – formy ratalne, 256 – wallety, 4096 - karty, 8192 - blik, 16384 - wszystkie metody z wyłączeniem blika
+
+Aby uruchomić poszczególne kanały, nalezy zsumowac ich wartości.
+
+Przykład: przelewy i przelew tradycyjny: channel=6
+
+waitForResult	
+boolean
+Parametr determinuje, czy użytkownik zostanie przekierowany z powrotem do sklepu od razu po wykonaniu płatności, czy dopiero, gdy dotrze wynik transakcji (z potwierdzeniem płatności). Przeczytaj więcej
+
+regulationAccept	
+boolean
+Default: false
+Akceptacja regulaminu Przelewy24:
+false – wyświetl zgodę na stronie p24 (domyślna),
+true – akceptacja dokonana, nie wyświetlaj.
+W przypadku wysyłania parametru „true”, na stronie Partnera musi znaleźć się zgoda o treści: „Oświadczam, że zapoznałem się z regulaminem i obowiązkiem informacyjnym serwisu Przelewy24”.
+Pod słowami regulamin i obowiązek informacyjny musi być link do stron z tymi dokumentami. Checkbox nie może być odgórnie zaznaczony.
+
+shipping	
+integer
+Koszt dostawy/wysyłki
+
+transferLabel	
+string <= 20 characters
+Opis pojawiający się w tytule przelewu. Dozwolone znaki to [a-z A-Z 0-9 ęółśążźćńĘÓŁŚĄŻŹĆŃ . /\ :- ]
+
+mobileLib	
+integer
+Value: 1
+Przesłanie tego parametru jest niezbędne przy wykorzystaniu bibliotek SDK. W mobileLib należy przesłać wartość 1, natomiast w parametrze sdkVersion należy wskazać wersję biblioteki, z której chcemy skorzystać.
+
+sdkVersion	
+string <= 10 characters
+Wersja bibliotek mobilnych. Określa czy transakcja jest mobilna.
+
+sign
+required
+string <= 100 characters
+
+Suma kontrolna parametrów:
+{"sessionId":"str","merchantId":int,"amount":int,"currency":"str","crc":"str"}
+
+liczona z użyciem sha384
+
+WAŻNE!:
+przy wykorzystaniu funkcji json_encode należy dodać następujące atrybuty
+"JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES"
+
+encoding	
+string <= 15 characters
+System kodowania przesyłanych znaków: ISO-8859-2, UTF-8, Windows-1250
+
+methodRefId	
+string <= 250 characters
+Specjalny parametr wymagany dla niektórych procesów płatności, np. BLIK i Karty one-click.
+
+cart	
+Array of objects (CartParameters)
+Koszyk
+
+additional	
+object
+Zbiór dodatkowych danych nt. transakcji i płatnika
+
+Responses
+200 successful operation
+400 bad request
+401 not authorized
+
+post
+/api/v1/transaction/register
+
+
+Request samples
+Payload
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"merchantId": 0,
+"posId": 0,
+"sessionId": "string",
+"amount": 0,
+"currency": "str",
+"description": "string",
+"email": "string",
+"client": "string",
+"address": "string",
+"zip": "string",
+"city": "string",
+"country": "PL",
+"phone": "string",
+"language": "pl",
+"method": 0,
+"urlReturn": "string",
+"urlStatus": "string",
+"timeLimit": 0,
+"channel": 1,
+"waitForResult": true,
+"regulationAccept": false,
+"shipping": 0,
+"transferLabel": "string",
+"mobileLib": 1,
+"sdkVersion": "string",
+"sign": "string",
+"encoding": "string",
+"methodRefId": "string",
+"cart": [
+{}
+],
+"additional": {
+"shipping": {},
+"PSU": {}
+}
+}
+Response samples
+200400401
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"token": "string"
+},
+"responseCode": 0
+}
+Weryfikacja transakcji
+Authorizations:
+basicAuth
+Request Body schema: application/json
+Po odebraniu powiadomienia, system Partnera powinien wykonać dodatkową operację mającą na celu potwierdzenie przyjęcia wpłaty oraz potwierdzenie autentyczności powiadomienia. Konieczne jest wykonanie weryfikacji transakcji za pomocą metody transaction/verify.
+
+Ważne! Transakcja zostaje uznana za potwierdzoną po jej weryfikacji. Jeżeli klient dokona transakcji, wróci na stronę sprzedawcy, ale sprzedawca nie zweryfikuje transakcji, dana kwota nie zostanie przekazana sprzedawcy ani uwzględniona w rozliczeniach. Pozostanie ona do dyspozycji klienta w formie przedpłaty.
+
+merchantId
+required
+integer
+ID Sklepu
+
+posId
+required
+integer
+ID Sklepu (domyślnie ID Sprzedawcy)
+
+sessionId
+required
+string <= 100 characters
+Unikalny identyfikator z systemu sprzedawcy
+
+amount
+required
+integer
+Kwota transakcji wyrażona w groszach, np. 1.23 PLN = 123
+
+currency
+required
+string <= 3 characters
+Default: "PLN"
+Waluta
+
+orderId
+required
+integer <int64>
+Id zamówienia z systemu Przelewy24
+
+sign
+required
+string
+Suma kontrolna parametrów:
+{"sessionId":"str","orderId":int,"amount":int,"currency":"str","crc":"str"}
+
+liczona z użyciem sha384
+
+WAŻNE!:
+przy wykorzystaniu funkcji json_encode należy dodać następujące atrybuty
+"JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES"
+
+Responses
+200 successful operation
+400 bad request
+401 not authorized
+
+put
+/api/v1/transaction/verify
+
+
+Request samples
+Payload
+Content type
+application/json
+
+Copy
+{
+"merchantId": 0,
+"posId": 0,
+"sessionId": "string",
+"amount": 0,
+"currency": "PLN",
+"orderId": 0,
+"sign": "string"
+}
+Response samples
+200400401
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"status": "success"
+},
+"responseCode": 0
+}
+Notyfikacja
+Wynik transakcji
+merchantId	
+integer
+ID Merchanta
+
+posId	
+integer
+ID Sklepu (domyślnie ID Merchanta)
+
+sessionId	
+string <= 100 characters
+Unikalny identyfikator z systemu sprzedawcy
+
+amount	
+integer
+Wartość opłaconej transakcji wyrażona w groszach, np. 1.23 PLN = 123
+
+originAmount	
+integer
+Wartość transakcji podczas rejestracji tokenu wyrażona w groszach, np. 1.23 PLN = 123
+
+currency	
+string <= 3 characters
+Default: "PLN"
+Wartość zgodna z ISO np. PLN
+
+orderId	
+integer <int64>
+Numer transakcji przypisany przez P24
+
+methodId	
+integer
+Metoda płatności, z której skorzystał klient
+
+statement	
+string
+Tytuł płatności
+
+sign	
+string
+
+Suma kontrolna parametrów:
+{"merchantId":int,"posId":int,"sessionId":"string","amount":int,"originAmount":int,"currency":"string", "orderId":int,"methodId":int,"statement":"string","crc":"string"}
+
+liczona z użyciem sha384
+
+WAŻNE!:
+przy wykorzystaniu funkcji json_encode należy dodać następujące atrybuty
+"JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES"
+
+
+Copy
+{
+"merchantId": 0,
+"posId": 0,
+"sessionId": "string",
+"amount": 0,
+"originAmount": 0,
+"currency": "PLN",
+"orderId": 0,
+"methodId": 0,
+"statement": "string",
+"sign": "string"
+}
+Automatyczne przekazywanie wyniku transakcji
+W sytuacji, gdy pierwsze powiadomienie o wyniku transakcji nie zostanie poprawnie odebrane przez system sprzedawcy (nie wykona on prawidłowej weryfikacji), system P24 wyśle kolejne powiadomienia. Powiadomienia zostaną wysłane po 3, 5, 15, 30, 60, 150 i 450 minutach (+/- 5 min.), chyba że wcześniej nastąpi prawidłowa weryfikacja transakcji.
+
+Parametry POST są takie same, jak w przypadku pierwszego powiadomienia.
+Wyliczanie sumy kontrolnej
+Rejestracja transakcji
+Poniżej znajdują się fragmenty kodu dla 4 języków programowania, prezentujące prawidłowe wyliczanie sumy kontrolnej sign dla żądania rejestracji transakcji.
+
+Aby prawidłowo wyliczać sign, należy pamiętać o poprawności danych (parametry merchantId oraz crc to wartości pobierane z panelu Przelewy24, a pozostałe wartości są ustalane indywidualnie dla każdej transakcji przez sprzedawcę) oraz o rozróżnieniu typów zmiennych (merchantId oraz amount to integer, pozostałe to string).
+
+WAŻNE!
+Należy pamiętać, że składowe sumy kontrolnej sign różnią się dla poszczególnych żądań wysyłanych lub odbieranych z Przelewy24. Wartość parametru sign, którą należy przekazać w żądaniu rejestracji transakcji, różni się od wartości sign przekazanej dla żądania weryfikacji transakcji.
+
+Przykłady wyliczania sumy kontrolnej sign dla żądania rejestracji transakcji:
+PHP
+JavaScript
+Java
+Python
+$params = [
+    'sessionId' => 'unikalne-id-sesji', // Tutaj należy umieścić unikalne wygenerowane ID sesji
+    'merchantId' => 999999, // Tutaj należy umieścić ID Sprzedawcy z panelu Przelewy24
+    'amount' => 1234, // Tutaj należy umieścić kwotę transakcji w groszach, 1234 oznacza 12,34 PLN
+    'currency' => 'PLN', // Tutaj należy umieścić walutę transakcji
+    'crc' => 'crc-z-panelu-p24', // Tutaj należy umieścić pobrany klucz CRC z panelu Przelewy24
+];
+// Sklejanie parametrów w ciąg JSON
+$combinedString = json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+// Hashowanie za pomocą SHA-384
+$hash = hash('sha384', $combinedString);
+echo 'Suma kontrolna parametrów wynosi: ' . $hash;
+Weryfikacja transakcji
+Należy zwrócić szczególną uwagę przy implementacji kodu do wyliczania sumy kontrolnej dla żądania weryfikacji transakcji i nie tylko. Żądanie weryfikacji transakcji w odróżnieniu do żądania rejestracji transakcji zawiera jeden nowy parametr, czyli orderId.
+
+Parametr orderId jest parametrem ustalanym przez Przelewy24 i jest to numeryczny identyfikator transakcji (typu integer). Wartość orderId można przechwycić z notyfikacji, która jest wysyłana na adres urlStatus.
+
+Przykłady wyliczania sumy kontrolnej sign dla żądania weryfikacji transakcji:
+PHP
+JavaScript
+Java
+Python
+$params = [
+    'sessionId' => 'unikalne-id-sesji', // Tutaj należy umieścić unikalne wygenerowane ID sesji
+    'orderId' => 999999, // Tutaj należy umieścić numeryczne ID transakcji odebrany np. z notyfikacji
+    'amount' => 1234, // Tutaj należy umieścić kwotę transakcji w groszach, 1234 oznacza 12,34 PLN
+    'currency' => 'PLN', // Tutaj należy umieścić walutę transakcji
+    'crc' => 'crc-z-panelu-p24', // Tutaj należy umieścić pobrany klucz CRC z panelu Przelewy24
+];
+// Sklejanie parametrów w ciąg JSON
+$combinedString = json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+// Hashowanie za pomocą SHA-384
+$hash = hash('sha384', $combinedString);
+echo 'Suma kontrolna parametrów wynosi: ' . $hash;
+Kalkulator sumy kontrolnej
+
+Dodatkowa funkcjonalność API
+Test Access
+Test połączenia. REST korzysta ze standardu autoryzacji "basicAuth", gdzie login i hasło to, odpowiednio, ID konta w P24 i klucz API (klucz do raportów) uzyskany z sekcji “Moje dane”.
+
+Authorizations:
+basicAuth
+Responses
+200 OK
+400 Bad Request
+401 Unauthorized
+
+get
+/api/v1/testAccess
+
+
+Response samples
+200400401
+Content type
+application/json
+
+Copy
+{
+"data": true,
+"error": "string"
+}
+Metody płatności
+Metoda zwraca listę dostępnych metod płatności.
+
+Authorizations:
+basicAuth
+path Parameters
+lang
+required
+string
+Enum: "pl" "en"
+Kod wybranego języka. Dostępne: pl , en
+
+query Parameters
+amount	
+integer
+Kwota transakcji.
+Parametr pozwala zweryfikować czy dana metoda płatności jest dostępna dla konkretnej kwoty.
+
+currency	
+string
+Default: "PLN"
+Wartość waluty zgodna z ISO np. PLN
+
+Responses
+200 Lista metod płatności
+403 Not authorized.
+404 Payment methods not found
+
+get
+/api/v1/payment/methods/{lang}?amount=150&currency=PLN
+
+
+Response samples
+200403404
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": [
+{}
+],
+"agreements": [ ],
+"responseCode": ""
+}
+Zwrot transakcji
+Zwróć jedną lub wiele transakcji.
+
+Authorizations:
+basicAuth
+Request Body schema: application/json
+required
+Parametr 'refunds' może zawierać wiele zwrotów.
+
+requestId
+required
+string <= 45 characters
+Indywidualne ID żądania
+
+refunds
+required
+Array of objects (RefundRequestArrayDataBasic)
+refundsUuid
+required
+string <= 35 characters
+Indywidualne ID dla poprawnego żądania zwrotu w systemie Merchanta
+
+urlStatus	
+string
+Adres do przekazania danych zwrotów
+
+Responses
+201 Created. Parametr 'data' zawiera wszystkie zwroty.
+400 Invalid input data
+401 Not authorized
+409 Conflict
+500 Unknown error
+
+post
+/api/v1/transaction/refund
+
+
+Request samples
+Payload
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"requestId": "string",
+"refunds": [
+{}
+],
+"refundsUuid": "string",
+"urlStatus": "string"
+}
+Response samples
+201400401409500
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": [
+{}
+],
+"responseCode": 0
+}
+Rejestracja transakcji offline
+Ta metoda umożliwia rejestrowanie płatności offline. Aby skorzystać z tej metody, w pierwszej kolejności trzeba zarejestrować standardową transakcję płatniczą z użyciem metody transaction/register.
+
+Dodatkowo można kontrolować, w którym banku zostanie wykonana płatność, za pomocą parametru method.
+
+Authorizations:
+basicAuth
+Request Body schema: 
+application/json
+application/json
+required
+Input parameters.
+
+token	
+string
+Responses
+200 Successful response
+400 Invalid input data
+401 Not authorized
+409 Conflict
+500 Undefined error
+
+post
+/api/v1/transaction/registerOffline
+
+
+Request samples
+Payload
+Content type
+
+application/json
+application/json
+
+Copy
+{
+"token": "string"
+}
+Response samples
+200400401409500
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"orderId": 0,
+"sessionId": "string",
+"amount": 0,
+"statement": "string",
+"iban": "string",
+"ibanOwner": "string",
+"ibanOwnerAddress": "string"
+},
+"responseCode": 0
+}
+Split Payment
+Obciążanie płatności w trybie Split Payment odbywa się z wykorzystaniem uprzednio zarejestrowanego tokenu w procesie analogicznym do transaction/register. Podczas rejestracji tokenu, należy dodać obiekt splitPaymentDetails, charakterystyczny dla tej formy wykonania transakcji.
+
+Authorizations:
+basicAuth
+Request Body schema: application/json
+Array
+
+merchantId
+required
+integer
+ID Merchanta
+
+posId
+required
+integer
+ID Sklepu (domyślnie ID merchanta)
+
+sessionId
+required
+string <= 100 characters
+Unikalny identyfikator z systemu sprzedawcy
+
+amount
+required
+integer
+Kwota transakcji wyrażona w groszach, np. 1.23 PLN = 123
+
+currency
+required
+string <= 3 characters
+Default: "PLN"
+Wartość zgodna z ISO np. PLN
+
+description
+required
+string <= 1024 characters
+Opis transakcji
+
+email
+required
+string <= 50 characters
+Email Klienta
+
+client	
+string <= 40 characters
+Imię i nazwisko Klienta
+
+address	
+string <= 80 characters
+Adres Klienta
+
+zip	
+string <= 10 characters
+Kod pocztowy Klienta
+
+city	
+string <= 50 characters
+Miasto Klienta
+
+country
+required
+string <= 2 characters
+Default: "PL"
+Kody krajów zgodnie ISO, np. PL, DE itp.
+
+phone	
+string <= 12 characters
+Telefon klienta w formacie: 481321132123
+
+language
+required
+string <= 2 characters
+Default: "pl"
+Jeden z następujących kodów krajów zgodnie z normą ISO 639-1: bg, cs, de, en, es, fr, hr, hu, it, nl, pl, pt, se, sk, ro
+
+method	
+integer
+Identyfikator metody płatności. Lista metod płatności widoczna w panelu lub dostępna przez API
+
+urlReturn
+required
+string <= 250 characters
+Adres powrotny po zakończeniu transakcji
+
+urlStatus	
+string <= 250 characters
+Adres do przekazania statusu transakcji
+
+timeLimit	
+integer
+Limit czasu na wykonanie transakcji, 0 - brak limitu, maks. 99 (w minutach)
+
+channel	
+integer
+Enum: "1" "2" "4" "8" "16" "32" "64" "128" "256" "4096"
+1 - karty + ApplePay + GooglePay, 2 - przelew, 4 - tradycyjny przelew, 8 - N/A, 16 - wszystkie 24/7 – udostępnia wszystkie metody płatności, 32 - uzyj przedpłaty, 64 – tylko metody pay-by-link, 128 – formy ratalne, 256 – wallety, 4096 - karty 8192 - blik 16384 - wszystkie metody z wyłączeniem blika
+
+Aby uruchomić poszczególne kanały, nalezy zsumowac ich wartości
+
+Przykład: przelewy i przelew tradycyjny: channel=6
+
+shipping	
+integer
+Koszt dostawy/wysyłki
+
+transferLabel	
+string <= 20 characters
+Opis pojawiający się w tytule przelewu. Dozwolone znaki to [a-z A-Z 0-9 ęółśążźćńĘÓŁŚĄŻŹĆŃ . /\ :- ]
+
+sdkVersion	
+string <= 10 characters
+Wersja bibliotek mobilnych. Określa czy transakcja jest mobilna.
+
+sign
+required
+string <= 100 characters
+
+Suma kontrolna parametrów:
+{"sessionId":"string","merchantId":int,"amount":int,"currency":"string","crc":"string"}
+
+liczona z użyciem sha384
+
+WAŻNE!:
+przy wykorzystaniu funkcji json_encode należy dodać następujące atrybuty
+"JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES"
+
+encoding	
+string <= 15 characters
+System kodowania przesyłanych znaków: ISO-8859-2, UTF-8, Windows-1250
+
+cart	
+Array of objects (CartParameters)
+Koszyk
+
+methodRefId	
+string <= 250 characters
+Specjalny parametr wymagany dla niektórych procesów płatności, np. BLIK i Karty one-click.
+
+splitPaymentDetails
+required
+object
+Responses
+200 Successful operation
+400 Bad request
+401 Not authorized
+
+post
+/api/v1/transaction/register/splitpayment
+
+
+Request samples
+Payload
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"merchantId": 0,
+"posId": 0,
+"sessionId": "string",
+"amount": 0,
+"currency": "PLN",
+"description": "string",
+"email": "string",
+"client": "string",
+"address": "string",
+"zip": "string",
+"city": "string",
+"country": "PL",
+"phone": "string",
+"language": "pl",
+"method": 0,
+"urlReturn": "string",
+"urlStatus": "string",
+"timeLimit": 0,
+"channel": "1",
+"shipping": 0,
+"transferLabel": "string",
+"sdkVersion": "string",
+"sign": "string",
+"encoding": "string",
+"cart": [
+{}
+],
+"methodRefId": "string",
+"splitPaymentDetails": {
+"vatAmount": 0,
+"invoiceNumber": "string",
+"nip": "string",
+"iban": "string"
+}
+}
+Response samples
+200400401
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"token": "string"
+},
+"responseCode": 0
+}
+Dane zwrotu dla OrderID
+Uzyskaj szczegóły zwrotu na podstawie ID zamówienia.
+
+Authorizations:
+basicAuth
+path Parameters
+orderId
+required
+any
+Id zamówienia dla istniejącego zwrotu
+
+Responses
+200 Żądanie zostało pomyślnie przetworzone. Parametr 'data' zawiera dane zwrotu.
+401 Not authorized
+404 Refund with given Order Id not found
+500 Undefined error
+
+get
+/api/v1/refund/by/orderId/{orderId}
+
+
+Response samples
+200401404500
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"orderId": 0,
+"sessionId": "string",
+"amount": 0,
+"currency": "string",
+"refunds": []
+},
+"responseCode": 0
+}
+Dane o transakcji poprzez sessionID
+Metoda zwraca informacje o transakcji na podstawie pola “sessionId”.
+
+Authorizations:
+basicAuth
+path Parameters
+sessionId
+required
+any
+Unikalny identyfikator transakcji z systemu sprzedawcy
+
+Responses
+200 OK
+400 Invalid input data
+401 Incorrect authentication
+404 Transaction not exist
+
+get
+/api/v1/transaction/by/sessionId/{sessionId}
+
+
+Response samples
+200400401404
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"statement": "string",
+"orderId": 0,
+"sessionId": "string",
+"status": 0,
+"amount": 0,
+"currency": "PLN",
+"date": "string",
+"dateOfTransaction": "string",
+"clientEmail": "string",
+"accountMD5": "string",
+"paymentMethod": 0,
+"description": "string",
+"clientName": "string",
+"clientAddress": "string",
+"clientCity": "string",
+"clientPostcode": "string",
+"batchId": 0,
+"fee": "0"
+},
+"responseCode": 0
+}
+Notyfikacja o zwrocie
+Wynik zwrotu
+Notyfikacja o zwrocie wysyłana jest w sposób asynchroniczny na adres URL podany w żądaniu wykonania zwrotu transaction/refund w parametrze urlStatus. Jeśli nie zostanie przekazana wartość w urlStatus, to notyfikacja zostanie przesłana na domyślny adres ustawiony w panelu P24 (o ile taki adres został skonfigurowany).
+
+Aby skonfigurować domyślny adres URL w panelu, proszę o kontakt z Biurem Obsługi Klienta poprzez formularz kontaktowy
+
+orderId	
+integer <int64>
+ID zwracanej transakcji w systemie P24
+
+sessionId	
+string
+ID zwracanej transakcji w systemie Partnera
+
+merchantId	
+integer
+ID Merchanta, na rzecz którego został wykonany zwrot
+
+requestId	
+string
+ID żądania zwrotu przekazane w transaction/refund
+
+refundsUuid	
+string
+ID żądania zwrotu w systemie Partnera przekazane w transaction/refund
+
+amount	
+integer
+Wartość kwoty wykonanego zwrotu wyrażona w groszach
+
+currency	
+string
+Waluta wykonanego zwrotu
+
+timestamp	
+integer
+Czas wysłania notyfikacji w formacie UNIX timestamp
+
+status	
+integer
+Enum: 0 1
+Status zrealizowanego zwrotu. 0 - zrealizowany, 1 - odrzucony
+
+sign	
+string
+
+Suma kontrolna parametrów:
+{"orderId":int,"sessionId":"str","refundsUuid":"str","merchantId":int,"amount":int,
+"currency":"str","status":int,"crc":"str"}
+
+liczona z użyciem sha384
+
+WAŻNE!:
+przy wykorzystaniu funkcji json_encode należy dodać następujące atrybuty
+"JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES"
+
+
+Copy
+{
+"orderId": 0,
+"sessionId": "string",
+"merchantId": 0,
+"requestId": "string",
+"refundsUuid": "string",
+"amount": 0,
+"currency": "PLN",
+"timestamp": 0,
+"status": 0,
+"sign": "string"
+}
+Przypadki użycia metod płatności
+PayPo
+Metoda płatności PayPo nie jest domyślnie uruchomioną formą płatności i jest dostępna po kontakcie z naszym działem Merchant Success poprzez formularz kontaktowy.
+
+Po uruchomieniu usługi na Państwa koncie, aby prawidłowo zarejestrować transakcję należy w żądaniu rejestracji transakcji przekazać dodatkowe parametry, które domyślnie są opcjonalne: client, city, zip, address.
+
+Kwota przesyłana w żądaniu obecnie minimalnie wynosi 5zł, jej maksymalna wartość 5 000zł.
+
+Płatności PayPo wypłacane są po otrzymaniu środków od operatora. domyślnie merchant otrzyma środki do 5 dni roboczych.
+
+PayPal
+Aby metoda PayPal działała poprawnie na Państwa stronie musi zostać ona uruchomiona dla konta po stronie Przelewy24. W celu uruchomienia metody PayPal prosimy o kontakt wykorzystując adres mailowy przypisany w panelu Przelewy24 do konta poprzez formularz kontaktowy.
+
+Aby poprawnie wykonać transakcję dla wskazanej metody konieczne jest przesłanie pełnego obiektu cart z wymaganymi parametrami wysłanymi w żądaniu rejestracji transakcji.
+
+Karty API
+Card info
+Metoda zwraca informację na temat danej karty płatniczej na podstawie poprzedniej płatności. Włączając numer referencyjny do obciążenia kart bez autoryzacji CVV.
+
+Authorizations:
+basicAuth
+path Parameters
+orderId
+required
+integer <int64>
+Unikalne ID zamówienia.
+
+Responses
+200 Success
+400 Wrong input data
+403 Not authorized
+404 Transaction not exists
+
+get
+/api/v1/card/info/{orderId}
+
+
+Response samples
+200400403404
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"refId": "string",
+"bin": 0,
+"mask": "string",
+"cardType": "string",
+"cardDate": "string",
+"hash": "string"
+},
+"responseCode": 0
+}
+Charge card with 3DS
+Metoda umożliwia obciążenie karty na podstawie numeru referencyjnego.
+
+Authorizations:
+basicAuth
+Request Body schema: application/json
+token	
+string
+Token zarejestrowany metodą transaction/register. Numer referencyjny karty musi zostać przekazany w trakcie rejestracji w parametrze methodRefId
+
+Responses
+200 The charge card command has been accepted - notification will be send on success.
+201 The card payment requires 3DS redirection
+400 Invalid input data
+401 Not authorized
+
+post
+/api/v1/card/chargeWith3ds
+
+
+Request samples
+Payload
+Content type
+application/json
+
+Copy
+{
+"token": "string"
+}
+Response samples
+200201400401
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"orderId": 0,
+"redirectUrl": "string"
+},
+"responseCode": 0
+}
+Charge card
+Metoda umożliwia obciążenie karty na podstawie numeru referencyjnego.
+
+Authorizations:
+basicAuth
+Request Body schema: application/json
+token	
+string
+Token zarejestrowany metodą transaction/register. Numer referencyjny karty musi zostać przekazany w trakcie rejestracji w parametrze methodRefId
+
+Responses
+200 The charge card command has been accepted - notification will be send on success.
+400 Invalid input data
+401 Not authorized
+
+post
+/api/v1/card/charge
+
+
+Request samples
+Payload
+Content type
+application/json
+
+Copy
+{
+"token": "string"
+}
+Response samples
+200400401
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"orderId": 0
+},
+"responseCode": 0
+}
+Card Payment
+Metoda służy do obciążenia karty klienta. Metoda przesyła dane kartowe bezpośrednio. Uruchomienie metody wymaga posiadania certyfikatu PCI DSS przez Sprzedawcę.
+
+Authorizations:
+basicAuth
+Request Body schema: application/json
+transactionToken
+required
+string
+Token pozyskany w procesie rejestracji
+
+cardNumber
+required
+string <= 16 characters
+Numer karty
+
+cardDate
+required
+string
+Data ważności w formacie MMYYYY
+
+cvv
+required
+string
+Card CVV
+
+clientName
+required
+string
+Imię i nazwisko posiadacza karty
+
+Responses
+200 The card payment has been succesed.
+201 The card payment requires 3DS redirection.
+400 Invalid input data
+401 Not authorized
+409 Conflict
+
+post
+/api/v1/card/pay
+
+
+Request samples
+Payload
+Content type
+application/json
+
+Copy
+{
+"transactionToken": "string",
+"cardNumber": "string",
+"cardDate": "string",
+"cvv": "string",
+"clientName": "string"
+}
+Response samples
+200201400401409
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"orderId": 0,
+"redirectUrl": "string"
+},
+"responseCode": 0
+}
+Dodatkowa notyfikacja kartowa
+Notyfikacja jest wysyłana na adres z parametru "urlCardPaymentNotification", który należy dodać do metody transaction/register lub na stały zapisany adres w konfiguracji konta P24. Nadrzędna jest wartość z tokenu, jeżeli została przesłana.
+
+Parametry dla pozytywnej autoryzacji
+
+amount	
+integer
+Kwota transakcji
+
+3ds	
+boolean
+Czy podczas płatności był wykonywany 3ds?
+
+method	
+integer
+ID metody płatności
+
+refId	
+string
+Numer referencyjny karty
+
+orderId	
+integer <int64>
+Identyfikator transakcji nadany przez P24 dla dla próbkowania 1-click
+
+sessionId	
+string
+ID sesji merchanta
+
+bin	
+integer
+Numer BIN karty
+
+maskedCCNumber	
+string
+Numer maskowany karty
+
+ccExp	
+string
+Data ważności karty w formacie MMYYYY np. 122020
+
+hash	
+string
+Unikatowy hash karty – unikalny dla każdej karty
+
+cardCountry	
+string
+Kod kraju zgodny z ISO, np. PL
+
+risk	
+integer
+0 – bezpieczna, 1 – podejrzana, 2 – niebezpieczna. Wynik obliczany na podstawie narzędzia do oceny ryzyka płatności kartą.
+
+liabilityshift	
+boolean
+Liability Shift oznacza przeniesienie odpowiedzialności za transakcje oszukańcze ze sprzedawcy na wystawcę karty lub podmiot przetwarzający płatności. 1 – Tak, 0 – Nie
+
+sign	
+string
+
+Suma kontrolna parametrów:
+{"amount":int,"3ds":boolean,"method":int,"refId":"str","orderId":int,"sessionId":"str",
+"bin":int,"maskedCCNumber":"str","ccExp":"str","hash":"str",
+"cardCountry":"str","risk":int,"liabilityshift":boolean,"crc":"str"}
+
+liczona z użyciem sha384
+
+Ważne!:
+w przypadku wykorzystania funkcji json_encode, powinny zostać dodane następujące atrybuty
+"JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES"
+
+
+Copy
+{
+"amount": 0,
+"3ds": true,
+"method": 0,
+"refId": "string",
+"orderId": 0,
+"sessionId": "string",
+"bin": 0,
+"maskedCCNumber": "string",
+"ccExp": "string",
+"hash": "string",
+"cardCountry": "PL",
+"risk": 0,
+"liabilityshift": false,
+"sign": "string"
+}
+Parametry dla negatywnej autoryzacji
+
+amount	
+integer
+Kwota transakcji
+
+3ds	
+boolean
+Czy podczas płatności był wykonywany 3ds?
+
+method	
+integer
+ID metody płatności
+
+orderId	
+integer <int64>
+Identyfikator transakcji nadany przez P24 dla dla próbkowania 1-click
+
+sessionId	
+string
+ID sesji merchanta
+
+errorCode	
+string
+Kod błędu
+
+errorMessage	
+string
+Opis błędu.
+
+sign	
+string
+
+Przed wyliczeniem signa, należy przekształcić wartość parametru w taki sposób, aby znaki alfanumeryczne zostały zamienione na diaktryczne.
+
+Suma kontrolna parametrów:
+{"amount":int,"3ds":boolean,"method":int,"orderId":int,"sessionId":"str",
+"errorCode":"str","errorMessage":"str","crc":"str"}
+
+Liczona z użyciem SHA384
+
+Ważne!:
+w przypadku wykorzystania funkcji json_encode, powinny zostać dodane następujące atrybuty
+"JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES"
+
+
+Copy
+{
+"amount": 0,
+"3ds": true,
+"method": 0,
+"orderId": 0,
+"sessionId": "string",
+"errorCode": "string",
+"errorMessage": "string",
+"sign": "string"
+}
+Przypadki użycia BLIK
+Wprowadzenie
+Oprócz standardowej płatności bazującej na przekierowaniu do paymanetwall P24, na stronie Merchanta można również umieścić płatności BLIK.
+
+Jak umieścić płatności BLIK na stronie Merchanta? (BLIK level 0)
+Po zarejestrowaniu transakcji z użyciem metody transaction/register, wywołujemy metodę paymentMethod/blik/chargeByCode, z obowiązkowym wykorzystaniem parametrów “token” (zwracany w odpowiedzi z rejestracji transakcji) i “blikCode” (wpisany przez użytkownika).
+
+Blik OneClick
+
+
+
+Blik
+Co to jest płatność BLIK 1-click?
+Jak sama nazwa sugeruje, płatność pozwala na wykonanie zakupu jednym kliknięciem. Nie wymaga to przepisania kodu BLIK, jedynie proste potwierdzenie w aplikacji mobilnej jednym kliknięciem.
+
+
+Blik OneClick
+
+Jak uzyskać informacje o aliasie?
+Są dwa sposoby na uzyskanie informacji o aliasie:
+
+Pozyskanie informacji poprzez obsłużenie dodatkowej notyfikacji. (zalecane)
+W celu otrzymania aliasu dla kolejnych płatności, wywołaj metodę getAliasesByEmail.
+Metoda zwraca listę aliasów (razem z typem i statusem) utworzonych dla danego adresu w zakresie danego merchanta.
+Dla aliasów zarejestrowanych z parametrami values wywołaj metodę getAliasesByEmail{email}/custom
+
+W związku z asynchronicznym charakterem przetwarzania statusu transakcji, czas zwrócenia aktualnego statusu aliasów przez metodę getAliasesByEmail może wynieść do 60 sekund po poprawnie dokonanej transakcji.
+Jak zarejestrować alias do wykorzystania w płatnościach 1-click?
+Transakcję można przetworzyć metodą paymentMethod/blik/chargeByCode. Usługa pozwala na przypisanie indywidualnych wartości alias value i alias label w parametrach wejściowych. Jeśli w procesie rejestracji transakcji parametr “referenceRegister” = true, to żądanie rejestracji aliasu zostanie przekazane do systemu BLIK, a klient otrzyma zaproszenie, wygenerowane przez aplikacje bankową, do płatności bez kodu T6 w sklepie merchanta.
+
+Po wywołaniu tej metody, powstanie obciążenie na kwotę przekazaną w rejestracji transakcji i zostanie zarejestrowany alias w systemie P24/BLIK.
+
+Utworzony alias może być wykorzystywany do przetwarzania płatności typu OneClick.
+
+Po zarejestrowaniu aliasu, klient nie będzie proszony o wprowadzanie kodu T6 podczas następnych płatności.
+
+
+
+Blik
+
+
+
+W celu zarejestrowania innej aplikacji mobilnej w systemie BLIK, należy skorzystać z metody paymentMethod/blik/chargeByCode wraz z 6-cyfrowym kodem BLIK, wygenerowanym przez aplikację. W systemie P24 transakcja musi być zarejestrowana na ten sam adres e-mail klienta.
+
+Alias tworzony jest na podstawie adresu e-mail przekazanego w procesie rejestracji. Oznacza to, że o ile nie zostały wykorzystane parametry “aliasValue” i “aliasLabel”, to na ten sam adres e-mail może być zarejestrowany tylko jeden alias danego typu.
+
+Aby zarejestrować więcej niż jeden alias dla danego adresu e-mail, należy skorzystać z alias value i alias label. W ten sposób merchant zapewni, że aliasy są unikalne. Lista aliasów merchanta może być pozyskana za pomocą metody getAliasesByEmail. Możliwe jest rejestrowanie tego samego aliasu zdefiniowanego przez merchanta dla kilku różnych adresów e-mail. W tym przypadku metoda getAliasesByEmail zwraca ten sam alias dla każdego z adresów e-mail.
+Jak wykonać płatność 1-click (tylko 1-click)?
+ChargeByAlias jest metodą płatności typu one click. Pozwala na obciążenie klienta korzystając z uprzednio pozyskanego aliasu. Pozyskany alias musi być przekazany w parametrze methodRefId w trakcie rejestracji transakcji(transaction/register). Ustaw typ type=alias.
+
+
+
+Blik
+
+Jak obsłużyć dwie zarejestrowane aplikacje na jeden alias (tylko 1-click)?
+MetodaChargeByAlias służy do wykonywania obciążeń środków klienta za pomocą wcześniej pobranego aliasu wraz z podaniem “alternativeKey” klucza identyfikującego aplikację mobilną klienta Pojawia się dodatkowy parametr "alternativeKey".
+
+Metodę należy wykonywać tylko w przypadku otrzymania odpowiedzi z metody chargeByAlias z typem „alias” z kodem błędu 51 i httpcode 409 (Wybrany alias do identyfikacji jest niejednoznaczny!) i z listą alternatywnych kluczy identyfikujących aplikacje mobilne klienta – "AliasAlternative".
+
+Klient powinien wybrać aplikację mobilną, z której zostanie dokonane obciążenie. Alias powinien zostac wybrany z listy the "AliasAlternative".
+
+Metoda z typem "alternativeKey" ” będzie wykorzystywana tylko w przypadku, gdy klient posiada więcej niż jedną aplikację mobilną podpiętą pod ten sam alias typu UID.
+
+Podczas obsługi błędu 51 sprzedawca nie powinien zapisywać alternatywnych kluczy i labeli. Dane te ulegają zmianie na poziomie bank / użytkownik aplikacji bankowej.
+
+
+
+Blik
+
+Jak poradzić sobie z przeterminowanym aliasem (tylko 1-click)?
+Gdy transakcja zostanie odrzucona z powodu błędu 68 (przedawnienia aliasu klienta), należy zarejestrować ponownie transakcję wraz z nowym aliasem - zgodnie z informacjami zawartymi w sekcji o rejestracji aliasu.
+Blik
+
+Jak mogę przetestować BLIK (whitelabel) w Sandbox?
+Aby przetestować płatność BLIK Whitelabel za pomocą kodu T6 w środowisku Sandbox należy użyć 6 cyfrowego kodu BLIK w formacie 777XXX dla udanej transakcji gdzie X to dowolna cyfra z zakresu od 0-9. Dla symulacji nieudanej transakcji należy użyć dowolnych 6 cyfr. Zalecamy również nie korzystanie z tego samego kodu BLIK w krótkich odstępach czasu celem zapewnienia poprawnych odpowiedzi.
+
+Tytuł przelewu widoczny w aplikacji klienta?
+Domyślnie, w aplikacji bankowej klienta, jako główny tytuł widoczny jest numer transakcji P24. Dodatkowe linie pokazują równiez informacje przesłane w parametrze description w żądaniu transaction/register, jako pomocnicze dane.
+
+Klient może również zobaczyć spersonalizowaną wartość przesłaną przez merchanta, zamiast numeru transkacji P24 w głównym tytule. W tym przypadku żądanie transaction/register powinno zawierać parametr transferLabel, który nadpisze główny tytuł przelewu.
+
+BLIK API
+BLIK charge by code
+Umożliwia obciążenie transakcji za pomocą kodu T6. Zwraca unikalny identyfikator transakcji.
+
+Authorizations:
+basicAuth
+Request Body schema: application/json
+token
+required
+string
+Token uzyskany podczas rejestracji transakcji żądaniem transaction/register.
+
+WAŻNE!:
+Aby poprawnie obciążyć płatnika metodą blikChargeByCode należy w żądaniu transaction/register przesłać w obiekcie additional obiekt PSU.
+
+blikCode
+required
+string
+6-cyfrowy, jednorazowy kod BLIK, wygenerowany w aplikacji
+
+aliasValue	
+string
+Unikalny alias użytkownika, który może być użyty do obciążenia środków podczas kolejnych transakcji.
+
+WAŻNE!: Parametr wymagany jeśli w żądaniu przesłano obiekt recurring.
+
+aliasLabel	
+string [ 5 .. 35 ] characters
+Etykieta aliasu wyświetlana w aplikacji.
+
+WAŻNE!: Parametr wymagany jeśli w żądaniu przesłano obiekt recurring.
+
+recurring	
+object (RecurringParamsIn)
+Obiekt zawierający infomacje dotyczące płatności cyklicznej BLIK.
+
+Funkcjonalność płatności cyklicznej nie jest domyślnie włączona. Skontaktuj się z Działem Obsługi Technicznej poprzez formularz kontaktowy, w celu uruchomienia usługi.
+Responses
+201 Created
+400 Invalid input data
+401 not authorized
+500 Undefined error
+
+post
+/api/v1/paymentMethod/blik/chargeByCode
+
+
+Request samples
+Payload
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"token": "string",
+"blikCode": "string",
+"aliasValue": "string",
+"aliasLabel": "string",
+"recurring": {
+"type": "M",
+"expirationDate": "string",
+"frequency": "string",
+"totalLimitAmount": 0,
+"limitAmount": 0,
+"totalLimitCount": 0,
+"availableBanks": true
+}
+}
+Response samples
+201400401500
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"orderId": 0,
+"message": "string"
+},
+"responseCode": 0
+}
+BLIK charge by Alias
+ChargeByAlias to metoda płatności typu one-click. Pozwala na obciążenie środków klienta, korzystając z uprzednio pozyskanego aliasu (getAliasesByEmail). Pozyskany alias musi zostac przekazany w parametrze methodRefId podczas rejestracji transakcji
+
+Authorizations:
+basicAuth
+Request Body schema: application/json
+token
+required
+string
+Token uzyskany podczas rejestracji transakcji żądaniem transaction/register.
+
+WAŻNE!:
+Aby poprawnie obciążyć płatnika metodą blikChargeByAlias należy w żądaniu transaction/register przesłać w obiekcie additional obiekt PSU.
+
+type
+required
+string
+Ustaw wartość „alias”
+
+
+alias
+alias
+aliasValue	
+string
+Uwaga! Wysłanie parametru spowoduje nadpisanie istniejącego aliasu.
+Unikalny alias użytkownika, który może być użyty do obciążenia środków podczas kolejnych transakcji.
+
+WAŻNE!: Parametr wymagany jeśli w żądaniu przesłano obiekt recurring.
+
+aliasLabel	
+string
+Uwaga! Wysłanie parametru spowoduje nadpisanie istniejącej etykiety.
+Etykieta aliasu wyświetlana w aplikacji.
+
+WAŻNE!: Parametr wymagany jeśli w żądaniu przesłano obiekt recurring.
+
+recurring	
+object (RecurringParamsIn)
+Obiekt zawierający infomacje dotyczące płatności cyklicznej BLIK.
+
+Funkcjonalność płatności cyklicznej nie jest domyślnie włączona. Skontaktuj się z Działem Obsługi Technicznej poprzez formularz kontaktowy, w celu uruchomienia usługi.
+Responses
+201 Created
+400 Bad request
+401 Not authorized
+409 AlternativeKeys
+500 Undefined error
+
+post
+/api/v1/paymentMethod/blik/chargeByAlias
+
+
+Request samples
+Payload
+Content type
+application/json
+Example
+
+alias
+alias
+
+Copy
+Expand allCollapse all
+{
+"token": "string",
+"type": "alias",
+"aliasValue": "string",
+"aliasLabel": "string",
+"recurring": {
+"type": "M",
+"expirationDate": "string",
+"frequency": "string",
+"totalLimitAmount": 0,
+"limitAmount": 0,
+"totalLimitCount": 0,
+"availableBanks": true
+}
+}
+Response samples
+201400401409500
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"orderId": 0,
+"message": "string"
+},
+"responseCode": 0
+}
+Getting Aliases ByEmail
+Aby uzyskać alias do kolejnych płatności, skorzystaj z metody "getAliasesByEmail"
+
+Metoda zwraca listę aliasów (wraz z typem i statusem) utworzonych dla danego adresu e-mail w zakresie danego merchanta.
+
+Authorizations:
+basicAuth
+path Parameters
+email
+required
+any
+Dla aliasów zarejestrowanych poprzez e-mail
+
+Responses
+200 OK
+400 Bad Request
+401 Unauthorized
+404 Alias not found
+
+get
+/api/v1/paymentMethod/blik/getAliasesByEmail/{email}
+
+
+Response samples
+200400401404
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": [
+{}
+],
+"responseCode": 0
+}
+Getting Aliases ByEmail (Custom)
+Aby uzyskać alias do kolejnych płatności, skorzystaj z metody "getAliasesByEmail"
+
+Metoda zwraca listę aliasów (wraz z typem i statusem) utworzonych dla danego adresu e-mail w zakresie danego merchanta.
+
+Authorizations:
+basicAuth
+path Parameters
+email
+required
+any
+Dla aliasów zarejestrowanych z wartościami "aliasValue" i "aliasLabel"
+
+Responses
+200 OK
+400 Bad Request
+401 Unauthorized
+404 Alias not found
+
+get
+/api/v1/paymentMethod/blik/getAliasesByEmail/{email}/custom
+
+
+Response samples
+200400401404
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": [
+{}
+],
+"responseCode": 0
+}
+Dodatkowa notyfikacja BLIK
+Dla dowolnych transakcji realizowanych przez BLIK, została wprowadzona opcjonalna dodatkowa notyfikacja o statusie płatności.
+
+Notyfikacja jest wysyłana na adres z parametru "urlCardPaymentNotification", który należy dodać do metody transaction/register lub na stały zapisany adres w konfiguracji konta P24. Nadrzędna jest wartość z tokenu, jeżeli została przesłana.
+
+Uwaga! Dla metody płatności BLIK Płacę Później, system P24 nie wysyła dodatkowych notyfikacji.
+
+data	
+object
+
+Copy
+Expand allCollapse all
+{
+"data": {
+"orderId": 0,
+"sessionId": "string",
+"method": 0,
+"result": {},
+"sign": "string"
+}
+}
+Notyfikacja uaktualnienia aliasu
+Dodatkowa notyfikacja może być wysłana na określony adres URL, jeśli status został utworzony lub zmieniony. Adres jest konfigurowany poprzez usługę P24. Notyfikacja może być wykorzystana jako alternatywa do metody getAliasesByEmail.
+
+email	
+string
+email klienta
+
+value	
+string
+wartość aliasu
+
+type	
+string
+UID dla 1-click, PAYID dla płatności cyklicznych
+
+status	
+string
+REGISTERED / UNREGISTERED / EXPIRED
+
+
+Copy
+{
+"email": "string",
+"value": "string",
+"type": "string",
+"status": "string"
+}
+Raport API
+Historia transakcji
+Aby włączyć taką funkcjonalność należy skontaktować się z opiekunem handlowym poprzez formularz kontaktowy
+
+Metoda zwraca informacje na temat: paczek (batch), transakcji i zwrotów, w zadanym okresie czasu.
+Stronicowanie
+Aby wywołać nastepna stronę, należy wysłać żądanie report/history z parametrem token, np.:
+GET	https://secure.przelewy24.pl/api/v1/report/history/{token}
+Authorizations:
+basicAuth
+path Parameters
+dateFrom
+required
+string
+Data w formacie YYYYMMDD
+
+dateTo
+required
+string
+Data w formacie YYYYMMDD. Maksymalny okres czasu to 31 dni
+
+type	
+string
+Typ obiektów do załadowania. Omiń ten parametr, jeśli chcesz pobrać wszystkie dane. Akceptowane wartości: batch, transaction, refund.
+
+Responses
+200 OK
+400 Bad request
+401 Not authorized
+500 Undefined error
+
+get
+/api/v1/report/history
+
+
+Response samples
+200400401500
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"data": [
+{}
+],
+"token": "string",
+"responseCode": 0,
+"pageInformation": [
+{}
+]
+}
+Informacje o paczce (batch)
+Aby włączyć taką funkcjonalność należy skontaktować się z opiekunem handlowym poprzez formularz kontaktowy
+
+Metoda zwraca wszystkie transakcje i zwroty opłacone w zadanej paczce (batch).
+Stronicowanie
+Aby wywołać następną strone należy wywołać żądanie report/batch/details z parametrem token np.:
+GET	https://secure.przelewy24.pl/api/v1/report/batch/details/{token}
+Authorizations:
+basicAuth
+path Parameters
+batch
+required
+integer
+Unikalne ID paczki
+
+token	
+string
+Token potrzebny do wywołania następnej strony
+
+Responses
+200 OK
+400 Bad request
+401 Not authorized
+500 Undefined error
+
+get
+/api/v1/report/batch/details
+
+
+Response samples
+200400401500
+Content type
+application/json
+
+Copy
+Expand allCollapse all
+{
+"token": "string",
+"responseCode": 0,
+"pageInformation": {
+"recordsOnPage": 0,
+"recordsAll": 0,
+"pageCount": 0
+},
+"data": [
+{}
+]
+}
+Buttony i bannery
+Raty - wstęp
+Rozwiązania finansujące mogą być sposobem na zwiększenie obrotów i zmniejszenie odsetka porzucanych koszyków w Twoim sklepie. Jednak samo włączenie rat online na formatce płatniczej nie zadziała (albo zadziała w… mocno ograniczonym zakresie).
+
+Kluczem do tego, by wykorzystać potencjał rat online jest ich właściwa ekspozycja w sklepie. Z tego przewodnika dowiesz się, jak to zrobić.
+
+Minimalizm to dobra praktyka w zakresie UX, ale zapomnij o nim, gdy chcesz, aby Twoi klienci wybierali płatność na raty. Jeśli chcesz dotrzeć do kupujących, którzy wybierają tę metodę opłacenia zamówienia, zadbaj o to, by dowiedzieli się o niej jeszcze przed jego finalizacją.
+
+Informuj klientów o możliwości rozłożenia płatności na raty na każdym etapie ścieżki zakupowej:
+• na stronie głównej,
+• na liście produktów,
+• na karcie produktu oraz
+• w checkoucie.
+
+Pamiętaj o tym, że klient, który wybiera raty, zwykle dysponuje ograniczonymi środkami. Jest zdecydowany na zakup, ale szuka najkorzystniejszej oferty.
+
+Informuj o ratach już na stronie głównej. Wykorzystaj slider lub top banner.
+
+raty-slider
+W ten sposób dotrzesz do szerokiego grona klientów. Nowym odwiedzającym dasz sygnał, że mogą płacić na raty.
+
+Dodaj logo rat wśród metod płatności prezentowanych w stopce strony. To jedno z podstawowych miejsc, gdzie klienci szukają informacji o możliwych sposobach opłacenia zamówienia.
+
+raty-stopka
+Jeśli Twoja witryna jest rozbudowana(kategorie, podkategorie), umieść przycisk „Tu kupisz na raty” także na podstronach sklepu.
+
+raty-tu-kupisz-na-raty
+Informowane Klienta o ratach na karcie produktu pomaga zwiększyć konwersję tej metody płatności do ponad 40%, podczas gdy konwersja ratalna przy informacji dopiero w koszyku czy na checkoucie to 8%. Opcja minimum to statyczne reklamy graficzne Dzięki nim poinformujesz klienta o dostępności usługi Przelewy24 Raty.
+
+raty-karta-produktu
+Lista produktów to kolejne miejsce, gdzie za pomocą informacji o ratach możesz skłonić klienta do podjęcia szybszej decyzji zakupowej lub do dodania do koszyka dodatkowych produktów.
+
+Koszyk / podsumowanie zamówienia - tutaj zdecydowanie nie powinno zabraknąć informacji o ratach. Ostatnia prosta. Nie chcesz, aby na tym etapie klient porzucił koszyk. Wyświetl jasny komunikat dotyczący finalizacji płatności ratalnych. Pamiętaj, że w tym miejscu klient prawdopodobnie wybrał już metodę płatności, więc raty komunikuj mu od samego początku jego podróży zakupowej.
+
+raty-koszyk
+Checkout - wyciągnij metodę płatności ratalnej do checkout.
+
+raty-checkoutJak wyświetlić daną metodę płatności znajdziesz tutaj Jak wyswietlic w sklepie pełen wybór metod płatności?
+Domyślnie metoda ratalna jest dostępna jako method=303. Przekierowanie należy wykonać zgodnie z wskazanymi wytycznymi.
+
+Wszystkie materiały graficzne są dostępne tutaj (https://www.przelewy24.pl/storage/app/media/do-pobrania/p24_raty/p24_raty_materialy_graficzne.zip)
+
+Widget
+Zaprezentuj najniższą możliwą ratę dla konkretnego produktu.
+
+raty-najnizsza
+Po kliknięciu w widget może pojawić się dowolny element np. pop-up z informacjami o Przelewy24 | Raty Aby uruchomić widget należy wykonać javasript:
+
+Wersja MINI
+Przykład widgetu MINI zaprezentowanego w sklepie:
+raty-mini
+
+Kod niezbędny do wywołania powyższego widgetu:
+
+  <body>
+    <!-- Tutaj będzie wyświetlony widget z wersją mini -->
+    <div id="installment-widget-mini"></div>
+    <!-- Osadzenie tagu z paczką -->
+    <script type="application/javascript" src="https://apm.przelewy24.pl/installments/installment-calculator-app.umd.sdk.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        const config = {
+          sign: "string",
+          posid: 'test', // Identyfikator punktu płatności posId.
+          method: '303',
+          amount: 1000, // grosze
+          currency: "PLN", // Waluta tylko "PLN"
+          lang: "pl",  // na ten moment tylko pl
+          test: false  // Opcjonalnie, do wykorzystania podczas testów, przyjmuje wartość boolean
+        }
+        // Utworzenie konstruktora i podanie configu
+        const installmentCalculatorApp = new InstallmentCalculatorApp(config);
+        // Utworzenie komponentu miniWidget
+        const miniWidget = await installmentCalculatorApp.create('mini-widget');
+        // Wyrenderowanie komponentu miniWidget w tagu o id installment-widget-mini
+        miniWidget.render('installment-widget-mini');
+      });
+    </script>
+  </body>
+Wersja MAX
+Przykład widgetu MAX zaprezentowanego w sklepie:
+raty-max
+
+Kod niezbędny do wywołania powyższego widgetu:
+
+    <body>
+    <!-- Tutaj będzie wyświetlony widget z wersją max -->
+    <div id="installment-widget-max"></div>
+    <!-- Osadzenie tagu z paczką -->
+    <script type="application/javascript" src="https://apm.przelewy24.pl/installments/installment-calculator-app.umd.sdk.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        const config = {
+          sign: "string",
+          posid: 'test', // Identyfikator punktu płatności posId.
+          method: '303',
+          amount: 1000, // grosze
+          currency: "PLN", // Waluta tylko "PLN"
+          lang: "pl",  // na ten moment tylko pl
+          test: false  // Opcjonalnie, do wykorzystania podczas testów, przyjmuje wartość boolean
+        }
+        // Utworzenie konstruktora i podanie configu
+        const installmentCalculatorApp = new InstallmentCalculatorApp(config);
+        // Utworzenie komponentu maxWidget
+        const maxWidget = await installmentCalculatorApp.create('max-widget');
+        // Wyrenderowanie komponentu maxWidget w tagu o id installment-calculator-max
+        maxWidget.render('installment-widget-max');
+      });
+    </script>
+  </body>
+Symulator
+To sposób na zwiększenie zaangażowania użytkownika. Kalkulator pozwala na zaprezentowanie bardziej szczegółowych informacji o dostępnych ratach.
+
+„Przeklikanie” różnych opcji ratalnych zbliży klienta do przejścia na kolejny etap ścieżki zakupowej.
+
+raty-symulator
+Przykłady gotowych kodów do prezentacji symulatora na stronie
+Wersja MINI z kliknięciem i wywołaniem kalkulatora w modalu
+Wersja MAX z kliknięciem i wywołaniem kalkulatora w modalu
+MINI widget z kliknięciem i otrzymaniem linku do kalkulatora
+MAXI widget z kliknięciem i otrzymaniem linku do kalkulatora
+Własny button z kliknięciem i wywołaniem kalkulatora w modalu
+Własny button z kliknięciem i otrzymaniem linku do kalkulatora
+Wersja MINI z kliknięciem i wywołaniem kalkulatora w modalu
+  <body>
+    <!-- Tutaj będzie wyświetlony widget z wersją mini -->
+    <div id="installment-widget-mini"></div>
+    <!-- Kontener na modal należy dodać na końcu body -->
+    <div id="calculator-modal"></div>
+    <!-- Osadzenie tagu z paczką -->
+    <script type="application/javascript" src="https://apm.przelewy24.pl/installments/installment-calculator-app.umd.sdk.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", async () => {
+        const config = {
+          sign: "string",
+          posid: 'test', // Identyfikator punktu płatności posId.
+          method: '303',
+          amount: 1000, // grosze
+          currency: "PLN", // Waluta tylko "PLN"
+          lang: "pl",  // na ten moment tylko pl
+          test: false  // Opcjonalnie, do wykorzystania podczas testów, przyjmuje wartość boolean
+        }
+        // Utworzenie konstruktora i podanie configu
+        const installmentCalculatorApp = new InstallmentCalculatorApp(config);
+        // Utworzenie komponentu calculatorModal
+        const calculatorModal = await installmentCalculatorApp.create('calculator-modal');
+        // Wyrenderowanie modal-a z kalkulatorem w tagu o id calculator-modal.
+        // Uwaga!!!
+        // 1. Nie używać id="installment-calculator-modal"
+        // 2. calculatorModal musi być wyrenderowany przed miniWidget
+        calculatorModal.render('calculator-modal');
+        // Utworzenie komponentu miniWidget
+        const miniWidget = await installmentCalculatorApp.create('mini-widget');
+        // Wyrenderowanie komponentu miniWidget w tagu o id installment-widget-mini
+        miniWidget.render('installment-widget-mini');
+      });
+    </script>
+  </body>
+  
+Parametry niezbędne do wywołania widgetu lub symulatora:
+Parametr	Opis
+sign	Wyliczony jako sha384({„crc”:”string”,”posId”:int,”method”:int})
+posId	ID Sklepu (domyślnie ID Partnera)
+method	Domyślnie 303
+amount	Kwota wyrażona w groszach
+lang	Dozwolone: pl
+currency	Dozwolone: PLN
+Parametry opcjonalne do wywołania widgetu lub symulatora:
+Parametr	Opis
+test	Dozwolone: true, false
+Wysłany parametr test z wartością true sprawia, że pola sign, posId oraz method nie są walidowane, muszą zostać natomiast przekazane w obiekcie config.
+

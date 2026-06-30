@@ -88,9 +88,11 @@ model Order {
   customerName          String
   customerEmail         String
   customerPhone         String
-  pickupPoint           String
-  pickupPointAddress    String
+  pickupPoint           String    @default("")
+  pickupPointAddress    String    @default("")
   stripePaymentIntentId String?   @unique
+  p24SessionId          String?   @unique
+  paymentProvider       String    @default("stripe")
   amount                Int
   currency              String    @default("pln")
   trackingNumber        String?
@@ -104,6 +106,7 @@ model Order {
   @@index([customerEmail])
   @@index([orderNumber])
   @@index([userId])
+  @@index([p24SessionId])
 }
 
 model Session {

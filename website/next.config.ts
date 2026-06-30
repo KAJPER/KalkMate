@@ -17,13 +17,13 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apm.przelewy24.pl",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://api.stripe.com https://openrouter.ai",
-      "frame-src https://js.stripe.com https://hooks.stripe.com",
-      "form-action 'self'",
+      "connect-src 'self' https://api.stripe.com https://openrouter.ai https://secure.przelewy24.pl https://sandbox.przelewy24.pl",
+      "frame-src https://js.stripe.com https://hooks.stripe.com https://secure.przelewy24.pl https://sandbox.przelewy24.pl",
+      "form-action 'self' https://secure.przelewy24.pl https://sandbox.przelewy24.pl",
     ].join("; "),
   },
 ];

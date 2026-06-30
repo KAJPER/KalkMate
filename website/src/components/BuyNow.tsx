@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import StripeProvider from "@/components/StripeProvider";
 import CheckoutForm from "@/components/CheckoutForm";
+import P24CheckoutForm from "@/components/P24CheckoutForm";
 import getStripe from "@/lib/getStripe";
 import type { InPostPoint } from "@/components/InPostGeowidget";
 import { useCart } from "@/components/CartContext";
@@ -51,7 +52,7 @@ const COUNTRIES = [
   { code: "OTHER", name: "🌍 Other country" },
 ];
 
-type Stage = "form" | "map" | "payment" | "error" | "success";
+type Stage = "form" | "map" | "payment" | "error" | "success" | "p24_processing";
 
 const content: Record<Locale, {
   eyebrow: string;
@@ -323,6 +324,31 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
     if (params.get("redirect_status") === "succeeded") {
       setIsModalOpen(true);
       setStage("success");
+    } else if (params.get("p24_return") === "true") {
+      const p24Session = params.get("p24_session");
+      setIsModalOpen(true);
+      if (p24Session) {
+        setStage("p24_processing");
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          try {
+            const r = await fetch(`/api/p24/status?sessionId=${p24Session}`);
+            const d = await r.json();
+            if (d.status === "paid") {
+              clearInterval(poll);
+              setStage("success");
+            }
+          } catch {}
+          if (attempts >= 8) {
+            clearInterval(poll);
+            // Assume success — webhook may still be processing
+            setStage("success");
+          }
+        }, 2500);
+      } else {
+        setStage("success");
+      }
     }
   }, []);
 
@@ -420,8 +446,16 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
       setErrorMessage(t.errDeliveryAddress);
       return;
     }
-    setIsCreatingIntent(true);
     setErrorMessage("");
+
+    // Polish customers → P24 (no Stripe PaymentIntent needed yet)
+    if (isPoland) {
+      setStage("payment");
+      return;
+    }
+
+    // EU / international customers → Stripe (Klarna + cards)
+    setIsCreatingIntent(true);
     try {
       const res = await fetch("/api/create-payment-intent", {
         method: "POST",
@@ -431,10 +465,8 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
           currency,
           shippingCents,
           couponCode: appliedCoupon?.code || null,
-          pickupPoint: isPoland && selectedPoint ? selectedPoint.name : null,
-          pickupPointAddress: isPoland && selectedPoint
-            ? `${selectedPoint.address.line1}, ${selectedPoint.address.line2}`
-            : null,
+          pickupPoint: null,
+          pickupPointAddress: null,
         }),
       });
       const data = await res.json();
@@ -871,7 +903,25 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                   </div>
                 )}
 
-                {(stage === "payment" || stage === "error") && clientSecret && (
+                {(stage === "payment" || stage === "error") && isPoland && (
+                  <P24CheckoutForm
+                    formData={formData}
+                    selectedPoint={selectedPoint}
+                    isPoland={isPoland}
+                    currency={currency}
+                    productCents={productCents}
+                    shippingCents={shippingCents}
+                    discountCents={discountCents}
+                    totalCents={totalCents}
+                    appliedCoupon={appliedCoupon}
+                    couponCode={appliedCoupon?.code || null}
+                    onSuccess={handlePaymentSuccess}
+                    onError={handlePaymentError}
+                    onBack={() => { setStage("form"); setErrorMessage(""); }}
+                  />
+                )}
+
+                {(stage === "payment" || stage === "error") && !isPoland && clientSecret && (
                   <div>
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="km-display text-3xl text-[#F2EDE3]">
@@ -885,9 +935,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                     <div className="mb-6 border border-[rgba(242,237,227,0.10)] p-4 space-y-1.5 text-sm">
                       <div className="flex justify-between">
                         <span className="text-[#F2EDE3]/65">KalkMate v1.0</span>
-                        <span className="text-[#F2EDE3]">
-                          {isPoland ? "699 zł" : `${(productCents / 100).toFixed(0)} EUR`}
-                        </span>
+                        <span className="text-[#F2EDE3]">{`${(productCents / 100).toFixed(0)} EUR`}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-[#F2EDE3]/65">{t.shipping}</span>
@@ -895,12 +943,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                           ? <span className="km-mono-eyebrow text-[#D8FF3D]">GRATIS</span>
                           : <span className="text-[#F2EDE3]">{(shippingCents / 100).toFixed(0)} EUR</span>}
                       </div>
-                      {isPoland && selectedPoint && (
-                        <div className="text-xs text-[#F2EDE3]/45 pt-1">
-                          ↳ {selectedPoint.name} · {selectedPoint.address.line1}
-                        </div>
-                      )}
-                      {!isPoland && formData.city && (
+                      {formData.city && (
                         <div className="text-xs text-[#F2EDE3]/45 pt-1">
                           ↳ {formData.street}, {formData.city} · {formData.country}
                         </div>
@@ -928,6 +971,23 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                     <StripeProvider clientSecret={clientSecret}>
                       <CheckoutForm onSuccess={handlePaymentSuccess} onError={handlePaymentError} />
                     </StripeProvider>
+                  </div>
+                )}
+
+                {stage === "p24_processing" && (
+                  <div className="text-center py-10 space-y-5">
+                    <div className="mx-auto w-16 h-16 border border-[#D8FF3D] flex items-center justify-center">
+                      <svg className="animate-spin h-8 w-8 text-[#D8FF3D]" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="km-display text-2xl text-[#F2EDE3]">Sprawdzamy płatność…</p>
+                      <p className="mt-2 text-sm text-[#F2EDE3]/60">
+                        Poczekaj chwilę — weryfikujemy potwierdzenie z Przelewy24.
+                      </p>
+                    </div>
                   </div>
                 )}
 
