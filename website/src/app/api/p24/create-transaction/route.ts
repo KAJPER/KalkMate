@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
     const returnUrl = `${baseUrl}/?p24_return=true&p24_session=${sessionId}`;
     const statusUrl = `${baseUrl}/api/webhooks/p24`;
 
-    // BLIK only: channel=8192. Cards/other: channel=1 (karty+ApplePay+GooglePay) + 2 (przelewy)
-    const channel = blikMode ? 8192 : 3;
+    // BLIK only: channel=8192. All other methods: channel=16 (everything enabled for merchant)
+    const channel = blikMode ? 8192 : 16;
 
     const token = await registerTransaction({
       sessionId,

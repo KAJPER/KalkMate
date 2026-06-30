@@ -52,7 +52,7 @@ const COUNTRIES = [
   { code: "OTHER", name: "🌍 Other country" },
 ];
 
-type Stage = "form" | "map" | "payment" | "error" | "success" | "p24_processing";
+type Stage = "form" | "map" | "payment" | "error" | "success" | "p24_processing" | "p24_pending";
 
 const content: Record<Locale, {
   eyebrow: string;
@@ -330,24 +330,26 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
       if (p24Session) {
         setStage("p24_processing");
         let attempts = 0;
+        let lastStatus = "unknown";
         const poll = setInterval(async () => {
           attempts++;
           try {
             const r = await fetch(`/api/p24/status?sessionId=${p24Session}`);
             const d = await r.json();
+            lastStatus = d.status;
             if (d.status === "paid") {
               clearInterval(poll);
               setStage("success");
+              return;
             }
           } catch {}
-          if (attempts >= 8) {
+          if (attempts >= 12) {
             clearInterval(poll);
-            // Assume success — webhook may still be processing
-            setStage("success");
+            setStage(lastStatus === "paid" ? "success" : "p24_pending");
           }
         }, 2500);
       } else {
-        setStage("success");
+        setStage("p24_pending");
       }
     }
   }, []);
@@ -988,6 +990,31 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                         Poczekaj chwilę — weryfikujemy potwierdzenie z Przelewy24.
                       </p>
                     </div>
+                  </div>
+                )}
+
+                {stage === "p24_pending" && (
+                  <div className="text-center py-6 space-y-5">
+                    <div className="mx-auto w-16 h-16 border border-[#F2EDE3]/30 flex items-center justify-center">
+                      <span className="km-display text-3xl text-[#F2EDE3]/60">?</span>
+                    </div>
+                    <div>
+                      <p className="km-display text-2xl text-[#F2EDE3]">Płatność nie potwierdzona</p>
+                      <p className="mt-3 text-sm text-[#F2EDE3]/60 max-w-sm mx-auto leading-relaxed">
+                        Nie otrzymaliśmy jeszcze potwierdzenia od Przelewy24.
+                        Jeśli płatność przeszła, wyślemy email z potwierdzeniem na{" "}
+                        <span className="text-[#F2EDE3]">{formData.email}</span> w ciągu kilku minut.
+                      </p>
+                      <p className="mt-3 text-xs text-[#F2EDE3]/40">
+                        Jeśli płatność została anulowana, możesz spróbować ponownie.
+                      </p>
+                    </div>
+                    <button
+                      onClick={closeModal}
+                      className="mt-2 px-8 py-3 border border-[rgba(242,237,227,0.18)] text-[#F2EDE3]/70 km-mono-eyebrow hover:border-[#D8FF3D] hover:text-[#F2EDE3] transition-colors"
+                    >
+                      Zamknij
+                    </button>
                   </div>
                 )}
 
