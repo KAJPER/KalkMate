@@ -4,6 +4,7 @@ import "./globals.css";
 import SessionProvider from "@/components/SessionProvider";
 import { CartProvider } from "@/components/CartContext";
 import { ClientCartDrawer, ClientCookieBanner } from "@/components/ClientShell";
+import PageTracker from "@/components/PageTracker";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -28,17 +29,22 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "KalkMate — Kalkulator AI | Matematyka, Fizyka, Chemia, Biologia",
   description:
-    "Kalkulator z AI. Zrób zdjęcie zadania — dostaniesz rozwiązanie. Matematyka, fizyka, chemia, biologia. Polska produkcja. 699 zł.",
+    "Kalkulator z aparatem i AI — zrób zdjęcie zadania, dostaniesz rozwiązanie krok po kroku. Matematyka, fizyka, chemia, biologia. Polska produkcja. 699 zł.",
   keywords: [
     "kalkulator ai",
     "kalkulator z ai",
-    "inteligentny kalkulator",
+    "ai kalkulator",
+    "kalkulator do ściągania",
+    "kalkulator z aparatem",
     "kalkulator z kamerą",
+    "inteligentny kalkulator",
     "kalkulator naukowy ai",
+    "kalkulator matura ai",
     "kalkmate",
     "calculator ai",
     "ai calculator",
     "KI Taschenrechner",
+    "ki taschenrechner mit kamera",
     "calculator ai kaufen",
   ],
   authors: [{ name: "KalkMate" }],
@@ -112,6 +118,7 @@ export default function RootLayout({
             <ClientCartDrawer />
           </CartProvider>
         </SessionProvider>
+        <PageTracker />
         <ClientCookieBanner />
       </body>
     </html>

@@ -262,6 +262,12 @@ export default function OrderDetailPage({
       second: "2-digit",
     });
 
+  const formatAmount = (amount: number, currency: string) => {
+    const value = (amount / 100).toFixed(2);
+    const symbol = currency?.toLowerCase() === "eur" ? "€" : "zł";
+    return `${value} ${symbol}`;
+  };
+
   const inputClass =
     "w-full px-3 py-2 rounded-lg border border-[#3F4147] bg-[#2B2D31] text-[#E0E0E0] text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]";
 
@@ -304,7 +310,7 @@ export default function OrderDetailPage({
               <div className="flex justify-between">
                 <span className="text-[#E0E0E0]/50">Kwota</span>
                 <span className="text-[#E0E0E0] font-bold">
-                  {(order.amount / 100).toFixed(2)} zł
+                  {formatAmount(order.amount, order.currency)}
                 </span>
               </div>
               <div className="flex justify-between items-center">

@@ -50,6 +50,11 @@ const navItems = [
     label: "Magazyn",
     icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
   },
+  {
+    href: "/admin/analytics",
+    label: "Analityka",
+    icon: "M3 3v18h18M9 17V9m4 8V5m4 12v-4"
+  },
 ];
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {

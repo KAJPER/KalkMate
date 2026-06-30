@@ -34,6 +34,7 @@ export default withAuth(
       pathname.startsWith("/api/admin") &&
       !pathname.startsWith("/api/admin/auth") &&
       !pathname.startsWith("/api/admin/visits")
+      // /api/track jest całkowicie publiczne — obsługiwane poza tym blokiem
     ) {
       const session = request.cookies.get("admin_session");
       if (!session || !isValidAdminSession(session?.value)) {

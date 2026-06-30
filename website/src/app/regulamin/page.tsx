@@ -17,7 +17,7 @@ export default function ReguaminPage() {
 
         <div>
           <h2 className="text-lg font-semibold text-[#F2EDE3] mb-2">§1. Postanowienia ogólne</h2>
-          <p>Niniejszy regulamin określa zasady sprzedaży produktów w sklepie internetowym dostępnym pod adresem kalkmate.pl, prowadzonym przez osobę fizyczną prowadzącą działalność pod nazwą KalkMate, zwaną dalej „Sprzedawcą".</p>
+          <p>Niniejszy regulamin określa zasady sprzedaży produktów w sklepie internetowym dostępnym pod adresem kalkmate.pl, prowadzonym przez <strong>Kacper Popko</strong> prowadzącego działalność gospodarczą pod firmą <strong>KAJPA Kacper Popko</strong>, ul. Zastawie I 37, 16-070 Choroszcz, NIP: 9662222951, REGON: 545011444, zwanych dalej „Sprzedawcą".</p>
         </div>
 
         <div>
@@ -55,7 +55,8 @@ export default function ReguaminPage() {
           <ol className="list-decimal pl-5 space-y-1">
             <li>Konsument ma prawo odstąpić od umowy zawartej na odległość w terminie 14 dni kalendarzowych bez podania przyczyny.</li>
             <li>Termin do odstąpienia od umowy wygasa po upływie 14 dni od dnia, w którym Konsument wszedł w posiadanie rzeczy.</li>
-            <li>Aby skorzystać z prawa odstąpienia, Konsument musi poinformować Sprzedawcę o swojej decyzji drogą mailową.</li>
+            <li>Aby skorzystać z prawa odstąpienia, Konsument musi poinformować Sprzedawcę o swojej decyzji drogą mailową na adres: <strong>kontakt@kalkmate.pl</strong>.</li>
+            <li>Zwrotu towaru należy dokonać na adres: <strong>KalkMate, ul. Zastawie I 37, 16-070 Choroszcz</strong>.</li>
             <li>Zwrot płatności następuje w terminie do 14 dni od dnia otrzymania zwracanego towaru.</li>
           </ol>
         </div>
@@ -64,8 +65,8 @@ export default function ReguaminPage() {
           <h2 className="text-lg font-semibold text-[#F2EDE3] mb-2">§6. Reklamacje i gwarancja</h2>
           <ol className="list-decimal pl-5 space-y-1">
             <li>Produkty objęte są gwarancją Sprzedawcy na okres 24 miesięcy od daty zakupu.</li>
-            <li>Reklamacje należy zgłaszać drogą mailową, podając numer zamówienia i opis usterki.</li>
-            <li>Sprzedawca rozpatruje reklamacje w terminie do 14 dni roboczych.</li>
+            <li>Reklamacje należy zgłaszać drogą mailową na adres: <strong>kontakt@kalkmate.pl</strong>, podając numer zamówienia i opis usterki.</li>
+            <li>Sprzedawca rozpatruje reklamacje w terminie do 14 dni kalendarzowych.</li>
           </ol>
         </div>
 
@@ -88,7 +89,7 @@ export default function ReguaminPage() {
         </div>
 
         <div className="pt-4 border-t border-[#F2EDE3]/10 text-xs text-[#F2EDE3]/40">
-          Kontakt: gordulek@gmail.com
+          Kontakt: kontakt@kalkmate.pl
         </div>
 
       </section>

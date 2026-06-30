@@ -9,9 +9,9 @@ const productName: Record<Locale, string> = {
 };
 
 const productDescription: Record<Locale, string> = {
-  pl: "Inteligentny kalkulator z wbudowaną kamerą i AI. Rozwiązuje zadania z matematyki, fizyki, chemii i biologii — robisz zdjęcie zadania, a rozwiązanie krok po kroku pojawia się na ekranie OLED 256×64.",
-  en: "Smart AI-powered calculator with a built-in camera. Photograph any math, physics, chemistry or biology problem and the full step-by-step solution appears on the 256×64 OLED screen.",
-  de: "Intelligenter KI-Taschenrechner mit eingebauter Kamera. Fotografiere eine Aufgabe aus Mathematik, Physik, Chemie oder Biologie — die vollständige Schritt-für-Schritt-Lösung erscheint auf dem 256×64 OLED-Display.",
+  pl: "Kalkulator z aparatem i AI do rozwiązywania zadań maturalnych. Zrób zdjęcie zadania z matematyki, fizyki, chemii lub biologii — pełne rozwiązanie krok po kroku pojawi się na ekranie OLED 256×64. Kalkulator do ściągania nowej generacji.",
+  en: "AI camera calculator for exams — photograph any math, physics, chemistry or biology problem and the full step-by-step solution appears on the 256×64 OLED screen. Smart, discreet, no phone needed.",
+  de: "KI Taschenrechner mit Kamera für Prüfungen. Fotografiere eine Aufgabe aus Mathematik, Physik, Chemie oder Biologie — die vollständige Schritt-für-Schritt-Lösung erscheint auf dem 256×64 OLED-Display.",
 };
 
 /** Product JSON-LD (schema.org) dla strony głównej w danym języku. */

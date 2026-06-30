@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
-import { verificationEmail } from "@/lib/email-templates";
+import { verificationEmail, detectLocale, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import crypto from "crypto";
 
 const VERIFY_EXPIRY_HOURS = 24;
@@ -27,10 +27,11 @@ export async function POST(req: NextRequest) {
       `;
       const baseUrl = process.env.NEXTAUTH_URL || "https://kalkmate.pl";
       const verifyUrl = `${baseUrl}/auth/verify?token=${token}`;
+      const locale = detectLocale(req.headers.get("accept-language"));
       await sendMail({
         to: email,
-        subject: "Potwierdz adres email - KalkMate",
-        html: verificationEmail({ verifyUrl, expiresHours: VERIFY_EXPIRY_HOURS, customerName: user.name || undefined }),
+        subject: EMAIL_SUBJECTS.verify[locale],
+        html: verificationEmail({ verifyUrl, expiresHours: VERIFY_EXPIRY_HOURS, customerName: user.name || undefined }, locale),
       });
     } else {
       // Symuluj opoznienie

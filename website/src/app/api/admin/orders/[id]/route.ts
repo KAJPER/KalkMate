@@ -6,6 +6,8 @@ import {
   statusInProgressEmail,
   statusShippedEmail,
   statusFulfilledEmail,
+  localeFromCountry,
+  EMAIL_SUBJECTS,
 } from "@/lib/email-templates";
 
 export async function GET(
@@ -66,11 +68,6 @@ export async function GET(
   }
 }
 
-const statusSubjects: Record<string, string> = {
-  in_progress: "Twoje zamówienie jest realizowane",
-  shipped: "Twoja paczka została wysłana!",
-  fulfilled: "Zamówienie zrealizowane",
-};
 
 export async function PATCH(
   request: NextRequest,
@@ -108,8 +105,9 @@ export async function PATCH(
       fulfillment_status !== previousStatus &&
       pi.metadata.customer_email
     ) {
+      const locale = localeFromCountry(pi.metadata.customer_country);
       const emailData = {
-        customerName: pi.metadata.customer_name || "Kliencie",
+        customerName: pi.metadata.customer_name || "Customer",
         product: pi.metadata.product || "KalkMate v1.0",
         trackingNumber: tracking_number || pi.metadata.tracking_number || "",
         pickupPoint: pi.metadata.pickup_point || "",
@@ -117,20 +115,24 @@ export async function PATCH(
       };
 
       let html: string | null = null;
+      let subject = "";
 
       if (fulfillment_status === "in_progress") {
-        html = statusInProgressEmail(emailData);
+        html = statusInProgressEmail(emailData, locale);
+        subject = EMAIL_SUBJECTS.orderInProgress[locale];
       } else if (fulfillment_status === "shipped") {
-        html = statusShippedEmail(emailData);
+        html = statusShippedEmail(emailData, locale);
+        subject = EMAIL_SUBJECTS.orderShipped[locale];
       } else if (fulfillment_status === "fulfilled") {
-        html = statusFulfilledEmail(emailData);
+        html = statusFulfilledEmail(emailData, locale);
+        subject = EMAIL_SUBJECTS.orderFulfilled[locale];
       }
 
       if (html) {
         try {
           await sendMail({
             to: pi.metadata.customer_email,
-            subject: statusSubjects[fulfillment_status] || "Aktualizacja zamówienia",
+            subject,
             html,
           });
         } catch (emailError) {

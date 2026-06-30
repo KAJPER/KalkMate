@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { sendMail } from "@/lib/mailer";
-import { purchaseConfirmationEmail } from "@/lib/email-templates";
+import { purchaseConfirmationEmail, localeFromCountry, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { prisma } from "@/lib/db";
 import { incrementCouponUsage } from "@/lib/coupons";
 
@@ -201,18 +201,22 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 
   // Send confirmation email
   try {
+    const locale = localeFromCountry(meta.customer_country);
+    const subject = locale === "de"
+      ? `Bestellbestätigung ${orderNumber} – KalkMate`
+      : `Order confirmation ${orderNumber} – KalkMate`;
     await sendMail({
       to: email,
-      subject: `Potwierdzenie zamówienia ${orderNumber} - KalkMate`,
+      subject,
       html: purchaseConfirmationEmail({
-        customerName: name || "Kliencie",
+        customerName: name || "Customer",
         customerEmail: email,
         product: meta.product || "KalkMate v1.0",
         amount: pi.amount,
         pickupPoint: pickupPoint,
         pickupPointAddress: pickupPointAddress,
         orderId: orderNumber,
-      }),
+      }, locale),
     });
     console.log(`[WEBHOOK] ✅ Confirmation email sent to ${email}`);
   } catch (emailError) {
@@ -285,18 +289,22 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
 
   // Send confirmation email
   try {
+    const locale = localeFromCountry(session.metadata?.customer_country);
+    const subject = locale === "de"
+      ? `Bestellbestätigung ${orderNumber} – KalkMate`
+      : `Order confirmation ${orderNumber} – KalkMate`;
     await sendMail({
       to: email,
-      subject: `Potwierdzenie zamówienia ${orderNumber} - KalkMate`,
+      subject,
       html: purchaseConfirmationEmail({
-        customerName: name || "Kliencie",
+        customerName: name || "Customer",
         customerEmail: email,
         product: "KalkMate v1.0",
         amount: session.amount_total || 0,
         pickupPoint: pickupPoint || "",
         pickupPointAddress: pickupPointAddress || "",
         orderId: orderNumber,
-      }),
+      }, locale),
     });
     console.log(`[WEBHOOK] ✅ Confirmation email sent to ${email}`);
   } catch (emailError) {
