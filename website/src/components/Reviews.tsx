@@ -70,35 +70,21 @@ export default function Reviews({ lang = "pl" }: { lang?: Locale }) {
             <article
               key={i}
               className="border border-[rgba(242,237,227,0.10)] bg-[#111] p-5 flex flex-col gap-3"
-              itemScope
-              itemType="https://schema.org/Review"
             >
               <Stars rating={r.rating} />
 
-              <p
-                className="text-[14px] leading-[1.6] text-[#F2EDE3]/80 flex-1"
-                itemProp="reviewBody"
-              >
+              <p className="text-[14px] leading-[1.6] text-[#F2EDE3]/80 flex-1">
                 {r.body}
               </p>
 
               <div className="border-t border-[rgba(242,237,227,0.08)] pt-3 flex items-center justify-between">
                 <div>
-                  <p className="text-[13px] text-[#F2EDE3] font-medium" itemProp="author" itemScope itemType="https://schema.org/Person">
-                    <span itemProp="name">{r.author}</span>
+                  <p className="text-[13px] text-[#F2EDE3] font-medium">
+                    {r.author}
                   </p>
                   <p className="km-mono-eyebrow text-[#F2EDE3]/35 text-[10px] mt-0.5">{r.location}</p>
                 </div>
                 <span className="km-mono-eyebrow text-[#D8FF3D]/60 text-[10px]">{t.verified}</span>
-              </div>
-
-              <meta itemProp="datePublished" content={r.date} />
-              <div itemProp="reviewRating" itemScope itemType="https://schema.org/Rating">
-                <meta itemProp="ratingValue" content={String(r.rating)} />
-                <meta itemProp="bestRating" content="5" />
-              </div>
-              <div itemProp="itemReviewed" itemScope itemType="https://schema.org/Product">
-                <meta itemProp="name" content="KalkMate" />
               </div>
             </article>
           ))}
