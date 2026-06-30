@@ -242,6 +242,9 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isCreatingIntent, setIsCreatingIntent] = useState(false);
+  const [polandStripeSecret, setPolandStripeSecret] = useState<string | null>(null);
+  const [isPolandStripeLoading, setIsPolandStripeLoading] = useState(false);
+  const [polandStripeError, setPolandStripeError] = useState("");
   const [formData, setFormData] = useState({
     name: "", email: "", phone: "",
     street: "", postcode: "", city: "",
@@ -479,6 +482,34 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
       setErrorMessage(err instanceof Error ? err.message : t.unexpectedError);
     } finally {
       setIsCreatingIntent(false);
+    }
+  };
+
+  const initPolandStripe = async () => {
+    setIsPolandStripeLoading(true);
+    setPolandStripeError("");
+    try {
+      const res = await fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          currency,
+          shippingCents,
+          couponCode: appliedCoupon?.code || null,
+          pickupPoint: selectedPoint?.name || null,
+          pickupPointAddress: selectedPoint
+            ? `${selectedPoint.address.line1}, ${selectedPoint.address.line2}`
+            : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t.serverError);
+      setPolandStripeSecret(data.clientSecret);
+    } catch (err) {
+      setPolandStripeError(err instanceof Error ? err.message : t.unexpectedError);
+    } finally {
+      setIsPolandStripeLoading(false);
     }
   };
 
@@ -919,7 +950,44 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                     couponCode={appliedCoupon?.code || null}
                     onSuccess={handlePaymentSuccess}
                     onError={handlePaymentError}
-                    onBack={() => { setStage("form"); setErrorMessage(""); }}
+                    onBack={() => { setStage("form"); setErrorMessage(""); setPolandStripeSecret(null); setPolandStripeError(""); }}
+                    footer={
+                      <div className="mt-1">
+                        <div className="my-4 flex items-center gap-3">
+                          <div className="flex-1 h-px bg-[rgba(242,237,227,0.10)]" />
+                          <span className="text-xs text-[#F2EDE3]/30 km-mono-eyebrow">LUB</span>
+                          <div className="flex-1 h-px bg-[rgba(242,237,227,0.10)]" />
+                        </div>
+                        {polandStripeError && (
+                          <div className="mb-3 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
+                            <p className="text-sm text-[#FF4D2E]">{polandStripeError}</p>
+                          </div>
+                        )}
+                        {!polandStripeSecret ? (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={initPolandStripe}
+                            disabled={isPolandStripeLoading}
+                            className="w-full flex items-center gap-4 p-4 border border-[rgba(242,237,227,0.18)] hover:border-[#D8FF3D] transition-colors disabled:opacity-50"
+                          >
+                            <div className="w-10 h-10 border border-[rgba(242,237,227,0.25)] flex items-center justify-center flex-shrink-0">
+                              {isPolandStripeLoading
+                                ? <svg className="animate-spin h-4 w-4 text-[#F2EDE3]/60" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                : <svg width="20" height="14" viewBox="0 0 24 17" fill="none"><rect x="0.5" y="0.5" width="23" height="16" rx="1.5" stroke="#F2EDE3" strokeOpacity="0.6"/><rect y="4" width="24" height="3" fill="#F2EDE3" fillOpacity="0.15"/><rect x="2" y="10" width="6" height="2" rx="0.5" fill="#F2EDE3" fillOpacity="0.6"/></svg>}
+                            </div>
+                            <div className="text-left">
+                              <p className="text-sm text-[#F2EDE3] font-medium">Karta / Apple Pay / Google Pay / Klarna</p>
+                              <p className="text-xs text-[#F2EDE3]/45 mt-0.5">Visa, Mastercard i więcej · przez Stripe</p>
+                            </div>
+                            <span className="ml-auto text-[#F2EDE3]/30">→</span>
+                          </motion.button>
+                        ) : (
+                          <StripeProvider clientSecret={polandStripeSecret}>
+                            <CheckoutForm onSuccess={handlePaymentSuccess} onError={handlePaymentError} />
+                          </StripeProvider>
+                        )}
+                      </div>
+                    }
                   />
                 )}
 
