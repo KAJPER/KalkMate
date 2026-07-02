@@ -48,8 +48,10 @@ static void _stWaitBtn() {
     }
 }
 
-static const char* _stT(const char* pl, const char* en) {
-    return kalkSettings.language == 0 ? pl : en;
+static const char* _stT(const char* pl, const char* en, const char* de) {
+    if (kalkSettings.language == 0) return pl;
+    if (kalkSettings.language == 1) return en;
+    return de;
 }
 
 // ---------------------------------------------------------------------------
@@ -282,11 +284,11 @@ static void _stShowInfo(U8G2 &d, int testNum, int total, const char* name) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
     char buf[32];
-    snprintf(buf, sizeof(buf), _stT("Test %d/%d:", "Test %d/%d:"), testNum, total);
+    snprintf(buf, sizeof(buf), _stT("Test %d/%d:", "Test %d/%d:", "Test %d/%d:"), testNum, total);
     d.drawStr(2, 12, buf);
     d.drawStr(2, 26, name);
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 45, _stT("OK/> = dalej   < = wyjdz", "OK/> = next   < = exit"));
+    d.drawStr(2, 45, _stT("OK/> = dalej   < = wyjdz", "OK/> = next   < = exit", "OK/> = weiter   < = Ende"));
     d.sendBuffer();
     delay(800);
 }
@@ -306,21 +308,21 @@ void showScreenTest(U8G2 &display) {
 
     const int TOTAL = 10;
 
-    struct { const char* pl; const char* en; void(*fn)(U8G2&); } tests[] = {
-        {"Bialy ekran",     "Full white",       _stFullWhite      },
-        {"Czarny ekran",    "Full black",       _stFullBlack      },
-        {"Szachownica",     "Checkerboard",     _stCheckerboard   },
-        {"Pasy poziome",    "Horiz. bands",     _stHorizontalBands},
-        {"Pasy pionowe",    "Vert. bands",      _stVerticalBands  },
-        {"Geometria",       "Geometry",         _stGeometry       },
-        {"Czcionki",        "Fonts",            _stFonts          },
-        {"Logo",            "Logo",             _stLogo           },
-        {"Cien tekstu",     "Shadow text",      _stShadowText     },
-        {"Animacja",        "Animation",        _stAnimation      },
+    struct { const char* pl; const char* en; const char* de; void(*fn)(U8G2&); } tests[] = {
+        {"Bialy ekran",     "Full white",       "Weisser Bildschirm", _stFullWhite      },
+        {"Czarny ekran",    "Full black",       "Schwarzer Bildschirm", _stFullBlack    },
+        {"Szachownica",     "Checkerboard",     "Schachbrett",       _stCheckerboard   },
+        {"Pasy poziome",    "Horiz. bands",     "Horiz. Streifen",   _stHorizontalBands},
+        {"Pasy pionowe",    "Vert. bands",      "Vert. Streifen",    _stVerticalBands  },
+        {"Geometria",       "Geometry",         "Geometrie",         _stGeometry       },
+        {"Czcionki",        "Fonts",            "Schriftarten",      _stFonts          },
+        {"Logo",            "Logo",             "Logo",              _stLogo           },
+        {"Cien tekstu",     "Shadow text",      "Schatten-Text",     _stShadowText     },
+        {"Animacja",        "Animation",        "Animation",         _stAnimation      },
     };
 
     for (int i = 0; i < TOTAL; i++) {
-        const char* name = kalkSettings.language == 0 ? tests[i].pl : tests[i].en;
+        const char* name = _stT(tests[i].pl, tests[i].en, tests[i].de);
         _stShowInfo(display, i + 1, TOTAL, name);
 
         // Czekaj na przycisk przed uruchomieniem testu
@@ -343,8 +345,8 @@ void showScreenTest(U8G2 &display) {
     // Koniec testow
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(40, 28, _stT("Testy zakonczone!", "Tests complete!"));
-    display.drawStr(50, 44, _stT("Ekran dziala OK", "Display OK"));
+    display.drawStr(40, 28, _stT("Testy zakonczone!", "Tests complete!", "Tests abgeschlossen!"));
+    display.drawStr(50, 44, _stT("Ekran dziala OK", "Display OK", "Display OK"));
     display.sendBuffer();
     delay(2000);
 }

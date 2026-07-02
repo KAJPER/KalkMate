@@ -34,13 +34,19 @@
 void showAboutScreen(U8G2 &display) {
 
     // --- dane stron -----------------------------------------------------------
-    // Wybor jezyka: 0 = Polski, 1 = English
-    bool _lang_en = (kalkSettings.language == 1);
+    // Wybor jezyka: 0 = Polski, 1 = English, 2 = Deutsch
+    uint8_t _lang = kalkSettings.language;
+    // Pomocniczy helper 3-jezyczny lokalny dla tego ekranu
+    auto _abT = [_lang](const char* pl, const char* en, const char* de) -> const char* {
+        if (_lang == 0) return pl;
+        if (_lang == 1) return en;
+        return de;
+    };
 
     const char* const _about_titles[3] = {
-        _lang_en ? "=== About ===" : "=== O programie ===",
-        _lang_en ? "=== Authors ===" : "=== Tworcy ===",
-        _lang_en ? "=== Version ===" : "=== Wersja ==="
+        _abT("=== O programie ===", "=== About ===", "=== Ueber ==="),
+        _abT("=== Tworcy ===", "=== Authors ===", "=== Autoren ==="),
+        _abT("=== Wersja ===", "=== Version ===", "=== Version ===")
     };
 
     // Linie z dynamiczna wersja firmware — z FW_VERSION zdefiniowanego w main.cpp
@@ -48,28 +54,28 @@ void showAboutScreen(U8G2 &display) {
     static char _aboutFwLine[40];
     snprintf(_aboutHeaderLine, sizeof(_aboutHeaderLine), "KalkMate v%s", FW_VERSION);
     snprintf(_aboutFwLine, sizeof(_aboutFwLine),
-             _lang_en ? "Firmware version: %s" : "Wersja firmware: %s",
+             _abT("Wersja firmware: %s", "Firmware version: %s", "Firmware-Version: %s"),
              FW_VERSION);
 
     // 4 linie tresci na strone (puste ciagi == pusta linia)
     const char* const _about_lines[3][4] = {
         {
             _aboutHeaderLine,
-            _lang_en ? "AI calculator for students" : "Kalkulator AI dla maturzystow",
-            _lang_en ? "Supports: math, physics," : "Obsluguje: matematyke, fizyke,",
-            _lang_en ? "chemistry and biology" : "chemie i biologie"
+            _abT("Kalkulator AI dla maturzystow", "AI calculator for students", "KI-Rechner fuer Schueler"),
+            _abT("Obsluguje: matematyke, fizyke,", "Supports: math, physics,", "Unterstuetzt: Mathe, Physik,"),
+            _abT("chemie i biologie", "chemistry and biology", "Chemie und Biologie")
         },
         {
-            _lang_en ? "Project and hardware:" : "Projekt i hardware:",
+            _abT("Projekt i hardware:", "Project and hardware:", "Projekt und Hardware:"),
             "  KAJPA",
-            _lang_en ? "Software:" : "Oprogramowanie:",
+            _abT("Oprogramowanie:", "Software:", "Software:"),
             "  KAJPA"
         },
         {
             _aboutFwLine,
             "Chip: ESP32-WROVER-E",
             "Flash: 16MB, PSRAM: 8MB",
-            _lang_en ? "Display: OLED 256x64" : "Wyswietlacz: OLED 256x64"
+            _abT("Wyswietlacz: OLED 256x64", "Display: OLED 256x64", "Display: OLED 256x64")
         }
     };
 
@@ -141,8 +147,8 @@ void showAboutScreen(U8G2 &display) {
         // --- Pasek nawigacji (y=63, font 5x7) ---
         display.setFont(u8g2_font_5x7_tf);
 
-        // "< WSTECZ" / "< BACK" — lewa strona
-        const char* backLabel = _lang_en ? "< BACK" : "< WSTECZ";
+        // "< WSTECZ" / "< BACK" / "< ZURUECK" — lewa strona
+        const char* backLabel = _abT("< WSTECZ", "< BACK", "< ZURUECK");
         display.drawStr(2, 63, backLabel);
 
         // "X/3" — srodek (szerokosc ekranu 256, napis ~3 znaki*5+odst = ~18px)
@@ -154,9 +160,9 @@ void showAboutScreen(U8G2 &display) {
         int pageStrX = (256 - pageStrW) / 2;
         display.drawStr(pageStrX, 63, pageStr);
 
-        // "DALEJ >" / "NEXT >" — prawa strona (nie na ostatniej stronie)
+        // "DALEJ >" / "NEXT >" / "WEITER >" — prawa strona (nie na ostatniej stronie)
         if (_about_cur_page < _about_total_pages - 1) {
-            const char* nextLabel = _lang_en ? "NEXT >" : "DALEJ >";
+            const char* nextLabel = _abT("DALEJ >", "NEXT >", "WEITER>");
             // szerokosc max 7 znakow * 5px = 35px
             display.drawStr(256 - 35 - 2, 63, nextLabel);
         }

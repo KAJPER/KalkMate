@@ -127,8 +127,10 @@ static void _solWaitRelease() {
     _solLastPress = millis();
 }
 
-static const char* _solT(const char* pl, const char* en) {
-    return kalkSettings.language == 0 ? pl : en;
+static const char* _solT(const char* pl, const char* en, const char* de) {
+    if (kalkSettings.language == 0) return pl;
+    if (kalkSettings.language == 1) return en;
+    return de;
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +154,7 @@ static void _solDrawLoading(U8G2 &d, const char* msg, int frame) {
 static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 16, _solT("! Blad !", "! Error !"));
+    d.drawStr(2, 16, _solT("! Blad !", "! Error !", "! Fehler !"));
     d.drawHLine(0, 18, 256);
     // Polskie znaki w komunikatach z serwera -> ASCII (bo font nie ma glyphow)
     String l1 = _solUtf8ToAscii(String(line1 ? line1 : ""));
@@ -160,7 +162,7 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
     d.drawStr(2, 32, l1.c_str());
     if (l2.length() > 0) d.drawStr(2, 46, l2.c_str());
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 62, _solT("OK = powrot", "OK = back"));
+    d.drawStr(2, 62, _solT("OK = powrot", "OK = back", "OK = zurueck"));
     d.sendBuffer();
     _solWaitRelease();
     while (!_solBtn(BTN_OK) && !_solBtn(BTN_LEFT)) delay(20);
@@ -461,7 +463,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
             // Stopka
             d.drawHLine(0, 55, 256);
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 63, _solT("< wyjdz  UP/DN scroll", "< exit  UP/DN scroll"));
+            d.drawStr(2, 63, _solT("< wyjdz  UP/DN scroll", "< exit  UP/DN scroll", "< raus  UP/DN scroll"));
 
             d.sendBuffer();
             needRedraw = false;
@@ -511,8 +513,8 @@ static bool _solEnsureWifi(U8G2 &d) {
 
     if (ssid[0] == '\0') {
         _solDrawError(d,
-            _solT("Brak WiFi!", "No WiFi!"),
-            _solT("Ustaw siec w menu.", "Set network in menu."));
+            _solT("Brak WiFi!", "No WiFi!", "Kein WLAN!"),
+            _solT("Ustaw siec w menu.", "Set network in menu.", "WLAN im Menue einstellen."));
         return false;
     }
 
@@ -520,7 +522,7 @@ static bool _solEnsureWifi(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
     char ln[48];
-    snprintf(ln, sizeof(ln), _solT("Lacze z: %s", "Connecting: %s"), ssid);
+    snprintf(ln, sizeof(ln), _solT("Lacze z: %s", "Connecting: %s", "Verbinde: %s"), ssid);
     d.drawStr(2, 24, ln);
     d.drawStr(2, 38, "...");
     d.sendBuffer();
@@ -533,11 +535,11 @@ static bool _solEnsureWifi(U8G2 &d) {
     while (WiFi.status() != WL_CONNECTED) {
         if (millis() - start > 15000) {
             _solDrawError(d,
-                _solT("Blad WiFi!", "WiFi failed!"),
-                _solT("Sprawdz haslo.", "Check password."));
+                _solT("Blad WiFi!", "WiFi failed!", "WLAN Fehler!"),
+                _solT("Sprawdz haslo.", "Check password.", "Passwort pruefen."));
             return false;
         }
-        _solDrawLoading(d, _solT("Laczenie WiFi...", "Connecting WiFi..."), frame++);
+        _solDrawLoading(d, _solT("Laczenie WiFi...", "Connecting WiFi...", "Verbinde WLAN..."), frame++);
         delay(250);
     }
     wifiSaveBssidChannel();      // zapisz BSSID+kanal do NVS na nastepny raz
@@ -582,9 +584,9 @@ static void _solSendText(U8G2 &d, const char* taskText) {
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
+    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe"));
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
+    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait...", "Bitte warten..."));
     d.sendBuffer();
 
     int httpCode = http.POST(jsonBody);
@@ -595,8 +597,8 @@ static void _solSendText(U8G2 &d, const char* taskText) {
 
     if (httpCode == 402) {
         // Serwer zwraca 402 gdy saldo tokenow < 1000 (skonczyly sie).
-        _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!"),
-                      _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl"));
+        _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!"),
+                      _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl"));
         return;
     }
 
@@ -609,12 +611,12 @@ static void _solSendText(U8G2 &d, const char* taskText) {
         } else {
             snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
         }
-        _solDrawError(d, _solT("Blad API:", "API error:"), errMsg);
+        _solDrawError(d, _solT("Blad API:", "API error:", "API Fehler:"), errMsg);
         return;
     }
 
     int solIdx = resp.indexOf("\"solution\":\"");
-    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer"), ""); return; }
+    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer", "Keine Antwort"), ""); return; }
 
     int solStart = solIdx + 12;
     static char _stSolution[_SOL_SOLUTION_MAX + 1];
@@ -658,7 +660,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     size_t bodySize = hdrLen + jpegLen + ftrLen;
     uint8_t* bodyBuf = (uint8_t*)ps_malloc(bodySize);
     if (!bodyBuf) {
-        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!"), "");
+        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!"), "");
         return;
     }
     memcpy(bodyBuf,                   _mpHdr, hdrLen);
@@ -681,9 +683,9 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem"));
+    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe"));
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait..."));
+    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait...", "Bitte warten..."));
     d.sendBuffer();
 
     int httpCode = http.POST(bodyBuf, (int)bodySize);
@@ -691,7 +693,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
 
     if (httpCode <= 0) {
         http.end();
-        _solDrawError(d, _solT("Blad polaczenia", "Connection error"), "");
+        _solDrawError(d, _solT("Blad polaczenia", "Connection error", "Verbindungsfehler"), "");
         return;
     }
 
@@ -700,8 +702,8 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
 
     if (httpCode == 402) {
         // Serwer zwraca 402 gdy saldo tokenow < 1000 (skonczyly sie).
-        _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!"),
-                      _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl"));
+        _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!"),
+                      _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl"));
         return;
     }
 
@@ -714,12 +716,12 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
         } else {
             snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
         }
-        _solDrawError(d, _solT("Blad API:", "API error:"), errMsg);
+        _solDrawError(d, _solT("Blad API:", "API error:", "API Fehler:"), errMsg);
         return;
     }
 
     int solIdx = resp.indexOf("\"solution\":\"");
-    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer"), ""); return; }
+    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer", "Keine Antwort"), ""); return; }
 
     int solStart = solIdx + 12;
     static char _jpSolution[_SOL_SOLUTION_MAX + 1];
@@ -763,7 +765,7 @@ static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
     // Zamiast kopiowac cala klawiature, skorzystamy z tej samej funkcji
     // i po prostu akceptujemy naglowek "Haslo:" (jezyk-agnostycznie OK)
     bool saved = _runKeyboard(d, taskText, sizeof(taskText),
-                              _solT("Zadanie: ", "Problem: "));
+                              _solT("Zadanie: ", "Problem: ", "Aufgabe: "));
     if (!saved || taskText[0] == '\0') return;
 
     if (!_solEnsureWifi(d)) {
@@ -771,10 +773,10 @@ static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
         if (offlineQueueAddText(taskText)) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 18, _solT("Brak WiFi.", "No WiFi."));
-            d.drawStr(2, 32, _solT("Zadanie w kolejce.", "Task queued."));
+            d.drawStr(2, 18, _solT("Brak WiFi.", "No WiFi.", "Kein WLAN."));
+            d.drawStr(2, 32, _solT("Zadanie w kolejce.", "Task queued.", "Aufgabe in Warteschlange."));
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 48, _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available."));
+            d.drawStr(2, 48, _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available.", "Senden nach WLAN-Verbindung."));
             d.sendBuffer();
             _solWaitRelease();
             delay(2000);
@@ -871,8 +873,8 @@ static bool _solPreviewAndConfirm(U8G2 &d) {
         // Prawy panel (x:164..255)
         d.setDrawColor(1);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(166, 8,  _solT("PODGLAD", "PREVIEW"));
-        d.drawStr(166, 24, _solT("Ostrosc", "Sharp"));
+        d.drawStr(166, 8,  _solT("PODGLAD", "PREVIEW", "VORSCHAU"));
+        d.drawStr(166, 24, _solT("Ostrosc", "Sharp", "Schaerfe"));
         // Pasek ostrosci 84px
         const int bx = 166, by = 28, bw = 84, bh = 8;
         d.drawFrame(bx, by, bw, bh);
@@ -880,8 +882,8 @@ static bool _solPreviewAndConfirm(U8G2 &d) {
         char pctbuf[8];
         snprintf(pctbuf, sizeof(pctbuf), "%d%%", pct);
         d.drawStr(166, 44, pctbuf);
-        d.drawStr(166, 53, _solT("OK = foto", "OK = photo"));
-        d.drawStr(166, 62, _solT("< = wyjdz", "< = exit"));
+        d.drawStr(166, 53, _solT("OK = foto", "OK = photo", "OK = Foto"));
+        d.drawStr(166, 62, _solT("< = wyjdz", "< = exit", "< = raus"));
         d.sendBuffer();
 
         // Przyciski — po wolnej klatce kamery (~80ms) robimy krotki burst
@@ -904,7 +906,7 @@ static void _solRunPhotoMode(U8G2 &d) {
     // === Faza 1: podglad na zywo (mono viewfinder) ===
     // Kamera w trybie GRAYSCALE QQVGA — uzytkownik kadruje zadanie i ustawia
     // odleglosc (pasek ostrosci pomaga trafic w sweet-spot stalej ostrosci).
-    _solDrawLoading(d, _solT("Uruchamiam podglad...", "Starting preview..."), 0);
+    _solDrawLoading(d, _solT("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau..."), 0);
 
     if (camBeginPreview()) {
         bool go = _solPreviewAndConfirm(d);
@@ -914,12 +916,12 @@ static void _solRunPhotoMode(U8G2 &d) {
         // Fallback (KALK_HW_LEGACY albo blad preview): statyczny ekran jak dawniej
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 16, _solT("Tryb: Zdjecie", "Mode: Photo"));
+        d.drawStr(2, 16, _solT("Tryb: Zdjecie", "Mode: Photo", "Modus: Foto"));
         d.drawHLine(0, 18, 256);
-        d.drawStr(2, 32, _solT("Skieruj na zadanie.", "Point at the problem."));
-        d.drawStr(2, 46, _solT("OK = zrob zdjecie", "OK = take photo"));
+        d.drawStr(2, 32, _solT("Skieruj na zadanie.", "Point at the problem.", "Auf Aufgabe richten."));
+        d.drawStr(2, 46, _solT("OK = zrob zdjecie", "OK = take photo", "OK = Foto machen"));
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, _solT("< = anuluj", "< = cancel"));
+        d.drawStr(2, 62, _solT("< = anuluj", "< = cancel", "< = abbrechen"));
         d.sendBuffer();
 
         _solWaitRelease();
@@ -935,21 +937,21 @@ static void _solRunPhotoMode(U8G2 &d) {
     // === Faza 2: finalne zdjecie JPEG/UXGA ===
     // camBegin: PWDN low, RESET pulse (przez MCP23017), esp_camera_init().
     // I2C dzielony z MCP23017 (sccb_i2c_port=0 w camera.h).
-    _solDrawLoading(d, _solT("Wlaczam kamere...", "Powering camera..."), 0);
+    _solDrawLoading(d, _solT("Wlaczam kamere...", "Powering camera...", "Kamera wird gestartet..."), 0);
 
     if (!camBegin()) {
-        _solDrawError(d, _solT("Init kamery!", "Camera init!"), "esp_camera_init");
+        _solDrawError(d, _solT("Init kamery!", "Camera init!", "Kamera-Init!"), "esp_camera_init");
         return;
     }
 
     // Warm-up - po switchu z podgladu AEC/AGC zbiega na nowo (3 klatki)
     camWarmup(3);
 
-    _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo..."), 0);
+    _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo...", "Foto wird gemacht..."), 0);
     camera_fb_t* fb = camCapture();
     if (!fb) {
         camEnd();
-        _solDrawError(d, _solT("Blad zdjecia!", "Capture error!"), "");
+        _solDrawError(d, _solT("Blad zdjecia!", "Capture error!", "Fotofehler!"), "");
         return;
     }
     // Skopiuj JPEG do PSRAM, potem zwolnij bufor kamery i wylacz kamere
@@ -959,7 +961,7 @@ static void _solRunPhotoMode(U8G2 &d) {
     if (!jpegBuf) {
         esp_camera_fb_return(fb);
         camEnd();
-        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!"), "PSRAM");
+        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!"), "PSRAM");
         return;
     }
     memcpy(jpegBuf, fb->buf, jpegLen);
@@ -972,10 +974,10 @@ static void _solRunPhotoMode(U8G2 &d) {
         if (offlineQueueAddPhoto(jpegBuf, jpegLen)) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 18, _solT("Brak WiFi.", "No WiFi."));
-            d.drawStr(2, 32, _solT("Zdjecie w kolejce.", "Photo queued."));
+            d.drawStr(2, 18, _solT("Brak WiFi.", "No WiFi.", "Kein WLAN."));
+            d.drawStr(2, 32, _solT("Zdjecie w kolejce.", "Photo queued.", "Foto in Warteschlange."));
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 48, _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available."));
+            d.drawStr(2, 48, _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available.", "Senden nach WLAN-Verbindung."));
             d.sendBuffer();
             _solWaitRelease();
             delay(2000);
@@ -1000,7 +1002,7 @@ static void _solModeSelect(U8G2 &d, int &mode) {
         powerCheckSleep();
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ==="));
+        d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ===", "=== Aufgabe loesen ==="));
         d.drawHLine(0, 12, 256);
 
         const char* labels[3][2] = {
@@ -1032,7 +1034,8 @@ static void _solModeSelect(U8G2 &d, int &mode) {
         d.drawHLine(0, 53, 256);
         d.setFont(u8g2_font_5x7_tf);
         d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
-                                "^/v select   OK: start   < back"));
+                                "^/v select   OK: start   < back",
+                                "^/v waehlen  OK: Start  < zurueck"));
         d.sendBuffer();
 
         if (_solBtn(BTN_UP)) {
@@ -1061,9 +1064,9 @@ static void _solRunHistoryMode(U8G2 &d) {
     if (count == 0) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 28, _solT("Brak zapisanych zadan", "No saved tasks"));
+        d.drawStr(2, 28, _solT("Brak zapisanych zadan", "No saved tasks", "Keine gespeicherten Aufgaben"));
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 56, _solT("OK / < = powrot", "OK / < = back"));
+        d.drawStr(2, 56, _solT("OK / < = powrot", "OK / < = back", "OK / < = zurueck"));
         d.sendBuffer();
         while (true) {
         if (panicTriggered()) return;
@@ -1083,7 +1086,7 @@ static void _solRunHistoryMode(U8G2 &d) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         char hdr[32];
-        snprintf(hdr, sizeof(hdr), _solT("Historia (%d/%d)", "History (%d/%d)"),
+        snprintf(hdr, sizeof(hdr), _solT("Historia (%d/%d)", "History (%d/%d)", "Verlauf (%d/%d)"),
                  cursor + 1, count);
         d.drawStr(2, 10, hdr);
         d.drawHLine(0, 12, 256);
@@ -1114,7 +1117,8 @@ static void _solRunHistoryMode(U8G2 &d) {
         d.drawHLine(0, 53, 256);
         d.setFont(u8g2_font_5x7_tf);
         d.drawStr(2, 62, _solT("^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
-                                "^/v OK:show  >:edit+resend  <:back"));
+                                "^/v OK:show  >:edit+resend  <:back",
+                                "^/v OK:zeigen >:bearb+senden <:zurueck"));
         d.sendBuffer();
 
         if (_solBtn(BTN_UP)) {
@@ -1172,10 +1176,10 @@ static void _solProcessQueue(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
     char hdr[40];
-    snprintf(hdr, sizeof(hdr), _solT("Kolejka: %d zadan", "Queue: %d tasks"), (int)n);
+    snprintf(hdr, sizeof(hdr), _solT("Kolejka: %d zadan", "Queue: %d tasks", "Warteschl.: %d Aufg."), (int)n);
     d.drawStr(2, 24, hdr);
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 40, _solT("Wysylam do serwera...", "Sending to server..."));
+    d.drawStr(2, 40, _solT("Wysylam do serwera...", "Sending to server...", "Sende an Server..."));
     d.sendBuffer();
     delay(1000);
 

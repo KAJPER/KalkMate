@@ -60,8 +60,10 @@ static void _infoWaitRelease() {
 // ---------------------------------------------------------------------------
 // Pomocnik dwujezycznosci
 // ---------------------------------------------------------------------------
-static const char* _infoT(const char* pl, const char* en) {
-    return kalkSettings.language == 0 ? pl : en;
+static const char* _infoT(const char* pl, const char* en, const char* de) {
+    if (kalkSettings.language == 0) return pl;
+    if (kalkSettings.language == 1) return en;
+    return de;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +107,7 @@ static void _infoDrawStaticPage(U8G2 &d, int page,
     d.setFont(u8g2_font_5x7_tf);
 
     // Lewa strona: WSTECZ / BACK
-    const char* backLabel = _infoT("< WSTECZ", "< BACK");
+    const char* backLabel = _infoT("< WSTECZ", "< BACK", "< ZURUECK");
     d.drawStr(2, 63, backLabel);
 
     // Srodek: X/5
@@ -117,7 +119,7 @@ static void _infoDrawStaticPage(U8G2 &d, int page,
 
     // Prawa strona: DALEJ / NEXT — nie na ostatniej stronie
     if (page < _INFO_TOTAL_PAGES - 1) {
-        const char* nextLabel = _infoT("DALEJ >", "NEXT >");
+        const char* nextLabel = _infoT("DALEJ >", "NEXT >", "WEITER >");
         d.drawStr(256 - 37 - 2, 63, nextLabel);
     }
 
@@ -132,15 +134,17 @@ static void _infoDrawServerPage(U8G2 &d, int page) {
     d.setFont(u8g2_font_6x10_tf);
 
     const char* title = _infoT("=== Status serwera (4/5) ===",
-                                "=== Server status (4/5) ===");
+                                "=== Server status (4/5) ===",
+                                "=== Serverstatus (4/5) ===");
     d.drawStr(2, 10, title);
     d.drawHLine(0, 12, 256);
 
     if (WiFi.status() == WL_CONNECTED) {
         // WiFi polaczone
-        d.drawStr(2, _INFO_CONTENT_Y[0], _infoT("WiFi: Polaczono", "WiFi: Connected"));
+        d.drawStr(2, _INFO_CONTENT_Y[0], _infoT("WiFi: Polaczono", "WiFi: Connected", "WiFi: Verbunden"));
         d.drawStr(2, _INFO_CONTENT_Y[1], _infoT("Serwer: OK (sprawdz w app)",
-                                                  "Server: OK (check in app)"));
+                                                  "Server: OK (check in app)",
+                                                  "Server: OK (siehe App)"));
 
         // IP
         char ipLine[40];
@@ -155,19 +159,23 @@ static void _infoDrawServerPage(U8G2 &d, int page) {
     } else {
         // Brak polaczenia
         d.drawStr(2, _INFO_CONTENT_Y[0], _infoT("WiFi: Brak polaczenia",
-                                                  "WiFi: Not connected"));
+                                                  "WiFi: Not connected",
+                                                  "WiFi: Nicht verbunden"));
         d.drawStr(2, _INFO_CONTENT_Y[1], _infoT("Polacz sie z WiFi w",
-                                                  "Connect to WiFi in"));
+                                                  "Connect to WiFi in",
+                                                  "WiFi verbinden in"));
         d.drawStr(2, _INFO_CONTENT_Y[2], _infoT("Ustawieniach aby korzystac",
-                                                  "Settings to use"));
+                                                  "Settings to use",
+                                                  "den Einstellungen fuer"));
         d.drawStr(2, _INFO_CONTENT_Y[3], _infoT("z funkcji AI",
-                                                  "AI features"));
+                                                  "AI features",
+                                                  "KI-Funktionen"));
     }
 
     d.drawHLine(0, 54, 256);
     d.setFont(u8g2_font_5x7_tf);
 
-    const char* backLabel = _infoT("< WSTECZ", "< BACK");
+    const char* backLabel = _infoT("< WSTECZ", "< BACK", "< ZURUECK");
     d.drawStr(2, 63, backLabel);
 
     char pageStr[8];
@@ -178,7 +186,7 @@ static void _infoDrawServerPage(U8G2 &d, int page) {
 
     // Nie ostatnia strona — pokaz DALEJ
     if (page < _INFO_TOTAL_PAGES - 1) {
-        const char* nextLabel = _infoT("DALEJ >", "NEXT >");
+        const char* nextLabel = _infoT("DALEJ >", "NEXT >", "WEITER >");
         d.drawStr(256 - 37 - 2, 63, nextLabel);
     }
 
@@ -194,45 +202,60 @@ static void _infoDrawPage(U8G2 &d, int page) {
         case 0: // Jak uzywac (1/5)
             _infoDrawStaticPage(d, page,
                 _infoT("=== Jak uzywac (1/5) ===",
-                        "=== How to use (1/5) ==="),
+                        "=== How to use (1/5) ===",
+                        "=== Bedienung (1/5) ==="),
                 _infoT("1. Zrob zdjecie zadania",
-                        "1. Take a photo of task"),
+                        "1. Take a photo of task",
+                        "1. Aufgabe fotografieren"),
                 _infoT("2. Nacisnij OK aby wyslac",
-                        "2. Press OK to send"),
+                        "2. Press OK to send",
+                        "2. OK druecken zum Senden"),
                 _infoT("3. Poczekaj na odpowiedz",
-                        "3. Wait for response"),
+                        "3. Wait for response",
+                        "3. Auf Antwort warten"),
                 _infoT("4. Czytaj rozwiazanie",
-                        "4. Read the solution")
+                        "4. Read the solution",
+                        "4. Loesung lesen")
             );
             break;
 
         case 1: // Wskazowki (2/5)
             _infoDrawStaticPage(d, page,
                 _infoT("=== Wskazowki (2/5) ===",
-                        "=== Tips (2/5) ==="),
+                        "=== Tips (2/5) ===",
+                        "=== Tipps (2/5) ==="),
                 _infoT("Dobre oswietlenie zadania",
-                        "Good lighting on the task"),
+                        "Good lighting on the task",
+                        "Aufgabe gut beleuchten"),
                 _infoT("Trzymaj rowno, bez rozmazania",
-                        "Hold steady, no blur"),
+                        "Hold steady, no blur",
+                        "Ruhig halten, nicht verwackeln"),
                 _infoT("Zadanie musi byc czytelne",
-                        "Task must be readable"),
+                        "Task must be readable",
+                        "Aufgabe muss lesbar sein"),
                 _infoT("Unikaj cieni na papierze",
-                        "Avoid shadows on paper")
+                        "Avoid shadows on paper",
+                        "Schatten auf Papier vermeiden")
             );
             break;
 
         case 2: // Obsługiwane przedmioty (3/5)
             _infoDrawStaticPage(d, page,
                 _infoT("=== Przedmioty (3/5) ===",
-                        "=== Subjects (3/5) ==="),
+                        "=== Subjects (3/5) ===",
+                        "=== Faecher (3/5) ==="),
                 _infoT("Matematyka - wszystkie dzialy",
-                        "Math - all topics"),
+                        "Math - all topics",
+                        "Mathematik - alle Themen"),
                 _infoT("Fizyka - zadania obliczeniowe",
-                        "Physics - calculations"),
+                        "Physics - calculations",
+                        "Physik - Berechnungen"),
                 _infoT("Chemia - rownania, obliczenia",
-                        "Chemistry - equations"),
+                        "Chemistry - equations",
+                        "Chemie - Gleichungen"),
                 _infoT("Biologia - pytania opisowe",
-                        "Biology - descriptive")
+                        "Biology - descriptive",
+                        "Biologie - Beschreibungen")
             );
             break;
 
@@ -243,13 +266,17 @@ static void _infoDrawPage(U8G2 &d, int page) {
         case 4: // FAQ (5/5)
             _infoDrawStaticPage(d, page,
                 _infoT("=== FAQ (5/5) ===",
+                        "=== FAQ (5/5) ===",
                         "=== FAQ (5/5) ==="),
                 _infoT("Brak odpowiedzi? Sprawdz WiFi",
-                        "No response? Check WiFi"),
+                        "No response? Check WiFi",
+                        "Keine Antwort? WiFi pruefen"),
                 _infoT("Zle rozwiazanie? Sprobuj znowu",
-                        "Wrong answer? Try again"),
+                        "Wrong answer? Try again",
+                        "Falsche Loesung? Nochmal versuchen"),
                 _infoT("Blad kamery? Uruchom ponownie",
-                        "Camera error? Restart device"),
+                        "Camera error? Restart device",
+                        "Kamerafehler? Geraet neu starten"),
                 "Kontakt: kacper@kajpa.pl"
             );
             break;

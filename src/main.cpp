@@ -110,8 +110,29 @@ const char* menuItemsEN[] = {
     "5. Settings",
     "6. About",
 };
+const char* menuItemsDE[] = {
+    "1. Aufgabe loesen",
+    "2. Notizen",
+    "3. Testmodus",
+    "4. Informationen",
+    "5. Einstellungen",
+    "6. Ueber",
+};
 const int MENU_COUNT = 6;
 const int VISIBLE_LINES = 4;
+
+// Trojjezyczny helper (0=Polski, 1=English, 2=Deutsch) — uzywany w main.cpp
+// zamiast lokalnego T() z settings_screen.h (inna konwencja nazewnictwa pliku).
+static inline const char* mT(const char* pl, const char* en, const char* de) {
+    if (kalkSettings.language == 0) return pl;
+    if (kalkSettings.language == 1) return en;
+    return de;
+}
+static inline const char* mMenuItem(int idx) {
+    if (kalkSettings.language == 0) return menuItemsPL[idx];
+    if (kalkSettings.language == 1) return menuItemsEN[idx];
+    return menuItemsDE[idx];
+}
 
 int selectedItem = 0;
 int scrollOffset = 0;
@@ -156,8 +177,7 @@ void drawMenu() {
         int itemIndex = scrollOffset + i;
         if (itemIndex >= MENU_COUNT) break;
         int y = 25 + i * 13;
-        const char* label = (kalkSettings.language == 0)
-            ? menuItemsPL[itemIndex] : menuItemsEN[itemIndex];
+        const char* label = mMenuItem(itemIndex);
         if (itemIndex == selectedItem) {
             u8g2.setDrawColor(1);
             u8g2.drawBox(0, y - 9, 256, 12);
@@ -181,10 +201,9 @@ void drawMenu() {
 void showSelected() {
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_10x20_tf);
-    u8g2.drawStr(10, 30, kalkSettings.language == 0 ? "Wybrano:" : "Selected:");
+    u8g2.drawStr(10, 30, mT("Wybrano:", "Selected:", "Ausgewaehlt:"));
     u8g2.setFont(u8g2_font_6x10_tf);
-    const char* label = (kalkSettings.language == 0)
-        ? menuItemsPL[selectedItem] : menuItemsEN[selectedItem];
+    const char* label = mMenuItem(selectedItem);
     u8g2.drawStr(10, 50, label);
     u8g2.sendBuffer();
     delay(1500);
@@ -201,25 +220,25 @@ static void showNotesScreen() {
         u8g2.setFont(u8g2_font_6x10_tf);
         char hdr[40];
         snprintf(hdr, sizeof(hdr),
-                 kalkSettings.language == 0 ? "Notatki (%d)" : "Notes (%d)",
+                 mT("Notatki (%d)", "Notes (%d)", "Notizen (%d)"),
                  count);
         u8g2.drawStr(2, 10, hdr);
         u8g2.drawHLine(0, 12, 256);
 
         if (count == 0) {
             u8g2.drawStr(2, 30,
-                kalkSettings.language == 0
-                    ? "Brak notatek. Dodaj je"
-                    : "No notes. Add them");
+                mT("Brak notatek. Dodaj je",
+                   "No notes. Add them",
+                   "Keine Notizen. Fuege sie"));
             u8g2.drawStr(2, 42,
-                kalkSettings.language == 0
-                    ? "w panelu klienta i zsynchron."
-                    : "in user panel and sync.");
+                mT("w panelu klienta i zsynchron.",
+                   "in user panel and sync.",
+                   "im Kundenpanel hinzu und sync."));
             u8g2.setFont(u8g2_font_5x7_tf);
             u8g2.drawStr(2, 62,
-                kalkSettings.language == 0
-                    ? "OK = sync   < = wyjscie"
-                    : "OK = sync   < = exit");
+                mT("OK = sync   < = wyjscie",
+                   "OK = sync   < = exit",
+                   "OK = sync   < = beenden"));
         } else {
             // Pokaz 4 widoczne tytuly
             int scroll = (cursor < 4) ? 0 : cursor - 3;
@@ -245,9 +264,9 @@ static void showNotesScreen() {
             }
             u8g2.setFont(u8g2_font_5x7_tf);
             u8g2.drawStr(2, 62,
-                kalkSettings.language == 0
-                    ? "OK = otworz   v = sync   < = wyjscie"
-                    : "OK = open   v = sync   < = exit");
+                mT("OK = otworz   v = sync   < = wyjscie",
+                   "OK = open   v = sync   < = exit",
+                   "OK = oeffnen  v = sync  < = beenden"));
         }
         u8g2.sendBuffer();
     };
@@ -292,9 +311,9 @@ static void showNotesScreen() {
             snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
             u8g2.drawStr(220, 62, info);
             u8g2.drawStr(2, 62,
-                kalkSettings.language == 0
-                    ? "^/v scroll   < = wstecz"
-                    : "^/v scroll   < = back");
+                mT("^/v scroll   < = wstecz",
+                   "^/v scroll   < = back",
+                   "^/v scroll   < = zurueck"));
             u8g2.sendBuffer();
 
             inputScan();
@@ -318,13 +337,9 @@ static void showNotesScreen() {
         u8g2.clearBuffer();
         u8g2.setFont(u8g2_font_6x10_tf);
         u8g2.drawStr(2, 24,
-            kalkSettings.language == 0
-                ? "Synchronizacja..."
-                : "Syncing...");
+            mT("Synchronizacja...", "Syncing...", "Synchronisiere..."));
         u8g2.drawStr(2, 38,
-            kalkSettings.language == 0
-                ? "Lacze z serwerem"
-                : "Connecting to server");
+            mT("Lacze z serwerem", "Connecting to server", "Verbinde mit Server"));
         u8g2.sendBuffer();
 
         // Ensure WiFi connected (uzyj zapisanego SSID/pass)
@@ -343,7 +358,7 @@ static void showNotesScreen() {
             u8g2.clearBuffer();
             u8g2.setFont(u8g2_font_6x10_tf);
             u8g2.drawStr(2, 30,
-                kalkSettings.language == 0 ? "Brak WiFi" : "No WiFi");
+                mT("Brak WiFi", "No WiFi", "Kein WLAN"));
             u8g2.sendBuffer();
             delay(2000);
             return -1;
@@ -358,15 +373,11 @@ static void showNotesScreen() {
         u8g2.setFont(u8g2_font_6x10_tf);
         if (n < 0) {
             u8g2.drawStr(2, 30,
-                kalkSettings.language == 0
-                    ? "Blad synchronizacji"
-                    : "Sync error");
+                mT("Blad synchronizacji", "Sync error", "Sync-Fehler"));
         } else {
             char buf[40];
             snprintf(buf, sizeof(buf),
-                kalkSettings.language == 0
-                    ? "Pobrano: %d notatek"
-                    : "Downloaded: %d notes",
+                mT("Pobrano: %d notatek", "Downloaded: %d notes", "Geladen: %d Notizen"),
                 n);
             u8g2.drawStr(2, 30, buf);
         }
@@ -626,19 +637,19 @@ void showDeviceIdQrScreen(U8G2 &d) {
 
         // Lewa strona: device ID + info
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 8, kalkSettings.language == 0 ? "Device ID:" : "Device ID:");
+        d.drawStr(2, 8, "Device ID:");
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 20, deviceId.c_str());
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 32, kalkSettings.language == 0
-            ? "Skanuj QR -> podlaczenie"
-            : "Scan QR -> link to account");
-        d.drawStr(2, 42, kalkSettings.language == 0
-            ? "do panelu klienta."
-            : "in user panel.");
-        d.drawStr(2, 60, kalkSettings.language == 0
-            ? "OK / < = wyjscie"
-            : "OK / < = exit");
+        d.drawStr(2, 32, mT("Skanuj QR -> podlaczenie",
+                             "Scan QR -> link to account",
+                             "QR scannen -> Konto verknuepfen"));
+        d.drawStr(2, 42, mT("do panelu klienta.",
+                             "in user panel.",
+                             "im Kundenpanel."));
+        d.drawStr(2, 60, mT("OK / < = wyjscie",
+                             "OK / < = exit",
+                             "OK / < = beenden"));
 
         // Prawa strona: QR (po prawej, 64x64 px max)
         // QR wersja 4 = 33 modules, kazdy 1px = 33x33. MieĹ›ci siÄ™ prawo.
@@ -680,20 +691,21 @@ static void showTestsScreen() {
         u8g2.setFont(u8g2_font_6x10_tf);
         char hdr[40];
         snprintf(hdr, sizeof(hdr),
-            kalkSettings.language == 0 ? "Sprawdzian (%d)" : "Tests (%d)", count);
+            mT("Sprawdzian (%d)", "Tests (%d)", "Tests (%d)"), count);
         u8g2.drawStr(2, 10, hdr);
         u8g2.drawHLine(0, 12, 256);
 
         if (count == 0) {
-            u8g2.drawStr(2, 30, kalkSettings.language == 0
-                ? "Brak sprawdzianow."
-                : "No tests.");
-            u8g2.drawStr(2, 42, kalkSettings.language == 0
-                ? "Dodaj w panelu klienta i sync."
-                : "Add in user panel and sync.");
+            u8g2.drawStr(2, 30, mT("Brak sprawdzianow.",
+                                    "No tests.",
+                                    "Keine Tests."));
+            u8g2.drawStr(2, 42, mT("Dodaj w panelu klienta i sync.",
+                                    "Add in user panel and sync.",
+                                    "Im Kundenpanel hinzufuegen u. sync."));
             u8g2.setFont(u8g2_font_5x7_tf);
-            u8g2.drawStr(2, 62, kalkSettings.language == 0
-                ? "OK = sync   < = wyjscie" : "OK = sync   < = exit");
+            u8g2.drawStr(2, 62, mT("OK = sync   < = wyjscie",
+                                    "OK = sync   < = exit",
+                                    "OK = sync   < = beenden"));
         } else {
             int scroll = (cursor < 4) ? 0 : cursor - 3;
             for (int i = 0; i < 4 && (scroll + i) < count; i++) {
@@ -714,9 +726,9 @@ static void showTestsScreen() {
                 }
             }
             u8g2.setFont(u8g2_font_5x7_tf);
-            u8g2.drawStr(2, 62, kalkSettings.language == 0
-                ? "OK=otworz  v=sync  <=wyjscie"
-                : "OK=open  v=sync  <=exit");
+            u8g2.drawStr(2, 62, mT("OK=otworz  v=sync  <=wyjscie",
+                                    "OK=open  v=sync  <=exit",
+                                    "OK=oeffnen v=sync <=beenden"));
         }
         u8g2.sendBuffer();
     };
@@ -766,9 +778,9 @@ static void showTestsScreen() {
             char info[24];
             snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
             u8g2.drawStr(220, 62, info);
-            u8g2.drawStr(2, 62, kalkSettings.language == 0
-                ? "^/v scroll  < wstecz"
-                : "^/v scroll  < back");
+            u8g2.drawStr(2, 62, mT("^/v scroll  < wstecz",
+                                    "^/v scroll  < back",
+                                    "^/v scroll  < zurueck"));
             u8g2.sendBuffer();
 
             inputScan();
@@ -791,8 +803,7 @@ static void showTestsScreen() {
     auto syncFromServer = [&]() {
         u8g2.clearBuffer();
         u8g2.setFont(u8g2_font_6x10_tf);
-        u8g2.drawStr(2, 30, kalkSettings.language == 0
-            ? "Synchronizacja..." : "Syncing...");
+        u8g2.drawStr(2, 30, mT("Synchronizacja...", "Syncing...", "Synchronisiere..."));
         u8g2.sendBuffer();
 
         if (WiFi.status() != WL_CONNECTED) {
@@ -807,7 +818,7 @@ static void showTestsScreen() {
         if (WiFi.status() != WL_CONNECTED) {
             u8g2.clearBuffer();
             u8g2.setFont(u8g2_font_6x10_tf);
-            u8g2.drawStr(2, 30, kalkSettings.language == 0 ? "Brak WiFi" : "No WiFi");
+            u8g2.drawStr(2, 30, mT("Brak WiFi", "No WiFi", "Kein WLAN"));
             u8g2.sendBuffer();
             delay(2000);
             return -1;
@@ -821,14 +832,11 @@ static void showTestsScreen() {
         u8g2.clearBuffer();
         u8g2.setFont(u8g2_font_6x10_tf);
         if (n < 0) {
-            u8g2.drawStr(2, 30, kalkSettings.language == 0
-                ? "Blad synchronizacji" : "Sync error");
+            u8g2.drawStr(2, 30, mT("Blad synchronizacji", "Sync error", "Sync-Fehler"));
         } else {
             char buf[40];
             snprintf(buf, sizeof(buf),
-                kalkSettings.language == 0
-                    ? "Pobrano: %d sprawdz."
-                    : "Downloaded: %d tests", n);
+                mT("Pobrano: %d sprawdz.", "Downloaded: %d tests", "Geladen: %d Tests"), n);
             u8g2.drawStr(2, 30, buf);
         }
         u8g2.sendBuffer();
@@ -1189,8 +1197,7 @@ void loop() {
 
     if (btnPressed(BTN_OK)) {
         resetActivity();
-        const char* label = (kalkSettings.language == 0)
-            ? menuItemsPL[selectedItem] : menuItemsEN[selectedItem];
+        const char* label = mMenuItem(selectedItem);
         Serial.printf("BTN OK - wybrano: %s\n", label);
         switch (selectedItem) {
             case 0: showSolveScreen(u8g2);  break;

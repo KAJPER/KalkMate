@@ -14,10 +14,12 @@
 #include "settings_screen.h"
 #include "wifi_persist.h"
 
-// Pomocnik tlumaczen — zwraca polski lub angielski napis
-// w zaleznosci od kalkSettings.language (0=Polski, 1=English)
-static const char* _wifiT(const char* pl, const char* en) {
-    return kalkSettings.language == 0 ? pl : en;
+// Pomocnik tlumaczen — zwraca polski, angielski lub niemiecki napis
+// w zaleznosci od kalkSettings.language (0=Polski, 1=English, 2=Deutsch)
+static const char* _wifiT(const char* pl, const char* en, const char* de) {
+    if (kalkSettings.language == 0) return pl;
+    if (kalkSettings.language == 1) return en;
+    return de;
 }
 
 // === Piny przyciskow ===
@@ -137,13 +139,13 @@ static void _drawWifiStatus(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
 
-    d.drawStr(2, 10, _wifiT("=== Ustawienia WiFi ===", "=== WiFi Settings ==="));
+    d.drawStr(2, 10, _wifiT("=== Ustawienia WiFi ===", "=== WiFi Settings ===", "=== WiFi-Einstellungen ==="));
     d.drawHLine(0, 12, 256);
 
     bool connected = (WiFi.status() == WL_CONNECTED);
 
     if (connected) {
-        d.drawStr(2, 23, _wifiT("Stan: Polaczono", "Status: Connected"));
+        d.drawStr(2, 23, _wifiT("Stan: Polaczono", "Status: Connected", "Status: Verbunden"));
 
         char line[52];
         snprintf(line, sizeof(line), "SSID: %s", WiFi.SSID().c_str());
@@ -155,17 +157,17 @@ static void _drawWifiStatus(U8G2 &d) {
         snprintf(line, sizeof(line), "RSSI: %d dBm", WiFi.RSSI());
         d.drawStr(2, 53, line);
     } else {
-        d.drawStr(2, 25, _wifiT("Stan: Rozlaczone", "Status: Disconnected"));
-        d.drawStr(2, 40, _wifiT("Brak polaczenia z siecia.", "No network connection."));
+        d.drawStr(2, 25, _wifiT("Stan: Rozlaczone", "Status: Disconnected", "Status: Getrennt"));
+        d.drawStr(2, 40, _wifiT("Brak polaczenia z siecia.", "No network connection.", "Keine Netzwerkverbindung."));
     }
 
     // Trzy podpowiedzi na dole: [< Wstecz] [OK Skanuj] [v Zapisane(N)]
     d.drawHLine(0, 54, 256);
     d.setFont(u8g2_font_5x7_tf);
     char sav[24];
-    snprintf(sav, sizeof(sav), _wifiT("v Zapisane(%d)", "v Saved(%d)"), wifiSavedCount());
-    d.drawStr(2,   62, _wifiT("< Wstecz", "< Back"));
-    d.drawStr(62,  62, _wifiT("OK Skanuj", "OK Scan"));
+    snprintf(sav, sizeof(sav), _wifiT("v Zapisane(%d)", "v Saved(%d)", "v Gespeichert(%d)"), wifiSavedCount());
+    d.drawStr(2,   62, _wifiT("< Wstecz", "< Back", "< Zurueck"));
+    d.drawStr(62,  62, _wifiT("OK Skanuj", "OK Scan", "OK Suchen"));
     d.drawStr(150, 62, sav);
 
     d.sendBuffer();
@@ -177,7 +179,7 @@ static void _drawWifiStatus(U8G2 &d) {
 static void _drawScanning(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, _wifiT("Skanowanie...", "Scanning..."));
+    d.drawStr(2, 20, _wifiT("Skanowanie...", "Scanning...", "Suche laeuft..."));
     d.sendBuffer();
 }
 
@@ -189,12 +191,12 @@ static void _drawNetworkList(U8G2 &d, int networks, int scroll, int selected) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
 
-    d.drawStr(2, 10, _wifiT("Wybierz siec WiFi:", "Select WiFi network:"));
+    d.drawStr(2, 10, _wifiT("Wybierz siec WiFi:", "Select WiFi network:", "WiFi-Netzwerk waehlen:"));
     d.drawHLine(0, 12, 256);
 
     if (networks == 0) {
-        d.drawStr(2, 36, _wifiT("Brak sieci.", "No networks found."));
-        d.drawStr(2, 50, _wifiT("OK = skanuj ponownie", "OK = scan again"));
+        d.drawStr(2, 36, _wifiT("Brak sieci.", "No networks found.", "Keine Netze gefunden."));
+        d.drawStr(2, 50, _wifiT("OK = skanuj ponownie", "OK = scan again", "OK = erneut suchen"));
         d.sendBuffer();
         return;
     }
@@ -270,17 +272,17 @@ static int _runNetworkList(U8G2 &d) {
         if (n <= 0) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 14, _wifiT("=== Skanowanie WiFi ===", "=== WiFi scan ==="));
+            d.drawStr(2, 14, _wifiT("=== Skanowanie WiFi ===", "=== WiFi scan ===", "=== WiFi-Suche ==="));
             d.drawHLine(0, 16, 256);
             d.setFont(u8g2_font_6x10_tf);
             if (n < 0) {
-                d.drawStr(2, 32, _wifiT("Blad skanu radia.", "Radio scan error."));
+                d.drawStr(2, 32, _wifiT("Blad skanu radia.", "Radio scan error.", "Fehler beim Scannen."));
             } else {
-                d.drawStr(2, 32, _wifiT("Brak sieci w zasiegu.", "No networks in range."));
+                d.drawStr(2, 32, _wifiT("Brak sieci w zasiegu.", "No networks in range.", "Keine Netze in Reichweite."));
             }
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 50, _wifiT("OK = skanuj ponownie", "OK = scan again"));
-            d.drawStr(2, 60, _wifiT("< = wyjscie", "< = cancel"));
+            d.drawStr(2, 50, _wifiT("OK = skanuj ponownie", "OK = scan again", "OK = erneut suchen"));
+            d.drawStr(2, 60, _wifiT("< = wyjscie", "< = cancel", "< = abbrechen"));
             d.sendBuffer();
         } else {
             _drawNetworkList(d, n, scroll, selected);
@@ -354,7 +356,7 @@ static void _drawKeyboard(U8G2 &d,
     d.setFont(u8g2_font_6x10_tf);
 
     // --- Linia 0: label + wpisany tekst ---
-    const char* lbl = label ? label : _wifiT("Haslo:", "Password:");
+    const char* lbl = label ? label : _wifiT("Haslo:", "Password:", "Passwort:");
     d.drawStr(2, 8, lbl);
     // Szerokosc etykiety: strlen * 6px (font 6x10) + 4px margines
     int lblW = (int)strlen(lbl) * 6 + 6;
@@ -522,7 +524,7 @@ static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label =
 static void _drawConnecting(U8G2 &d, const char* ssid, int dots) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, _wifiT("Laczenie z:", "Connecting to:"));
+    d.drawStr(2, 20, _wifiT("Laczenie z:", "Connecting to:", "Verbinde mit:"));
     d.drawStr(2, 34, ssid);
     char dotStr[8] = "";
     for (int i = 0; i < dots; i++) strncat(dotStr, ".", sizeof(dotStr) - 1);
@@ -533,20 +535,20 @@ static void _drawConnecting(U8G2 &d, const char* ssid, int dots) {
 static void _drawConnectError(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 18, _wifiT("Blad polaczenia!", "Connection failed!"));
-    d.drawStr(2, 32, _wifiT("Sprawdz SSID i haslo.", "Check SSID and password."));
-    d.drawStr(2, 48, _wifiT("OK = powrot", "OK = back"));
+    d.drawStr(2, 18, _wifiT("Blad polaczenia!", "Connection failed!", "Verbindung fehlgeschlagen!"));
+    d.drawStr(2, 32, _wifiT("Sprawdz SSID i haslo.", "Check SSID and password.", "SSID und Passwort pruefen."));
+    d.drawStr(2, 48, _wifiT("OK = powrot", "OK = back", "OK = zurueck"));
     d.sendBuffer();
 }
 
 static void _drawConnectOk(U8G2 &d) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, _wifiT("Polaczono!", "Connected!"));
+    d.drawStr(2, 20, _wifiT("Polaczono!", "Connected!", "Verbunden!"));
     char ipLine[48];
     snprintf(ipLine, sizeof(ipLine), "IP: %s", WiFi.localIP().toString().c_str());
     d.drawStr(2, 36, ipLine);
-    d.drawStr(2, 52, _wifiT("Powrot za chwile...", "Returning shortly..."));
+    d.drawStr(2, 52, _wifiT("Powrot za chwile...", "Returning shortly...", "Rueckkehr in Kuerze..."));
     d.sendBuffer();
     delay(2000);
 }
@@ -589,11 +591,11 @@ static bool _runSavedNetworks(U8G2 &d) {
         if (cnt == 0) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 12, _wifiT("Zapamietane sieci", "Saved networks"));
+            d.drawStr(2, 12, _wifiT("Zapamietane sieci", "Saved networks", "Gespeicherte Netze"));
             d.drawHLine(0, 14, 256);
-            d.drawStr(2, 34, _wifiT("Brak zapisanych sieci.", "No saved networks."));
+            d.drawStr(2, 34, _wifiT("Brak zapisanych sieci.", "No saved networks.", "Keine gespeicherten Netze."));
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _wifiT("< wstecz", "< back"));
+            d.drawStr(2, 62, _wifiT("< wstecz", "< back", "< zurueck"));
             d.sendBuffer();
             if (_wifiBtn(BTN_LEFT) || _wifiBtn(BTN_OK)) { _wifiWaitRelease(); return false; }
             delay(20);
@@ -604,7 +606,7 @@ static bool _runSavedNetworks(U8G2 &d) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         char hdr[40];
-        snprintf(hdr, sizeof(hdr), _wifiT("Zapamietane (%d)", "Saved (%d)"), cnt);
+        snprintf(hdr, sizeof(hdr), _wifiT("Zapamietane (%d)", "Saved (%d)", "Gespeichert (%d)"), cnt);
         d.drawStr(2, 10, hdr);
         d.drawHLine(0, 12, 256);
 
@@ -633,7 +635,8 @@ static bool _runSavedNetworks(U8G2 &d) {
         if (scroll + WIFI_SCAN_VISIBLE < cnt) d.drawStr(248, 50, "v");
         d.setFont(u8g2_font_5x7_tf);
         d.drawStr(2, 63, _wifiT("OK polacz  > zapomnij  < wstecz",
-                                "OK connect  > forget  < back"));
+                                "OK connect  > forget  < back",
+                                "OK verbind.  > loeschen  < zurueck"));
         d.sendBuffer();
 
         if (_wifiBtn(BTN_UP)) {
