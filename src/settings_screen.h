@@ -53,9 +53,9 @@ struct KalkMateSettings {
     uint8_t panicKey;     // KalkKey ktory wraca z trybu AI do kalkulatora
 };
 
-// Domyslne: jasnosc 8, polski, szczegolowy, autoSleep ON, 4 min,
+// Domyslne: jasnosc 8, english, szczegolowy, autoSleep ON, 4 min,
 //           kod "1111", panic = KEY_MU (27)
-static KalkMateSettings kalkSettings = {8, 0, 0, true, 4, "1111", /*KEY_MU*/27};
+static KalkMateSettings kalkSettings = {8, 1, 0, true, 4, "1111", /*KEY_MU*/27};
 
 // Zapis/odczyt ustawien w NVS (wszystkie razem). Definicje TUTAJ bo
 // musza byc po definicji kalkSettings - wifi_persist.h jest include'owany
@@ -75,12 +75,12 @@ static void kalkLoadSettings() {
     Preferences prefs;
     prefs.begin("kalkmate", true);
     kalkSettings.brightness   = prefs.getUChar("bright",    8);
-    kalkSettings.language     = prefs.getUChar("lang",      0);
+    kalkSettings.language     = prefs.getUChar("lang",      1);
     kalkSettings.solveMode    = prefs.getUChar("solveMode", 0);
     kalkSettings.autoSleep    = prefs.getBool ("autoSleep", true);
     kalkSettings.sleepMinutes = prefs.getUChar("sleepMin",  4);
     if (kalkSettings.brightness > 15)   kalkSettings.brightness = 8;
-    if (kalkSettings.language > 2)      kalkSettings.language = 0;
+    if (kalkSettings.language > 2)      kalkSettings.language = 1;
     if (kalkSettings.solveMode > 2)     kalkSettings.solveMode = 0;
     if (kalkSettings.sleepMinutes > 10) kalkSettings.sleepMinutes = 4;
     prefs.end();
@@ -1233,7 +1233,7 @@ static void _editFactoryReset(U8G2 &d) {
     // 5. Reset kalkSettings w RAM (zostana wpisane defaulty przy nastepnym boot
     // i tak, ale dla porzadku)
     kalkSettings.brightness   = 8;
-    kalkSettings.language     = 0;
+    kalkSettings.language     = 1;
     kalkSettings.solveMode    = 0;
     kalkSettings.autoSleep    = true;
     kalkSettings.sleepMinutes = 4;
