@@ -1,1 +1,0 @@
-{"ok":true,"solution":"1. Dane/Szukane\nRownanie: x^2+32x+10=0\nSzukane: pierwiastki rownania x1, x2"}

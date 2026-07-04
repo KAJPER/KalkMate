@@ -1,5 +1,0 @@
-API key should be set when using the Gemini API.
-API key should be set when using the Gemini API.
-Could not load the default credentials. Browse to https://cloud.google.com/docs/authentication/getting-started for more information.
-(node:3285208) MetadataLookupWarning: received unexpected error = All promises were rejected code = UNKNOWN
-(Use `node --trace-warnings ...` to show where the warning was created)

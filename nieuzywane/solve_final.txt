@@ -1,1 +1,0 @@
-{"ok":true,"solution":"Dane: Rownanie kwadratowe x^2+32x+10=0, wspolczynniki a=1, b=32, c=10"}
