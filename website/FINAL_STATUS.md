@@ -39,8 +39,8 @@ npx prisma db push
 
 ### ✅ Zmienne środowiskowe
 ```env
-✅ GEMINI_API_KEY          - AIza...REDACTED
-✅ NEXTAUTH_SECRET         - REDACTED_NEXTAUTH_SECRET
+✅ GEMINI_API_KEY          - AIza...twoj_prawdziwy_klucz
+✅ NEXTAUTH_SECRET         - <openssl rand -base64 32>
 ✅ DATABASE_URL            - file:./dev.db
 ✅ STRIPE_SECRET_KEY       - sk_test_...
 ✅ RESEND_API_KEY          - re_...
@@ -194,7 +194,7 @@ nano .env.local
 # DATABASE_URL=postgresql://kalkmate_user:password@localhost:5432/kalkmate
 # NEXTAUTH_SECRET=<openssl rand -base64 32>
 # NEXTAUTH_URL=https://kalkmate.pl
-# GEMINI_API_KEY=AIza...REDACTED
+# GEMINI_API_KEY=AIza...twoj_prawdziwy_klucz
 # ... reszta kluczy
 
 # 6. Build
@@ -273,7 +273,7 @@ npx prisma studio
 ```bash
 curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent" \
   -H 'Content-Type: application/json' \
-  -H 'X-goog-api-key: AIza...REDACTED' \
+  -H 'X-goog-api-key: AIza...twoj_prawdziwy_klucz' \
   -X POST \
   -d '{"contents":[{"parts":[{"text":"test"}]}]}'
 ```

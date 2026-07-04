@@ -10,6 +10,7 @@ deploy.bat
 
 # Production flasher — klucze szyfrowania i logi NIE NA GIT
 tools/flasher/keys/
+tools/flasher/Klucze kalkmate/
 tools/flasher/production_log.csv
 tools/flasher/config.json
 
@@ -21,4 +22,9 @@ src/graphify-out/
 
 # Captured photos z urzadzen (debug, mogą być pełne)
 website/captures/
-update.tar.gz  
+update.tar.gz
+
+# Baza danych — moze zawierac prawdziwe konta/licencje
+website/prisma/*.db
+website/prisma/**/*.db
+website/prisma/dev.db-journal
