@@ -6,6 +6,7 @@ import {
   statusInProgressEmail,
   statusShippedEmail,
   statusFulfilledEmail,
+  statusCancelledEmail,
   localeFromCountry,
   EMAIL_SUBJECTS,
 } from "@/lib/email-templates";
@@ -126,6 +127,9 @@ export async function PATCH(
       } else if (fulfillment_status === "fulfilled") {
         html = statusFulfilledEmail(emailData, locale);
         subject = EMAIL_SUBJECTS.orderFulfilled[locale];
+      } else if (fulfillment_status === "cancelled") {
+        html = statusCancelledEmail(emailData, locale);
+        subject = EMAIL_SUBJECTS.orderCancelled[locale];
       }
 
       if (html) {

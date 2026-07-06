@@ -428,6 +428,7 @@ export default function OrderDetailPage({
                   <option value="in_progress">W realizacji</option>
                   <option value="shipped">Wysłane</option>
                   <option value="fulfilled">Zrealizowane</option>
+                  <option value="cancelled">Anulowane</option>
                 </select>
               </div>
 

@@ -30,6 +30,7 @@ const fulfillmentColors: Record<string, string> = {
   in_progress: "bg-amber-500/10 text-amber-400",
   shipped: "bg-blue-500/10 text-blue-400",
   fulfilled: "bg-green-500/10 text-green-400",
+  cancelled: "bg-red-500/10 text-red-400",
 };
 
 const fulfillmentLabels: Record<string, string> = {
@@ -37,6 +38,7 @@ const fulfillmentLabels: Record<string, string> = {
   in_progress: "W realizacji",
   shipped: "Wysłane",
   fulfilled: "Zrealizowane",
+  cancelled: "Anulowane",
 };
 
 export default function OrderStatusBadge({

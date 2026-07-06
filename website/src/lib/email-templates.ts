@@ -74,6 +74,7 @@ const TX: Record<EmailLocale, Record<string, string>> = {
     badgeInProgress:  "In Bearbeitung",
     badgeShipped:     "Versendet",
     badgeFulfilled:   "Abgeschlossen",
+    badgeCancelled:   "Storniert",
     rowProduct:       "Produkt",
     rowAmount:        "Betrag",
     rowLocker:        "Paketfach",
@@ -93,6 +94,7 @@ const TX: Record<EmailLocale, Record<string, string>> = {
     badgeInProgress:  "In progress",
     badgeShipped:     "Shipped",
     badgeFulfilled:   "Completed",
+    badgeCancelled:   "Cancelled",
     rowProduct:       "Product",
     rowAmount:        "Amount",
     rowLocker:        "Parcel locker",
@@ -387,6 +389,40 @@ export function statusFulfilledEmail(data: FulfillmentData, locale: EmailLocale 
   return shell(inner, locale);
 }
 
+export function statusCancelledEmail(data: FulfillmentData, locale: EmailLocale = "en"): string {
+  const eyebrows: Record<EmailLocale, string> = {
+    de: "Status · Storniert",
+    en: "Status · Cancelled",
+  };
+  const headlines: Record<EmailLocale, [string, string]> = {
+    de: ["Storniert.", "Storniert"],
+    en: ["Cancelled.", "Cancelled"],
+  };
+  const leads: Record<EmailLocale, string> = {
+    de: `Hallo <strong style="color:${C.paper};font-weight:700;">${data.customerName}</strong>, deine Bestellung <strong style="color:${C.paper};font-weight:600;">${data.product}</strong> wurde storniert.`,
+    en: `Hi <strong style="color:${C.paper};font-weight:700;">${data.customerName}</strong>, your order <strong style="color:${C.paper};font-weight:600;">${data.product}</strong> has been cancelled.`,
+  };
+  const mailLink = `<a href="mailto:kontakt@kalkmate.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">kontakt@kalkmate.pl</a>`;
+  const bodies: Record<EmailLocale, string> = {
+    de: `Falls du dazu Fragen hast oder das nicht erwartet hast, melde dich bitte bei uns unter ${mailLink}.`,
+    en: `If you have any questions about this or didn't expect it, please reach out to us at ${mailLink}.`,
+  };
+  const [hl, hlAccent] = headlines[locale];
+
+  const inner = `
+    ${eyebrowBlock(eyebrows[locale])}
+    ${headline(hl, hlAccent)}
+    ${lead(leads[locale])}
+
+    ${infoTable([
+      infoRow(t(locale, "rowStatus"), statusBadge(t(locale, "badgeCancelled"))),
+    ].join(""))}
+
+    ${body(bodies[locale])}
+  `;
+  return shell(inner, locale);
+}
+
 export function verificationEmail(data: VerificationData, locale: EmailLocale = "en"): string {
   const eyebrows: Record<EmailLocale, string> = {
     de: "Konto · E-Mail-Bestätigung",
@@ -486,6 +522,10 @@ export const EMAIL_SUBJECTS = {
   orderFulfilled: {
     de: "Bestellung abgeschlossen – KalkMate",
     en: "Order completed – KalkMate",
+  },
+  orderCancelled: {
+    de: "Deine Bestellung wurde storniert – KalkMate",
+    en: "Your order has been cancelled – KalkMate",
   },
   orderConfirmation: {
     de: "Bestellbestätigung – KalkMate",
