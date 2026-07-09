@@ -29,26 +29,26 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
-  const [lastId, setLastId] = useState<string | null>(null);
+  const [nextOffset, setNextOffset] = useState(0);
   const [search, setSearch] = useState("");
 
-  const fetchOrders = useCallback(async (after?: string) => {
+  const fetchOrders = useCallback(async (offset = 0) => {
     setLoading(true);
     try {
       const url = new URL("/api/admin/orders", window.location.origin);
       url.searchParams.set("limit", "50");
-      if (after) url.searchParams.set("starting_after", after);
+      url.searchParams.set("offset", String(offset));
 
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        if (after) {
+        if (offset > 0) {
           setOrders((prev) => [...prev, ...data.orders]);
         } else {
           setOrders(data.orders);
         }
         setHasMore(data.has_more);
-        setLastId(data.last_id);
+        setNextOffset(data.next_offset);
       }
     } catch (error) {
       console.error("Failed to fetch orders:", error);
@@ -179,7 +179,7 @@ export default function OrdersPage() {
         {hasMore && !loading && (
           <div className="px-4 py-3 border-t border-[#3F4147]">
             <button
-              onClick={() => lastId && fetchOrders(lastId)}
+              onClick={() => fetchOrders(nextOffset)}
               className="text-sm text-[#3B82F6] hover:underline"
             >
               Załaduj więcej

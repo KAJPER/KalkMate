@@ -495,16 +495,7 @@ export default function OrderDetailPage({
               </div>
             </div>
 
-            {/* Furgonetka Label Section — not wired up for P24 orders yet (route.ts
-                assumes a Stripe PaymentIntent id), so show a manual-process notice instead. */}
-            {order.payment_provider === "p24" ? (
-              <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6">
-                <h2 className="text-lg font-bold text-[#E0E0E0] mb-2">Furgonetka — Etykieta</h2>
-                <p className="text-sm text-amber-400">
-                  Automatyczne tworzenie etykiety InPost nie jest jeszcze dostępne dla zamówień Przelewy24 — utwórz etykietę ręcznie w panelu Furgonetka/InPost.
-                </p>
-              </div>
-            ) : (
+            {/* Furgonetka Label Section */}
             <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center flex-shrink-0">
@@ -697,7 +688,6 @@ export default function OrderDetailPage({
                 Przesyłka zostanie nadana w Paczkomacie InPost. Punkt odbioru: {order.pickup_point || "—"}
               </p>
             </div>
-            )}
 
             {/* Invoice section */}
             <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">

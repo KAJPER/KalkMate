@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
         id, "userId", "orderNumber", status,
         "customerName", "customerEmail", "customerPhone",
         "pickupPoint", "pickupPointAddress",
+        "customerAddressStreet", "customerAddressPostcode", "customerAddressCity", "customerCountry",
         amount, currency,
         "paymentProvider", "p24SessionId",
         "createdAt", "updatedAt"
@@ -125,6 +126,7 @@ export async function POST(request: NextRequest) {
         ${name}, ${email}, ${phone},
         ${isPoland && pickupPoint ? String(pickupPoint) : ""},
         ${isPoland && pickupPointAddress ? String(pickupPointAddress) : ""},
+        ${street || ""}, ${postcode || ""}, ${city || ""}, ${resolvedCountry},
         ${totalAmount}, ${resolvedCurrency.toLowerCase()},
         'p24', ${sessionId},
         ${now}, ${now}

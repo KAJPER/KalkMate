@@ -103,6 +103,15 @@ model Order {
   deliveredAt           DateTime?
   invoiceSentAt         DateTime?
   invoiceFilename       String?
+  fulfillmentStatus     String    @default("unfulfilled")
+  adminNotes            String?
+  customerAddressStreet    String?
+  customerAddressPostcode  String?
+  customerAddressCity      String?
+  customerCountry          String?
+  furgonetkaPackageId   String?
+  furgonetkaOrderUuid   String?
+  furgonetkaStatus      String?
   User                  User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([customerEmail])

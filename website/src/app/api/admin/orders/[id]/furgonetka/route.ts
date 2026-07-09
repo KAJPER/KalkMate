@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { stripe } from "@/lib/stripe";
+import { prisma } from "@/lib/db";
 import {
   createFurgonetkaPackage,
   orderFurgonetkaShipment,
@@ -26,7 +26,7 @@ const INPOST_SERVICE_ID = parseInt(process.env.FURGONETKA_INPOST_SERVICE_ID || "
 
 /**
  * POST /api/admin/orders/[id]/furgonetka
- * Creates a shipment label for a given Stripe payment intent.
+ * Creates a shipment label for a given order.
  * Body: { action: "create" | "documents" | "status", commandUuid?: string }
  */
 export async function POST(
@@ -39,22 +39,21 @@ export async function POST(
   const { action = "create", commandUuid, serviceId } = body;
 
   try {
-    // Fetch order from Stripe
-    const pi = await stripe.paymentIntents.retrieve(id);
-    const meta = pi.metadata;
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) {
+      return NextResponse.json({ error: "Nie znaleziono zamówienia" }, { status: 404 });
+    }
 
-    if (!meta.customer_name || !meta.customer_phone) {
+    if (!order.customerName || !order.customerPhone) {
       return NextResponse.json({ error: "Brak danych klienta w zamówieniu" }, { status: 400 });
     }
 
     if (action === "status" && commandUuid) {
-      // Check command status
       const status = await getFurgonetkaCommandStatus(commandUuid);
       return NextResponse.json(status);
     }
 
     if (action === "documents" && commandUuid) {
-      // Get document URL
       try {
         const url = await getFurgonetkaDocumentUrl(commandUuid, 30_000);
         return NextResponse.json({ url });
@@ -64,8 +63,7 @@ export async function POST(
     }
 
     if (action === "request_documents") {
-      // Get the package_id from metadata
-      const packageId = meta.furgonetka_package_id;
+      const packageId = order.furgonetkaPackageId;
       if (!packageId) {
         return NextResponse.json({ error: "Najpierw utwórz przesyłkę" }, { status: 400 });
       }
@@ -74,15 +72,11 @@ export async function POST(
     }
 
     // action === "create" - create new package
-    // Extract receiver address from Stripe metadata
-    // Address fields: customer_address_street, customer_address_postcode, customer_address_city
-    // (or parse from pickup_point_address for legacy orders)
-    const receiverStreet = meta.customer_address_street || "";
-    const receiverPostcode = meta.customer_address_postcode || "";
-    const receiverCity = meta.customer_address_city || "";
-    const pickupPointId = meta.pickup_point || "";
+    const receiverStreet = order.customerAddressStreet || "";
+    const receiverPostcode = order.customerAddressPostcode || "";
+    const receiverCity = order.customerAddressCity || "";
+    const pickupPointId = order.pickupPoint || "";
 
-    // Determine service_id
     const resolvedServiceId = serviceId || INPOST_SERVICE_ID;
     if (!resolvedServiceId) {
       return NextResponse.json(
@@ -91,7 +85,6 @@ export async function POST(
       );
     }
 
-    // Build receiver
     const receiver: {
       name: string;
       phone: string;
@@ -102,9 +95,9 @@ export async function POST(
       postcode: string;
       city: string;
     } = {
-      name: meta.customer_name,
-      phone: meta.customer_phone,
-      email: meta.customer_email || "",
+      name: order.customerName,
+      phone: order.customerPhone,
+      email: order.customerEmail || "",
       country_code: "PL",
       street: "",
       postcode: "",
@@ -130,14 +123,13 @@ export async function POST(
       receiver.city = receiverCity;
     }
 
-
     // Create package in Furgonetka cart
     const pkg = await createFurgonetkaPackage({
       pickup: SENDER,
       receiver,
       service_id: resolvedServiceId,
       parcels: [{ weight: 0.5, width: 20, height: 10, depth: 15 }],
-      user_reference_number: pi.metadata.product ? `KalkMate #${id.slice(-8)}` : undefined,
+      user_reference_number: `KalkMate #${id.slice(-8)}`,
     });
 
     // Order/confirm the shipment
@@ -151,12 +143,12 @@ export async function POST(
       commandStatus = await getFurgonetkaCommandStatus(orderResult.uuid);
     }
 
-    // Save package_id and order uuid to Stripe metadata
-    await stripe.paymentIntents.update(id, {
-      metadata: {
-        furgonetka_package_id: pkg.package_id,
-        furgonetka_order_uuid: orderResult.uuid,
-        furgonetka_status: commandStatus.status,
+    await prisma.order.update({
+      where: { id },
+      data: {
+        furgonetkaPackageId: pkg.package_id,
+        furgonetkaOrderUuid: orderResult.uuid,
+        furgonetkaStatus: commandStatus.status,
       },
     });
 
@@ -185,17 +177,14 @@ export async function GET(
   const authErr = requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
 
-  try {
-    const pi = await stripe.paymentIntents.retrieve(id);
-    const meta = pi.metadata;
-
-    return NextResponse.json({
-      package_id: meta.furgonetka_package_id || null,
-      order_uuid: meta.furgonetka_order_uuid || null,
-      status: meta.furgonetka_status || null,
-    });
-  } catch (error) {
-    console.error("Furgonetka GET error:", error);
+  const order = await prisma.order.findUnique({ where: { id } });
+  if (!order) {
     return NextResponse.json({ error: "Nie znaleziono zamówienia" }, { status: 404 });
   }
+
+  return NextResponse.json({
+    package_id: order.furgonetkaPackageId || null,
+    order_uuid: order.furgonetkaOrderUuid || null,
+    status: order.furgonetkaStatus || null,
+  });
 }

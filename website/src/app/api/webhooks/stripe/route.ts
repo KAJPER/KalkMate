@@ -130,6 +130,10 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   const phone = meta.customer_phone || "";
   const pickupPoint = meta.pickup_point || "";
   const pickupPointAddress = meta.pickup_point_address || "";
+  const addressStreet = meta.customer_address_street || "";
+  const addressPostcode = meta.customer_address_postcode || "";
+  const addressCity = meta.customer_address_city || "";
+  const country = meta.customer_country || "";
 
   console.log(`[WEBHOOK] Processing order for email: ${email}`);
 
@@ -158,6 +162,10 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       customerPhone: phone,
       pickupPoint: pickupPoint,
       pickupPointAddress: pickupPointAddress,
+      customerAddressStreet: addressStreet,
+      customerAddressPostcode: addressPostcode,
+      customerAddressCity: addressCity,
+      customerCountry: country,
       stripePaymentIntentId: pi.id,
       amount: pi.amount,
       currency: pi.currency,
