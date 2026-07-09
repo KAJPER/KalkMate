@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { stripe } from "@/lib/stripe";
+import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 
 function invoiceHtml(name: string, filename: string) {
@@ -56,9 +57,21 @@ export async function POST(
       return NextResponse.json({ error: "Plik zbyt duży (max 10 MB)" }, { status: 400 });
     }
 
-    const pi = await stripe.paymentIntents.retrieve(id);
-    const email = pi.metadata.customer_email;
-    const name  = (pi.metadata.customer_name || "Kliencie").split(" ")[0];
+    const p24Order = await prisma.order.findFirst({
+      where: { id, paymentProvider: "p24" },
+    });
+
+    let email: string | undefined;
+    let rawName: string | undefined;
+    if (p24Order) {
+      email = p24Order.customerEmail;
+      rawName = p24Order.customerName;
+    } else {
+      const pi = await stripe.paymentIntents.retrieve(id);
+      email = pi.metadata.customer_email;
+      rawName = pi.metadata.customer_name;
+    }
+    const name = (rawName || "Kliencie").split(" ")[0];
 
     if (!email) {
       return NextResponse.json({ error: "Brak adresu email klienta w zamówieniu" }, { status: 400 });
@@ -83,12 +96,19 @@ export async function POST(
       return NextResponse.json({ error: result.error || "Błąd wysyłki" }, { status: 500 });
     }
 
-    await stripe.paymentIntents.update(id, {
-      metadata: {
-        invoice_sent_at: new Date().toISOString(),
-        invoice_filename: file.name,
-      },
-    });
+    if (p24Order) {
+      await prisma.order.update({
+        where: { id },
+        data: { invoiceSentAt: new Date(), invoiceFilename: file.name },
+      });
+    } else {
+      await stripe.paymentIntents.update(id, {
+        metadata: {
+          invoice_sent_at: new Date().toISOString(),
+          invoice_filename: file.name,
+        },
+      });
+    }
 
     return NextResponse.json({ ok: true, sentTo: email, filename: file.name });
   } catch (e) {

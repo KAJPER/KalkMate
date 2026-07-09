@@ -101,6 +101,8 @@ model Order {
   paidAt                DateTime?
   shippedAt             DateTime?
   deliveredAt           DateTime?
+  invoiceSentAt         DateTime?
+  invoiceFilename       String?
   User                  User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([customerEmail])

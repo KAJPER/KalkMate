@@ -139,6 +139,25 @@ export default function P24CheckoutForm({
           <span className="ml-auto text-[#F2EDE3]/30">→</span>
         </motion.button>
 
+        {/* All other P24-enabled methods: cards, Apple Pay, Google Pay, PayPo, raty */}
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => pay(false)}
+          disabled={isLoading}
+          className="w-full flex items-center gap-4 p-4 border border-[rgba(242,237,227,0.18)] hover:border-[#D8FF3D] transition-colors disabled:opacity-50"
+        >
+          <div className="w-10 h-10 border border-[rgba(242,237,227,0.25)] flex items-center justify-center flex-shrink-0">
+            {loadingMethod === "other"
+              ? <svg className="animate-spin h-4 w-4 text-[#F2EDE3]/60" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              : <svg width="20" height="14" viewBox="0 0 24 17" fill="none"><rect x="0.5" y="0.5" width="23" height="16" rx="1.5" stroke="#F2EDE3" strokeOpacity="0.6"/><rect y="4" width="24" height="3" fill="#F2EDE3" fillOpacity="0.15"/><rect x="2" y="10" width="6" height="2" rx="0.5" fill="#F2EDE3" fillOpacity="0.6"/></svg>}
+          </div>
+          <div className="text-left">
+            <p className="text-sm text-[#F2EDE3] font-medium">Przelewy24</p>
+            <p className="text-xs text-[#F2EDE3]/45 mt-0.5">Karta, Apple Pay, Google Pay, PayPo, raty</p>
+          </div>
+          <span className="ml-auto text-[#F2EDE3]/30">→</span>
+        </motion.button>
+
         {footer}
       </div>
     </div>

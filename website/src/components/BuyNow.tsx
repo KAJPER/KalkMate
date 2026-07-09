@@ -976,8 +976,8 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                                 : <svg width="20" height="14" viewBox="0 0 24 17" fill="none"><rect x="0.5" y="0.5" width="23" height="16" rx="1.5" stroke="#F2EDE3" strokeOpacity="0.6"/><rect y="4" width="24" height="3" fill="#F2EDE3" fillOpacity="0.15"/><rect x="2" y="10" width="6" height="2" rx="0.5" fill="#F2EDE3" fillOpacity="0.6"/></svg>}
                             </div>
                             <div className="text-left">
-                              <p className="text-sm text-[#F2EDE3] font-medium">Karta / Apple Pay / Google Pay / Klarna</p>
-                              <p className="text-xs text-[#F2EDE3]/45 mt-0.5">Visa, Mastercard i więcej · przez Stripe</p>
+                              <p className="text-sm text-[#F2EDE3] font-medium">Klarna — zapłać później lub w ratach</p>
+                              <p className="text-xs text-[#F2EDE3]/45 mt-0.5">Odroczona płatność · przez Stripe</p>
                             </div>
                             <span className="ml-auto text-[#F2EDE3]/30">→</span>
                           </motion.button>

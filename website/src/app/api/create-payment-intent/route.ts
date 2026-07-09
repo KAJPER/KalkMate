@@ -88,10 +88,17 @@ export async function POST(request: NextRequest) {
 
     const totalAmount = (productAmount - discountAmount) + resolvedShipping;
 
+    // Poland: cards/Apple Pay/Google Pay go through Przelewy24 now — Stripe is
+    // only reached here for the Klarna fallback, so restrict it to Klarna only
+    // instead of offering the full automatic payment method menu again.
+    const paymentMethodConfig = isPoland
+      ? { payment_method_types: ["klarna"] }
+      : { automatic_payment_methods: { enabled: true } };
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalAmount,
       currency: resolvedCurrency,
-      automatic_payment_methods: { enabled: true },
+      ...paymentMethodConfig,
       metadata: {
         product: "KalkMate v1.0",
         user_id: user.id,
