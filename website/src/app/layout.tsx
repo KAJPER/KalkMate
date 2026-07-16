@@ -3,7 +3,7 @@ import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import SessionProvider from "@/components/SessionProvider";
 import { CartProvider } from "@/components/CartContext";
-import { ClientCartDrawer, ClientCookieBanner } from "@/components/ClientShell";
+import { ClientCartDrawer, ClientCookieBanner, ClientClarityAnalytics } from "@/components/ClientShell";
 import PageTracker from "@/components/PageTracker";
 
 const geist = Geist({
@@ -119,6 +119,7 @@ export default function RootLayout({
           </CartProvider>
         </SessionProvider>
         <PageTracker />
+        <ClientClarityAnalytics />
         <ClientCookieBanner />
       </body>
     </html>
