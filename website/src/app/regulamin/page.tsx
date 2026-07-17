@@ -76,6 +76,7 @@ export default function ReguaminPage() {
             <li>Administratorem danych osobowych jest Sprzedawca.</li>
             <li>Dane osobowe przetwarzane są wyłącznie w celu realizacji zamówienia i nie są udostępniane podmiotom trzecim, z wyjątkiem firm kurierskich i operatorów płatności.</li>
             <li>Kupującemu przysługuje prawo wglądu do swoich danych, ich poprawiania oraz żądania usunięcia.</li>
+            <li>Strona wykorzystuje pliki cookies, w tym narzędzie analityczne Microsoft Clarity (mapy ciepła, nagrania sesji), ładowane wyłącznie po wyrażeniu zgody w bannerze cookies. Szczegóły znajdują się w <a href="/polityka-prywatnosci#sek-9" className="text-[#D8FF3D] hover:underline">Polityce Prywatności</a>.</li>
           </ol>
         </div>
 

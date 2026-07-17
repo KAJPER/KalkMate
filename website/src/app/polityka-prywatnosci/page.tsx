@@ -74,7 +74,7 @@ export default function PrivacyPolicy() {
               RODO · zgodne z UE 2016/679
             </span>
             <span className="km-mono-eyebrow text-[#F2EDE3]/40 hidden md:inline">
-              Aktualizacja · 2026-05-31
+              Aktualizacja · 2026-07-16
             </span>
           </div>
 
@@ -259,6 +259,7 @@ export default function PrivacyPolicy() {
               <li><strong className="text-[#F2EDE3]">InPost</strong> – firma kurierska (dostawa produktów do Paczkomatów).</li>
               <li><strong className="text-[#F2EDE3]">Resend</strong> – usługa email (wysyłka wiadomości transakcyjnych i magic links).</li>
               <li><strong className="text-[#F2EDE3]">Google AI (Gemini)</strong> – dostawca usługi AI Chat (przetwarzanie zapytań w chatbocie).</li>
+              <li><strong className="text-[#F2EDE3]">Microsoft Clarity</strong> – narzędzie analityczne (mapy ciepła, nagrania sesji) wykorzystywane wyłącznie po wyrażeniu zgody na cookies analityczne — zob. sekcja 9.</li>
               <li><strong className="text-[#F2EDE3]">Dostawca hostingu</strong> – przechowywanie danych na serwerach VPS.</li>
               <li><strong className="text-[#F2EDE3]">Dostawca bazy danych PostgreSQL</strong> – przechowywanie danych użytkowników.</li>
               <li><strong className="text-[#F2EDE3]">Podmioty uprawnione na mocy prawa</strong> – organy państwowe, sądy (jeśli wymagają tego przepisy).</li>
@@ -276,8 +277,8 @@ export default function PrivacyPolicy() {
           <section>
             <H id="sek-7" eyebrow="07" title="Transfer" accent="poza EOG" />
             <P>
-              Niektórzy dostawcy usług (np. Stripe, Google AI) mogą przetwarzać dane poza
-              Europejskim Obszarem Gospodarczym (EOG). W takich przypadkach:
+              Niektórzy dostawcy usług (np. Stripe, Google AI, Microsoft Clarity) mogą przetwarzać
+              dane poza Europejskim Obszarem Gospodarczym (EOG). W takich przypadkach:
             </P>
             <UL>
               <li>Zapewniamy odpowiednie zabezpieczenia zgodnie z RODO (standardowe klauzule umowne zatwierdzone przez Komisję Europejską).</li>
@@ -362,11 +363,34 @@ export default function PrivacyPolicy() {
             <ul className="list-disc list-outside ml-6 mt-3 space-y-2 text-[14px] text-[#F2EDE3]/70 marker:text-[#D8FF3D]/60">
               <li><strong className="text-[#F2EDE3]">Niezbędne</strong> — zapewniają podstawowe funkcjonalności strony (sesja użytkownika, koszyk, logowanie).</li>
               <li><strong className="text-[#F2EDE3]">Funkcjonalne</strong> — zapamiętują Wasze preferencje (np. tryb ciemny).</li>
-              <li><strong className="text-[#F2EDE3]">Analityczne</strong> — pomagają nam zrozumieć, jak użytkownicy korzystają ze strony (anonimowe dane).</li>
+              <li><strong className="text-[#F2EDE3]">Analityczne</strong> — pomagają nam zrozumieć, jak użytkownicy korzystają ze strony (mapy ciepła, nagrania sesji, statystyki odwiedzin). Wykorzystujemy do tego <strong className="text-[#F2EDE3]">Microsoft Clarity</strong> (Microsoft Corporation).</li>
               <li><strong className="text-[#F2EDE3]">Marketingowe</strong> — używane do personalizacji reklam (tylko za zgodą).</li>
             </ul>
 
-            <SubH>9.3. Zarządzanie cookies</SubH>
+            <SubH>9.3. Microsoft Clarity</SubH>
+            <P>
+              Microsoft Clarity ładowany jest wyłącznie po wyrażeniu zgody na cookies analityczne
+              w bannerze zgody („Akceptuję wszystkie"). Narzędzie zapisuje na urządzeniu m.in.
+              cookies <span className="font-mono text-[13px]">_clck</span>,{" "}
+              <span className="font-mono text-[13px]">_clsk</span>,{" "}
+              <span className="font-mono text-[13px]">CLID</span>,{" "}
+              <span className="font-mono text-[13px]">ANONCHK</span>,{" "}
+              <span className="font-mono text-[13px]">MR</span> i{" "}
+              <span className="font-mono text-[13px]">SM</span>, służące do rozpoznania
+              powracającego użytkownika, nagrywania sesji i generowania map ciepła. Dane
+              przetwarzane są przez Microsoft Corporation zgodnie z{" "}
+              <a
+                href="https://learn.microsoft.com/en-us/clarity/faq"
+                target="_blank"
+                rel="noopener"
+                className="text-[#D8FF3D] hover:underline"
+              >
+                polityką prywatności Microsoft Clarity
+              </a>. Zgodę można wycofać w dowolnym momencie, czyszcząc dane bannera zgody
+              w ustawieniach przeglądarki (localStorage) i wybierając „Tylko niezbędne".
+            </P>
+
+            <SubH>9.4. Zarządzanie cookies</SubH>
             <P>
               Możecie Państwo zarządzać cookies poprzez ustawienia przeglądarki. Należy jednak
               pamiętać, że wyłączenie cookies może wpłynąć na funkcjonalność Serwisu
@@ -492,7 +516,7 @@ export default function PrivacyPolicy() {
           {/* Stopka dokumentu */}
           <div className="pt-8 border-t border-[rgba(242,237,227,0.10)] flex flex-wrap items-center justify-between gap-4">
             <span className="km-mono-eyebrow text-[#F2EDE3]/45">
-              Ostatnia aktualizacja · 2026-05-31
+              Ostatnia aktualizacja · 2026-07-16
             </span>
             <div className="flex items-center gap-4">
               <Link href="/regulamin" className="km-mono-eyebrow text-[#F2EDE3]/55 hover:text-[#D8FF3D] transition-colors">
