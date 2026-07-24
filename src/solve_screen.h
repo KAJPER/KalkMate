@@ -26,6 +26,7 @@
 #include "history.h"
 #include "camera.h"         // camBegin / camCapture / camEnd
 #include "offline_queue.h"  // kolejka zadan gdy brak WiFi
+#include "offline_solver.h" // lokalne solvery (bez WiFi) — rownania, uklady, procenty, pochodne
 
 #ifndef KALK_CAMERA_ENABLED
 #define KALK_CAMERA_ENABLED 1
@@ -366,7 +367,7 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
     return xi - x;
 }
 
-static void _solDisplaySolution(U8G2 &d, const char* solution) {
+static void _solDisplaySolution(U8G2 &d, const char* solution, const char* headerLabel = "AI") {
     // Wylacz auto-sleep — user czyta dluzsza odpowiedz, ekran nie ma sie wylaczyc
     powerSetInhibit(true);
 
@@ -443,7 +444,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution) {
             // Naglowek
             d.setFont(u8g2_font_5x7_tf);
             char hdr[32];
-            snprintf(hdr, sizeof(hdr), "AI %d-%d/%d",
+            snprintf(hdr, sizeof(hdr), "%s %d-%d/%d", headerLabel,
                      scroll + 1,
                      min(scroll + VISIBLE, lineCount),
                      lineCount);
@@ -994,7 +995,7 @@ static void _solRunPhotoMode(U8G2 &d) {
 // Ekran wyboru trybu (zdjecie / tekst)
 // ---------------------------------------------------------------------------
 static void _solModeSelect(U8G2 &d, int &mode) {
-    // mode: 0 = zdjecie, 1 = tekst, 2 = historia
+    // mode: 0 = zdjecie, 1 = tekst, 2 = historia, 3 = offline (lokalne solvery)
     _solWaitRelease();
 
     while (true) {
@@ -1005,24 +1006,26 @@ static void _solModeSelect(U8G2 &d, int &mode) {
         d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ===", "=== Aufgabe loesen ==="));
         d.drawHLine(0, 12, 256);
 
-        const char* labels[3][2] = {
+        const char* labels[4][2] = {
             { "  [1] Zdjecie kamery", "  [1] Camera photo" },
             { "  [2] Wpisz tekst",    "  [2] Enter text"    },
             { "  [3] Historia",       "  [3] History"       },
+            { "  [4] Offline",        "  [4] Offline"        },
         };
-        const char* labelsSel[3][2] = {
+        const char* labelsSel[4][2] = {
             { "> [1] Zdjecie kamery", "> [1] Camera photo" },
             { "> [2] Wpisz tekst",    "> [2] Enter text"    },
             { "> [3] Historia",       "> [3] History"       },
+            { "> [4] Offline",        "> [4] Offline"        },
         };
 
-        const int Y[3] = {14, 27, 40};   // top y kazdej pozycji (3 widoczne)
-        const int TEXT_Y[3] = {24, 37, 50};
+        const int Y[4] = {13, 23, 33, 43};   // top y kazdej pozycji (4 widoczne)
+        const int TEXT_Y[4] = {22, 32, 42, 52};
         bool en = (kalkSettings.language == 1);
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 4; i++) {
             if (mode == i) {
-                d.drawBox(0, Y[i], 256, 12);
+                d.drawBox(0, Y[i], 256, 10);
                 d.setDrawColor(0);
                 d.drawStr(4, TEXT_Y[i], labelsSel[i][en ? 1 : 0]);
                 d.setDrawColor(1);
@@ -1041,7 +1044,7 @@ static void _solModeSelect(U8G2 &d, int &mode) {
         if (_solBtn(BTN_UP)) {
             if (mode > 0) mode--;
         } else if (_solBtn(BTN_DOWN)) {
-            if (mode < 2) mode++;
+            if (mode < 3) mode++;
         } else if (_solBtn(BTN_OK)) {
             _solWaitRelease();
             return;
@@ -1051,6 +1054,582 @@ static void _solModeSelect(U8G2 &d, int &mode) {
             return;
         }
         delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Generyczne menu wyboru z listy (uzywane przez podmenu Offline).
+// Zwraca wybrany indeks (0..count-1), albo -1 jesli uzytkownik wyszedl (LEFT).
+// ---------------------------------------------------------------------------
+static int _solListMenu(U8G2 &d, const char* title, const char* const* items, int count) {
+    _solWaitRelease();
+    int sel = 0;
+    int scroll = 0;
+    const int VISIBLE = 4;   // wiersze widoczne na raz (13..53 / 10px = 4)
+    const int ROW_H = 10;
+
+    while (true) {
+        if (panicTriggered()) return -1;
+        powerCheckSleep();
+
+        if (sel < scroll) scroll = sel;
+        if (sel >= scroll + VISIBLE) scroll = sel - VISIBLE + 1;
+
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, title);
+        d.drawHLine(0, 12, 256);
+
+        for (int row = 0; row < VISIBLE; row++) {
+            int i = scroll + row;
+            if (i >= count) break;
+            int y = 13 + row * ROW_H;
+            int textY = y + ROW_H - 2;
+            if (i == sel) {
+                d.drawBox(0, y, 256, ROW_H);
+                d.setDrawColor(0);
+                d.drawStr(4, textY, items[i]);
+                d.setDrawColor(1);
+            } else {
+                d.drawStr(4, textY, items[i]);
+            }
+        }
+
+        d.drawHLine(0, 53, 256);
+        d.setFont(u8g2_font_5x7_tf);
+        if (scroll > 0)                  d.drawStr(240, 8, "^");
+        if (scroll + VISIBLE < count)     d.drawStr(248, 8, "v");
+        d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
+                                "^/v select   OK: start   < back",
+                                "^/v waehlen  OK: Start  < zurueck"));
+        d.sendBuffer();
+
+        if (_solBtn(BTN_UP)) {
+            if (sel > 0) sel--;
+        } else if (_solBtn(BTN_DOWN)) {
+            if (sel < count - 1) sel++;
+        } else if (_solBtn(BTN_OK)) {
+            _solWaitRelease();
+            return sel;
+        } else if (_solBtn(BTN_LEFT)) {
+            _solWaitRelease();
+            return -1;
+        }
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dopisuje znak do bufora edycji pola liczbowego (styl _calcAppendDigit
+// z calculator.h, ale na lokalnym buforze zamiast globalnego stanu _calc).
+// ---------------------------------------------------------------------------
+static void _numAppendChar(char* buf, size_t bufSize, bool &awaitingFirst, char c) {
+    if (awaitingFirst) {
+        buf[0] = (c == '.') ? '0' : c;
+        buf[1] = '\0';
+        if (c == '.') strcat(buf, ".");
+        awaitingFirst = false;
+    } else {
+        size_t len = strlen(buf);
+        if (len + 1 >= bufSize) return;
+        if (c == '.' && strchr(buf, '.')) return;
+        buf[len] = c;
+        buf[len + 1] = '\0';
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Edytor pojedynczego pola liczbowego (offline solver) — wpisywanie cyfr
+// bezposrednio klawiszami 0-9/./+-  (jak w trybie kalkulatora), a nie przez
+// UP/DOWN inkrementacje jak w _editAiCode. C/CE kasuje biezacy wpis; na
+// nietknietym polu (nic wpisane) wychodzi z calego flow (return false).
+// = (KEY_EQ) zatwierdza pole i przechodzi dalej (return true).
+// ---------------------------------------------------------------------------
+static bool _numEditField(U8G2 &d, const char* label, double &outValue) {
+    char buf[16] = "0";
+    bool awaitingFirst = true;
+    _solWaitRelease();
+
+    uint32_t blink = millis();
+    bool blinkOn = true;
+
+    while (true) {
+        if (panicTriggered()) return false;
+        if (millis() - blink > 400) { blinkOn = !blinkOn; blink = millis(); }
+
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, label);
+        d.drawHLine(0, 12, 256);
+
+        d.setFont(u8g2_font_logisoso22_tn);
+        int textW = d.getStrWidth(buf);
+        int x = 256 - textW - 8;
+        if (x < 4) x = 4;
+        d.drawStr(x, 45, buf);
+        if (blinkOn) d.drawBox(x + textW + 2, 32, 10, 3);
+
+        d.drawHLine(0, 53, 256);
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 62, _solT("+/- znak   =: dalej   C: kasuj/wyjdz",
+                                "+/- sign   =: next   C: clear/exit",
+                                "+/- Vorz.  =: weiter  C: loesch/raus"));
+        d.sendBuffer();
+
+        if (inputKeyConsume(KEY_0))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '0'); continue; }
+        if (inputKeyConsume(KEY_1))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '1'); continue; }
+        if (inputKeyConsume(KEY_2))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '2'); continue; }
+        if (inputKeyConsume(KEY_3))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '3'); continue; }
+        if (inputKeyConsume(KEY_4))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '4'); continue; }
+        if (inputKeyConsume(KEY_5))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '5'); continue; }
+        if (inputKeyConsume(KEY_6))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '6'); continue; }
+        if (inputKeyConsume(KEY_7))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '7'); continue; }
+        if (inputKeyConsume(KEY_8))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '8'); continue; }
+        if (inputKeyConsume(KEY_9))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '9'); continue; }
+        if (inputKeyConsume(KEY_00))  {
+            _numAppendChar(buf, sizeof(buf), awaitingFirst, '0');
+            _numAppendChar(buf, sizeof(buf), awaitingFirst, '0');
+            continue;
+        }
+        if (inputKeyConsume(KEY_DOT)) { _numAppendChar(buf, sizeof(buf), awaitingFirst, '.'); continue; }
+
+        if (inputKeyConsume(KEY_PLUSMINUS)) {
+            double v = atof(buf);
+            offlineFmtNum(-v, buf, sizeof(buf));
+            awaitingFirst = false;
+            continue;
+        }
+        if (inputKeyConsume(KEY_CCE)) {
+            if (awaitingFirst) { _solWaitRelease(); return false; }  // nietkniete -> wyjscie
+            strcpy(buf, "0");
+            awaitingFirst = true;
+            continue;
+        }
+        if (inputKeyConsume(KEY_EQ)) {
+            outValue = atof(buf);
+            _solWaitRelease();
+            return true;
+        }
+        delay(15);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Offline: rownanie liniowe ax+b=0
+// ---------------------------------------------------------------------------
+static void _solOfflineLinear(U8G2 &d) {
+    double a, b;
+    if (!_numEditField(d, _solT("Rownanie liniowe: a =", "Linear equation: a =", "Lineare Gleichung: a ="), a)) return;
+    if (!_numEditField(d, "b =", b)) return;
+
+    LinearResult r = offlineSolveLinear(a, b);
+    char aS[24], bS[24];
+    offlineFmtNum(a, aS, sizeof(aS));
+    offlineFmtNum(b, bS, sizeof(bS));
+
+    String result = String("a = ") + aS + ", b = " + bS + "\n\n";
+    if (r.infinite) {
+        result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
+    } else if (r.none) {
+        result += _solT("Brak rozwiazan", "No solution", "Keine Loesung");
+    } else {
+        char xS[24];
+        offlineFmtNum(r.x, xS, sizeof(xS));
+        result += String("x = ") + xS;
+    }
+
+    historySave(String("[Offline] a=") + aS + " b=" + bS, result);
+    _solDisplaySolution(d, result.c_str(), "OFFLINE");
+}
+
+// ---------------------------------------------------------------------------
+// Offline: rownanie kwadratowe ax^2+bx+c=0
+// ---------------------------------------------------------------------------
+static void _solOfflineQuadratic(U8G2 &d) {
+    double a, b, c;
+    if (!_numEditField(d, _solT("Rown. kwadratowe: a =", "Quadratic equation: a =", "Quadr. Gleichung: a ="), a)) return;
+    if (!_numEditField(d, "b =", b)) return;
+    if (!_numEditField(d, "c =", c)) return;
+
+    QuadraticResult r = offlineSolveQuadratic(a, b, c);
+    char aS[24], bS[24], cS[24];
+    offlineFmtNum(a, aS, sizeof(aS));
+    offlineFmtNum(b, bS, sizeof(bS));
+    offlineFmtNum(c, cS, sizeof(cS));
+
+    String result = String("a=") + aS + " b=" + bS + " c=" + cS + "\n\n";
+
+    if (r.usedLinear) {
+        result += _solT("a=0 -> rownanie liniowe\n", "a=0 -> linear equation\n", "a=0 -> lineare Gleichung\n");
+        if (r.linear.infinite) {
+            result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
+        } else if (r.linear.none) {
+            result += _solT("Brak rozwiazan", "No solution", "Keine Loesung");
+        } else {
+            char xS[24];
+            offlineFmtNum(r.linear.x, xS, sizeof(xS));
+            result += String("x = ") + xS;
+        }
+    } else {
+        char dS[24];
+        offlineFmtNum(r.delta, dS, sizeof(dS));
+        result += String("\\Delta = ") + dS + "\n";
+        if (r.realRoots == 2) {
+            char x1S[24], x2S[24];
+            offlineFmtNum(r.x1, x1S, sizeof(x1S));
+            offlineFmtNum(r.x2, x2S, sizeof(x2S));
+            result += String("x_1 = ") + x1S + "\n" + "x_2 = " + x2S;
+        } else if (r.realRoots == 1) {
+            char xS[24];
+            offlineFmtNum(r.x1, xS, sizeof(xS));
+            result += String(_solT("x (podwojny) = ", "x (double) = ", "x (doppelt) = ")) + xS;
+        } else {
+            char reS[24], imS[24];
+            offlineFmtNum(r.reP, reS, sizeof(reS));
+            offlineFmtNum(fabs(r.imP), imS, sizeof(imS));
+            result += _solT("Brak pierwiastkow rzeczywistych\n", "No real roots\n", "Keine reellen Nullstellen\n");
+            result += String("x = ") + reS + " \\pm " + imS + "i";
+        }
+    }
+
+    historySave(String("[Offline] a=") + aS + " b=" + bS + " c=" + cS, result);
+    _solDisplaySolution(d, result.c_str(), "OFFLINE");
+}
+
+// ---------------------------------------------------------------------------
+// Offline: uklad 2 rownan liniowych (metoda Cramera)
+// ---------------------------------------------------------------------------
+static void _solOfflineSystem(U8G2 &d) {
+    double a1, b1, c1, a2, b2, c2;
+    if (!_numEditField(d, _solT("Rown.1: a1 =", "Eq.1: a1 =", "Gl.1: a1 ="), a1)) return;
+    if (!_numEditField(d, "b1 =", b1)) return;
+    if (!_numEditField(d, "c1 =", c1)) return;
+    if (!_numEditField(d, _solT("Rown.2: a2 =", "Eq.2: a2 =", "Gl.2: a2 ="), a2)) return;
+    if (!_numEditField(d, "b2 =", b2)) return;
+    if (!_numEditField(d, "c2 =", c2)) return;
+
+    System2x2Result r = offlineSolveSystem2x2(a1, b1, c1, a2, b2, c2);
+    String result;
+    if (r.infinite) {
+        result = _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
+    } else if (r.none) {
+        result = _solT("Uklad sprzeczny (brak rozwiazan)", "Inconsistent system (no solution)", "Widerspruechliches System (keine Loesung)");
+    } else {
+        char xS[24], yS[24];
+        offlineFmtNum(r.x, xS, sizeof(xS));
+        offlineFmtNum(r.y, yS, sizeof(yS));
+        result = String("x = ") + xS + "\ny = " + yS;
+    }
+
+    char eq[96];
+    snprintf(eq, sizeof(eq), "a1=%.4g b1=%.4g c1=%.4g / a2=%.4g b2=%.4g c2=%.4g", a1, b1, c1, a2, b2, c2);
+    historySave(String("[Offline] ") + eq, result);
+    _solDisplaySolution(d, result.c_str(), "OFFLINE");
+}
+
+// ---------------------------------------------------------------------------
+// Offline: procenty i proporcje (podmenu 2 pozycji)
+// ---------------------------------------------------------------------------
+static void _solOfflinePercent(U8G2 &d) {
+    const char* items[2] = {
+        _solT("X% z Y", "X% of Y", "X% von Y"),
+        _solT("Proporcja a:b=c:x", "Proportion a:b=c:x", "Verhaeltnis a:b=c:x"),
+    };
+    int sel = _solListMenu(d, _solT("=== Procenty ===", "=== Percentages ===", "=== Prozente ==="), items, 2);
+    if (sel < 0) return;
+
+    if (sel == 0) {
+        double pct, base;
+        if (!_numEditField(d, "X (%) =", pct)) return;
+        if (!_numEditField(d, "Y =", base)) return;
+        double v = offlinePercentOf(pct, base);
+        char pS[24], bS[24], vS[24];
+        offlineFmtNum(pct, pS, sizeof(pS));
+        offlineFmtNum(base, bS, sizeof(bS));
+        offlineFmtNum(v, vS, sizeof(vS));
+        String result = String(pS) + "% z " + bS + " = " + vS;
+        historySave(String("[Offline] ") + pS + "% z " + bS, result);
+        _solDisplaySolution(d, result.c_str(), "OFFLINE");
+    } else {
+        double a, b, c;
+        if (!_numEditField(d, "a =", a)) return;
+        if (!_numEditField(d, "b =", b)) return;
+        if (!_numEditField(d, "c =", c)) return;
+        double x = offlineProportion(a, b, c);
+        char aS[24], bS[24], cS[24], xS[24];
+        offlineFmtNum(a, aS, sizeof(aS));
+        offlineFmtNum(b, bS, sizeof(bS));
+        offlineFmtNum(c, cS, sizeof(cS));
+        offlineFmtNum(x, xS, sizeof(xS));
+        String result = String(aS) + ":" + bS + " = " + cS + ":x\n\nx = " + xS;
+        historySave(String("[Offline] ") + aS + ":" + bS + "=" + cS + ":x", result);
+        _solDisplaySolution(d, result.c_str(), "OFFLINE");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Offline: pochodna wielomianu (stopien 2 lub 3)
+// ---------------------------------------------------------------------------
+static void _solOfflineDerivative(U8G2 &d) {
+    const char* items[2] = {
+        _solT("Stopien 2 (ax^2+bx+c)", "Degree 2 (ax^2+bx+c)", "Grad 2 (ax^2+bx+c)"),
+        _solT("Stopien 3 (ax^3+bx^2+cx+d)", "Degree 3 (ax^3+bx^2+cx+d)", "Grad 3 (ax^3+bx^2+cx+d)"),
+    };
+    int sel = _solListMenu(d, _solT("=== Pochodna ===", "=== Derivative ===", "=== Ableitung ==="), items, 2);
+    if (sel < 0) return;
+
+    int degree = (sel == 0) ? 2 : 3;
+    double coeffs[4] = {0, 0, 0, 0};   // coeffs[0]=wyraz wolny ... coeffs[degree]=najwyzsza potega
+    const char* labelsHi[4] = {"a =", "b =", "c =", "d ="};   // od najwyzszej potegi w dol
+
+    for (int i = degree; i >= 0; i--) {
+        if (!_numEditField(d, labelsHi[degree - i], coeffs[i])) return;
+    }
+
+    double deriv[4] = {0, 0, 0, 0};
+    int dDeg = offlinePolyDerivative(coeffs, degree, deriv);
+
+    String fx = "f(x) = ";
+    for (int i = degree; i >= 0; i--) {
+        char cS[24];
+        offlineFmtNum(coeffs[i], cS, sizeof(cS));
+        if (i < degree && coeffs[i] >= 0) fx += "+";
+        fx += cS;
+        if (i > 0) { fx += "x"; if (i > 1) { fx += "^"; fx += String(i); } }
+    }
+
+    String fpx = "f'(x) = ";
+    if (dDeg >= 0) {
+        for (int i = dDeg; i >= 0; i--) {
+            char cS[24];
+            offlineFmtNum(deriv[i], cS, sizeof(cS));
+            if (i < dDeg && deriv[i] >= 0) fpx += "+";
+            fpx += cS;
+            if (i > 0) { fpx += "x"; if (i > 1) { fpx += "^"; fpx += String(i); } }
+        }
+    } else {
+        fpx += "0";
+    }
+
+    String result = fx + "\n\n" + fpx;
+    historySave(String("[Offline] ") + fx, result);
+    _solDisplaySolution(d, result.c_str(), "OFFLINE");
+}
+
+// ---------------------------------------------------------------------------
+// Offline: punkty na plaszczyznie — odleglosc |AB| + srodek odcinka
+// ---------------------------------------------------------------------------
+static void _solOfflinePoints(U8G2 &d) {
+    double x1, y1, x2, y2;
+    if (!_numEditField(d, _solT("Punkt A: x1 =", "Point A: x1 =", "Punkt A: x1 ="), x1)) return;
+    if (!_numEditField(d, "y1 =", y1)) return;
+    if (!_numEditField(d, _solT("Punkt B: x2 =", "Point B: x2 =", "Punkt B: x2 ="), x2)) return;
+    if (!_numEditField(d, "y2 =", y2)) return;
+
+    PointsResult r = offlinePointsCalc(x1, y1, x2, y2);
+    char x1S[24], y1S[24], x2S[24], y2S[24], dS[24], mxS[24], myS[24];
+    offlineFmtNum(x1, x1S, sizeof(x1S));
+    offlineFmtNum(y1, y1S, sizeof(y1S));
+    offlineFmtNum(x2, x2S, sizeof(x2S));
+    offlineFmtNum(y2, y2S, sizeof(y2S));
+    offlineFmtNum(r.distance, dS, sizeof(dS));
+    offlineFmtNum(r.midX, mxS, sizeof(mxS));
+    offlineFmtNum(r.midY, myS, sizeof(myS));
+
+    String result = String("|AB| = ") + dS + "\n" +
+                     _solT("Srodek S = (", "Midpoint S = (", "Mittelpunkt S = (") + mxS + ", " + myS + ")";
+
+    historySave(String("[Offline] A(") + x1S + "," + y1S + ") B(" + x2S + "," + y2S + ")", result);
+    _solDisplaySolution(d, result.c_str(), "OFFLINE");
+}
+
+// ---------------------------------------------------------------------------
+// Offline: twierdzenie Pitagorasa (podmenu 2 pozycji)
+// ---------------------------------------------------------------------------
+static void _solOfflinePythagoras(U8G2 &d) {
+    const char* items[2] = {
+        _solT("Znam obie przyprostokatne", "Know both legs", "Kenne beide Katheten"),
+        _solT("Znam przeciwprost.+bok", "Know hypotenuse+leg", "Kenne Hypotenuse+Kathete"),
+    };
+    int sel = _solListMenu(d, _solT("=== Pitagoras ===", "=== Pythagoras ===", "=== Pythagoras ==="), items, 2);
+    if (sel < 0) return;
+
+    if (sel == 0) {
+        double a, b;
+        if (!_numEditField(d, _solT("Przyprost.: a =", "Leg: a =", "Kathete: a ="), a)) return;
+        if (!_numEditField(d, "b =", b)) return;
+        PythagorasResult r = offlinePythagorasHypotenuse(a, b);
+        char aS[24], bS[24], cS[24];
+        offlineFmtNum(a, aS, sizeof(aS));
+        offlineFmtNum(b, bS, sizeof(bS));
+        offlineFmtNum(r.result, cS, sizeof(cS));
+        String result = String("a=") + aS + " b=" + bS + "\n\nc = " + cS;
+        historySave(String("[Offline] Pitagoras a=") + aS + " b=" + bS, result);
+        _solDisplaySolution(d, result.c_str(), "OFFLINE");
+    } else {
+        double c, a;
+        if (!_numEditField(d, _solT("Przeciwprost.: c =", "Hypotenuse: c =", "Hypotenuse: c ="), c)) return;
+        if (!_numEditField(d, _solT("Przyprost.: a =", "Leg: a =", "Kathete: a ="), a)) return;
+        PythagorasResult r = offlinePythagorasLeg(c, a);
+        char cS[24], aS[24];
+        offlineFmtNum(c, cS, sizeof(cS));
+        offlineFmtNum(a, aS, sizeof(aS));
+        String result;
+        if (!r.valid) {
+            result = _solT("Blad: c musi byc dluzsze niz a", "Error: c must be longer than a", "Fehler: c muss laenger als a sein");
+        } else {
+            char bS[24];
+            offlineFmtNum(r.result, bS, sizeof(bS));
+            result = String("c=") + cS + " a=" + aS + "\n\nb = " + bS;
+        }
+        historySave(String("[Offline] Pitagoras c=") + cS + " a=" + aS, result);
+        _solDisplaySolution(d, result.c_str(), "OFFLINE");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Offline: ciagi arytmetyczne i geometryczne (podmenu 2 pozycji)
+// ---------------------------------------------------------------------------
+static void _solOfflineSequence(U8G2 &d) {
+    const char* items[2] = {
+        _solT("Arytmetyczny", "Arithmetic", "Arithmetisch"),
+        _solT("Geometryczny", "Geometric", "Geometrisch"),
+    };
+    int sel = _solListMenu(d, _solT("=== Ciagi ===", "=== Sequences ===", "=== Folgen ==="), items, 2);
+    if (sel < 0) return;
+
+    double a1, diffOrRatio, nD;
+    if (!_numEditField(d, "a1 =", a1)) return;
+    if (!_numEditField(d, sel == 0 ? "r =" : "q =", diffOrRatio)) return;
+    if (!_numEditField(d, "n =", nD)) return;
+    int n = (int)(nD >= 0 ? nD + 0.5 : nD - 0.5);
+    if (n < 1) n = 1;
+
+    SequenceResult res = (sel == 0)
+        ? offlineArithmeticSeq(a1, diffOrRatio, n)
+        : offlineGeometricSeq(a1, diffOrRatio, n);
+
+    char a1S[24], drS[24], anS[24], snS[24];
+    offlineFmtNum(a1, a1S, sizeof(a1S));
+    offlineFmtNum(diffOrRatio, drS, sizeof(drS));
+    offlineFmtNum(res.nthTerm, anS, sizeof(anS));
+    offlineFmtNum(res.sumN, snS, sizeof(snS));
+
+    String result = String("a_") + n + " = " + anS + "\n" + "S_" + n + " = " + snS;
+    historySave(String("[Offline] a1=") + a1S + (sel == 0 ? " r=" : " q=") + drS + " n=" + n, result);
+    _solDisplaySolution(d, result.c_str(), "OFFLINE");
+}
+
+// ---------------------------------------------------------------------------
+// Offline: pola i obwody podstawowych figur (podmenu 4 pozycji)
+// ---------------------------------------------------------------------------
+static void _solOfflineArea(U8G2 &d) {
+    const char* items[4] = {
+        _solT("Prostokat", "Rectangle", "Rechteck"),
+        _solT("Trojkat (3 boki)", "Triangle (3 sides)", "Dreieck (3 Seiten)"),
+        _solT("Kolo", "Circle", "Kreis"),
+        _solT("Trapez", "Trapezoid", "Trapez"),
+    };
+    int sel = _solListMenu(d, _solT("=== Pola i obwody ===", "=== Areas ===", "=== Flaechen ==="), items, 4);
+    if (sel < 0) return;
+
+    String result, histLabel;
+
+    if (sel == 0) {
+        double a, b;
+        if (!_numEditField(d, _solT("Prostokat: a =", "Rectangle: a =", "Rechteck: a ="), a)) return;
+        if (!_numEditField(d, "b =", b)) return;
+        AreaResult r = offlineRectangle(a, b);
+        char aS[24], bS[24], pS[24], oS[24];
+        offlineFmtNum(a, aS, sizeof(aS));
+        offlineFmtNum(b, bS, sizeof(bS));
+        offlineFmtNum(r.area, pS, sizeof(pS));
+        offlineFmtNum(r.perimeter, oS, sizeof(oS));
+        result = String(_solT("Pole = ", "Area = ", "Flaeche = ")) + pS + "\n" +
+                 _solT("Obwod = ", "Perimeter = ", "Umfang = ") + oS;
+        histLabel = String("Prostokat a=") + aS + " b=" + bS;
+    } else if (sel == 1) {
+        double a, b, c;
+        if (!_numEditField(d, _solT("Trojkat: a =", "Triangle: a =", "Dreieck: a ="), a)) return;
+        if (!_numEditField(d, "b =", b)) return;
+        if (!_numEditField(d, "c =", c)) return;
+        AreaResult r = offlineTriangleHeron(a, b, c);
+        char aS[24], bS[24], cS[24];
+        offlineFmtNum(a, aS, sizeof(aS));
+        offlineFmtNum(b, bS, sizeof(bS));
+        offlineFmtNum(c, cS, sizeof(cS));
+        if (!r.valid) {
+            result = _solT("Blad: takie boki nie tworza trojkata", "Error: these sides don't form a triangle", "Fehler: diese Seiten bilden kein Dreieck");
+        } else {
+            char pS[24], oS[24];
+            offlineFmtNum(r.area, pS, sizeof(pS));
+            offlineFmtNum(r.perimeter, oS, sizeof(oS));
+            result = String(_solT("Pole = ", "Area = ", "Flaeche = ")) + pS + "\n" +
+                     _solT("Obwod = ", "Perimeter = ", "Umfang = ") + oS;
+        }
+        histLabel = String("Trojkat a=") + aS + " b=" + bS + " c=" + cS;
+    } else if (sel == 2) {
+        double rad;
+        if (!_numEditField(d, _solT("Kolo: r =", "Circle: r =", "Kreis: r ="), rad)) return;
+        AreaResult r = offlineCircle(rad);
+        char rS[24], pS[24], oS[24];
+        offlineFmtNum(rad, rS, sizeof(rS));
+        offlineFmtNum(r.area, pS, sizeof(pS));
+        offlineFmtNum(r.perimeter, oS, sizeof(oS));
+        result = String(_solT("Pole = ", "Area = ", "Flaeche = ")) + pS + "\n" +
+                 _solT("Obwod = ", "Perimeter = ", "Umfang = ") + oS;
+        histLabel = String("Kolo r=") + rS;
+    } else {
+        double a, b, h;
+        if (!_numEditField(d, _solT("Trapez: a =", "Trapezoid: a =", "Trapez: a ="), a)) return;
+        if (!_numEditField(d, "b =", b)) return;
+        if (!_numEditField(d, "h =", h)) return;
+        AreaResult r = offlineTrapezoid(a, b, h);
+        char aS[24], bS[24], hS[24], pS[24];
+        offlineFmtNum(a, aS, sizeof(aS));
+        offlineFmtNum(b, bS, sizeof(bS));
+        offlineFmtNum(h, hS, sizeof(hS));
+        offlineFmtNum(r.area, pS, sizeof(pS));
+        result = String(_solT("Pole = ", "Area = ", "Flaeche = ")) + pS + "\n" +
+                 _solT("(obwod wymaga dlugosci ramion)", "(perimeter needs leg lengths)", "(Umfang braucht Schenkellaengen)");
+        histLabel = String("Trapez a=") + aS + " b=" + bS + " h=" + hS;
+    }
+
+    historySave(String("[Offline] ") + histLabel, result);
+    _solDisplaySolution(d, result.c_str(), "OFFLINE");
+}
+
+// ---------------------------------------------------------------------------
+// Offline — dispatcher: menu 9 narzedzi, wraca do siebie po kazdym policzeniu
+// ---------------------------------------------------------------------------
+static void runOfflineSolver(U8G2 &d) {
+    const char* items[9] = {
+        _solT("Rownanie liniowe", "Linear equation", "Lineare Gleichung"),
+        _solT("Rownanie kwadratowe", "Quadratic equation", "Quadratische Gleichung"),
+        _solT("Uklad 2 rownan", "2-eq. system", "2er-Gleichungssystem"),
+        _solT("Procenty / proporcje", "Percentages / proportions", "Prozente / Verhaeltnisse"),
+        _solT("Pochodna wielomianu", "Polynomial derivative", "Polynom-Ableitung"),
+        _solT("Punkty na plaszczyznie", "Points on a plane", "Punkte in der Ebene"),
+        _solT("Twierdzenie Pitagorasa", "Pythagorean theorem", "Satz des Pythagoras"),
+        _solT("Ciagi (arytm./geom.)", "Sequences (arith./geom.)", "Folgen (arith./geom.)"),
+        _solT("Pola i obwody figur", "Areas and perimeters", "Flaechen und Umfaenge"),
+    };
+    while (true) {
+        if (panicTriggered()) return;
+        int sel = _solListMenu(d, _solT("=== Offline ===", "=== Offline ===", "=== Offline ==="), items, 9);
+        if (sel < 0) return;   // wyjscie do _solModeSelect
+
+        switch (sel) {
+            case 0: _solOfflineLinear(d);     break;
+            case 1: _solOfflineQuadratic(d);  break;
+            case 2: _solOfflineSystem(d);     break;
+            case 3: _solOfflinePercent(d);    break;
+            case 4: _solOfflineDerivative(d); break;
+            case 5: _solOfflinePoints(d);     break;
+            case 6: _solOfflinePythagoras(d); break;
+            case 7: _solOfflineSequence(d);   break;
+            case 8: _solOfflineArea(d);       break;
+        }
     }
 }
 
@@ -1234,6 +1813,8 @@ void showSolveScreen(U8G2 &display) {
             _solRunTextMode(display);
         } else if (mode == 2) {
             _solRunHistoryMode(display);
+        } else if (mode == 3) {
+            runOfflineSolver(display);
         }
         // Po powrocie z trybu → znow wybor trybu
     }
