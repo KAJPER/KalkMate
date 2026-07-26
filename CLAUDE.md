@@ -291,6 +291,22 @@ Pinout 24-pin różni się między producentami (AliExpress, Arducam, Waveshare)
 ### DVDD kamery
 DVDD = **1.3V** (nie 1.2V!). XC6206P132MR daje dokładnie 1.3V.
 
+### Kod AI zawiera cyfrę na martwym klawiszu → urządzenie zablokowane na dobre
+Wejście do JAKIEGOKOLWIEK menu (w tym Ustawień, gdzie dopiero można zmienić
+kod) wymaga wpisania obecnego kodu AI. Jeśli klawisz użyty w kodzie się
+zepsuje (np. wada membrany), użytkownik nie ma jak zmienić kodu — zamknięte
+koło, a na PROD_REL (eFuse Release lock) nie da się też przeflashować przez
+USB ani dosięgnąć OTA (ono też jest za tym samym kodem).
+
+**Zabezpieczenie (od fw 1.7.0+):** przytrzymaj **C/CE** podczas włączania
+przełącznikiem zasilania (2s) → pełny reset fabryczny (WiFi, kod AI, panic
+key, historia, notatki, sprawdziany, powiązanie z kontem) bez pytania o
+stary kod — ten sam zakres co „Ustawienia → Reset fabryczny", tylko
+dostępny zanim jeszcze da się wejść do menu. Patrz `main.cpp` `setup()`,
+sekcja "Ratunkowy reset fabryczny". Nie pomaga to urządzeniom z firmware
+sprzed tej zmiany (nie da się tego dostarczyć wstecz na już zablokowany
+egzemplarz — brak ścieżki USB i OTA).
+
 ---
 
 ## Dostawcy komponentów

@@ -150,11 +150,12 @@ static void _camApplyCommonSensor() {
     s->set_wpc(s,           1);   // white pixel correction
     s->set_raw_gma(s,       1);   // gamma correction
     s->set_lenc(s,          1);   // lens correction (winietowanie)
-    // Sensor zamontowany w obudowie do gory nogami → wymaga obrotu 180°
-    // czyli hmirror=1 + vflip=1 (mirror w pionie + odbicie poziome razem
-    // = obrot 180° w stosunku do natywnej orientacji sensora).
-    s->set_hmirror(s,       1);
-    s->set_vflip(s,         1);
+    // UWAGA: poprzednio ustawione hmirror=1+vflip=1 (obrot 180°) zakladalo
+    // sensor zamontowany do gory nogami — to zalozenie bylo bledne (podglad
+    // i zdjecie wychodzily obrocone o 180° w zla strone). Natywna orientacja
+    // sensora jest juz poprawna, bez korekty.
+    s->set_hmirror(s,       0);
+    s->set_vflip(s,         0);
     s->set_dcw(s,           1);   // downsize crop window
     s->set_colorbar(s,      0);   // 1 = test pattern (tylko debug)
 }
