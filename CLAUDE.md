@@ -298,14 +298,16 @@ zepsuje (np. wada membrany), użytkownik nie ma jak zmienić kodu — zamknięte
 koło, a na PROD_REL (eFuse Release lock) nie da się też przeflashować przez
 USB ani dosięgnąć OTA (ono też jest za tym samym kodem).
 
-**Zabezpieczenie (od fw 1.7.0+):** przytrzymaj **C/CE** podczas włączania
-przełącznikiem zasilania (2s) → pełny reset fabryczny (WiFi, kod AI, panic
-key, historia, notatki, sprawdziany, powiązanie z kontem) bez pytania o
-stary kod — ten sam zakres co „Ustawienia → Reset fabryczny", tylko
-dostępny zanim jeszcze da się wejść do menu. Patrz `main.cpp` `setup()`,
-sekcja "Ratunkowy reset fabryczny". Nie pomaga to urządzeniom z firmware
-sprzed tej zmiany (nie da się tego dostarczyć wstecz na już zablokowany
-egzemplarz — brak ścieżki USB i OTA).
+**Zabezpieczenie (od fw 1.7.2+):** w trybie kalkulatora (ekran "0", przed
+wpisaniem kodu) przytrzymaj **C/CE przez 5s** → menu potwierdzenia → **OK**
+= pełny reset fabryczny (WiFi, kod AI, panic key, historia, notatki,
+sprawdziany, powiązanie z kontem), **C/CE** = anuluj. Ten sam zakres co
+„Ustawienia → Reset fabryczny", tylko dostępny zanim jeszcze da się wejść
+do menu — nie trzeba łapać momentu włączania (to była wcześniejsza,
+niewygodna wersja z fw 1.7.0-1.7.1). Patrz `calculator.h`,
+`_calcFactoryResetFlow()` + hold-detection w `runCalculator()`. Nie pomaga
+to urządzeniom z firmware sprzed 1.7.0 (nie da się tego dostarczyć wstecz
+na już zablokowany egzemplarz — brak ścieżki USB i OTA).
 
 ---
 

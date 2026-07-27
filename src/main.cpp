@@ -35,7 +35,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.7.2"
+#define FW_VERSION "1.7.3"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -1054,87 +1054,10 @@ void setup() {
                       kalkSettings.sleepMinutes);
     }
 
-    // === Ratunkowy reset fabryczny — przytrzymaj C/CE podczas wlaczania ===
-    // Zabezpieczenie na wypadek gdy fizyczny klawisz uzyty w kodzie AI
-    // przestanie dzialac (np. wada klawiatury) — bez tego nie da sie wejsc
-    // do ZADNEGO menu (w tym Ustawien), bo wszystko jest za tym samym kodem.
-    // Wymaga przytrzymania 10s (zeby na pewno nie odpalilo sie przypadkiem),
-    // a potem POKAZUJE MENU POTWIERDZENIA zamiast od razu kasowac — dopiero
-    // OK faktycznie robi reset (to samo co "Ustawienia -> Reset fabryczny"
-    // w settings_screen.h: WiFi, kod AI, panic key, historia, notatki,
-    // sprawdziany, powiazanie z kontem).
-    if (inputKeyDown(KEY_CCE)) {
-        const uint32_t HOLD_MS = 10000;
-        uint32_t _rstT0 = millis();
-        bool _rstHeld = true;
-
-        while (millis() - _rstT0 < HOLD_MS) {
-            if (!inputKeyDown(KEY_CCE)) { _rstHeld = false; break; }
-            int secLeft = (int)((HOLD_MS - (millis() - _rstT0)) / 1000) + 1;
-            u8g2.clearBuffer();
-            u8g2.setFont(u8g2_font_6x10_tf);
-            u8g2.drawStr(6, 20, "Reset fabryczny...");
-            char buf[32];
-            snprintf(buf, sizeof(buf), "Trzymaj C/CE... %ds", secLeft);
-            u8g2.drawStr(6, 34, buf);
-            u8g2.sendBuffer();
-            delay(50);
-        }
-
-        if (_rstHeld) {
-            // Czekaj az user pusci C/CE, zeby nie zaliczylo sie od razu jako
-            // "OK" albo "anuluj" w menu potwierdzenia ponizej.
-            while (inputKeyDown(KEY_CCE)) delay(20);
-
-            bool confirmed = false, cancelled = false;
-            while (!confirmed && !cancelled) {
-                u8g2.clearBuffer();
-                u8g2.setFont(u8g2_font_6x10_tf);
-                u8g2.drawStr(2, 10, "=== Reset fabryczny ===");
-                u8g2.drawHLine(0, 12, 256);
-                u8g2.setFont(u8g2_font_5x7_tf);
-                u8g2.drawStr(2, 26, "Skasuje: WiFi, kod AI, historie,");
-                u8g2.drawStr(2, 35, "notatki, sprawdziany, konto.");
-                u8g2.setFont(u8g2_font_6x10_tf);
-                u8g2.drawStr(2, 55, "OK = TAK");
-                u8g2.drawStr(2, 63, "C/CE = anuluj");
-                u8g2.sendBuffer();
-
-                if (inputKeyConsume(KEY_EQ))  confirmed = true;
-                if (inputKeyConsume(KEY_CCE)) cancelled = true;
-                delay(20);
-            }
-
-            if (confirmed) {
-                Serial.println("[BOOT] Reset fabryczny potwierdzony (C/CE held 10s + OK)");
-
-                // NVS — te same 3 namespace'y co _editFactoryReset
-                {
-                    Preferences p;
-                    if (p.begin("kalkmate", false)) { p.clear(); p.end(); }
-                    if (p.begin("kalkhist", false)) { p.clear(); p.end(); }
-                    if (p.begin("kalkmap",  false)) { p.clear(); p.end(); }
-                }
-                // SPIFFS — notatki/sprawdziany
-                if (SPIFFS.begin(true)) {
-                    if (SPIFFS.exists("/notes.json")) SPIFFS.remove("/notes.json");
-                    if (SPIFFS.exists("/tests.json")) SPIFFS.remove("/tests.json");
-                }
-
-                u8g2.clearBuffer();
-                u8g2.setFont(u8g2_font_6x10_tf);
-                u8g2.drawStr(6, 25, "Zresetowano fabrycznie");
-                u8g2.drawStr(6, 40, "Restart...");
-                u8g2.sendBuffer();
-                delay(1500);
-                ESP.restart();
-                while (true) delay(1000);   // niedosiegniete
-            }
-            // cancelled -> lecimy dalej do normalnego boota
-        }
-    }
-
     // === FAZA 3: pelen kalkulator (przejmuje renderowanie) ===
+    // Ratunkowy reset fabryczny — przytrzymaj C/CE 5s w trybie kalkulatora
+    // (nie trzeba lapac momentu wlaczania) — patrz _calcFactoryResetFlow
+    // w calculator.h.
     runCalculator(u8g2);
 
     // === Tryb AI ===
