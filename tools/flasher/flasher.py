@@ -444,8 +444,17 @@ class FlasherApp:
             ]
             self._run_subprocess(cmd, prefix="esptool")
 
-            # Step 2 (opcjonalne): Flash Encryption eFuse
-            if mode in ("PROD_DEV", "PROD_REL"):
+            # Step 2 (TYLKO PROD_DEV): Flash Encryption eFuse — pierwsze wypalenie
+            # klucza + wlaczenie szyfrowania. PROD_REL zaklada ze urzadzenie JUZ
+            # przeszlo przez PROD_DEV wczesniej (dokladnie tak jak w
+            # SHIPPING_CHECKLIST.md: krok 3 zawsze przed krokiem 5) — wiec klucz
+            # w BLOCK_KEY0 juz istnieje i jest read-protected. Probowanie
+            # burn-key ponownie w PROD_REL (np. w osobnej sesji od PROD_DEV)
+            # zawsze failuje z "BLOCK_KEY0 is read-protected", bo espefuse nie
+            # moze zweryfikowac zgodnosci z juz wypalona wartoscia — a wymuszenie
+            # (--force-write-always) ryzykuje uszkodzeniem juz zaszyfrowanej
+            # flashy jesli cokolwiek sie nie zgra co do bitu.
+            if mode == "PROD_DEV":
                 self.log("[2/3] Wypalanie Flash Encryption eFuse...")
                 # Wypal klucz w BLOCK_KEY0
                 cmd = [self.cfg["espefuse"], "--chip", self.cfg["chip"],
@@ -458,6 +467,8 @@ class FlasherApp:
                        "--port", port,
                        "burn-efuse", "SPI_BOOT_CRYPT_CNT", "1"]
                 self._run_subprocess(cmd, prefix="espefuse-en", stdin_input="BURN\n")
+            elif mode == "PROD_REL":
+                self.log("[2/3] Pomijam wypalanie klucza (juz zrobione w PROD_DEV)")
 
             # Step 3 (tylko PROD_REL): zamknij Flash Encryption Release
             if mode == "PROD_REL":
