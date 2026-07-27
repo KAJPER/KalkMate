@@ -39,6 +39,19 @@
 #define _OTA_CHECK_ENDPOINT  KALK_SERVER_URL "/api/device/firmware/check"
 #define _OTA_HTTP_TIMEOUT_MS 30000
 
+// Jezyk UI (0=PL,1=EN,2=DE) — implementacja w settings_screen.h (po pelnej
+// definicji kalkSettings). Forward-deklarowane tu zeby ota_update.h zostal
+// self-contained i mogl byc wlaczony PRZED definicja struct KalkMateSettings
+// (settings_screen.h robi #include "ota_update.h" wczesniej niz definiuje
+// kalkSettings).
+extern int otaGetLanguage();
+static const char* _otaT(const char* pl, const char* en, const char* de) {
+    int l = otaGetLanguage();
+    if (l == 0) return pl;
+    if (l == 1) return en;
+    return de;
+}
+
 struct OtaInfo {
     bool   available;     // true gdy nowa wersja > FW_VERSION
     String latestVersion; // wersja zwrocona przez serwer (lub pusta)
@@ -165,7 +178,7 @@ static void _otaDrawProgress(U8G2 &d, const char* line1, int percent) {
     if (fill > 0) d.drawBox(barX + 2, barY + 2, fill, barH - 4);
 
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 60, "Nie wylaczaj urzadzenia!");
+    d.drawStr(2, 60, _otaT("Nie wylaczaj urzadzenia!", "Do not turn off the device!", "Geraet nicht ausschalten!"));
 
     d.sendBuffer();
 }
@@ -298,7 +311,7 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
     Serial.printf("[OTA] install: %s\n", binUrl.c_str());
 
     if (WiFi.status() != WL_CONNECTED) {
-        _otaDrawProgress(d, "Blad: brak WiFi", 0);
+        _otaDrawProgress(d, _otaT("Blad: brak WiFi", "Error: no WiFi", "Fehler: kein WLAN"), 0);
         delay(2000);
         return false;
     }
@@ -306,7 +319,7 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
 #ifdef KALK_REQUIRE_SIGNED_OTA
     if (sigB64.isEmpty()) {
         Serial.println("[OTA] KALK_REQUIRE_SIGNED_OTA: brak podpisu — install odrzucony");
-        _otaDrawProgress(d, "PROD: brak podpisu!", 0);
+        _otaDrawProgress(d, _otaT("PROD: brak podpisu!", "PROD: missing signature!", "PROD: fehlende Signatur!"), 0);
         delay(3000);
         return false;
     }
@@ -315,12 +328,12 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
     // C5: walidacja domeny przed pobraniem — zapobiega przekierowaniu na obcy serwer
     if (!binUrl.startsWith("https://kalkmate.pl/")) {
         Serial.printf("[OTA] ODRZUCONO: zly URL firmware: %s\n", binUrl.c_str());
-        _otaDrawProgress(d, "BLAD: zly URL!", 0);
+        _otaDrawProgress(d, _otaT("BLAD: zly URL!", "ERROR: bad URL!", "FEHLER: falsche URL!"), 0);
         delay(3000);
         return false;
     }
 
-    _otaDrawProgress(d, "Laczenie z serwerem...", 0);
+    _otaDrawProgress(d, _otaT("Laczenie z serwerem...", "Connecting to server...", "Verbinde mit Server..."), 0);
 
     WiFiClientSecure client;
     client.setCACert(KALKMATE_CA_CERT);
@@ -345,8 +358,8 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
     int code = http.GET();
     if (code != 200) {
         Serial.printf("[OTA] download HTTP %d\n", code);
-        char err[32];
-        snprintf(err, sizeof(err), "Blad pobrania: %d", code);
+        char err[48];
+        snprintf(err, sizeof(err), _otaT("Blad pobrania: %d", "Download error: %d", "Downloadfehler: %d"), code);
         _otaDrawProgress(d, err, 0);
         delay(3000);
         http.end();
@@ -355,7 +368,7 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
 
     int total = http.getSize();
     if (total <= 0) {
-        _otaDrawProgress(d, "Blad: rozmiar 0", 0);
+        _otaDrawProgress(d, _otaT("Blad: rozmiar 0", "Error: size 0", "Fehler: Groesse 0"), 0);
         delay(2000);
         http.end();
         return false;
@@ -364,13 +377,13 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
 
     if (!Update.begin(total)) {
         Serial.printf("[OTA] Update.begin failed: %s\n", Update.errorString());
-        _otaDrawProgress(d, "Blad: brak miejsca", 0);
+        _otaDrawProgress(d, _otaT("Blad: brak miejsca", "Error: no space", "Fehler: kein Speicherplatz"), 0);
         delay(3000);
         http.end();
         return false;
     }
 
-    _otaDrawProgress(d, "Pobieranie firmware...", 0);
+    _otaDrawProgress(d, _otaT("Pobieranie firmware...", "Downloading firmware...", "Firmware wird geladen..."), 0);
 
     // Streaming SHA-256 zeby zweryfikowac podpis po pobraniu
     bool verifySignature = (sigB64.length() > 0);
@@ -397,7 +410,7 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
                 Serial.printf("[OTA] Update.write failed: %s\n", Update.errorString());
                 Update.abort();
                 if (verifySignature) mbedtls_sha256_free(&shaCtx);
-                _otaDrawProgress(d, "Blad zapisu", written * 100 / total);
+                _otaDrawProgress(d, _otaT("Blad zapisu", "Write error", "Schreibfehler"), written * 100 / total);
                 delay(3000);
                 http.end();
                 return false;
@@ -412,7 +425,7 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
             if (now - lastDraw > 250) {
                 lastDraw = now;
                 int pct = written * 100 / total;
-                _otaDrawProgress(d, "Pobieranie firmware...", pct);
+                _otaDrawProgress(d, _otaT("Pobieranie firmware...", "Downloading firmware...", "Firmware wird geladen..."), pct);
             }
         } else {
             delay(1);
@@ -446,7 +459,7 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
             Serial.printf("[OTA] parse_public_key fail: -0x%x\n", -ret);
             mbedtls_pk_free(&pk);
             Update.abort();
-            _otaDrawProgress(d, "Blad parsowania key", 100);
+            _otaDrawProgress(d, _otaT("Blad parsowania key", "Key parse error", "Schluessel-Parsefehler"), 100);
             delay(3000);
             return false;
         }
@@ -459,36 +472,36 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
         if (ret != 0) {
             Serial.printf("[OTA] WERYFIKACJA PODPISU NIEUDANA: -0x%x\n", -ret);
             Update.abort();
-            _otaDrawProgress(d, "PODPIS NIEPOPRAWNY!", 100);
+            _otaDrawProgress(d, _otaT("PODPIS NIEPOPRAWNY!", "SIGNATURE INVALID!", "SIGNATUR UNGUELTIG!"), 100);
             delay(5000);
             return false;
         }
         Serial.println("[OTA] podpis OK - firmware zaufany");
-        _otaDrawProgress(d, "Podpis OK, zapisuje...", 100);
+        _otaDrawProgress(d, _otaT("Podpis OK, zapisuje...", "Signature OK, saving...", "Signatur OK, speichere..."), 100);
     }
 
     if (written != total) {
         Serial.printf("[OTA] incomplete: %d / %d\n", written, total);
         Update.abort();
-        _otaDrawProgress(d, "Blad: niepelny pobor", written * 100 / total);
+        _otaDrawProgress(d, _otaT("Blad: niepelny pobor", "Error: incomplete download", "Fehler: unvollstaendiger Download"), written * 100 / total);
         delay(3000);
         return false;
     }
 
     if (!Update.end(true)) {
         Serial.printf("[OTA] Update.end failed: %s\n", Update.errorString());
-        _otaDrawProgress(d, "Blad finalizacji", 100);
+        _otaDrawProgress(d, _otaT("Blad finalizacji", "Finalize error", "Fehler beim Abschluss"), 100);
         delay(3000);
         return false;
     }
 
     if (!Update.isFinished()) {
-        _otaDrawProgress(d, "Update niepelny", 100);
+        _otaDrawProgress(d, _otaT("Update niepelny", "Update incomplete", "Update unvollstaendig"), 100);
         delay(3000);
         return false;
     }
 
-    _otaDrawProgress(d, "Sukces! Restart...", 100);
+    _otaDrawProgress(d, _otaT("Sukces! Restart...", "Success! Restarting...", "Erfolg! Neustart..."), 100);
     delay(1500);
     otaMarkPendingValidation();
     ESP.restart();

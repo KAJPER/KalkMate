@@ -101,6 +101,10 @@ static const char* T(const char* pl, const char* en, const char* de) {
     return de;
 }
 
+// Implementacja forward-deklaracji z ota_update.h (patrz komentarz tam) —
+// ota_update.h jest wlaczony wyzej w tym pliku, PRZED definicja kalkSettings.
+int otaGetLanguage() { return kalkSettings.language; }
+
 // ---------------------------------------------------------------------------
 // Stale menu — 15 pozycji, ulozone tematycznie:
 //   Preferencje:    Jasnosc, Jezyk, Tryb, Sleep, Kod AI, Panic
@@ -1216,9 +1220,21 @@ static void _editFactoryReset(U8G2 &d) {
     Serial.println("[FACTORY] start");
 
     // 3. NVS - skasuj 3 znane namespacy
+    // dev_token to tozsamosc urzadzenia wobec serwera (nie ustawienie
+    // uzytkownika) — jesli go skasujemy, serwer dalej ma STARY token dla
+    // tego MAC-a, a urzadzenie wysle pusty -> 401 "Invalid device token"
+    // na kazdym kolejnym register/account-status (device-auth.ts na
+    // serwerze). Zachowujemy go przez reset.
+    char savedDevToken[68] = "";
+    wifiLoadDeviceToken(savedDevToken, sizeof(savedDevToken));
     {
         Preferences p;
-        if (p.begin("kalkmate", false)) { p.clear(); p.end(); Serial.println("[FACTORY] NVS kalkmate cleared"); }
+        if (p.begin("kalkmate", false)) {
+            p.clear();
+            if (savedDevToken[0]) p.putString("dev_token", savedDevToken);
+            p.end();
+            Serial.println("[FACTORY] NVS kalkmate cleared (dev_token zachowany)");
+        }
         if (p.begin("kalkhist", false)) { p.clear(); p.end(); Serial.println("[FACTORY] NVS kalkhist cleared"); }
         if (p.begin("kalkmap",  false)) { p.clear(); p.end(); Serial.println("[FACTORY] NVS kalkmap cleared"); }
     }

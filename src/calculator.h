@@ -264,8 +264,21 @@ static void _calcFactoryResetFlow(U8G2& u8g2) {
 
     Serial.println("[CALC] Reset fabryczny potwierdzony (C/CE held 5s + OK)");
     {
+        // dev_token to tozsamosc urzadzenia wobec serwera (nie ustawienie
+        // uzytkownika) — jesli go skasujemy, serwer dalej ma STARY token
+        // zapisany dla tego MAC-a, a urzadzenie wysle pusty/inny -> serwer
+        // odrzuca kazde kolejne register/account-status z 401 "Invalid
+        // device token" (verifyDeviceAuth w website/src/lib/device-auth.ts).
+        // Zachowujemy go przez reset, zeby uniknac tego zablokowania.
+        char savedDevToken[68] = "";
+        wifiLoadDeviceToken(savedDevToken, sizeof(savedDevToken));
+
         Preferences p;
-        if (p.begin("kalkmate", false)) { p.clear(); p.end(); }
+        if (p.begin("kalkmate", false)) {
+            p.clear();
+            if (savedDevToken[0]) p.putString("dev_token", savedDevToken);
+            p.end();
+        }
         if (p.begin("kalkhist", false)) { p.clear(); p.end(); }
         if (p.begin("kalkmap",  false)) { p.clear(); p.end(); }
     }
