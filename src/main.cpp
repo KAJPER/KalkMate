@@ -35,7 +35,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.7.3"
+#define FW_VERSION "1.7.5"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -463,25 +463,25 @@ void showAccountStatusScreen(U8G2 &d) {
     auto drawBusy = [&](const char* msg) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, "Status konta");
+        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
         d.drawHLine(0, 12, 256);
         d.drawStr(2, 32, msg);
         d.sendBuffer();
     };
 
-    drawBusy("Sprawdzam WiFi...");
+    drawBusy(mT("Sprawdzam WiFi...", "Checking WiFi...", "Pruefe WLAN..."));
     if (WiFi.status() != WL_CONNECTED) {
         char ssid[33] = "", pass[64] = "";
         wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
         if (ssid[0] == '\0') {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 10, "Status konta");
+            d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
             d.drawHLine(0, 12, 256);
-            d.drawStr(2, 32, "Brak zapisanego WiFi.");
-            d.drawStr(2, 44, "Settings -> Ustaw WiFi");
+            d.drawStr(2, 32, mT("Brak zapisanego WiFi.", "No saved WiFi.", "Kein gespeichertes WLAN."));
+            d.drawStr(2, 44, mT("Settings -> Ustaw WiFi", "Settings -> Set up WiFi", "Settings -> WLAN einrichten"));
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, "C/CE = wyjscie");
+            d.drawStr(2, 62, mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
             d.sendBuffer();
             while (true) {
                 if (_panicRequested) { exitWait(); return; }
@@ -489,7 +489,7 @@ void showAccountStatusScreen(U8G2 &d) {
                 delay(20);
             }
         }
-        drawBusy("Lacze z WiFi...");
+        drawBusy(mT("Lacze z WiFi...", "Connecting to WiFi...", "Verbinde mit WLAN..."));
         WiFi.mode(WIFI_STA);
         WiFi.begin(ssid, pass);
         unsigned long t0 = millis();
@@ -499,11 +499,11 @@ void showAccountStatusScreen(U8G2 &d) {
     if (WiFi.status() != WL_CONNECTED) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, "Status konta");
+        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
         d.drawHLine(0, 12, 256);
-        d.drawStr(2, 32, "Brak polaczenia z WiFi.");
+        d.drawStr(2, 32, mT("Brak polaczenia z WiFi.", "No WiFi connection.", "Keine WLAN-Verbindung."));
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, "C/CE = wyjscie");
+        d.drawStr(2, 62, mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
         d.sendBuffer();
         while (true) {
             if (_panicRequested) { exitWait(); return; }
@@ -513,10 +513,10 @@ void showAccountStatusScreen(U8G2 &d) {
     }
 
     // Zarejestruj device (zaktualizuj unlock code) + pobierz status
-    drawBusy("Rejestruje urzadzenie...");
+    drawBusy(mT("Rejestruje urzadzenie...", "Registering device...", "Registriere Geraet..."));
     accountRegister();
 
-    drawBusy("Pobieram status...");
+    drawBusy(mT("Pobieram status...", "Fetching status...", "Lade Status..."));
     AccountStatus st;
     bool ok = accountFetchStatus(st);
 
@@ -525,35 +525,38 @@ void showAccountStatusScreen(U8G2 &d) {
         if (_panicRequested) { exitWait(); return; }
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, "Status konta");
+        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
         d.drawHLine(0, 12, 256);
 
         d.setFont(u8g2_font_5x7_tf);
         char line[80];
         if (!ok) {
-            d.drawStr(2, 22, "Blad pobierania:");
+            d.drawStr(2, 22, mT("Blad pobierania:", "Fetch error:", "Ladefehler:"));
             snprintf(line, sizeof(line), "%s", st.error.c_str());
             d.drawStr(2, 32, line);
         } else if (!st.paired) {
-            d.drawStr(2, 22, "Status:  NIEPODLACZONE");
-            d.drawStr(2, 34, "Sparuj na stronie:");
+            d.drawStr(2, 22, mT("Status:  NIEPODLACZONE", "Status:  NOT LINKED", "Status:  NICHT VERBUNDEN"));
+            d.drawStr(2, 34, mT("Sparuj na stronie:", "Pair on the website:", "Koppeln auf der Website:"));
             d.drawStr(2, 44, "kalkmate.pl/panel -> Kalkulator");
-            d.drawStr(2, 54, "Wpisz Device ID + kod odblokowania.");
+            d.drawStr(2, 54, mT("Wpisz Device ID + kod odblokowania.",
+                                 "Enter Device ID + unlock code.",
+                                 "Geraete-ID + Freischaltcode eingeben."));
         } else {
-            d.drawStr(2, 21, "Status:  PODLACZONE");
-            snprintf(line, sizeof(line), "Konto: %.34s", st.userEmail.c_str());
+            d.drawStr(2, 21, mT("Status:  PODLACZONE", "Status:  LINKED", "Status:  VERBUNDEN"));
+            snprintf(line, sizeof(line), mT("Konto: %.34s", "Account: %.34s", "Konto: %.34s"), st.userEmail.c_str());
             d.drawStr(2, 30, line);
             if (st.hasLicense) {
                 const char* lic_s = (st.licenseStatus == "active") ? "OK" :
-                                    (st.licenseStatus == "trial")  ? "trial" : "wygas";
-                snprintf(line, sizeof(line), "Lic: %.14s (%s)",
+                                    (st.licenseStatus == "trial")  ? mT("trial", "trial", "Test")
+                                                                    : mT("wygas", "expired", "abgelaufen");
+                snprintf(line, sizeof(line), mT("Lic: %.14s (%s)", "Lic: %.14s (%s)", "Lizenz: %.14s (%s)"),
                          st.licenseCode.c_str(), lic_s);
                 d.drawStr(2, 39, line);
 
                 // Dni + aktywny model AI na jednej linii
                 char combo[64] = "";
                 if (st.daysLeft >= 0)
-                    snprintf(combo, sizeof(combo), "Dni: %d", st.daysLeft);
+                    snprintf(combo, sizeof(combo), mT("Dni: %d", "Days: %d", "Tage: %d"), st.daysLeft);
                 if (st.aiModel.length() > 0) {
                     // Skroc do nazwy po '/' (np. "google/gemini-2.5-pro" -> "gemini-2.5-pro")
                     int sl = st.aiModel.lastIndexOf('/');
@@ -567,20 +570,20 @@ void showAccountStatusScreen(U8G2 &d) {
                 if (combo[0]) d.drawStr(2, 48, combo);
 
                 if (st.aiMode.length() > 0) {
-                    snprintf(line, sizeof(line), "Tryb: %.28s", st.aiMode.c_str());
+                    snprintf(line, sizeof(line), mT("Tryb: %.28s", "Mode: %.28s", "Modus: %.28s"), st.aiMode.c_str());
                     d.drawStr(2, 57, line);
                 }
             } else {
-                d.drawStr(2, 39, "Brak licencji na koncie");
+                d.drawStr(2, 39, mT("Brak licencji na koncie", "No license on account", "Keine Lizenz im Konto"));
             }
         }
 
-        d.drawStr(2, 63, "C/CE = wyjscie   OK = odswiez");
+        d.drawStr(2, 63, mT("C/CE = wyjscie   OK = odswiez", "C/CE = exit   OK = refresh", "C/CE = beenden   OK = aktualisieren"));
         d.sendBuffer();
 
         if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
         if (_setBtn(BTN_OK)) {
-            drawBusy("Odswiezam...");
+            drawBusy(mT("Odswiezam...", "Refreshing...", "Aktualisiere..."));
             accountRegister();
             ok = accountFetchStatus(st);
             inputWaitRelease();
@@ -601,7 +604,7 @@ void showDeviceIdQrScreen(U8G2 &d) {
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, "Device ID + QR");
         d.drawHLine(0, 12, 256);
-        d.drawStr(2, 32, "Rejestruje na serwerze...");
+        d.drawStr(2, 32, mT("Rejestruje na serwerze...", "Registering with server...", "Registriere beim Server..."));
         d.sendBuffer();
 
         if (WiFi.status() != WL_CONNECTED) {

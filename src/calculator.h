@@ -243,17 +243,19 @@ static void _calcFactoryResetFlow(U8G2& u8g2) {
     while (!confirmed && !cancelled) {
         u8g2.clearBuffer();
         u8g2.setFont(u8g2_font_6x10_tf);
-        u8g2.drawStr(2, 10, "=== Reset fabryczny ===");
+        u8g2.drawStr(2, 10, T("=== Reset fabryczny ===", "=== Factory reset ===", "=== Werksreset ==="));
         u8g2.drawHLine(0, 12, 256);
         u8g2.setFont(u8g2_font_5x7_tf);
-        u8g2.drawStr(2, 26, "Skasuje: WiFi, kod AI, historie,");
-        u8g2.drawStr(2, 35, "notatki, sprawdziany, konto.");
+        u8g2.drawStr(2, 26, T("Skasuje: WiFi, kod AI, historie,", "Deletes: WiFi, AI code, history,", "Loescht: WLAN, KI-Code, Verlauf,"));
+        u8g2.drawStr(2, 35, T("notatki, sprawdziany, konto.", "notes, tests, account link.", "Notizen, Tests, Kontoverknuepfung."));
         u8g2.setFont(u8g2_font_6x10_tf);
-        u8g2.drawStr(2, 55, "OK = TAK");
-        u8g2.drawStr(2, 63, "C/CE = anuluj");
+        u8g2.drawStr(2, 55, T("OK = TAK", "OK = YES", "OK = JA"));
+        u8g2.drawStr(2, 63, T("C/CE = anuluj", "C/CE = cancel", "C/CE = abbrechen"));
         u8g2.sendBuffer();
 
+        // OK = "=" LUB "5" (jak wszedzie indziej w UI, "5/OK" to ten sam klawisz)
         if (inputKeyConsume(KEY_EQ))  confirmed = true;
+        if (inputKeyConsume(KEY_5))   confirmed = true;
         if (inputKeyConsume(KEY_CCE)) cancelled = true;
         delay(20);
     }
@@ -274,8 +276,8 @@ static void _calcFactoryResetFlow(U8G2& u8g2) {
 
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.drawStr(6, 25, "Zresetowano fabrycznie");
-    u8g2.drawStr(6, 40, "Restart...");
+    u8g2.drawStr(6, 25, T("Zresetowano fabrycznie", "Factory reset done", "Werksreset abgeschlossen"));
+    u8g2.drawStr(6, 40, T("Restart...", "Restarting...", "Neustart..."));
     u8g2.sendBuffer();
     delay(1500);
     ESP.restart();

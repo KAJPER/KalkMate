@@ -906,7 +906,7 @@ static void _editUpdate(U8G2 &d) {
                 break;
             case ST_ERROR: {
                 char eb[60];
-                snprintf(eb, sizeof(eb), "Blad: %.40s", info.error.c_str());
+                snprintf(eb, sizeof(eb), T("Blad: %.40s", "Error: %.40s", "Fehler: %.40s"), info.error.c_str());
                 d.drawStr(2, 40, eb);
                 d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
                 break;
