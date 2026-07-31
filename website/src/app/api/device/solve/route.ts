@@ -123,36 +123,59 @@ const FORMAT_RULES = `Formatowanie pod mały ekran kalkulatora:
 - Pisz matematykę zwykłym tekstem z symbolami Unicode: ułamek a/b, potęga x² lub x^n, pierwiastek √(x), mnożenie ·, oraz Δ, π, α, ≤, ≥, ≠, °, ± gdy trzeba.
 - Każdy krok w osobnej linii. ZAWSZE dokończ całe rozwiązanie — nie przerywaj w połowie.`;
 
-function buildSystemPrompt(aiMode: string, solveMode: number): string {
+// Jezyk odpowiedzi — sterowany ustawieniem kalkulatora (kalkSettings.language),
+// wysylanym w naglowku x-language: "pl" (domyslnie), "en", "de".
+const LANGUAGE_NAMES: Record<string, string> = {
+  pl: "polskim",
+  en: "angielskim (English)",
+  de: "niemieckim (Deutsch)",
+};
+function buildSystemPrompt(aiMode: string, solveMode: number, language: string): string {
   const base = aiMode === "raw" ? BASE_RAW : BASE_MATURA;
   const detail = DETAIL_PROMPTS[solveMode] ?? DETAIL_PROMPTS[0];
-  return `${base}\n\n${detail}\n\n${FORMAT_RULES}`;
+  const langName = LANGUAGE_NAMES[language] ?? LANGUAGE_NAMES.pl;
+  const langRule = language === "pl"
+    ? ""
+    : `\n\nODPOWIADAJ WYŁĄCZNIE w języku ${langName}, niezależnie od języka treści zadania. Terminy matematyczne/fizyczne/chemiczne/biologiczne oraz cała odpowiedź (w tym słowo "Odpowiedź:" na końcu) mają być w tym języku.`;
+  return `${base}\n\n${detail}\n\n${FORMAT_RULES}${langRule}`;
 }
 
 // === Normalizacja odpowiedzi AI dla malego ekranu kalkulatora ===
 // Rozne modele zwracaja matematyke roznie (DeepSeek/GPT: ciezki LaTeX \frac \(
-// \Delta; Qwen/Mistral: gotowe Unicode). Zamieniamy WSZYSTKO na czysty tekst z
-// symbolami Unicode, ktore czcionka OLED (6x12_te) renderuje. Dziala dla
-// kazdego modelu i kazdej wersji firmware (kalkulator dostaje gotowy tekst).
+// \Delta; Qwen/Mistral: gotowe Unicode). Zamieniamy WSZYSTKO na czysty tekst.
+// WAZNE: czcionka OLED (u8g2_font_6x12_te) to okrojony font terminalowy —
+// NIE MA greki ani wiekszosci symboli matematycznych Unicode (sprawdzone
+// narzedziem dekodujacym dane fontu). Ma tylko: · × ÷ ± ~ ¬ ° * oraz Latin-1
+// (w tym ¹²³, ₀-₉). Dlatego grecki i "egzotyczne" symbole zamieniamy na ASCII
+// zamiast na Unicode ktorego font i tak nie narysuje (byla to cicha,
+// niewidoczna luka w wyswietlanym tekscie).
 const _GREEK_OPS: Record<string, string> = {
-  alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",varepsilon:"ε",zeta:"ζ",eta:"η",
-  theta:"θ",vartheta:"θ",iota:"ι",kappa:"κ",lambda:"λ",mu:"μ",nu:"ν",xi:"ξ",pi:"π",
-  rho:"ρ",sigma:"σ",tau:"τ",upsilon:"υ",phi:"φ",varphi:"φ",chi:"χ",psi:"ψ",omega:"ω",
-  Gamma:"Γ",Delta:"Δ",Theta:"Θ",Lambda:"Λ",Xi:"Ξ",Pi:"Π",Sigma:"Σ",Phi:"Φ",Psi:"Ψ",Omega:"Ω",
-  cdot:"·",times:"×",div:"÷",pm:"±",mp:"∓",ast:"*",star:"*",
-  leq:"≤",le:"≤",geq:"≥",ge:"≥",neq:"≠",ne:"≠",approx:"≈",equiv:"≡",cong:"≅",sim:"~",propto:"∝",
-  infty:"∞",partial:"∂",nabla:"∇",prime:"′",
-  rightarrow:"→",to:"→",longrightarrow:"→",leftarrow:"←",leftrightarrow:"↔",mapsto:"→",
-  Rightarrow:"⇒",implies:"⇒",Leftarrow:"⇐",iff:"⇔",Leftrightarrow:"⇔",
-  in:"∈",notin:"∉",subset:"⊂",subseteq:"⊆",supset:"⊃",cup:"∪",cap:"∩",emptyset:"∅",varnothing:"∅",
-  forall:"∀",exists:"∃",neg:"¬",lnot:"¬",land:"∧",wedge:"∧",lor:"∨",vee:"∨",
-  sum:"Σ",prod:"Π",int:"∫",oint:"∮",angle:"∠",perp:"⊥",parallel:"∥",
-  ldots:"…",dots:"…",cdots:"…",vdots:"⋮",deg:"°",circ:"°",degree:"°",
+  // Litery greckie — brak glifow w foncie OLED, zapisujemy nazwe lacinska
+  // (identyczne z nazwa komendy LaTeX, wiec te wpisy sa tylko dla "var*").
+  varepsilon:"epsilon",vartheta:"theta",varphi:"phi",
+  // Operatory obecne w foncie OLED — zostawiamy jako prawdziwy Unicode.
+  cdot:"·",times:"×",div:"÷",pm:"±",ast:"*",star:"*",sim:"~",neg:"¬",lnot:"¬",
+  deg:"°",circ:"°",degree:"°",
+  // Reszta — font ich nie ma, zamiana na czytelne ASCII.
+  mp:"-+",
+  leq:"<=",le:"<=",geq:">=",ge:">=",neq:"!=",ne:"!=",approx:"~=",equiv:"===",cong:"~=",
+  infty:"inf",partial:"d",prime:"'",
+  rightarrow:"->",to:"->",longrightarrow:"->",leftarrow:"<-",leftrightarrow:"<->",mapsto:"->",
+  Rightarrow:"=>",implies:"=>",Leftarrow:"<-",iff:"<=>",Leftrightarrow:"<=>",
+  notin:"not in",emptyset:"{}",varnothing:"{}",forall:"for all",
+  land:"AND",wedge:"AND",lor:"OR",vee:"OR",cup:"union",cap:"intersect",
+  parallel:"||",ldots:"...",dots:"...",cdots:"...",vdots:"...",
   left:"",right:"",bigg:"",Big:"",big:"",Bigg:"",displaystyle:"",textstyle:"",limits:"",nolimits:"",
   quad:" ",qquad:"  ",",":" ",";":" ",":":" ","!":"",
+  // Nierozpoznane komendy (alpha, pi, Delta, in, subset, sum, int, angle,
+  // perp, exists, nabla, propto, oint...) spadaja na fallback nizej — sama
+  // nazwa komendy bez backslasha (patrz replace() ponizej), co dla greki
+  // daje dokladnie nazwe litery ("alpha", "pi", "Delta") — czytelne bez
+  // znajomosci fontu z symbolami.
 };
-const _SUP: Record<string, string> = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","+":"⁺","-":"⁻","(":"⁽",")":"⁾","n":"ⁿ","i":"ⁱ"};
-const _SUB: Record<string, string> = {"0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉","+":"₊","-":"₋","(":"₍",")":"₎"};
+// Tylko cyfry — font OLED ma podpis dolny ₀-₉, ale NIE MA ₊₋₍₎ (sprawdzone
+// dekoderem fontu). Znaki spoza tej listy spadaja na fallback "_(...)".
+const _SUB: Record<string, string> = {"0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉"};
 function _toScript(x: string, map: Record<string, string>): string | null {
   let out = "";
   for (const c of x) { if (!(c in map)) return null; out += map[c]; }
@@ -169,18 +192,26 @@ function normalizeForCalc(input: string): string {
   t = t.replace(/\\(?:boxed|text|mathrm|mathbf|mathit|mathsf|operatorname|mathbb)\s*\{([^{}]*)\}/g, "$1");
   // \frac{A}{B} / \dfrac / \tfrac -> (A)/(B), kilka przebiegow dla zagniezdzen
   for (let i = 0; i < 5; i++) t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "($1)/($2)");
-  // \sqrt[n]{X} -> [n]√(X) ; \sqrt{X} -> √(X)
-  t = t.replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, "$1√($2)");
-  for (let i = 0; i < 3; i++) t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, "√($1)");
+  // \sqrt[n]{X} -> root_n(X) ; \sqrt{X} -> sqrt(X) — "√" nie istnieje w foncie OLED.
+  t = t.replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, "root_$1($2)");
+  for (let i = 0; i < 3; i++) t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, "sqrt($1)");
   // greka + operatory + komendy (po frac/sqrt). Nieznane \komenda -> sama nazwa.
   t = t.replace(/\\([A-Za-z]+)|\\(.)/g, (m, w, sym) => {
     if (w !== undefined) return w in _GREEK_OPS ? _GREEK_OPS[w] : w;
     return sym in _GREEK_OPS ? _GREEK_OPS[sym] : sym; // \, \; itp.
   });
-  // potegi i indeksy -> Unicode (gdy sie da), inaczej ^(...) / _(...)
-  t = t.replace(/\^\{([^{}]*)\}/g, (m, e) => _toScript(e, _SUP) ?? `^(${e})`);
-  t = t.replace(/\^\(([^()]*)\)/g, (m, e) => _toScript(e, _SUP) ?? `^(${e})`);
-  t = t.replace(/\^(\S)/g, (m, c) => _toScript(c, _SUP) ?? `^${c}`);
+  // potegi -> zawsze ^(...) / ^X — kalkulator rysuje to sam podniesionym,
+  // mniejszym fontem (patrz _solDrawMathLine w solve_screen.h). CELOWO nie
+  // zamieniamy na Unicode superscript (⁴⁵⁶⁷⁸⁹ⁿ itd.) — font OLED ma tylko
+  // ¹²³, reszta byla cichą, niewidoczną luką w wyswietlanym tekscie.
+  t = t.replace(/\^\{([^{}]*)\}/g, (m, e) => `^(${e})`);
+  t = t.replace(/\^\(([^()]*)\)/g, (m, e) => `^(${e})`);
+  // Wykladniki bez klamer, np. "10^-12" albo "10^12" (czesty zapis modeli AI
+  // dla potegi 10 - jednostki SI). Bez tego tylko "-" trafialoby do exponentu,
+  // a cyfry zostawaly na normalnej linii (rozjechany zapis).
+  t = t.replace(/\^(-?\d+)/g, (m, e) => `^(${e})`);
+  t = t.replace(/\^(\S)/g, (m, c) => `^${c}`);
+  // indeksy dolne -> Unicode cyfry (gdy sie da), inaczej _(...)
   t = t.replace(/_\{([^{}]*)\}/g, (m, e) => _toScript(e, _SUB) ?? `_(${e})`);
   t = t.replace(/_(\S)/g, (m, c) => _toScript(c, _SUB) ?? `_${c}`);
   // markdown: **bold** __bold__ -> tekst, ### naglowki -> usun, listy -> zostaw
@@ -201,35 +232,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    // Weryfikacja klucza licencyjnego
+    // Weryfikacja klucza licencyjnego — opcjonalny, patrz fallback
+    // subskrypcyjny nizej (dla userow z AI Chat ale bez fizycznej licencji).
     const licenseKey = request.headers.get("x-license-key");
-    if (!licenseKey) {
-      return NextResponse.json(
-        { ok: false, error: "Brak klucza licencyjnego" },
-        { status: 403 }
-      );
-    }
+    const deviceIdHeader = request.headers.get("x-device-id");
 
     // Sprawdź licencję w bazie
-    let license = await prisma.license.findUnique({
-      where: { code: licenseKey.trim().toLowerCase() },
-    });
-
-    if (!license) {
-      return NextResponse.json(
-        { ok: false, error: "Nieprawidlowy klucz licencji" },
-        { status: 403 }
-      );
-    }
-
-    // H6: rate limit per licencja — 30 zadań/minutę
-    const rl = rateLimit(`solve:${license.code}`, 30, 60_000);
-    if (!rl.ok) {
-      return NextResponse.json(
-        { ok: false, error: "Za duzo zadan. Poczekaj chwile." },
-        { status: 429 }
-      );
-    }
+    let license = licenseKey
+      ? await prisma.license.findUnique({
+          where: { code: licenseKey.trim().toLowerCase() },
+        })
+      : null;
 
     // Weryfikacja wlasciwosci licencji:
     // Jezeli licencja jest "claimed" przez konto webowe (claimedByUserId),
@@ -237,9 +250,8 @@ export async function POST(request: NextRequest) {
     // Inaczej kazdy z dostepem do kodu mogłby ja uzywac na obcym device.
     // Jezeli licencja nie jest claimed - dopuszczamy "device-only" usage
     // (legacy mode: licencja przypisana do urzadzenia bez konta).
-    const deviceIdHeader = request.headers.get("x-device-id");
     let pairedDevice: { id: string; userId: string | null } | null = null;
-    if (license.claimedByUserId) {
+    if (license?.claimedByUserId) {
       if (!deviceIdHeader) {
         return NextResponse.json(
           { ok: false, error: "Brak x-device-id" },
@@ -268,8 +280,48 @@ export async function POST(request: NextRequest) {
       if (device) pairedDevice = { id: device.id, userId: device.userId };
     }
 
+    // Fallback: brak (lub nierozpoznany) klucz licencyjny, ale urzadzenie
+    // jest sparowane z kontem ktore ma aktywna subskrypcje AI Chat —
+    // niektore kalkulatory sprzedawane sa bez fizycznego kodu licencyjnego,
+    // dostep dziala wtedy wylacznie przez subskrypcje z panelu.
+    if (!license) {
+      let subscriptionActive = false;
+      if (pairedDevice?.userId) {
+        const subscription = await prisma.subscription.findUnique({
+          where: { userId: pairedDevice.userId },
+        });
+        const now = new Date();
+        subscriptionActive =
+          !!subscription &&
+          (subscription.status === "active" ||
+            (subscription.status === "trial" && new Date(subscription.trialEndsAt) > now));
+      }
+      if (!subscriptionActive) {
+        return NextResponse.json(
+          { ok: false, error: "Nieprawidlowy klucz licencji" },
+          { status: 403 }
+        );
+      }
+    }
+
+    // H6: rate limit — per licencja, albo per urzadzenie gdy dostep jest
+    // przez subskrypcje (brak licencji)
+    const rl = rateLimit(
+      `solve:${license?.code || pairedDevice?.id || deviceIdHeader || "unknown"}`,
+      30,
+      60_000
+    );
+    if (!rl.ok) {
+      return NextResponse.json(
+        { ok: false, error: "Za duzo zadan. Poczekaj chwile." },
+        { status: 429 }
+      );
+    }
+
     // Pierwsza aktywacja licencji — ustaw timer wygasania
-    if (!license.isUsed || !license.usedAt) {
+    // (caly ten blok dotyczy tylko dostepu przez fizyczna licencje; dostep
+    // przez subskrypcje, obsluzony wyzej, nie ma z nim nic wspolnego)
+    if (license && (!license.isUsed || !license.usedAt)) {
       await prisma.license.update({
         where: { id: license.id },
         data: {
@@ -290,7 +342,7 @@ export async function POST(request: NextRequest) {
       return new Date() > expiresAt;
     };
 
-    if (isExpired(license)) {
+    if (license && isExpired(license)) {
       // Auto-upgrade: jezeli device jest sparowane z userem, ktory ma INNA
       // aktywna licencje (zaclaim'owana w panelu), uzyj jej zamiast tej z
       // headera. Pokrywa przypadek: firmware ma na flashu stary kod, user
@@ -352,7 +404,7 @@ export async function POST(request: NextRequest) {
     // User.aiModel / User.aiMode oraz Device.promptMode nie sa w Prisma schemie
     // -> raw SQL. Priorytet trybu: user.aiMode -> Device.promptMode (legacy) ->
     // default "matura". Model: user.aiModel -> "default" (Gemini).
-    const ownerUserId = license.claimedByUserId || pairedDevice?.userId || null;
+    const ownerUserId = license?.claimedByUserId || pairedDevice?.userId || null;
     let aiMode: "matura" | "raw" = "matura";
     let aiModel = "default";
     if (ownerUserId) {
@@ -377,7 +429,11 @@ export async function POST(request: NextRequest) {
     // Poziom szczegolowosci z kalkulatora (kalkSettings.solveMode -> naglowek).
     // Domyslnie 0 = Szczegolowy (gdy stary firmware nie wysyla naglowka).
     const solveMode = Math.max(0, Math.min(2, parseInt(request.headers.get("x-solve-mode") || "0", 10) || 0));
-    const systemPrompt = buildSystemPrompt(aiMode, solveMode);
+    // Jezyk odpowiedzi (kalkSettings.language -> naglowek x-language).
+    // Domyslnie "pl" (stary firmware bez tego naglowka).
+    const langHeader = (request.headers.get("x-language") || "pl").toLowerCase();
+    const language = langHeader === "en" || langHeader === "de" ? langHeader : "pl";
+    const systemPrompt = buildSystemPrompt(aiMode, solveMode, language);
     let modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
       ? aiModel
       : OPENROUTER_DEFAULT_MODEL;
@@ -494,7 +550,7 @@ export async function POST(request: NextRequest) {
       // wciaz mamy oryginalne zdjecie do debugu/audytu.
       const deviceId  = request.headers.get("x-device-id");
       const fwVersion = request.headers.get("x-fw-version");
-      await saveCapture(base64Data, deviceId, licenseKey, fwVersion);
+      await saveCapture(base64Data, deviceId, licenseKey || license?.code || "subscription", fwVersion);
 
       userParts.push({
         inlineData: {
@@ -541,7 +597,7 @@ export async function POST(request: NextRequest) {
             requestCount: { increment: 1 },
             lastSeen: new Date(),
             firmwareVersion: fwVer || undefined,
-            licenseCode: license.code,
+            licenseCode: license?.code || undefined,
           },
         })
         .catch((e) => console.error("[solve] device.update fail:", e));
@@ -550,8 +606,8 @@ export async function POST(request: NextRequest) {
         .create({
           data: {
             deviceId: deviceIdHeader,
-            licenseCode: license.code,
-            userId: license.claimedByUserId,
+            licenseCode: license?.code || null,
+            userId: ownerUserId,
             mode,
             question: mode === "text" ? (text || "") : "[zdjecie kamery]",
             answer: solution,

@@ -172,9 +172,16 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
 
 // ---------------------------------------------------------------------------
 // Konwerter LaTeX -> czytelny UTF-8 dla OLED (z polskimi znakami).
-// Renderowane czcionka 6x12_te przez drawUTF8 (ma polskie glyphy + greke +
-// symbole). Obsluga: \frac, \sqrt, ^ _ (potegi/indeksy), greka, operatory,
-// relacje, strzalki. Polskie znaki UTF-8 przepisywane bez zmian.
+// Renderowane czcionka 6x12_te przez drawUTF8. UWAGA: ten font to okrojony
+// font terminalowy — NIE MA greki ani wiekszosci symboli matematycznych
+// Unicode (sprawdzone narzedziem dekodujacym dane fontu, patrz commit ktory
+// to naprawil). Ma tylko: · × ÷ ± ~ ¬ ° * oraz Latin-1 (w tym ¹²³, ₀-₉).
+// Dlatego grecki i "egzotyczne" symbole zamieniamy na czytelne ASCII zamiast
+// na Unicode, ktorego font i tak nie narysuje (byla to cicha, niewidoczna
+// luka w tekscie — dokladnie ten sam problem co po stronie serwera w
+// normalizeForCalc(), route.ts). Obsluga: \frac, \sqrt, ^ _ (potegi/
+// indeksy), operatory, relacje, strzalki. Polskie znaki UTF-8 (font JE MA)
+// przepisywane bez zmian.
 // ---------------------------------------------------------------------------
 
 // Dlugosc znaku UTF-8 wg bajtu wiodacego.
@@ -186,31 +193,28 @@ static inline int _utf8Len(uint8_t b) {
     return 1;
 }
 
-// Tablica komend LaTeX -> UTF-8 (greka, operatory, relacje, strzalki).
+// Tablica komend LaTeX -> UTF-8/ASCII. Litery greckie NIE sa tu wpisane
+// celowo — nierozpoznana komenda spada na fallback w _solLatexEmit (usuwa
+// backslash, zostawia nazwe), co dla "\alpha" daje po prostu "alpha".
 struct _SolSym { const char* cmd; const char* utf8; };
 static const _SolSym _SOL_SYMS[] = {
-    {"alpha","α"},{"beta","β"},{"gamma","γ"},{"delta","δ"},{"epsilon","ε"},
-    {"varepsilon","ε"},{"zeta","ζ"},{"eta","η"},{"theta","θ"},{"vartheta","θ"},
-    {"iota","ι"},{"kappa","κ"},{"lambda","λ"},{"mu","μ"},{"nu","ν"},{"xi","ξ"},
-    {"pi","π"},{"rho","ρ"},{"sigma","σ"},{"tau","τ"},{"upsilon","υ"},
-    {"phi","φ"},{"varphi","φ"},{"chi","χ"},{"psi","ψ"},{"omega","ω"},
-    {"Gamma","Γ"},{"Delta","Δ"},{"Theta","Θ"},{"Lambda","Λ"},{"Xi","Ξ"},
-    {"Pi","Π"},{"Sigma","Σ"},{"Phi","Φ"},{"Psi","Ψ"},{"Omega","Ω"},
-    {"cdot","·"},{"times","×"},{"div","÷"},{"pm","±"},{"mp","∓"},{"ast","*"},
-    {"leq","≤"},{"le","≤"},{"geq","≥"},{"ge","≥"},{"neq","≠"},{"ne","≠"},
-    {"approx","≈"},{"equiv","≡"},{"cong","≅"},{"sim","~"},{"propto","∝"},
-    {"infty","∞"},{"partial","∂"},{"nabla","∇"},{"prime","′"},
-    {"rightarrow","→"},{"to","→"},{"leftarrow","←"},{"leftrightarrow","↔"},
-    {"Rightarrow","⇒"},{"implies","⇒"},{"Leftarrow","⇐"},{"iff","⇔"},
-    {"Leftrightarrow","⇔"},{"mapsto","→"},
-    {"in","∈"},{"notin","∉"},{"subset","⊂"},{"subseteq","⊆"},{"supset","⊃"},
-    {"cup","∪"},{"cap","∩"},{"emptyset","∅"},{"varnothing","∅"},
-    {"forall","∀"},{"exists","∃"},{"neg","¬"},{"lnot","¬"},
-    {"land","∧"},{"wedge","∧"},{"lor","∨"},{"vee","∨"},
-    {"sum","Σ"},{"prod","Π"},{"int","∫"},{"angle","∠"},{"perp","⊥"},
-    {"parallel","∥"},{"ldots","…"},{"dots","…"},{"cdots","…"},
-    {"deg","°"},{"circ","°"},{"degree","°"},{"mathbb",""},
-    {"left",""},{"right",""},{"quad"," "},{"qquad","  "},
+    {"varepsilon","epsilon"},{"vartheta","theta"},{"varphi","phi"},
+    // Operatory obecne w foncie OLED — prawdziwy Unicode.
+    {"cdot","·"},{"times","×"},{"div","÷"},{"pm","±"},{"ast","*"},
+    {"sim","~"},{"neg","¬"},{"lnot","¬"},{"deg","°"},{"circ","°"},{"degree","°"},
+    // Reszta — font ich nie ma, zamiana na czytelne ASCII.
+    {"mp","-+"},
+    {"leq","<="},{"le","<="},{"geq",">="},{"ge",">="},{"neq","!="},{"ne","!="},
+    {"approx","~="},{"equiv","==="},{"cong","~="},
+    {"infty","inf"},{"partial","d"},{"prime","'"},
+    {"rightarrow","->"},{"to","->"},{"leftarrow","<-"},{"leftrightarrow","<->"},
+    {"Rightarrow","=>"},{"implies","=>"},{"Leftarrow","<-"},{"iff","<=>"},
+    {"Leftrightarrow","<=>"},{"mapsto","->"},
+    {"notin","not in"},{"emptyset","{}"},{"varnothing","{}"},{"forall","for all"},
+    {"land","AND"},{"wedge","AND"},{"lor","OR"},{"vee","OR"},
+    {"cup","union"},{"cap","intersect"},
+    {"parallel","||"},{"ldots","..."},{"dots","..."},{"cdots","..."},
+    {"mathbb",""},{"left",""},{"right",""},{"quad"," "},{"qquad","  "},
 };
 static const int _SOL_SYM_N = sizeof(_SOL_SYMS) / sizeof(_SOL_SYMS[0]);
 
@@ -254,11 +258,15 @@ static void _solLatexEmit(const char* s, int n, char* dst, int& di, int cap) {
                 if (i<n && s[i]=='{') { i++; int b=_solBraceSpan(s+i,n-i); if(di<cap-1)dst[di++]='('; _solLatexEmit(s+i,b,dst,di,cap); if(di<cap-1)dst[di++]=')'; i+=b; if(i<n&&s[i]=='}')i++; }
                 continue;
             }
-            // \sqrt[n]{x} / \sqrt{x} -> [n]√(x) / √(x)
+            // \sqrt[n]{x} -> root_n(x) ; \sqrt{x} -> sqrt(x) — "√" (U+221A)
+            // nie istnieje w foncie OLED (6x12_te), byla niewidoczna.
             if (wlen == 4 && strncmp(s+i+1,"sqrt",4)==0) {
                 i = j;
-                if (i<n && s[i]=='[') { i++; while(i<n && s[i]!=']'){ if(di<cap-1)dst[di++]=s[i]; i++; } if(i<n&&s[i]==']')i++; }
-                const char* r="√"; while(*r && di<cap-1) dst[di++]=*r++;
+                bool hasIdx = (i<n && s[i]=='[');
+                const char* r = hasIdx ? "root_" : "sqrt"; while(*r && di<cap-1) dst[di++]=*r++;
+                if (hasIdx) {
+                    i++; while(i<n && s[i]!=']'){ if(di<cap-1)dst[di++]=s[i]; i++; } if(i<n&&s[i]==']')i++;
+                }
                 if (i<n && s[i]=='{') { i++; int a=_solBraceSpan(s+i,n-i); if(di<cap-1)dst[di++]='('; _solLatexEmit(s+i,a,dst,di,cap); if(di<cap-1)dst[di++]=')'; i+=a; if(i<n&&s[i]=='}')i++; }
                 continue;
             }
@@ -295,6 +303,15 @@ static void _solLatexEmit(const char* s, int n, char* dst, int& di, int cap) {
                 if (a>1) { if(di<cap-1)dst[di++]='('; _solLatexEmit(s+i,a,dst,di,cap); if(di<cap-1)dst[di++]=')'; }
                 else { _solLatexEmit(s+i,a,dst,di,cap); }
                 i+=a; if(i<n&&s[i]=='}')i++;
+            } else if (i<n && (s[i]=='-' || (s[i]>='0'&&s[i]<='9'))) {
+                // wykladnik bez klamer, np. "10^-12" albo "10^12" — zjedz caly
+                // ciag (opcjonalny minus + cyfry) jako jedna grupe, inaczej
+                // tylko "-" trafialoby do exponentu a cyfry zostawaly na linii.
+                int j2 = i;
+                if (s[j2]=='-') j2++;
+                while (j2<n && s[j2]>='0' && s[j2]<='9') j2++;
+                if (j2 - i > 1) { if(di<cap-1)dst[di++]='('; while(i<j2&&di<cap-1) dst[di++]=s[i++]; if(di<cap-1)dst[di++]=')'; }
+                else { while(i<j2&&di<cap-1) dst[di++]=s[i++]; }
             } else if (i<n) { int cl=_utf8Len((uint8_t)s[i]); for(int q=0;q<cl&&i<n&&di<cap-1;q++) dst[di++]=s[i++]; }
             continue;
         }
@@ -578,6 +595,7 @@ static void _solSendText(U8G2 &d, const char* taskText) {
     http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
+    http.addHeader("x-language", kalkSettings.language == 0 ? "pl" : (kalkSettings.language == 2 ? "de" : "en"));
     { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); }
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
@@ -679,6 +697,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
+    http.addHeader("x-language", kalkSettings.language == 0 ? "pl" : (kalkSettings.language == 2 ? "de" : "en"));
     { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); }
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
@@ -1006,31 +1025,31 @@ static void _solModeSelect(U8G2 &d, int &mode) {
         d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ===", "=== Aufgabe loesen ==="));
         d.drawHLine(0, 12, 256);
 
-        const char* labels[4][2] = {
-            { "  [1] Zdjecie kamery", "  [1] Camera photo" },
-            { "  [2] Wpisz tekst",    "  [2] Enter text"    },
-            { "  [3] Historia",       "  [3] History"       },
-            { "  [4] Offline",        "  [4] Offline"        },
+        const char* labels[4][3] = {
+            { "  [1] Zdjecie kamery", "  [1] Camera photo", "  [1] Kamerafoto"    },
+            { "  [2] Wpisz tekst",    "  [2] Enter text",   "  [2] Text eingeben" },
+            { "  [3] Historia",       "  [3] History",      "  [3] Verlauf"       },
+            { "  [4] Offline",        "  [4] Offline",      "  [4] Offline"       },
         };
-        const char* labelsSel[4][2] = {
-            { "> [1] Zdjecie kamery", "> [1] Camera photo" },
-            { "> [2] Wpisz tekst",    "> [2] Enter text"    },
-            { "> [3] Historia",       "> [3] History"       },
-            { "> [4] Offline",        "> [4] Offline"        },
+        const char* labelsSel[4][3] = {
+            { "> [1] Zdjecie kamery", "> [1] Camera photo", "> [1] Kamerafoto"    },
+            { "> [2] Wpisz tekst",    "> [2] Enter text",   "> [2] Text eingeben" },
+            { "> [3] Historia",       "> [3] History",      "> [3] Verlauf"       },
+            { "> [4] Offline",        "> [4] Offline",      "> [4] Offline"       },
         };
 
         const int Y[4] = {13, 23, 33, 43};   // top y kazdej pozycji (4 widoczne)
         const int TEXT_Y[4] = {22, 32, 42, 52};
-        bool en = (kalkSettings.language == 1);
+        int lang = kalkSettings.language > 2 ? 0 : kalkSettings.language;
 
         for (int i = 0; i < 4; i++) {
             if (mode == i) {
                 d.drawBox(0, Y[i], 256, 10);
                 d.setDrawColor(0);
-                d.drawStr(4, TEXT_Y[i], labelsSel[i][en ? 1 : 0]);
+                d.drawStr(4, TEXT_Y[i], labelsSel[i][lang]);
                 d.setDrawColor(1);
             } else {
-                d.drawStr(4, TEXT_Y[i], labels[i][en ? 1 : 0]);
+                d.drawStr(4, TEXT_Y[i], labels[i][lang]);
             }
         }
 
