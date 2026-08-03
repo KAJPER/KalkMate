@@ -15,6 +15,14 @@ export function localeHome(locale: Locale): string {
   return locale === "pl" ? "/" : `/${locale}`;
 }
 
+/**
+ * Ścieżka dowolnej podstrony dla danego języka, np. localePath("de", "/pomoc")
+ * -> "/de/pomoc". `path` bez językowego prefiksu, zaczyna się od "/".
+ */
+export function localePath(locale: Locale, path: string): string {
+  return locale === "pl" ? path : `/${locale}${path}`;
+}
+
 /** Absolutny URL strony głównej dla danego języka. */
 export function localeHomeUrl(locale: Locale): string {
   return locale === "pl" ? `${SITE_URL}/` : `${SITE_URL}/${locale}`;
