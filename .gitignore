@@ -28,3 +28,6 @@ update.tar.gz
 website/prisma/*.db
 website/prisma/**/*.db
 website/prisma/dev.db-journal
+
+
+pcb
