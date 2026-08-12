@@ -90,7 +90,7 @@ export default function P24CheckoutForm({
       {/* Order summary */}
       <div className="mb-6 border border-[rgba(242,237,227,0.10)] p-4 space-y-1.5 text-sm">
         <div className="flex justify-between">
-          <span className="text-[#F2EDE3]/65">KalkMate v1.0</span>
+          <span className="text-[#F2EDE3]/65">KalkMate v3.0</span>
           <span className="text-[#F2EDE3]">{fmtMoney(productCents)}</span>
         </div>
         <div className="flex justify-between">

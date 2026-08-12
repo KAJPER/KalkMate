@@ -146,17 +146,24 @@ function buildSystemPrompt(aiMode: string, solveMode: number, language: string):
 // WAZNE: czcionka OLED (u8g2_font_6x12_te) to okrojony font terminalowy —
 // NIE MA greki ani wiekszosci symboli matematycznych Unicode (sprawdzone
 // narzedziem dekodujacym dane fontu). Ma tylko: · × ÷ ± ~ ¬ ° * oraz Latin-1
-// (w tym ¹²³, ₀-₉). Dlatego grecki i "egzotyczne" symbole zamieniamy na ASCII
-// zamiast na Unicode ktorego font i tak nie narysuje (byla to cicha,
-// niewidoczna luka w wyswietlanym tekscie).
+// (w tym ¹²³, ₀-₉). GRECKI DZIALA MIMO TO — kalkulator (solve_screen.h,
+// _solDrawMathLine) przelacza font na u8g2_font_unifont_t_greek TYLKO dla
+// znakow z bloku greckiego Unicode, wiec tu wysylamy prawdziwe greckie
+// litery. Wybrany po wizualnym tescie 3 kandydatow na prawdziwym OLED
+// (tools/greek_font_test). Pozostale "egzotyczne" symbole matematyczne
+// (bez dedykowanego fontu) nadal zamieniamy na czytelne ASCII, bo dla nich
+// nie ma odpowiednika — font ich nie ma i nie ma dla nich osobnej czcionki.
 const _GREEK_OPS: Record<string, string> = {
-  // Litery greckie — brak glifow w foncie OLED, zapisujemy nazwe lacinska
-  // (identyczne z nazwa komendy LaTeX, wiec te wpisy sa tylko dla "var*").
-  varepsilon:"epsilon",vartheta:"theta",varphi:"phi",
+  // Litery greckie — prawdziwy Unicode, kalkulator ma dla nich osobny font.
+  alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",varepsilon:"ε",zeta:"ζ",eta:"η",
+  theta:"θ",vartheta:"θ",iota:"ι",kappa:"κ",lambda:"λ",mu:"μ",nu:"ν",xi:"ξ",pi:"π",
+  rho:"ρ",sigma:"σ",tau:"τ",upsilon:"υ",phi:"φ",varphi:"φ",chi:"χ",psi:"ψ",omega:"ω",
+  Gamma:"Γ",Delta:"Δ",Theta:"Θ",Lambda:"Λ",Xi:"Ξ",Pi:"Π",Sigma:"Σ",Phi:"Φ",Psi:"Ψ",Omega:"Ω",
   // Operatory obecne w foncie OLED — zostawiamy jako prawdziwy Unicode.
   cdot:"·",times:"×",div:"÷",pm:"±",ast:"*",star:"*",sim:"~",neg:"¬",lnot:"¬",
   deg:"°",circ:"°",degree:"°",
-  // Reszta — font ich nie ma, zamiana na czytelne ASCII.
+  // Reszta — font ich nie ma i nie ma dla nich osobnej czcionki jak grecki,
+  // zamiana na czytelne ASCII.
   mp:"-+",
   leq:"<=",le:"<=",geq:">=",ge:">=",neq:"!=",ne:"!=",approx:"~=",equiv:"===",cong:"~=",
   infty:"inf",partial:"d",prime:"'",
@@ -167,11 +174,6 @@ const _GREEK_OPS: Record<string, string> = {
   parallel:"||",ldots:"...",dots:"...",cdots:"...",vdots:"...",
   left:"",right:"",bigg:"",Big:"",big:"",Bigg:"",displaystyle:"",textstyle:"",limits:"",nolimits:"",
   quad:" ",qquad:"  ",",":" ",";":" ",":":" ","!":"",
-  // Nierozpoznane komendy (alpha, pi, Delta, in, subset, sum, int, angle,
-  // perp, exists, nabla, propto, oint...) spadaja na fallback nizej — sama
-  // nazwa komendy bez backslasha (patrz replace() ponizej), co dla greki
-  // daje dokladnie nazwe litery ("alpha", "pi", "Delta") — czytelne bez
-  // znajomosci fontu z symbolami.
 };
 // Tylko cyfry — font OLED ma podpis dolny ₀-₉, ale NIE MA ₊₋₍₎ (sprawdzone
 // dekoderem fontu). Znaki spoza tej listy spadaja na fallback "_(...)".

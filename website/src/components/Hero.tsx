@@ -258,7 +258,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
             </div>
 
             <div className="absolute -bottom-4 left-4 bg-[#D8FF3D] text-[#0B0B0B] px-2.5 py-1">
-              <p className="km-mono-eyebrow">KM v1.0</p>
+              <p className="km-mono-eyebrow">KM v3.0</p>
             </div>
           </div>
         </div>

@@ -1271,93 +1271,143 @@ static void _editFactoryReset(U8G2 &d) {
     while (true) delay(1000);
 }
 
-// Test kamery — inicjalizuje OV2640, robi zdjecie, pokazuje info na OLED.
-// OK = nowe zdjecie, < = wyjscie (z deinit + power off).
+// Zywy podglad (mono viewfinder) w tescie kamery — ta sama technika co
+// _solPreviewAndConfirm w solve_screen.h (dithering ordered-Bayer 4x4 z
+// GRAYSCALE QQVGA na 1-bit XBM), ale samodzielna kopia: settings_screen.h
+// jest includowany w main.cpp PRZED solve_screen.h, wiec nie moze wywolac
+// jego funkcji statycznych. Kamera musi juz byc w trybie camBeginPreview().
+// Zwraca: 1 = user wcisnal OK (chce JPEG zdjecie), 0 = wyjscie (< / CCE),
+// -1 = panic.
+static int _setCamPreviewLoop(U8G2 &d, uint32_t shotCount, uint32_t lastSize, int lastW, int lastH) {
+    static const int PV_W = 160, PV_H = 64;
+    static const int XBM_STRIDE = (PV_W + 7) / 8;
+    static uint8_t xbm[XBM_STRIDE * PV_H];
+    static const uint8_t bayer4[4][4] = {
+        {  0,  8,  2, 10},
+        { 12,  4, 14,  6},
+        {  3, 11,  1,  9},
+        { 15,  7, 13,  5}
+    };
+    static float sharpMax = 1.0f;
+
+    _setWaitRelease();
+    while (true) {
+        if (_panicRequested) return -1;
+
+        camera_fb_t* fb = esp_camera_fb_get();
+        if (!fb) { delay(10); continue; }
+
+        const int sw = fb->width, sh = fb->height;
+        if (sw < PV_W || sh < PV_H || !fb->buf) {
+            esp_camera_fb_return(fb);
+            delay(10);
+            continue;
+        }
+        const int row0 = (sh - PV_H) / 2;
+
+        uint32_t sharp = 0;
+        memset(xbm, 0, sizeof(xbm));
+        for (int y = 0; y < PV_H; y++) {
+            const uint8_t* row  = fb->buf + (size_t)(row0 + y) * sw;
+            uint8_t*       xrow = xbm + (size_t)y * XBM_STRIDE;
+            const uint8_t* brow = bayer4[y & 3];
+            for (int x = 0; x < PV_W; x++) {
+                uint8_t thr = (uint8_t)(brow[x & 3] * 16);
+                if (row[x] > thr) xrow[x >> 3] |= (1 << (x & 7));
+                if (x + 1 < PV_W) {
+                    int g = (int)row[x] - (int)row[x + 1];
+                    sharp += (g < 0 ? -g : g);
+                }
+            }
+        }
+        esp_camera_fb_return(fb);
+
+        float sf = (float)sharp;
+        if (sf > sharpMax) sharpMax = sf;
+        else               sharpMax = sharpMax * 0.97f + sf * 0.03f;
+        int pct = (sharpMax > 1.0f) ? (int)(sf * 100.0f / sharpMax) : 0;
+        if (pct > 100) pct = 100;
+
+        d.clearBuffer();
+        d.drawXBM(0, 0, PV_W, PV_H, xbm);
+        d.drawFrame(0, 0, PV_W, PV_H);
+
+        // Prawy panel (x:164..255)
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(166, 8, T("TEST KAMERY", "CAMERA TEST", "KAMERATEST"));
+        d.drawStr(166, 20, T("Ostrosc", "Sharp", "Schaerfe"));
+        const int bx = 166, by = 24, bw = 84, bh = 8;
+        d.drawFrame(bx, by, bw, bh);
+        d.drawBox(bx + 1, by + 1, (bw - 2) * pct / 100, bh - 2);
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%d%%", pct);
+        d.drawStr(166, 40, buf);
+        if (shotCount > 0) {
+            snprintf(buf, sizeof(buf), "%lu: %dx%d", (unsigned long)shotCount, lastW, lastH);
+            d.drawStr(166, 50, buf);
+            snprintf(buf, sizeof(buf), "%lu KB", (unsigned long)(lastSize / 1024));
+            d.drawStr(166, 58, buf);
+        } else {
+            d.drawStr(166, 50, T("Brak zdjec", "No shots", "Kein Foto"));
+        }
+        d.setFont(u8g2_font_4x6_tf);
+        d.drawStr(2, 63, T("OK=zdjecie JPEG  CCE=wyjscie", "OK=JPEG shot  CCE=exit", "OK=JPEG-Foto  CCE=Ende"));
+        d.sendBuffer();
+
+        for (int k = 0; k < 3; k++) {
+            if (inputBtn(BTN_OK)   == LOW) { _setWaitRelease(); return 1; }
+            if (inputKeyConsume(KEY_CCE) || inputBtn(BTN_LEFT) == LOW) { _setWaitRelease(); return 0; }
+            delay(35);
+        }
+    }
+}
+
+// Test kamery — zywy podglad (GRAYSCALE QQVGA) caly czas, OK robi realne
+// zdjecie JPEG (pelna rozdzielczosc UXGA, ten sam tryb co w rozwiazywaniu
+// zadania) i pokazuje jego rozmiar/rozdzielczosc, po czym wraca do
+// podgladu. CCE/< = wyjscie (deinit + power off).
 static void _editCamTest(U8G2 &d) {
     _setWaitRelease();
 
-    // Komunikat "Inicjalizacja..."
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 14, T("=== Test kamery ===", "=== Camera test ===", "=== Kameratest ==="));
-    d.drawHLine(0, 16, 256);
-    d.drawStr(2, 32, T("Init OV2640...", "Initializing OV2640...", "OV2640 wird initialisiert..."));
-    d.sendBuffer();
-
-    bool ok = camBegin();
-
-    if (ok) {
-        // Warm-up: 2 pierwsze klatki sa zwykle przeswiecone. Wyrzuc je
-        // teraz zeby _setBtn nie czekal na nie podczas user-initiated capture.
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 14, T("=== Test kamery ===", "=== Camera test ===", "=== Kameratest ==="));
-        d.drawHLine(0, 16, 256);
-        d.drawStr(2, 32, T("Rozgrzewam sensor...", "Warming sensor...", "Sensor wird aufgewaermt..."));
-        d.sendBuffer();
-        camWarmup(2);
-    }
-
-    uint32_t lastShot = 0;
-    uint32_t shotCount = 0;
-    uint32_t lastSize = 0;
+    uint32_t shotCount = 0, lastSize = 0;
     int lastW = 0, lastH = 0;
-    char errBuf[40] = "";
-
-    auto draw = [&]() {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, T("=== Test kamery ===", "=== Camera test ===", "=== Kameratest ==="));
-        d.drawHLine(0, 12, 256);
-
-        if (!ok) {
-            d.drawStr(2, 28, T("Init NIEUDANY", "Init FAILED", "Init FEHLGESCHLAGEN"));
-            d.drawStr(2, 40, errBuf);
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, T("< = wyjscie", "< = exit", "< = beenden"));
-        } else {
-            char buf[48];
-            snprintf(buf, sizeof(buf), "Zdjec: %lu", (unsigned long)shotCount);
-            d.drawStr(2, 26, buf);
-            if (shotCount > 0) {
-                snprintf(buf, sizeof(buf), "Rozdz: %dx%d", lastW, lastH);
-                d.drawStr(2, 38, buf);
-                snprintf(buf, sizeof(buf), "JPEG: %lu B (%lu KB)",
-                         (unsigned long)lastSize, (unsigned long)(lastSize/1024));
-                d.drawStr(2, 50, buf);
-            } else {
-                d.drawStr(2, 38, T("Nacisnij OK aby zrobic zdjecie",
-                                   "Press OK to capture",
-                                   "OK druecken zum Aufnehmen"));
-            }
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, T("OK = zdjecie    < = wyjscie",
-                              "OK = capture    < = exit",
-                              "OK = Aufnahme   < = beenden"));
-        }
-        d.sendBuffer();
-    };
-
-    draw();
 
     while (true) {
-        if (_panicRequested) {
-            camEnd();
-            return;
-        }
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 32, T("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau..."));
+        d.sendBuffer();
 
-        if (_setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) {
-            camEnd();
-            _setWaitRelease();
-            return;
-        }
-
-        if (ok && _setBtn(BTN_OK)) {
+        if (!camBeginPreview()) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 30, T("Robie zdjecie...", "Capturing...", "Aufnahme laeuft..."));
+            d.drawStr(2, 14, T("=== Test kamery ===", "=== Camera test ===", "=== Kameratest ==="));
+            d.drawHLine(0, 16, 256);
+            d.drawStr(2, 32, T("Init NIEUDANY", "Init FAILED", "Init FEHLGESCHLAGEN"));
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, T("< = wyjscie", "< = exit", "< = beenden"));
             d.sendBuffer();
+            _setWaitRelease();
+            while (true) {
+                if (_panicRequested) return;
+                if (_setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) { _setWaitRelease(); return; }
+                delay(20);
+            }
+        }
 
+        int r = _setCamPreviewLoop(d, shotCount, lastSize, lastW, lastH);
+        camEnd();   // KONIECZNE przed przelaczeniem na JPEG albo wyjsciem
+
+        if (r <= 0) return;   // 0 = wyjscie, -1 = panic
+
+        // === OK: realne zdjecie JPEG/UXGA (ten sam tryb co w rozwiazywaniu zadania) ===
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 30, T("Robie zdjecie...", "Capturing...", "Aufnahme laeuft..."));
+        d.sendBuffer();
+
+        if (camBegin()) {
+            camWarmup(2);
             camera_fb_t* fb = camCapture();
             if (fb) {
                 shotCount++;
@@ -1370,14 +1420,11 @@ static void _editCamTest(U8G2 &d) {
                 esp_camera_fb_return(fb);
             } else {
                 Serial.println("[CAM] capture FAILED");
-                snprintf(errBuf, sizeof(errBuf), "Capture failed");
-                ok = false;
             }
-            draw();
-            _setWaitRelease();
+        } else {
+            Serial.println("[CAM] camBegin (JPEG) FAILED");
         }
-
-        delay(20);
+        camEnd();   // wracamy do petli -> camBeginPreview() od nowa
     }
 }
 

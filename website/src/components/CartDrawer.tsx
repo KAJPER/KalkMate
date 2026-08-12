@@ -190,7 +190,7 @@ export default function CartDrawer() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <p className="km-mono-eyebrow text-[#D8FF3D] text-[10px] mb-1">
-                            / KM-v1.0
+                            / KM-v3.0
                           </p>
                           <p className="text-[15px] text-[#F2EDE3] font-medium truncate">
                             {item.name}

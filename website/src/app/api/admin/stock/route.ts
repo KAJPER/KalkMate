@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { COOKIE_NAME } from "@/lib/admin-auth";
 
 const STOCK_ID = "kalkmate-v1-stock";
-const STOCK_NAME = "KalkMate v1.0 — stan magazynowy (strona główna)";
+const STOCK_NAME = "KalkMate v3.0 — stan magazynowy (strona główna)";
 
 function isAdmin(req: NextRequest) {
   const token = req.cookies.get(COOKIE_NAME)?.value;

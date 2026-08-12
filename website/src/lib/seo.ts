@@ -23,7 +23,7 @@ export function productJsonLd(locale: Locale) {
     name: productName[locale],
     image: `${SITE_URL}/KalkMate.png`,
     description: productDescription[locale],
-    sku: "KM-V1",
+    sku: "KM-V3",
     brand: { "@type": "Brand", name: "KalkMate" },
     offers: {
       "@type": "Offer",

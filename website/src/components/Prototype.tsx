@@ -53,7 +53,7 @@ export default function Prototype() {
           transition={{ duration: 0.5, ease: "easeOut", delay: 0.1 }}
           className="mt-12 grid md:grid-cols-3 gap-6"
         >
-          {["Prototyp v1.0", "Płytka PCB", "Urządzenie docelowe"].map((label, n) => (
+          {["Prototyp v3.0", "Płytka PCB", "Urządzenie docelowe"].map((label, n) => (
             <div
               key={n}
               className="relative aspect-[4/3] rounded-xl border-2 border-dashed border-gray-300 dark:border-[#3F4147] bg-[#F5F5F5] dark:bg-[#313338] flex flex-col items-center justify-center overflow-hidden"
@@ -62,7 +62,7 @@ export default function Prototype() {
                 <>
                   <Image
                     src="/KalkMate4.png"
-                    alt="Prototyp v1.0 - pierwszy działający prototyp kalkulatora KalkMate"
+                    alt="Prototyp v3.0 - pierwszy działający prototyp kalkulatora KalkMate"
                     fill
                     className="object-cover"
                     quality={85}

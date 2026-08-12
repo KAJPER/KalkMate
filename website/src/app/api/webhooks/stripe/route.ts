@@ -219,7 +219,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       html: purchaseConfirmationEmail({
         customerName: name || "Customer",
         customerEmail: email,
-        product: meta.product || "KalkMate v1.0",
+        product: meta.product || "KalkMate v3.0",
         amount: pi.amount,
         pickupPoint: pickupPoint,
         pickupPointAddress: pickupPointAddress,
@@ -307,7 +307,7 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
       html: purchaseConfirmationEmail({
         customerName: name || "Customer",
         customerEmail: email,
-        product: "KalkMate v1.0",
+        product: "KalkMate v3.0",
         amount: session.amount_total || 0,
         pickupPoint: pickupPoint || "",
         pickupPointAddress: pickupPointAddress || "",

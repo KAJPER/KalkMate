@@ -95,14 +95,12 @@ const content: Record<Locale, {
   pl: {
     eyebrow: "[ 07 ] · Order",
     h2a: "Weź ", h2italic: "jeden", h2b: ".", h2line2: "Reszta to formalność.",
-    intro: "KalkMate v1.0 — ręcznie składany w Polsce. Każda sztuka z indywidualnym numerem seryjnym i 24-miesięczną gwarancją. Dostawa darmowa do Paczkomatu InPost.",
+    intro: "KalkMate v3.0 — ręcznie składany w Polsce. Każda sztuka z indywidualnym numerem seryjnym i 24-miesięczną gwarancją. Dostawa darmowa do Paczkomatu InPost.",
     included: [
-      "Urządzenie KalkMate v1.0",
-      "30 naklejek znamionowych",
+      "Urządzenie KalkMate v3.0",
+      "6 naklejek znamionowych",
       "Miesiąc AI Chat gratis",
-      "Kabel USB-C",
       "Instrukcja obsługi",
-      "Instrukcja konfiguracji WiFi",
     ],
     badges: ["Bezpieczna płatność", "14 dni na zwrot", "Gwarancja 24 mc", "Wysyłka międzynarodowa"],
     stockAvailable: (n) => `${n} szt. dostępnych`,
@@ -140,14 +138,12 @@ const content: Record<Locale, {
   en: {
     eyebrow: "[ 07 ] · Order",
     h2a: "Get ", h2italic: "one", h2b: ".", h2line2: "The rest is a formality.",
-    intro: "KalkMate v1.0 — hand-assembled in Poland. Each unit has an individual serial number and a 24-month warranty. Free delivery to InPost Parcel Locker.",
+    intro: "KalkMate v3.0 — hand-assembled in Poland. Each unit has an individual serial number and a 24-month warranty. Free delivery to InPost Parcel Locker.",
     included: [
-      "KalkMate v1.0 device",
-      "30 rating-plate stickers",
+      "KalkMate v3.0 device",
+      "6 rating-plate stickers",
       "One month of AI Chat free",
-      "USB-C cable",
       "User manual",
-      "WiFi setup guide",
     ],
     badges: ["Secure payment", "14-day returns", "24-month warranty", "International shipping"],
     stockAvailable: (n) => `${n} in stock`,
@@ -185,14 +181,12 @@ const content: Record<Locale, {
   de: {
     eyebrow: "[ 07 ] · Order",
     h2a: "Nimm ", h2italic: "eins", h2b: ".", h2line2: "Der Rest ist Formsache.",
-    intro: "KalkMate v1.0 — handmontiert in Polen. Jedes Gerät mit individueller Seriennummer und 24 Monaten Garantie. Kostenlose Lieferung an InPost-Paketstation.",
+    intro: "KalkMate v3.0 — handmontiert in Polen. Jedes Gerät mit individueller Seriennummer und 24 Monaten Garantie. Kostenlose Lieferung an InPost-Paketstation.",
     included: [
-      "KalkMate v1.0 Gerät",
-      "30 Typenschild-Aufkleber",
+      "KalkMate v3.0 Gerät",
+      "6 Typenschild-Aufkleber",
       "Ein Monat AI Chat gratis",
-      "USB-C-Kabel",
       "Bedienungsanleitung",
-      "WLAN-Einrichtungsanleitung",
     ],
     badges: ["Sichere Zahlung", "14 Tage Rückgaberecht", "24 Monate Garantie", "Internationaler Versand"],
     stockAvailable: (n) => `${n} auf Lager`,
@@ -568,7 +562,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                 <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-r border-b border-[#D8FF3D]" />
 
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
-                  <span className="km-mono-eyebrow text-[#F2EDE3]/55">/ KM-v1.0 · ORDER</span>
+                  <span className="km-mono-eyebrow text-[#F2EDE3]/55">/ KM-v3.0 · ORDER</span>
                   <span className="km-mono-eyebrow text-[#D8FF3D] flex items-center gap-2">
                     <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
                     {t.stockAvailable(stockLeft)}
@@ -655,7 +649,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                   <span>→</span>
                 </button>
                 <button
-                  onClick={() => addItem({ id: "kalkmate-v1", name: "KalkMate v1.0", price: 69900 })}
+                  onClick={() => addItem({ id: "kalkmate-v1", name: "KalkMate v3.0", price: 69900 })}
                   className="w-full px-6 py-4 border border-[rgba(242,237,227,0.18)] text-[#F2EDE3]/70 km-mono-eyebrow text-[13px] hover:border-[#D8FF3D] hover:text-[#F2EDE3] transition-colors flex items-center justify-between"
                 >
                   <span>{t.addToCart}</span>
@@ -695,7 +689,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
               }`}
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)] sticky top-0 bg-[#0B0B0B] z-10">
-                <span className="km-mono-eyebrow text-[#D8FF3D]">/ KM-v1.0 · {stage.toUpperCase()}</span>
+                <span className="km-mono-eyebrow text-[#D8FF3D]">/ KM-v3.0 · {stage.toUpperCase()}</span>
                 <button
                   onClick={closeModal}
                   className="w-8 h-8 border border-[rgba(242,237,227,0.20)] flex items-center justify-center text-[#F2EDE3] hover:bg-[#F2EDE3] hover:text-[#0B0B0B] transition-colors"
@@ -714,7 +708,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
 
                     {/* Order summary */}
                     <div className="border border-[rgba(242,237,227,0.10)] p-4 grid grid-cols-2 gap-2 text-sm">
-                      <span className="text-[#F2EDE3]/65">KalkMate v1.0</span>
+                      <span className="text-[#F2EDE3]/65">KalkMate v3.0</span>
                       <span className="text-right text-[#F2EDE3]">
                         {isPoland ? "699 zł" : `${(productCents / 100).toFixed(0)} EUR`}
                       </span>
@@ -1004,7 +998,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
 
                     <div className="mb-6 border border-[rgba(242,237,227,0.10)] p-4 space-y-1.5 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-[#F2EDE3]/65">KalkMate v1.0</span>
+                        <span className="text-[#F2EDE3]/65">KalkMate v3.0</span>
                         <span className="text-[#F2EDE3]">{`${(productCents / 100).toFixed(0)} EUR`}</span>
                       </div>
                       <div className="flex justify-between">

@@ -46,7 +46,7 @@ export async function GET(
       customer_address_city: order.customerAddressCity || "",
       pickup_point: order.pickupPoint || "",
       pickup_point_address: order.pickupPointAddress || "",
-      product: "KalkMate v1.0",
+      product: "KalkMate v3.0",
       fulfillment_status: order.fulfillmentStatus || "unfulfilled",
       shipped_at: order.shippedAt ? order.shippedAt.toISOString() : null,
       tracking_number: order.trackingNumber || "",
@@ -105,7 +105,7 @@ export async function PATCH(
     const locale = localeFromCountry(order.customerCountry);
     const emailData = {
       customerName: order.customerName || "Customer",
-      product: "KalkMate v1.0",
+      product: "KalkMate v3.0",
       trackingNumber: tracking_number || order.trackingNumber || "",
       pickupPoint: order.pickupPoint || "",
       pickupPointAddress: order.pickupPointAddress || "",

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
+import { downloadLicenseSheetPdf, CARDS_PER_SHEET } from "@/lib/licensePdf";
 
 interface License {
   id: string;
@@ -27,6 +28,9 @@ export default function LicensesPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "used" | "unused">("all");
   const [stats, setStats] = useState({ total: 0, used: 0, unused: 0 });
+  const [sheetCount, setSheetCount] = useState(1);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const MAX_SHEETS = 4; // API ogranicza count do 100 na zadanie (4 * 25)
 
   useEffect(() => {
     fetchLicenses();
@@ -82,6 +86,34 @@ export default function LicensesPage() {
       alert("Wystąpił błąd");
     } finally {
       setGeneratingCodes(false);
+    }
+  };
+
+  const generateSheetPdf = async () => {
+    setGeneratingPdf(true);
+    const durationDays = licenseDuration === "week" ? 7 : licenseDuration === "month" ? 30 : 90;
+    const count = sheetCount * CARDS_PER_SHEET;
+
+    try {
+      const res = await fetch("/api/admin/licenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count, durationDays, description: "Arkusz PDF do druku" }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        await downloadLicenseSheetPdf(data.codes, durationDays);
+        setGeneratedCodes(data.codes);
+        fetchLicenses();
+      } else {
+        alert("Nie udało się wygenerować licencji");
+      }
+    } catch (error) {
+      console.error("Failed to generate license sheet PDF:", error);
+      alert("Wystąpił błąd");
+    } finally {
+      setGeneratingPdf(false);
     }
   };
 
@@ -205,6 +237,53 @@ export default function LicensesPage() {
           >
             Generuj 10
           </button>
+        </div>
+
+        {/* Arkusz PDF do druku */}
+        <div className="bg-[#2B2D31] rounded-xl p-5 mb-4 border border-[#3F4147]/50">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shrink-0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[#E0E0E0]">Arkusz PDF do druku</h3>
+              <p className="text-xs text-[#E0E0E0]/50">
+                Karty 35×50mm z liniami do wycięcia — przód (kod) + tył (instrukcja aktywacji), {CARDS_PER_SHEET} kart / arkusz A4
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-[#E0E0E0]/60 shrink-0">Liczba arkuszy A4:</label>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSheetCount((n) => Math.max(1, n - 1))}
+                disabled={generatingPdf}
+                className="w-8 h-8 flex items-center justify-center bg-[#313338] hover:bg-[#3F4147] rounded-lg text-[#E0E0E0] disabled:opacity-50"
+              >
+                −
+              </button>
+              <span className="w-10 text-center text-sm font-bold text-[#E0E0E0]">{sheetCount}</span>
+              <button
+                onClick={() => setSheetCount((n) => Math.min(MAX_SHEETS, n + 1))}
+                disabled={generatingPdf}
+                className="w-8 h-8 flex items-center justify-center bg-[#313338] hover:bg-[#3F4147] rounded-lg text-[#E0E0E0] disabled:opacity-50"
+              >
+                +
+              </button>
+            </div>
+            <span className="text-xs text-[#E0E0E0]/40">
+              = {sheetCount * CARDS_PER_SHEET} licencji
+            </span>
+            <button
+              onClick={generateSheetPdf}
+              disabled={generatingPdf || generatingCodes}
+              className="ml-auto bg-gradient-to-br from-purple-500 to-purple-700 hover:brightness-110 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generatingPdf ? "Generuję..." : "Generuj i pobierz PDF"}
+            </button>
+          </div>
         </div>
 
         {generatingCodes && (

@@ -40,7 +40,7 @@ function pickupHtml(name: string, tracking: string) {
       <div style="margin:32px 0;height:1px;background:rgba(242,237,227,0.10)"></div>
       <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:rgba(242,237,227,0.70)">Cześć ${name},</p>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:rgba(242,237,227,0.70)">
-        Kurier InPost odebrał Twoje zamówienie <strong style="color:#F2EDE3">KalkMate v1.0</strong>
+        Kurier InPost odebrał Twoje zamówienie <strong style="color:#F2EDE3">KalkMate v3.0</strong>
         i przekazał je do sieci logistycznej. Paczka jest w drodze do wybranego Paczkomatu.
       </p>
       <div style="background:#0E0E0E;border:1px solid rgba(242,237,227,0.10);padding:16px 20px;margin-bottom:28px">
@@ -74,7 +74,7 @@ function deliveredHtml(name: string, tracking: string, pickupPoint: string) {
       <div style="margin:32px 0;height:1px;background:rgba(242,237,227,0.10)"></div>
       <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:rgba(242,237,227,0.70)">Cześć ${name},</p>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:rgba(242,237,227,0.70)">
-        Twój <strong style="color:#F2EDE3">KalkMate v1.0</strong> dotarł do Paczkomatu
+        Twój <strong style="color:#F2EDE3">KalkMate v3.0</strong> dotarł do Paczkomatu
         i czeka na odbiór. Masz <strong style="color:#F2EDE3">48 godzin</strong> na odebranie paczki.
       </p>
       <div style="background:#0E0E0E;border:1px solid rgba(242,237,227,0.10);padding:16px 20px;margin-bottom:12px">

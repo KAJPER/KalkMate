@@ -78,7 +78,7 @@ export default function CartPage() {
               <h2 className="km-display text-3xl mb-3">Koszyk jest pusty</h2>
               <p className="text-[#F2EDE3]/50 mb-8 max-w-sm mx-auto">
                 Nie masz jeszcze żadnych produktów w koszyku. Dodaj KalkMate
-                v1.0, aby kontynuować.
+                v3.0, aby kontynuować.
               </p>
               <Link
                 href="/#kup-teraz"
@@ -115,7 +115,7 @@ export default function CartPage() {
                       {/* Product info */}
                       <div>
                         <p className="km-mono-eyebrow text-[#D8FF3D] text-[10px] mb-1">
-                          / KM-v1.0 · ORDER
+                          / KM-v3.0 · ORDER
                         </p>
                         <p className="text-[16px] text-[#F2EDE3] font-medium">
                           {item.name}

@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       html: purchaseConfirmationEmail({
         customerName: order.customerName || "Kliencie",
         customerEmail: order.customerEmail,
-        product: "KalkMate v1.0",
+        product: "KalkMate v3.0",
         amount: order.amount,
         pickupPoint: order.pickupPoint || "",
         pickupPointAddress: order.pickupPointAddress || "",

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       customer_phone: o.customerPhone || "",
       pickup_point: o.pickupPoint || "",
       pickup_point_address: o.pickupPointAddress || "",
-      product: "KalkMate v1.0",
+      product: "KalkMate v3.0",
       fulfillment_status: o.fulfillmentStatus || "unfulfilled",
       shipped_at: o.shippedAt ? o.shippedAt.toISOString() : null,
       tracking_number: o.trackingNumber || "",

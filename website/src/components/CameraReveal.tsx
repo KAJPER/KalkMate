@@ -185,10 +185,10 @@ export default function CameraReveal() {
                 </svg>
               </div>
               <h3 className="font-bold text-[#1a1a1a] dark:text-[#E0E0E0] mb-2">
-                30 naklejek w zestawie
+                6 naklejek w zestawie
               </h3>
               <p className="text-sm text-[#1a1a1a]/60 dark:text-[#E0E0E0]/60">
-                Jedna naklejka starcza na ~5 tygodni. 30 sztuk wystarczy na minimum 3 lata użytkowania.
+                Jedna naklejka starcza na ~5 tygodni. 6 sztuk wystarczy na ok. 7 miesięcy użytkowania.
               </p>
             </div>
 

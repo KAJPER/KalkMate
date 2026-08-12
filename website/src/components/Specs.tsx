@@ -32,8 +32,8 @@ const content: Record<Locale, Content> = {
       {
         label: "Compute",
         rows: [
-          ["MCU", "ESP32-WROVER-E"],
-          ["Pamięć", "8 MB PSRAM · 4 MB Flash"],
+          ["MCU", "ESP32-S3-WROOM-1-N16R8"],
+          ["Pamięć", "8 MB PSRAM · 16 MB Flash"],
           ["WiFi", "2.4 GHz 802.11 b/g/n"],
         ],
       },
@@ -56,8 +56,8 @@ const content: Record<Locale, Content> = {
       {
         label: "Zasilanie",
         rows: [
-          ["Bateria", "LiPo 3.7 V · 1200 mAh"],
-          ["Praca", "~6 h tryb mieszany"],
+          ["Bateria", "LiPo 3.7 V · 1500 mAh"],
+          ["Praca", "~8 h tryb mieszany"],
           ["Ładowanie", "USB-C · ~2 h"],
         ],
       },
@@ -78,8 +78,8 @@ const content: Record<Locale, Content> = {
       {
         label: "Compute",
         rows: [
-          ["MCU", "ESP32-WROVER-E"],
-          ["Memory", "8 MB PSRAM · 4 MB Flash"],
+          ["MCU", "ESP32-S3-WROOM-1-N16R8"],
+          ["Memory", "8 MB PSRAM · 16 MB Flash"],
           ["WiFi", "2.4 GHz 802.11 b/g/n"],
         ],
       },
@@ -102,8 +102,8 @@ const content: Record<Locale, Content> = {
       {
         label: "Power",
         rows: [
-          ["Battery", "LiPo 3.7 V · 1200 mAh"],
-          ["Runtime", "~6 h mixed use"],
+          ["Battery", "LiPo 3.7 V · 1500 mAh"],
+          ["Runtime", "~8 h mixed use"],
           ["Charging", "USB-C · ~2 h"],
         ],
       },
@@ -124,8 +124,8 @@ const content: Record<Locale, Content> = {
       {
         label: "Compute",
         rows: [
-          ["MCU", "ESP32-WROVER-E"],
-          ["Speicher", "8 MB PSRAM · 4 MB Flash"],
+          ["MCU", "ESP32-S3-WROOM-1-N16R8"],
+          ["Speicher", "8 MB PSRAM · 16 MB Flash"],
           ["WiFi", "2.4 GHz 802.11 b/g/n"],
         ],
       },
@@ -148,8 +148,8 @@ const content: Record<Locale, Content> = {
       {
         label: "Stromversorgung",
         rows: [
-          ["Akku", "LiPo 3.7 V · 1200 mAh"],
-          ["Laufzeit", "~6 h gemischt"],
+          ["Akku", "LiPo 3.7 V · 1500 mAh"],
+          ["Laufzeit", "~8 h gemischt"],
           ["Laden", "USB-C · ~2 h"],
         ],
       },

@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       sessionId,
       amount: totalAmount,
       currency: resolvedCurrency,
-      description: "KalkMate v1.0 - AI Calculator",
+      description: "KalkMate v3.0 - AI Calculator",
       email,
       client: name,
       phone,

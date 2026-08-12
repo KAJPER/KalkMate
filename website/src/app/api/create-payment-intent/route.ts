@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       currency: resolvedCurrency,
       ...paymentMethodConfig,
       metadata: {
-        product: "KalkMate v1.0",
+        product: "KalkMate v3.0",
         user_id: user.id,
         customer_name: name,
         customer_email: email,
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         discount_amount: String(discountAmount),
       },
       receipt_email: email,
-      description: "KalkMate v1.0 - AI Calculator",
+      description: "KalkMate v3.0 - AI Calculator",
     });
 
     return NextResponse.json({ clientSecret: paymentIntent.client_secret });

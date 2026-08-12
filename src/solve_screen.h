@@ -174,14 +174,18 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
 // Konwerter LaTeX -> czytelny UTF-8 dla OLED (z polskimi znakami).
 // Renderowane czcionka 6x12_te przez drawUTF8. UWAGA: ten font to okrojony
 // font terminalowy — NIE MA greki ani wiekszosci symboli matematycznych
-// Unicode (sprawdzone narzedziem dekodujacym dane fontu, patrz commit ktory
-// to naprawil). Ma tylko: · × ÷ ± ~ ¬ ° * oraz Latin-1 (w tym ¹²³, ₀-₉).
-// Dlatego grecki i "egzotyczne" symbole zamieniamy na czytelne ASCII zamiast
-// na Unicode, ktorego font i tak nie narysuje (byla to cicha, niewidoczna
-// luka w tekscie — dokladnie ten sam problem co po stronie serwera w
-// normalizeForCalc(), route.ts). Obsluga: \frac, \sqrt, ^ _ (potegi/
-// indeksy), operatory, relacje, strzalki. Polskie znaki UTF-8 (font JE MA)
-// przepisywane bez zmian.
+// Unicode (sprawdzone narzedziem dekodujacym dane fontu). Ma tylko:
+// · × ÷ ± ~ ¬ ° * oraz Latin-1 (w tym ¹²³, ₀-₉). Grecki DZIALA mimo to —
+// litery greckie dostaja prawdziwy Unicode (patrz tabela nizej), a
+// _solDrawMathLine() przelacza font na u8g2_font_unifont_t_greek TYLKO dla
+// znakow z bloku greckiego (dokladnie ta sama technika co dla wykladnikow:
+// przelaczenie fontu w trakcie rysowania jednej linii). Wybrany po
+// wizualnym teście 3 kandydatow na prawdziwym OLED (tools/greek_font_test).
+// "Egzotyczne" symbole matematyczne (bez dedykowanego fontu) nadal
+// zamieniane na czytelne ASCII — font ich nie ma i nie ma dla nich osobnej
+// czcionki. Obsluga: \frac, \sqrt, ^ _ (potegi/indeksy), operatory,
+// relacje, strzalki. Polskie znaki UTF-8 (font JE MA) przepisywane bez
+// zmian.
 // ---------------------------------------------------------------------------
 
 // Dlugosc znaku UTF-8 wg bajtu wiodacego.
@@ -193,12 +197,29 @@ static inline int _utf8Len(uint8_t b) {
     return 1;
 }
 
-// Tablica komend LaTeX -> UTF-8/ASCII. Litery greckie NIE sa tu wpisane
-// celowo — nierozpoznana komenda spada na fallback w _solLatexEmit (usuwa
-// backslash, zostawia nazwe), co dla "\alpha" daje po prostu "alpha".
+// Kodpunkt Unicode + dlugosc w bajtach (do wykrywania bloku greckiego).
+static uint32_t _utf8Decode(const char* s, int& len) {
+    uint8_t b0 = (uint8_t)s[0];
+    if (b0 < 0x80) { len = 1; return b0; }
+    if ((b0 >> 5) == 0x6) { len = 2; return ((b0 & 0x1F) << 6) | ((uint8_t)s[1] & 0x3F); }
+    if ((b0 >> 4) == 0xE) { len = 3; return ((b0 & 0x0F) << 12) | (((uint8_t)s[1] & 0x3F) << 6) | ((uint8_t)s[2] & 0x3F); }
+    if ((b0 >> 3) == 0x1E) { len = 4; return ((b0 & 0x07) << 18) | (((uint8_t)s[1] & 0x3F) << 12) | (((uint8_t)s[2] & 0x3F) << 6) | ((uint8_t)s[3] & 0x3F); }
+    len = 1; return b0;
+}
+static inline bool _isGreek(uint32_t cp) { return cp >= 0x0370 && cp <= 0x03FF; }
+
+// Tablica komend LaTeX -> UTF-8/ASCII.
 struct _SolSym { const char* cmd; const char* utf8; };
 static const _SolSym _SOL_SYMS[] = {
-    {"varepsilon","epsilon"},{"vartheta","theta"},{"varphi","phi"},
+    // Litery greckie — prawdziwy Unicode, renderowane osobnym fontem
+    // (u8g2_font_unifont_t_greek) przez _solDrawMathLine().
+    {"alpha","α"},{"beta","β"},{"gamma","γ"},{"delta","δ"},{"epsilon","ε"},
+    {"varepsilon","ε"},{"zeta","ζ"},{"eta","η"},{"theta","θ"},{"vartheta","θ"},
+    {"iota","ι"},{"kappa","κ"},{"lambda","λ"},{"mu","μ"},{"nu","ν"},{"xi","ξ"},
+    {"pi","π"},{"rho","ρ"},{"sigma","σ"},{"tau","τ"},{"upsilon","υ"},
+    {"phi","φ"},{"varphi","φ"},{"chi","χ"},{"psi","ψ"},{"omega","ω"},
+    {"Gamma","Γ"},{"Delta","Δ"},{"Theta","Θ"},{"Lambda","Λ"},{"Xi","Ξ"},
+    {"Pi","Π"},{"Sigma","Σ"},{"Phi","Φ"},{"Psi","Ψ"},{"Omega","Ω"},
     // Operatory obecne w foncie OLED — prawdziwy Unicode.
     {"cdot","·"},{"times","×"},{"div","÷"},{"pm","±"},{"ast","*"},
     {"sim","~"},{"neg","¬"},{"lnot","¬"},{"deg","°"},{"circ","°"},{"degree","°"},
@@ -371,12 +392,17 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
                 xi += (w > 0 ? w : elen * 5) + 1;
             }
         } else {
-            int cl = _utf8Len((uint8_t)text[i]);
+            int cl;
+            uint32_t cp = _utf8Decode(text + i, cl);
             char ch[5];
             int q = 0;
             for (; q < cl && i < len; q++) ch[q] = text[i++];
             ch[q] = '\0';
-            d.setFont(u8g2_font_6x12_te);
+            // Litery greckie -> osobny font (u8g2_font_6x12_te ich nie ma).
+            // Ten sam kodpunkt, ta sama linia bazowa — dokladnie jak w
+            // tools/greek_font_test, gdzie wizualnie zweryfikowano ze tak
+            // wygenerowany mix czyta sie dobrze mimo wiekszej wysokosci glifu.
+            d.setFont(_isGreek(cp) ? u8g2_font_unifont_t_greek : u8g2_font_6x12_te);
             int w = d.drawUTF8(xi, y, ch);
             xi += (w > 0 ? w : 6);
         }

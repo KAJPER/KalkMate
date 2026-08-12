@@ -147,7 +147,7 @@ function shell(inner: string, locale: EmailLocale = "en"): string {
           <tr>
             <td align="left" style="background:${C.ink};">${brandHtml(24)}</td>
             <td align="right" style="background:${C.ink};">
-              <span style="font-family:${FONT_MONO};font-size:10px;letter-spacing:0.15em;color:${C.paperDim};text-transform:uppercase;">/MAIL &middot; v1.0</span>
+              <span style="font-family:${FONT_MONO};font-size:10px;letter-spacing:0.15em;color:${C.paperDim};text-transform:uppercase;">/MAIL &middot; v3.0</span>
             </td>
           </tr>
         </table>

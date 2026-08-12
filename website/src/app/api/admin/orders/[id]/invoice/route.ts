@@ -15,7 +15,7 @@ function invoiceHtml(name: string, filename: string) {
       <div style="margin:32px 0;height:1px;background:rgba(242,237,227,0.10)"></div>
       <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:rgba(242,237,227,0.70)">Cześć ${name},</p>
       <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:rgba(242,237,227,0.70)">
-        W załączniku znajdziesz fakturę do swojego zamówienia <strong style="color:#F2EDE3">KalkMate v1.0</strong>.
+        W załączniku znajdziesz fakturę do swojego zamówienia <strong style="color:#F2EDE3">KalkMate v3.0</strong>.
         Jeśli masz pytania dotyczące faktury, odpisz na tego maila.
       </p>
       <div style="background:#0E0E0E;border:1px solid rgba(242,237,227,0.10);padding:16px 20px;margin-bottom:28px">

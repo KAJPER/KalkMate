@@ -67,7 +67,7 @@ const DICT: Record<Locale, Dict> = {
       "Instrukcja obsługi kalkulatora KalkMate: pierwsze uruchomienie, konfiguracja WiFi, tryb AI, rozwiązywanie problemów i historia firmware.",
     navHome: "← Strona główna",
     navPanel: "Panel",
-    heroEyebrow: "[ pomoc ] · v1.0",
+    heroEyebrow: "[ pomoc ] · v3.0",
     heroTitleLine1: "Pomoc &",
     heroTitleAccent: "dokumentacja",
     heroDesc: (v) =>
@@ -88,7 +88,7 @@ const DICT: Record<Locale, Dict> = {
       eyebrow: "01 · Start", title: "Pierwsze uruchomienie.", accent: "uruchomienie",
       videoLabel: "Wideo: pierwsze uruchomienie",
       steps: [
-        { title: "Naładuj", body: "Podłącz dołączony kabel USB-C do kalkulatora i ładowarki ≥5V/1A. Pełne ładowanie ~3h. LED na płytce świeci podczas ładowania." },
+        { title: "Naładuj", body: "Podłącz dołączony kabel USB-C do kalkulatora i ładowarki ≥5V/1A. Pełne ładowanie ~2h. LED na płytce świeci podczas ładowania." },
         { title: "Włącz", body: "Przesuń przełącznik suwakowy na boku w pozycję ON. Po ~2s zobaczysz ekran powitalny KalkMate, a następnie **ekran kalkulatora** (cyfrowy wyświetlacz)." },
         { title: "Wejdź do menu AI", body: "Na klawiaturze kalkulatora wpisz **kod odblokowujący** (domyślnie `1111`) — same cyfry, bez operatorów między nimi. Ekran na chwilę pokaże „AI\" i otworzy menu główne. Dopiero teraz dostępne są Ustawienia i inne funkcje." },
         { title: "Skonfiguruj WiFi", body: "Ustawienia → WiFi → wybierz sieć z listy → wpisz hasło (klawiatura ekranowa). To wymagane do działania AI, sync notatek i OTA." },
@@ -136,8 +136,8 @@ const DICT: Record<Locale, Dict> = {
       note: "Najwięcej prądu zżera **OLED przy 12V** (przetwornica MT3608). Skróć autosleep do 1–2 minut żeby wydłużyć czas pracy 2–3×. Ustawienia → Sleep.",
       body: "**Ładowanie**: USB-C (PD nie wymagany, każdy zasilacz ≥5V/1A). LED na płytce świeci podczas ładowania, gaśnie przy 100%. Bateria jest chroniona przed przeładowaniem (MCP73831 + DW01A).",
       stats: [
-        { val: "2000", unit: "mAh", label: "Pojemność (LiPo)" },
-        { val: "~3", unit: "h", label: "Pełne ładowanie" },
+        { val: "1500", unit: "mAh", label: "Pojemność (LiPo)" },
+        { val: "~2", unit: "h", label: "Pełne ładowanie" },
         { val: "2–3", unit: "dni", label: "Typowe użycie" },
         { val: "5–7", unit: "dni", label: "Stand-by" },
       ],
@@ -167,7 +167,7 @@ const DICT: Record<Locale, Dict> = {
       eyebrow: "08 · FAQ", title: "Często zadawane pytania.", accent: "pytania",
       faqs: [
         { q: "Jak włączyć / wyłączyć kalkulator?", a: "Przesuń przełącznik suwakowy na boku. Wyłączenie nie kasuje notatek ani historii — wszystko jest zapisane w pamięci wewnętrznej." },
-        { q: "Jak długo trzyma bateria?", a: "Mieszane użycie (kilka godzin AI + reszta sleep): ~2–3 dni. Stand-by: 5–7 dni. Pełne ładowanie: ~3 godziny przez USB-C." },
+        { q: "Jak długo trzyma bateria?", a: "Mieszane użycie (kilka godzin AI + reszta sleep): ~2–3 dni. Stand-by: 5–7 dni. Pełne ładowanie: ~2 godziny przez USB-C." },
         { q: "Dlaczego AI Chat wymaga WiFi?", a: "Same odpowiedzi liczy serwer (model Gemini). Bez WiFi działa tylko kalkulator, notatki, sprawdziany. Konfiguracja: Ustawienia → WiFi." },
         { q: "Co to jest klawisz Panic?", a: "Klawisz (domyślnie MU) który NATYCHMIAST cofa do trybu kalkulatora z dowolnego ekranu. Przydaje się gdy ktoś patrzy. Możesz go zmienić w Ustawienia → Panic key." },
         { q: "Jak dodaję notatki / sprawdziany?", a: "Wyłącznie przez panel klienta na kalkmate.pl/panel. Kalkulator synchronizuje je przez WiFi (Notatki → Sync). Na urządzeniu tylko czytasz, nie edytujesz." },
@@ -206,7 +206,7 @@ const DICT: Record<Locale, Dict> = {
       "KalkMate calculator user guide: first setup, WiFi configuration, AI mode, troubleshooting and firmware history.",
     navHome: "← Home",
     navPanel: "Panel",
-    heroEyebrow: "[ help ] · v1.0",
+    heroEyebrow: "[ help ] · v3.0",
     heroTitleLine1: "Help &",
     heroTitleAccent: "documentation",
     heroDesc: (v) =>
@@ -227,7 +227,7 @@ const DICT: Record<Locale, Dict> = {
       eyebrow: "01 · Start", title: "First setup.", accent: "setup",
       videoLabel: "Video: first setup",
       steps: [
-        { title: "Charge it", body: "Connect the included USB-C cable to the calculator and a ≥5V/1A charger. A full charge takes ~3h. The LED on the board lights up while charging." },
+        { title: "Charge it", body: "Connect the included USB-C cable to the calculator and a ≥5V/1A charger. A full charge takes ~2h. The LED on the board lights up while charging." },
         { title: "Turn it on", body: "Slide the switch on the side to ON. After ~2s you'll see the KalkMate splash screen, then the **calculator screen** (digital display)." },
         { title: "Open the AI menu", body: "On the calculator keypad, type the **unlock code** (default `1111`) — digits only, no operators in between. The screen briefly shows „AI\" and opens the main menu. Only now are Settings and other features available." },
         { title: "Set up WiFi", body: "Settings → WiFi → pick a network from the list → enter the password (on-screen keyboard). Required for AI, note sync and OTA updates." },
@@ -275,8 +275,8 @@ const DICT: Record<Locale, Dict> = {
       note: "The **OLED at 12V** (MT3608 boost converter) draws the most power. Shorten auto-sleep to 1–2 minutes for 2–3× more runtime. Settings → Sleep.",
       body: "**Charging**: USB-C (PD not required, any ≥5V/1A charger works). The LED on the board lights up while charging and turns off at 100%. The battery is protected against overcharging (MCP73831 + DW01A).",
       stats: [
-        { val: "2000", unit: "mAh", label: "Capacity (LiPo)" },
-        { val: "~3", unit: "h", label: "Full charge" },
+        { val: "1500", unit: "mAh", label: "Capacity (LiPo)" },
+        { val: "~2", unit: "h", label: "Full charge" },
         { val: "2–3", unit: "days", label: "Typical use" },
         { val: "5–7", unit: "days", label: "Standby" },
       ],
@@ -306,7 +306,7 @@ const DICT: Record<Locale, Dict> = {
       eyebrow: "08 · FAQ", title: "Frequently asked questions.", accent: "questions",
       faqs: [
         { q: "How do I turn the calculator on / off?", a: "Slide the switch on the side. Turning it off doesn't erase notes or history — everything is saved in internal memory." },
-        { q: "How long does the battery last?", a: "Mixed use (a few hours of AI + the rest in sleep): ~2–3 days. Standby: 5–7 days. Full charge: ~3 hours via USB-C." },
+        { q: "How long does the battery last?", a: "Mixed use (a few hours of AI + the rest in sleep): ~2–3 days. Standby: 5–7 days. Full charge: ~2 hours via USB-C." },
         { q: "Why does AI Chat need WiFi?", a: "The answers themselves are computed by the server (Gemini model). Without WiFi only the calculator, notes and tests work. Setup: Settings → WiFi." },
         { q: "What is the Panic key?", a: "A key (MU by default) that IMMEDIATELY switches back to calculator mode from any screen. Handy when someone's looking. You can change it in Settings → Panic key." },
         { q: "How do I add notes / tests?", a: "Only through the customer panel at kalkmate.pl/panel. The calculator syncs them over WiFi (Notes → Sync). On the device you can only read them, not edit." },
@@ -345,7 +345,7 @@ const DICT: Record<Locale, Dict> = {
       "Bedienungsanleitung für den KalkMate-Taschenrechner: erste Inbetriebnahme, WLAN-Einrichtung, KI-Modus, Fehlerbehebung und Firmware-Verlauf.",
     navHome: "← Startseite",
     navPanel: "Panel",
-    heroEyebrow: "[ hilfe ] · v1.0",
+    heroEyebrow: "[ hilfe ] · v3.0",
     heroTitleLine1: "Hilfe &",
     heroTitleAccent: "Dokumentation",
     heroDesc: (v) =>
@@ -366,7 +366,7 @@ const DICT: Record<Locale, Dict> = {
       eyebrow: "01 · Start", title: "Erste Inbetriebnahme.", accent: "Inbetriebnahme",
       videoLabel: "Video: Erste Inbetriebnahme",
       steps: [
-        { title: "Aufladen", body: "Verbinde das mitgelieferte USB-C-Kabel mit dem Rechner und einem Ladegerät mit ≥5V/1A. Volle Ladung dauert ~3h. Die LED auf der Platine leuchtet während des Ladens." },
+        { title: "Aufladen", body: "Verbinde das mitgelieferte USB-C-Kabel mit dem Rechner und einem Ladegerät mit ≥5V/1A. Volle Ladung dauert ~2h. Die LED auf der Platine leuchtet während des Ladens." },
         { title: "Einschalten", body: "Schiebe den Schalter an der Seite auf ON. Nach ~2s siehst du den KalkMate-Startbildschirm, danach den **Taschenrechner-Bildschirm** (Digitalanzeige)." },
         { title: "KI-Menü öffnen", body: "Gib auf der Tastatur den **Entsperrcode** ein (Standard `1111`) — nur Ziffern, ohne Rechenzeichen dazwischen. Der Bildschirm zeigt kurz „AI\" und öffnet das Hauptmenü. Erst jetzt sind Einstellungen und weitere Funktionen verfügbar." },
         { title: "WLAN einrichten", body: "Einstellungen → WLAN → Netzwerk aus der Liste wählen → Passwort eingeben (Bildschirmtastatur). Erforderlich für KI, Notizen-Sync und OTA-Updates." },
@@ -414,8 +414,8 @@ const DICT: Record<Locale, Dict> = {
       note: "Am meisten Strom zieht das **OLED bei 12V** (MT3608-Boost-Wandler). Verkürze den Auto-Sleep auf 1–2 Minuten für 2–3× mehr Laufzeit. Einstellungen → Sleep.",
       body: "**Laden**: USB-C (PD nicht erforderlich, jedes Ladegerät ≥5V/1A funktioniert). Die LED auf der Platine leuchtet beim Laden und erlischt bei 100%. Der Akku ist vor Überladung geschützt (MCP73831 + DW01A).",
       stats: [
-        { val: "2000", unit: "mAh", label: "Kapazität (LiPo)" },
-        { val: "~3", unit: "h", label: "Volle Ladung" },
+        { val: "1500", unit: "mAh", label: "Kapazität (LiPo)" },
+        { val: "~2", unit: "h", label: "Volle Ladung" },
         { val: "2–3", unit: "Tage", label: "Typische Nutzung" },
         { val: "5–7", unit: "Tage", label: "Standby" },
       ],
@@ -445,7 +445,7 @@ const DICT: Record<Locale, Dict> = {
       eyebrow: "08 · FAQ", title: "Häufig gestellte Fragen.", accent: "Fragen",
       faqs: [
         { q: "Wie schalte ich den Rechner ein / aus?", a: "Schiebe den Schalter an der Seite. Ausschalten löscht keine Notizen oder den Verlauf — alles bleibt im internen Speicher erhalten." },
-        { q: "Wie lange hält der Akku?", a: "Gemischte Nutzung (einige Stunden KI + Rest im Sleep): ~2–3 Tage. Standby: 5–7 Tage. Volle Ladung: ~3 Stunden über USB-C." },
+        { q: "Wie lange hält der Akku?", a: "Gemischte Nutzung (einige Stunden KI + Rest im Sleep): ~2–3 Tage. Standby: 5–7 Tage. Volle Ladung: ~2 Stunden über USB-C." },
         { q: "Warum braucht der KI-Chat WLAN?", a: "Die Antworten selbst berechnet der Server (Gemini-Modell). Ohne WLAN funktionieren nur Taschenrechner, Notizen und Tests. Einrichtung: Einstellungen → WLAN." },
         { q: "Was ist die Panic-Taste?", a: "Eine Taste (standardmäßig MU), die SOFORT von jedem Bildschirm zurück in den Taschenrechner-Modus wechselt. Praktisch, wenn jemand zuschaut. Änderbar unter Einstellungen → Panic-Taste." },
         { q: "Wie füge ich Notizen / Tests hinzu?", a: "Nur über das Kundenpanel auf kalkmate.pl/panel. Der Rechner synchronisiert sie über WLAN (Notizen → Sync). Auf dem Gerät kannst du sie nur lesen, nicht bearbeiten." },
