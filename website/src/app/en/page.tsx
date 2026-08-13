@@ -18,11 +18,13 @@ const FAQ          = dynamic(() => import("@/components/FAQ"));
 const lang = "en" as const;
 
 export const metadata: Metadata = {
-  title: "KalkMate — AI Calculator | Smart Photo Calculator",
+  title: "KalkMate — AI Calculator with Camera | Smart Photo Calculator",
   description:
-    "KalkMate is the AI calculator that solves math, physics, chemistry and biology problems. Point the built-in camera at a problem — get the full step-by-step solution on its OLED screen. 169 EUR, then from 4 EUR/month.",
+    "KalkMate is an AI calculator with camera built in — point it at any math, physics, chemistry or biology problem and get the full step-by-step solution on its OLED screen. 169 EUR, then from 4 EUR/month.",
   keywords: [
     "AI calculator",
+    "AI calculator with camera",
+    "calculator with camera",
     "photo calculator AI",
     "calculator with AI",
     "AI math solver",
@@ -40,7 +42,7 @@ export const metadata: Metadata = {
     languages: languageAlternates(),
   },
   openGraph: {
-    title: "KalkMate — AI Calculator",
+    title: "KalkMate — AI Calculator with Camera",
     description:
       "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, subscription from 4 EUR/month.",
     type: "website",
@@ -48,14 +50,14 @@ export const metadata: Metadata = {
     url: `${SITE_URL}/en`,
     siteName: "KalkMate",
     images: [
-      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — AI Calculator" },
+      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — AI Calculator with Camera" },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "KalkMate — AI Calculator",
+    title: "KalkMate — AI Calculator with Camera",
     description:
-      "Photo → AI → Solution. The smart calculator that solves math, physics, chemistry and biology problems.",
+      "Photo → AI → Solution. The AI calculator with camera that solves math, physics, chemistry and biology problems.",
     images: ["/KalkMate.png"],
   },
   robots: {

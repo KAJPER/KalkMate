@@ -17,11 +17,11 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apm.przelewy24.pl https://geowidget.inpost.pl",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apm.przelewy24.pl https://geowidget.inpost.pl https://www.clarity.ms",
       "style-src 'self' 'unsafe-inline' https://geowidget.inpost.pl",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https://geowidget.inpost.pl",
-      "connect-src 'self' https://api.stripe.com https://openrouter.ai https://secure.przelewy24.pl https://sandbox.przelewy24.pl https://geowidget.inpost.pl https://api.inpost.pl https://geowidget.inpost.pl",
+      "connect-src 'self' https://api.stripe.com https://openrouter.ai https://secure.przelewy24.pl https://sandbox.przelewy24.pl https://geowidget.inpost.pl https://api.inpost.pl https://www.clarity.ms https://*.clarity.ms",
       "frame-src https://js.stripe.com https://hooks.stripe.com https://secure.przelewy24.pl https://sandbox.przelewy24.pl https://geowidget.inpost.pl https://*.inpost.pl",
       "form-action 'self' https://secure.przelewy24.pl https://sandbox.przelewy24.pl",
     ].join("; "),

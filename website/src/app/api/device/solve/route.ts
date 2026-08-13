@@ -178,6 +178,15 @@ const _GREEK_OPS: Record<string, string> = {
 // Tylko cyfry — font OLED ma podpis dolny ₀-₉, ale NIE MA ₊₋₍₎ (sprawdzone
 // dekoderem fontu). Znaki spoza tej listy spadaja na fallback "_(...)".
 const _SUB: Record<string, string> = {"0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉"};
+// Odwrotna mapa: literalny Unicode superscript (ktory model czasem wypisuje
+// wprost zamiast LaTeX-owego ^{...}, np. kopiujac zapis "10⁻⁵" ze zdjecia
+// zadania) -> zwykly znak. Font OLED ma tylko ¹²³ z tego zakresu — reszta
+// (w tym sam minus ⁻!) byla cicha, niewidoczna luka w tekscie.
+const _SUP_REV: Record<string, string> = {
+  "⁰":"0","¹":"1","²":"2","³":"3","⁴":"4","⁵":"5","⁶":"6","⁷":"7","⁸":"8","⁹":"9",
+  "⁺":"+","⁻":"-","⁽":"(","⁾":")","ⁿ":"n","ⁱ":"i",
+};
+const _SUP_RUN_RE = /[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁽⁾ⁿⁱ]+/g;
 function _toScript(x: string, map: Record<string, string>): string | null {
   let out = "";
   for (const c of x) { if (!(c in map)) return null; out += map[c]; }
@@ -215,6 +224,11 @@ function normalizeForCalc(input: string): string {
   // "[^(" wykluczone z fallbacku — na tym etapie "^(" zawsze pochodzi juz z
   // normalizacji wyzej (regex braced/paren), nie jest surowym wejsciem.
   t = t.replace(/\^(-?(?:\d+|[^\s(]))/g, (m, e) => `^(${e})`);
+  // Literalny Unicode superscript wypisany wprost przez model (bez ^ w
+  // ogole) — np. skopiowany zapis "2 · 10⁻⁵ Pa" ze zdjecia zadania. Bez
+  // tego omija cala logike wyzej (nie ma zadnego "^" do zlapania), a font
+  // OLED nie ma tych glifow (w tym samego minusa ⁻) -> niewidoczna luka.
+  t = t.replace(_SUP_RUN_RE, (run) => `^(${[...run].map((c) => _SUP_REV[c]).join("")})`);
   // indeksy dolne -> Unicode cyfry (gdy sie da), inaczej _(...)
   t = t.replace(/_\{([^{}]*)\}/g, (m, e) => _toScript(e, _SUB) ?? `_(${e})`);
   t = t.replace(/_(\S)/g, (m, c) => _toScript(c, _SUB) ?? `_${c}`);

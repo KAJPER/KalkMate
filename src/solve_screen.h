@@ -208,6 +208,24 @@ static uint32_t _utf8Decode(const char* s, int& len) {
 }
 static inline bool _isGreek(uint32_t cp) { return cp >= 0x0370 && cp <= 0x03FF; }
 
+// Literalny Unicode superscript (model czasem wypisuje wprost, bez ^, np.
+// kopiujac zapis "10⁻⁵" ze zdjecia zadania) -> zwykly znak ASCII, albo 0
+// gdy cp nie jest supersriptem. Uzywane do awaryjnego "podniesienia" takich
+// znakow w _solDrawMathLine, gdyby jednak ominely normalizacje na serwerze
+// (device_account/offline solver itp.) — font OLED ma tylko ¹²³ z tego
+// zakresu, reszta (w tym sam minus ⁻) byla niewidoczna.
+static inline char _supToAscii(uint32_t cp) {
+    switch (cp) {
+        case 0x2070: return '0'; case 0x00B9: return '1'; case 0x00B2: return '2';
+        case 0x00B3: return '3'; case 0x2074: return '4'; case 0x2075: return '5';
+        case 0x2076: return '6'; case 0x2077: return '7'; case 0x2078: return '8';
+        case 0x2079: return '9'; case 0x207A: return '+'; case 0x207B: return '-';
+        case 0x207D: return '('; case 0x207E: return ')'; case 0x207F: return 'n';
+        case 0x2071: return 'i';
+        default: return 0;
+    }
+}
+
 // Tablica komend LaTeX -> UTF-8/ASCII.
 struct _SolSym { const char* cmd; const char* utf8; };
 static const _SolSym _SOL_SYMS[] = {
@@ -401,6 +419,17 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
         } else {
             int cl;
             uint32_t cp = _utf8Decode(text + i, cl);
+            char supAscii = _supToAscii(cp);
+            if (supAscii) {
+                // Awaryjne podniesienie literalnego superscriptu (patrz komentarz
+                // przy _supToAscii) — ta sama technika co dla "^(...)".
+                i += cl;
+                char exp1[2] = { supAscii, '\0' };
+                d.setFont(u8g2_font_5x7_tf);
+                int w = d.drawUTF8(xi, y - 4, exp1);
+                xi += (w > 0 ? w : 5) + 1;
+                continue;
+            }
             char ch[5];
             int q = 0;
             for (; q < cl && i < len; q++) ch[q] = text[i++];
