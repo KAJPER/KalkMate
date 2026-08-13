@@ -208,11 +208,13 @@ function normalizeForCalc(input: string): string {
   // ¹²³, reszta byla cichą, niewidoczną luką w wyswietlanym tekscie.
   t = t.replace(/\^\{([^{}]*)\}/g, (m, e) => `^(${e})`);
   t = t.replace(/\^\(([^()]*)\)/g, (m, e) => `^(${e})`);
-  // Wykladniki bez klamer, np. "10^-12" albo "10^12" (czesty zapis modeli AI
-  // dla potegi 10 - jednostki SI). Bez tego tylko "-" trafialoby do exponentu,
-  // a cyfry zostawaly na normalnej linii (rozjechany zapis).
-  t = t.replace(/\^(-?\d+)/g, (m, e) => `^(${e})`);
-  t = t.replace(/\^(\S)/g, (m, c) => `^${c}`);
+  // Wykladniki bez klamer: "10^-12"/"10^12" (cyfry, np. potegi 10 - jednostki
+  // SI) ORAZ "e^-x"/"2^-n" (ujemna zmienna, bez cyfr). Bez tego tylko "-"
+  // trafialoby do exponentu, a reszta (cyfry LUB litera zmiennej) zostawala
+  // na normalnej linii (rozjechany, "polamany" zapis).
+  // "[^(" wykluczone z fallbacku — na tym etapie "^(" zawsze pochodzi juz z
+  // normalizacji wyzej (regex braced/paren), nie jest surowym wejsciem.
+  t = t.replace(/\^(-?(?:\d+|[^\s(]))/g, (m, e) => `^(${e})`);
   // indeksy dolne -> Unicode cyfry (gdy sie da), inaczej _(...)
   t = t.replace(/_\{([^{}]*)\}/g, (m, e) => _toScript(e, _SUB) ?? `_(${e})`);
   t = t.replace(/_(\S)/g, (m, c) => _toScript(c, _SUB) ?? `_${c}`);

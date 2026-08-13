@@ -325,12 +325,19 @@ static void _solLatexEmit(const char* s, int n, char* dst, int& di, int cap) {
                 else { _solLatexEmit(s+i,a,dst,di,cap); }
                 i+=a; if(i<n&&s[i]=='}')i++;
             } else if (i<n && (s[i]=='-' || (s[i]>='0'&&s[i]<='9'))) {
-                // wykladnik bez klamer, np. "10^-12" albo "10^12" — zjedz caly
-                // ciag (opcjonalny minus + cyfry) jako jedna grupe, inaczej
-                // tylko "-" trafialoby do exponentu a cyfry zostawaly na linii.
+                // wykladnik bez klamer: "10^-12"/"10^12" (cyfry) ORAZ
+                // "e^-x"/"2^-n" (ujemna zmienna, bez cyfr) — zjedz caly
+                // ciag (opcjonalny minus + cyfry, LUB minus + jeden znak gdy
+                // po minusie nie ma cyfr) jako jedna grupe. Inaczej tylko
+                // "-" trafialoby do exponentu, a reszta zostawala na linii.
                 int j2 = i;
-                if (s[j2]=='-') j2++;
+                bool neg = false;
+                if (s[j2]=='-') { neg = true; j2++; }
+                int digitsStart = j2;
                 while (j2<n && s[j2]>='0' && s[j2]<='9') j2++;
+                if (neg && j2 == digitsStart && j2<n) {
+                    int cl = _utf8Len((uint8_t)s[j2]); j2 += cl;
+                }
                 if (j2 - i > 1) { if(di<cap-1)dst[di++]='('; while(i<j2&&di<cap-1) dst[di++]=s[i++]; if(di<cap-1)dst[di++]=')'; }
                 else { while(i<j2&&di<cap-1) dst[di++]=s[i++]; }
             } else if (i<n) { int cl=_utf8Len((uint8_t)s[i]); for(int q=0;q<cl&&i<n&&di<cap-1;q++) dst[di++]=s[i++]; }
