@@ -256,9 +256,8 @@ export default function AnalyticsPage() {
 
   const funnelLabels: Record<string, string> = {
     "/": "Strona główna",
-    "/sklep": "Sklep",
-    "/zamow": "Checkout",
-    "/auth/register": "Rejestracja",
+    "/koszyk": "Koszyk",
+    "/auth/signin": "Logowanie",
     "/panel": "Panel klienta",
   };
 

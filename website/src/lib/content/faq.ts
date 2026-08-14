@@ -12,6 +12,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
       a: "Tak — to kalkulator z aparatem (kamerą), który robi zdjęcie zadania i wyświetla pełne rozwiązanie krok po kroku na ekranie. Obudowa, klawiatura i ekran są identyczne ze standardowymi kalkulatorami prostymi. Tryb AI uruchamiasz ukrytą kombinacją klawiszy — nie ma żadnych ikon ani wskaźników, które by Cię zdradzały.",
     },
     {
+      q: "Czym różni się KalkMate od aplikacji jak Photomath czy Gauth?",
+      a: "To fizyczne urządzenie, nie aplikacja na telefon — a telefony i smartwatche są zabronione na sali maturalnej. Photomath czy Gauth świetnie sprawdzają się do nauki w domu, ale nie da się ich użyć w trakcie egzaminu. KalkMate wygląda i działa jak zwykły, dozwolony kalkulator prosty, więc AI masz przy sobie także podczas samego testu.",
+    },
+    {
       q: "Jakie przedmioty obsługuje AI?",
       a: "Matematyka (poziom podstawowy i rozszerzony), fizyka, chemia i biologia. Model jest trenowany na tysiącach zadań z ostatnich 10 lat. Sukcesywnie dodajemy kolejne przedmioty.",
     },
@@ -46,6 +50,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
       a: "Yes — KalkMate is an AI camera calculator: it photographs the problem and shows the full step-by-step solution on screen. The casing, keypad and screen are identical to standard simple calculators. You launch AI mode with a hidden key combination — there are no icons or indicators that could give you away.",
     },
     {
+      q: "How is KalkMate different from apps like Photomath or Gauth?",
+      a: "KalkMate is a physical device, not a phone app — and phones and smartwatches are banned in exam rooms. Apps like Photomath or Gauth are great for studying at home, but you simply can't use them during the actual exam. KalkMate looks and works like a standard, permitted simple calculator, so you have AI with you during the test itself.",
+    },
+    {
       q: "Which subjects does the AI support?",
       a: "Mathematics (basic and extended level), physics, chemistry and biology. The model is trained on thousands of problems from the last 10 years. We keep adding more subjects.",
     },
@@ -78,6 +86,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
     {
       q: "Ist KalkMate ein KI Taschenrechner mit Kamera?",
       a: "Ja — KalkMate ist ein KI Taschenrechner mit Kamera: Du fotografierst die Aufgabe und siehst die vollständige Schritt-für-Schritt-Lösung auf dem Display. Gehäuse, Tastatur und Display sind identisch mit handelsüblichen einfachen Taschenrechnern. Den KI-Modus startest du mit einer versteckten Tastenkombination — es gibt keine Symbole oder Anzeigen, die dich verraten könnten.",
+    },
+    {
+      q: "Wie unterscheidet sich KalkMate von Apps wie Photomath oder Gauth?",
+      a: "KalkMate ist ein physisches Gerät, keine Handy-App — und Handys sowie Smartwatches sind im Prüfungsraum verboten. Apps wie Photomath oder Gauth eignen sich hervorragend zum Lernen zu Hause, lassen sich aber während der eigentlichen Prüfung nicht nutzen. KalkMate sieht aus wie ein normaler, zugelassener einfacher Taschenrechner und funktioniert auch so — die KI hast du also direkt während der Prüfung dabei.",
     },
     {
       q: "Welche Fächer unterstützt die KI?",

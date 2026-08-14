@@ -17,7 +17,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apm.przelewy24.pl https://geowidget.inpost.pl https://www.clarity.ms",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apm.przelewy24.pl https://geowidget.inpost.pl https://www.clarity.ms https://*.clarity.ms",
       "style-src 'self' 'unsafe-inline' https://geowidget.inpost.pl",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https://geowidget.inpost.pl",

@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
     // ----------------------------------------------------------------
     // Lejek konwersji (kluczowe strony)
     // ----------------------------------------------------------------
-    const funnelPages = ["/", "/sklep", "/zamow", "/auth/register", "/panel"];
+    const funnelPages = ["/", "/koszyk", "/auth/signin", "/panel"];
     const funnel = funnelPages.map((page) => ({
       page,
       views: visits.filter((v) => v.page === page || v.page.startsWith(page + "?")).length,

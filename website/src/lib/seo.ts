@@ -74,3 +74,30 @@ export function homeJsonLd(locale: Locale): string[] {
     JSON.stringify(o),
   );
 }
+
+/**
+ * Organization JSON-LD — encja marki (dane zgodne z Footer/wpisem CEIDG).
+ * Renderowane raz, w root layout, żeby było obecne na każdej stronie —
+ * pomaga wyszukiwarkom i modelom AI rozpoznać "KalkMate" jako konkretny,
+ * weryfikowalny podmiot (a nie tylko frazę w tekście).
+ */
+export function organizationJsonLd(): string {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "KalkMate",
+    legalName: "KAJPA Kacper Popko",
+    url: SITE_URL,
+    logo: `${SITE_URL}/KalkMate.png`,
+    email: "kontakt@kalkmate.pl",
+    telephone: "+48600580888",
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: "ul. Zastawie I 37",
+      postalCode: "16-070",
+      addressLocality: "Choroszcz",
+      addressCountry: "PL",
+    },
+    taxID: "9662222951",
+  });
+}

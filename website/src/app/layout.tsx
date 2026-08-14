@@ -5,6 +5,7 @@ import SessionProvider from "@/components/SessionProvider";
 import { CartProvider } from "@/components/CartContext";
 import { ClientCartDrawer, ClientCookieBanner, ClientClarityAnalytics } from "@/components/ClientShell";
 import PageTracker from "@/components/PageTracker";
+import { organizationJsonLd } from "@/lib/seo";
 
 const geist = Geist({
   variable: "--font-geist",
@@ -112,6 +113,10 @@ export default function RootLayout({
       <body
         className={`${geist.variable} ${instrument.variable} ${jetbrains.variable} antialiased km-grain bg-[#0B0B0B] text-[#F2EDE3]`}
       >
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: organizationJsonLd() }}
+        />
         <SessionProvider>
           <CartProvider>
             {children}
