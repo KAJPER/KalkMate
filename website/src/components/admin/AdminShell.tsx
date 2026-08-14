@@ -51,6 +51,11 @@ const navItems = [
     icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
   },
   {
+    href: "/admin/etykiety",
+    label: "Krajalnica etykiet",
+    icon: "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"
+  },
+  {
     href: "/admin/analytics",
     label: "Analityka",
     icon: "M3 3v18h18M9 17V9m4 8V5m4 12v-4"
