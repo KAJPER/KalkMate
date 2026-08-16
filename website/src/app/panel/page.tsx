@@ -954,13 +954,14 @@ export default function PanelPage() {
   const [aiSaving, setAiSaving] = useState(false);
   const [tokenBalance, setTokenBalance] = useState<number>(1_000_000);
   const [buyingPack, setBuyingPack] = useState<string | null>(null);
+  const [buyCurrency, setBuyCurrency] = useState<"pln" | "eur">("pln");
   const buyTokens = async (packId: string) => {
     setBuyingPack(packId);
     try {
       const r = await fetch("/api/tokens/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packId }),
+        body: JSON.stringify({ packId, currency: buyCurrency }),
       });
       const j = await r.json();
       if (j?.url) { window.location.href = j.url; return; }
@@ -2523,7 +2524,22 @@ export default function PanelPage() {
 
               {/* === SKLEP: KUP TOKENY === */}
               <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
-                <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">{t.buyTokens}</div>
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <div className="km-mono-eyebrow text-[#D8FF3D]">{t.buyTokens}</div>
+                  <div className="inline-flex items-center border border-[rgba(242,237,227,0.18)] shrink-0">
+                    {(["pln", "eur"] as const).map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setBuyCurrency(c)}
+                        className={`km-mono-eyebrow text-[11px] px-2.5 py-1 transition-colors ${
+                          buyCurrency === c ? "bg-[#D8FF3D] text-[#0B0B0B]" : "text-[#F2EDE3]/55 hover:text-[#F2EDE3]"
+                        }`}
+                      >
+                        {c.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <p className="text-sm text-[#F2EDE3]/55 mb-4">
                   {t.buyTokensDesc}
                 </p>
@@ -2542,7 +2558,9 @@ export default function PanelPage() {
                       )}
                       <div className="text-lg font-bold text-[#F2EDE3]">{t.packLabel(p.tokens)}</div>
                       <div className="text-3xl font-bold text-[#D8FF3D] mt-1">
-                        {(p.priceGrosze / 100).toFixed(0)}<span className="text-base text-[#F2EDE3]/50"> zł</span>
+                        {buyCurrency === "pln"
+                          ? <>{(p.priceGrosze / 100).toFixed(0)}<span className="text-base text-[#F2EDE3]/50"> zł</span></>
+                          : <>{(p.priceEurCents / 100).toFixed(0)}<span className="text-base text-[#F2EDE3]/50"> EUR</span></>}
                       </div>
                       <div className="text-xs text-[#F2EDE3]/40 mt-1 mb-3">
                         ~{Math.floor(p.tokens / 3200).toLocaleString(DATE_LOCALE[lang])} {t.maturaTasksApprox}
