@@ -61,6 +61,38 @@ export default function OpenRouterPage() {
   const [data, setData] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"consumed" | "chat" | "device" | "cost">("consumed");
+  const [search, setSearch] = useState("");
+  const [addTokensFor, setAddTokensFor] = useState<string | null>(null);
+  const [addTokensAmount, setAddTokensAmount] = useState("1000000");
+  const [addingTokens, setAddingTokens] = useState(false);
+
+  const submitAddTokens = async (userId: string) => {
+    const tokens = parseInt(addTokensAmount, 10);
+    if (!Number.isFinite(tokens) || tokens === 0) return;
+    setAddingTokens(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "addTokens", data: { tokens } }),
+      });
+      if (res.ok) {
+        const j = await res.json();
+        setData((prev) =>
+          prev
+            ? { ...prev, users: prev.users.map((u) => (u.id === userId ? { ...u, tokenBalance: j.tokenBalance } : u)) }
+            : prev
+        );
+        setAddTokensFor(null);
+      } else {
+        alert("Nie udało się doładować tokenów");
+      }
+    } catch {
+      alert("Błąd sieci");
+    } finally {
+      setAddingTokens(false);
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -77,7 +109,13 @@ export default function OpenRouterPage() {
   }, []);
 
   const sortedUsers = data
-    ? [...data.users].sort((a, b) => {
+    ? [...data.users]
+        .filter((u) => {
+          const q = search.trim().toLowerCase();
+          if (!q) return true;
+          return u.email.toLowerCase().includes(q) || (u.name || "").toLowerCase().includes(q);
+        })
+        .sort((a, b) => {
         if (sortBy === "chat") return b.chatMessages - a.chatMessages;
         if (sortBy === "device") return b.deviceSolves - a.deviceSolves;
         if (sortBy === "cost") return b.estimatedCostUSD - a.estimatedCostUSD;
@@ -221,7 +259,14 @@ export default function OpenRouterPage() {
                 </svg>
                 Użytkownicy — zużycie tokenów
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Szukaj po email/imieniu..."
+                  className="px-3 py-1.5 rounded-lg text-xs bg-[#2B2D31] border border-[#3F4147] text-[#E0E0E0] placeholder-[#E0E0E0]/30 focus:outline-none focus:border-[#3B82F6] w-56"
+                />
                 <span className="text-xs text-[#E0E0E0]/40">Sortuj:</span>
                 {(["consumed", "chat", "device", "cost"] as const).map((s) => (
                   <button
@@ -236,6 +281,12 @@ export default function OpenRouterPage() {
                 ))}
               </div>
             </div>
+
+            {search.trim() && (
+              <p className="text-xs text-[#E0E0E0]/40 mb-3">
+                {sortedUsers.length} {sortedUsers.length === 1 ? "wynik" : "wyników"} dla &quot;{search}&quot;
+              </p>
+            )}
 
             <div className="space-y-3">
               {sortedUsers.map((u, i) => (
@@ -257,7 +308,38 @@ export default function OpenRouterPage() {
                         }`}>
                           {u.aiMode === "raw" ? "Czysty AI" : "Egzamin"}
                         </span>
+                        <button
+                          onClick={() => { setAddTokensFor(addTokensFor === u.id ? null : u.id); setAddTokensAmount("1000000"); }}
+                          className="ml-auto px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/25 transition-colors"
+                        >
+                          + Tokeny
+                        </button>
                       </div>
+
+                      {addTokensFor === u.id && (
+                        <div className="flex items-center gap-2 mb-3 bg-[#1E2024] rounded-lg p-2.5">
+                          <input
+                            type="number"
+                            value={addTokensAmount}
+                            onChange={(e) => setAddTokensAmount(e.target.value)}
+                            className="flex-1 px-2 py-1 rounded bg-[#2B2D31] border border-[#3F4147] text-[#E0E0E0] text-xs focus:outline-none focus:border-[#3B82F6]"
+                            placeholder="np. 1000000 (ujemna = odejmij)"
+                          />
+                          <button
+                            onClick={() => submitAddTokens(u.id)}
+                            disabled={addingTokens}
+                            className="px-3 py-1 rounded text-xs font-medium bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-50 transition-colors"
+                          >
+                            {addingTokens ? "..." : "Dodaj"}
+                          </button>
+                          <button
+                            onClick={() => setAddTokensFor(null)}
+                            className="px-3 py-1 rounded text-xs font-medium bg-[#3F4147] hover:bg-[#4a4d54] text-[#E0E0E0]/70 transition-colors"
+                          >
+                            Anuluj
+                          </button>
+                        </div>
+                      )}
 
                       {/* Token progress */}
                       <div className="mb-2">

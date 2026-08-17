@@ -15,6 +15,27 @@ interface User {
     plan: string | null;
   } | null;
   licensesUsed: number;
+  ordersCount: number;
+  tokenBalance: number;
+  tokensPurchased: number;
+  tokenPurchaseCount: number;
+}
+
+interface PurchaseHistory {
+  orders: Array<{
+    id: string; orderNumber: string; status: string; amount: number; currency: string;
+    paymentProvider: string; createdAt: string; paidAt: string | null; fulfillmentStatus: string;
+  }>;
+  tokenPurchases: Array<{
+    id: string; provider: string; tokens: number; amount: number; currency: string; paidAt: string | null;
+  }>;
+  licenses: Array<{ code: string; durationDays: number; usedAt: string | null; description: string | null }>;
+}
+
+function fmtTokensShort(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
 export default function UsersPage() {
@@ -26,6 +47,24 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", email: "", subscriptionStatus: "" });
+  const [search, setSearch] = useState("");
+  const [purchasesUser, setPurchasesUser] = useState<User | null>(null);
+  const [purchasesData, setPurchasesData] = useState<PurchaseHistory | null>(null);
+  const [purchasesLoading, setPurchasesLoading] = useState(false);
+
+  const openPurchases = async (user: User) => {
+    setPurchasesUser(user);
+    setPurchasesData(null);
+    setPurchasesLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/purchases`);
+      if (res.ok) setPurchasesData(await res.json());
+    } catch (error) {
+      console.error("Failed to fetch purchases:", error);
+    } finally {
+      setPurchasesLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -122,13 +161,26 @@ export default function UsersPage() {
     }
   };
 
+  const filteredUsers = users.filter((u) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return u.email.toLowerCase().includes(q) || (u.name || "").toLowerCase().includes(q);
+  });
+
   return (
     <AdminShell>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#E0E0E0] mb-1">Użytkownicy</h1>
           <p className="text-sm text-[#E0E0E0]/60">Zarządzanie kontami użytkowników ({total} total)</p>
         </div>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Szukaj po email/imieniu (na tej stronie)..."
+          className="px-4 py-2 rounded-lg text-sm bg-[#313338] border border-[#3F4147] text-[#E0E0E0] placeholder-[#E0E0E0]/30 focus:outline-none focus:border-[#3B82F6] w-72"
+        />
       </div>
 
       {loading ? (
@@ -154,9 +206,15 @@ export default function UsersPage() {
               </div>
             </div>
 
+            {search.trim() && (
+              <p className="px-6 pt-4 text-xs text-[#E0E0E0]/40">
+                {filteredUsers.length} {filteredUsers.length === 1 ? "wynik" : "wyników"} dla &quot;{search}&quot; (spośród {users.length} na tej stronie)
+              </p>
+            )}
+
             {/* User List */}
             <div className="divide-y divide-[#3F4147]">
-              {users.map((user, i) => (
+              {filteredUsers.map((user, i) => (
                 <motion.div
                   key={user.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -208,6 +266,20 @@ export default function UsersPage() {
                     </div>
                   </div>
 
+                  {/* Zakupy summary */}
+                  <div className="mt-2 flex items-center gap-3 flex-wrap text-xs">
+                    <span className="text-[#E0E0E0]/50">
+                      Saldo tokenów: <span className="text-emerald-400 font-semibold">{fmtTokensShort(user.tokenBalance)}</span>
+                    </span>
+                    <span className="text-[#E0E0E0]/50">
+                      Kupił łącznie: <span className="text-[#E0E0E0] font-semibold">{fmtTokensShort(user.tokensPurchased)}</span>
+                      {user.tokenPurchaseCount > 0 && <span className="text-[#E0E0E0]/30"> ({user.tokenPurchaseCount}×)</span>}
+                    </span>
+                    <span className="text-[#E0E0E0]/50">
+                      Zamówienia (opłacone): <span className={`font-semibold ${user.ordersCount > 0 ? "text-purple-400" : "text-[#E0E0E0]/40"}`}>{user.ordersCount}</span>
+                    </span>
+                  </div>
+
                   {/* Action Buttons */}
                   <div className="mt-3 flex items-center gap-2">
                     <button
@@ -219,6 +291,15 @@ export default function UsersPage() {
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                       </svg>
                       Edytuj
+                    </button>
+                    <button
+                      onClick={() => openPurchases(user)}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 text-xs font-medium rounded-lg transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+                      </svg>
+                      Zakupy
                     </button>
                     <button
                       onClick={() => deleteUser(user)}
@@ -328,6 +409,112 @@ export default function UsersPage() {
                 Anuluj
               </button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Purchases Modal */}
+      {purchasesUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setPurchasesUser(null)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#2B2D31] rounded-2xl border border-[#3F4147] p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-xl font-bold text-[#E0E0E0]">Historia zakupów</h2>
+              <button onClick={() => setPurchasesUser(null)} className="text-[#E0E0E0]/40 hover:text-[#E0E0E0] text-xl leading-none">✕</button>
+            </div>
+            <p className="text-sm text-[#E0E0E0]/50 mb-5">{purchasesUser.email}</p>
+
+            {purchasesLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3B82F6]" />
+              </div>
+            ) : purchasesData ? (
+              <div className="space-y-6">
+                {/* Zamowienia (kalkulator) */}
+                <div>
+                  <h3 className="text-sm font-semibold text-purple-400 mb-2">Zamówienia — kalkulator ({purchasesData.orders.length})</h3>
+                  {purchasesData.orders.length === 0 ? (
+                    <p className="text-xs text-[#E0E0E0]/40">Brak zamówień</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {purchasesData.orders.map((o) => (
+                        <div key={o.id} className="flex items-center justify-between text-xs bg-[#313338] rounded-lg px-3 py-2">
+                          <div>
+                            <span className="text-[#E0E0E0] font-medium">{o.orderNumber}</span>
+                            <span className="text-[#E0E0E0]/40 ml-2">
+                              {new Date(o.createdAt).toLocaleDateString("pl-PL", { day: "2-digit", month: "short", year: "numeric" })}
+                            </span>
+                            <span className="text-[#E0E0E0]/30 ml-2">via {o.paymentProvider}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full ${
+                              o.status === "paid" ? "bg-green-500/15 text-green-400" : "bg-gray-500/15 text-gray-400"
+                            }`}>{o.status}</span>
+                            <span className="text-[#E0E0E0] font-semibold">
+                              {(o.amount / 100).toFixed(2)} {o.currency.toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Doladowania tokenow */}
+                <div>
+                  <h3 className="text-sm font-semibold text-emerald-400 mb-2">Doładowania tokenów AI ({purchasesData.tokenPurchases.length})</h3>
+                  {purchasesData.tokenPurchases.length === 0 ? (
+                    <p className="text-xs text-[#E0E0E0]/40">Brak doładowań</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {purchasesData.tokenPurchases.map((tp) => (
+                        <div key={tp.id} className="flex items-center justify-between text-xs bg-[#313338] rounded-lg px-3 py-2">
+                          <div>
+                            <span className="text-[#E0E0E0] font-medium">{fmtTokensShort(tp.tokens)} tokenów</span>
+                            <span className="text-[#E0E0E0]/40 ml-2">
+                              {tp.paidAt ? new Date(tp.paidAt).toLocaleDateString("pl-PL", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                            </span>
+                            <span className="text-[#E0E0E0]/30 ml-2">via {tp.provider}</span>
+                          </div>
+                          <span className="text-[#E0E0E0] font-semibold">
+                            {(tp.amount / 100).toFixed(2)} {tp.currency.toUpperCase()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Licencje AI Chat */}
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-400 mb-2">Licencje AI Chat wykorzystane ({purchasesData.licenses.length})</h3>
+                  {purchasesData.licenses.length === 0 ? (
+                    <p className="text-xs text-[#E0E0E0]/40">Brak</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {purchasesData.licenses.map((l, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-[#313338] rounded-lg px-3 py-2">
+                          <div>
+                            <code className="text-[#E0E0E0] font-mono">{l.code}</code>
+                            {l.description && <span className="text-[#E0E0E0]/40 ml-2">{l.description}</span>}
+                          </div>
+                          <span className="text-[#E0E0E0]/50">
+                            {l.durationDays} dni
+                            {l.usedAt && <span className="ml-2">{new Date(l.usedAt).toLocaleDateString("pl-PL", { day: "2-digit", month: "short" })}</span>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-red-400">Nie udało się załadować historii</p>
+            )}
           </motion.div>
         </div>
       )}

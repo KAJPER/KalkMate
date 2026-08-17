@@ -55,6 +55,22 @@ export async function PATCH(
       return NextResponse.json({ success: true, user: updated });
     }
 
+    if (action === "addTokens") {
+      // Reczne doladowanie/korekta tokenow AI przez admina (np. reklamacja,
+      // niedoliczona platnosc). tokenBalance nie jest w Prisma schemie.
+      const tokens = Number(data?.tokens);
+      if (!Number.isFinite(tokens) || tokens === 0) {
+        return NextResponse.json({ error: "Nieprawidłowa liczba tokenów" }, { status: 400 });
+      }
+      await prisma.$executeRaw`
+        UPDATE "User" SET "tokenBalance" = MAX(0, COALESCE("tokenBalance", 0) + ${tokens}) WHERE "id" = ${id}
+      `;
+      const rows = await prisma.$queryRaw<{ tokenBalance: number }[]>`
+        SELECT "tokenBalance" FROM "User" WHERE "id" = ${id} LIMIT 1
+      `;
+      return NextResponse.json({ success: true, tokenBalance: rows[0]?.tokenBalance ?? 0 });
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error) {
     console.error("Failed to update user:", error);

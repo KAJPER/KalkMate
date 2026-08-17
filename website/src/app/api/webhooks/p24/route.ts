@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { verifyNotificationSign, verifyTransaction } from "@/lib/przelewy24";
 import { sendMail } from "@/lib/mailer";
 import { purchaseConfirmationEmail } from "@/lib/email-templates";
-import { findTokenPurchaseP24BySession, markTokenPurchaseP24Paid } from "@/lib/tokenPurchaseP24";
+import { findTokenPurchaseBySession, markTokenPurchasePaid } from "@/lib/tokenPurchases";
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  // Doladowanie tokenow AI (osobna tabela od "Order" — patrz tokenPurchaseP24.ts)
-  const tokenPurchase = await findTokenPurchaseP24BySession(String(sessionId));
+  // Doladowanie tokenow AI (osobna tabela od "Order" — patrz tokenPurchases.ts)
+  const tokenPurchase = await findTokenPurchaseBySession(String(sessionId));
   if (tokenPurchase) {
     if (tokenPurchase.status === "paid") {
       console.log("[P24 WEBHOOK] Token purchase already processed:", tokenPurchase.id);
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       console.error("[P24 WEBHOOK] Verify transaction failed (token purchase):", err);
       return NextResponse.json({ error: "Verify failed" }, { status: 500 });
     }
-    await markTokenPurchaseP24Paid(tokenPurchase.id);
+    await markTokenPurchasePaid(tokenPurchase.id);
     await prisma.$executeRaw`
       UPDATE "User" SET "tokenBalance" = COALESCE("tokenBalance", 0) + ${tokenPurchase.tokens} WHERE "id" = ${tokenPurchase.userId}
     `;

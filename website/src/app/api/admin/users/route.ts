@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { COOKIE_NAME } from "@/lib/admin-auth";
+import { sumTokensPurchasedByUser } from "@/lib/tokenPurchases";
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,12 +26,20 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Get license usage for each user
+    // Get license usage + purchase summary for each user
     const usersWithLicenses = await Promise.all(
       users.map(async (user) => {
         const licensesUsed = await prisma.license.count({
           where: { usedBy: user.id },
         });
+        const ordersCount = await prisma.order.count({
+          where: { userId: user.id, status: "paid" },
+        });
+        const tokenRow = await prisma.$queryRaw<{ tokenBalance: number | null }[]>`
+          SELECT "tokenBalance" FROM "User" WHERE "id" = ${user.id} LIMIT 1
+        `.catch(() => []);
+        const tokenBalance = tokenRow[0]?.tokenBalance ?? 0;
+        const tokensPurchased = await sumTokensPurchasedByUser(user.id).catch(() => ({ tokens: 0, count: 0 }));
 
         return {
           id: user.id,
@@ -53,6 +62,10 @@ export async function GET(req: NextRequest) {
               }
             : null,
           licensesUsed,
+          ordersCount,
+          tokenBalance,
+          tokensPurchased: tokensPurchased.tokens,
+          tokenPurchaseCount: tokensPurchased.count,
         };
       })
     );

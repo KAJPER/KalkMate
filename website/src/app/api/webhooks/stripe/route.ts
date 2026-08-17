@@ -5,6 +5,8 @@ import { sendMail } from "@/lib/mailer";
 import { purchaseConfirmationEmail, localeFromCountry, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { prisma } from "@/lib/db";
 import { incrementCouponUsage } from "@/lib/coupons";
+import { createPaidTokenPurchase } from "@/lib/tokenPurchases";
+import { randomUUID } from "crypto";
 
 export async function POST(request: NextRequest) {
   console.log("[WEBHOOK] Received webhook request");
@@ -333,6 +335,21 @@ async function handleTokenPurchase(session: Stripe.Checkout.Session) {
     UPDATE "User" SET "tokenBalance" = COALESCE("tokenBalance", 0) + ${tokens} WHERE "id" = ${userId}
   `;
   console.log(`[WEBHOOK] token purchase: +${tokens} tokenow dla user ${userId}`);
+
+  // Loguj do historii zakupow (widoczne w /admin/users) — spojne z P24.
+  try {
+    await createPaidTokenPurchase({
+      id: randomUUID(),
+      sessionId: session.id,
+      provider: "stripe",
+      userId,
+      tokens,
+      amount: session.amount_total || 0,
+      currency: (session.currency || "eur").toLowerCase(),
+    });
+  } catch (e) {
+    console.error("[WEBHOOK] token purchase: log do TokenPurchase failed:", e);
+  }
 }
 
 async function handleSubscriptionCreated(session: Stripe.Checkout.Session) {

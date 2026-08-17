@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { getTokenPack } from "@/lib/tokenPacks";
 import { registerTransaction, paymentUrl } from "@/lib/przelewy24";
-import { createPendingTokenPurchaseP24 } from "@/lib/tokenPurchaseP24";
+import { createPendingTokenPurchase } from "@/lib/tokenPurchases";
 import { randomUUID } from "crypto";
 
 // POST /api/tokens/checkout  { packId, currency? }
@@ -56,9 +56,10 @@ export async function POST(request: NextRequest) {
         channel: 16,
       });
 
-      await createPendingTokenPurchaseP24({
+      await createPendingTokenPurchase({
         id: randomUUID(),
         sessionId,
+        provider: "p24",
         userId: user.id,
         tokens: pack.tokens,
         amount: pack.priceGrosze,
