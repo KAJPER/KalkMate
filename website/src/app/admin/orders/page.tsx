@@ -66,6 +66,7 @@ export default function OrdersPage() {
         (o) =>
           o.customer_name.toLowerCase().includes(search.toLowerCase()) ||
           o.customer_email.toLowerCase().includes(search.toLowerCase()) ||
+          o.customer_phone.replace(/[\s-]/g, "").includes(search.replace(/[\s-]/g, "")) ||
           o.id.toLowerCase().includes(search.toLowerCase())
       )
     : orders;
@@ -87,7 +88,7 @@ export default function OrdersPage() {
         <h1 className="text-xl font-bold text-[#E0E0E0]">Zamówienia</h1>
         <input
           type="text"
-          placeholder="Szukaj po nazwisku, email lub ID..."
+          placeholder="Szukaj po nazwisku, email, telefonie lub ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:w-72 px-3 py-2 rounded-lg border border-[#3F4147] bg-[#2B2D31] text-[#E0E0E0] text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6] placeholder:text-[#E0E0E0]/30"
