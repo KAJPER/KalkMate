@@ -1880,7 +1880,7 @@ void showSolveScreen(U8G2 &display) {
     // Wyslij zadania z kolejki offline jesli WiFi dostepne (cichy tryb)
     _solProcessQueue(display);
 
-    int mode = 1;  // domyslnie tekst (kamera moze byc niedostepna)
+    int mode = 0;  // domyslnie zdjecie (kamera) — najczestszy wybor
 
     while (true) {
         if (panicTriggered()) return;

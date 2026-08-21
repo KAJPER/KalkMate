@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>KalkMate — Formularz reklamacyjny (do druku)</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --black:#0a0a0a;
+  --white:#ffffff;
+  --gray1:#1a1a1a;
+  --gray2:#333;
+  --gray3:#555;
+  --gray4:#888;
+  --gray5:#bbb;
+  --gray6:#e8e8e8;
+  --gray7:#f5f5f5;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+}
+
+body{
+  font-family:var(--sans);
+  background:#fff;
+  color:var(--black);
+  font-size:10.5px;
+  line-height:1.5;
+}
+
+.page{
+  width:210mm;
+  min-height:297mm;
+  padding:14mm 16mm 12mm 16mm;
+  position:relative;
+}
+
+/* HEADER */
+.header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  border-bottom:3px solid var(--black);
+  padding-bottom:7px;
+  margin-bottom:14px;
+}
+.brand{
+  font-family:var(--mono);
+  font-size:26px;
+  font-weight:700;
+  letter-spacing:-1px;
+  line-height:1;
+}
+.brand span{
+  font-size:10px;
+  font-weight:400;
+  color:var(--gray3);
+  display:block;
+  letter-spacing:1px;
+  margin-top:2px;
+  font-family:var(--sans);
+  text-transform:uppercase;
+}
+.doc-title{
+  font-size:9px;
+  color:var(--gray3);
+  text-align:right;
+  letter-spacing:0.5px;
+  line-height:1.6;
+}
+.doc-title b{ color:var(--black); font-size:11px; display:block; }
+
+/* SELLER INFO STRIP */
+.seller{
+  font-size:9px;
+  color:var(--gray3);
+  border:1px solid var(--gray6);
+  background:var(--gray7);
+  padding:8px 10px;
+  margin-bottom:16px;
+  display:flex;
+  justify-content:space-between;
+  gap:20px;
+}
+.seller div{ line-height:1.6; }
+.seller b{ color:var(--black); }
+
+/* SECTIONS */
+.sec{ margin-bottom:14px; }
+.sec-title{
+  font-family:var(--mono);
+  font-weight:700;
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  border-bottom:2px solid var(--black);
+  padding-bottom:4px;
+  margin-bottom:8px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.sec-num{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:16px;height:16px;
+  background:var(--black);
+  color:#fff;
+  font-size:9px;
+  border-radius:2px;
+}
+
+/* FIELD GRID */
+.grid{ display:grid; gap:8px 14px; }
+.grid-2{ grid-template-columns:1fr 1fr; }
+.grid-3{ grid-template-columns:1fr 1fr 1fr; }
+
+.field{ margin-bottom:2px; }
+.field label{
+  display:block;
+  font-size:8.5px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  color:var(--gray4);
+  margin-bottom:2px;
+}
+.line{
+  border:0;
+  border-bottom:1px solid var(--black);
+  height:16px;
+  width:100%;
+}
+.line.tall{ height:22px; }
+
+.blank-lines{
+  border:1px solid var(--gray5);
+  border-radius:2px;
+  min-height:60px;
+  padding:6px 8px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 15px,
+      var(--gray6) 15px,
+      var(--gray6) 16px
+    );
+}
+.blank-lines.short{ min-height:32px; }
+
+/* CHECKBOX ROWS */
+.check-row{
+  display:flex;
+  align-items:flex-start;
+  gap:7px;
+  margin-bottom:7px;
+  font-size:10px;
+}
+.box{
+  flex:0 0 auto;
+  width:12px;height:12px;
+  border:1.5px solid var(--black);
+  margin-top:1px;
+}
+.check-row .sub{
+  display:block;
+  font-size:8.5px;
+  color:var(--gray4);
+  margin-top:1px;
+}
+
+.note{
+  font-size:8.5px;
+  color:var(--gray4);
+  font-style:italic;
+  margin-top:4px;
+}
+
+/* ATTACHMENTS */
+.attach-list{ list-style:none; }
+.attach-list li{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  font-size:10px;
+  margin-bottom:5px;
+}
+
+/* SIGNATURE */
+.sign-block{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:30px;
+  margin-top:20px;
+}
+.sign-line{
+  border-top:1px solid var(--black);
+  padding-top:4px;
+  font-size:8.5px;
+  color:var(--gray4);
+  text-align:center;
+}
+
+/* FOOTER */
+.foot{
+  position:absolute;
+  bottom:8mm;
+  left:16mm;
+  right:16mm;
+  display:flex;
+  justify-content:space-between;
+  font-size:8px;
+  color:var(--gray5);
+  border-top:1px solid var(--gray6);
+  padding-top:5px;
+}
+
+.declaration{
+  font-size:9px;
+  color:var(--gray2);
+  border-left:2px solid var(--black);
+  padding-left:8px;
+  margin-bottom:10px;
+  line-height:1.6;
+}
+
+@media print{
+  body{ font-size:10.5px; }
+  .page{ padding:10mm 14mm 10mm 14mm; }
+  @page{ size:A4; margin:0; }
+}
+
+@media screen{
+  body{ background:#ddd; }
+  .page{ box-shadow:0 0 20px rgba(0,0,0,0.25); background:#fff; margin:20px auto; }
+  .print-btn{
+    position:fixed; top:16px; right:16px;
+    font-family:var(--mono); font-weight:700; font-size:12px;
+    background:var(--black); color:#fff; border:none;
+    padding:10px 16px; border-radius:4px; cursor:pointer;
+    z-index:10;
+  }
+}
+@media print{ .print-btn{ display:none; } }
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">DRUKUJ ⎙</button>
+
+<div class="page">
+
+  <div class="header">
+    <div class="brand">KalkMate</div>
+    <div class="doc-title"><b>FORMULARZ REKLAMACYJNY</b>wersja do wydruku i wypełnienia odręcznego</div>
+  </div>
+
+  <div class="seller">
+    <div><b>Sprzedawca:</b> KAJPA Kacper Popko, ul. Zastawie I 37, 16-070 Choroszcz<br>NIP: 9662222951 · REGON: 545011444</div>
+    <div><b>Kontakt:</b> kontakt@kalkmate.pl<br>Gwarancja: 24 miesiące od daty zakupu</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><span class="sec-num">1</span>Dane zgłaszającego</div>
+    <div class="grid grid-2">
+      <div class="field"><label>Imię i nazwisko</label><div class="line"></div></div>
+      <div class="field"><label>Telefon kontaktowy</label><div class="line"></div></div>
+      <div class="field" style="grid-column:1/-1"><label>Adres (ulica, nr, kod pocztowy, miejscowość)</label><div class="line"></div></div>
+      <div class="field"><label>E-mail</label><div class="line"></div></div>
+      <div class="field"><label>Numer konta do zwrotu (jeśli dotyczy)</label><div class="line"></div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><span class="sec-num">2</span>Dane zakupu</div>
+    <div class="grid grid-3">
+      <div class="field"><label>Numer zamówienia</label><div class="line"></div></div>
+      <div class="field"><label>Data zakupu</label><div class="line"></div></div>
+      <div class="field"><label>Dowód zakupu (paragon / faktura nr)</label><div class="line"></div></div>
+      <div class="field"><label>Numer seryjny urządzenia (jeśli znany)</label><div class="line"></div></div>
+      <div class="field"><label>Wersja firmware (jeśli znana)</label><div class="line"></div></div>
+      <div class="field"><label>Data stwierdzenia wady</label><div class="line"></div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><span class="sec-num">3</span>Opis wady / niezgodności</div>
+    <div class="field">
+      <label>Co się stało — dokładny opis usterki, okoliczności wystąpienia, czy jest odtwarzalna</label>
+      <div class="blank-lines"></div>
+    </div>
+    <div class="note">Jeśli urządzenie nie włącza się, nie ładuje, nie reaguje na klawiaturę, ekran jest pusty/przygaszony, kamera nie robi zdjęć, urządzenie zablokowało się kodem — proszę opisać to możliwie dokładnie, podając kiedy usterka wystąpiła pierwszy raz.</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><span class="sec-num">4</span>Żądanie reklamującego</div>
+    <div class="check-row"><div class="box"></div> Naprawa urządzenia</div>
+    <div class="check-row"><div class="box"></div> Wymiana na nowy egzemplarz</div>
+    <div class="check-row"><div class="box"></div> Obniżenie ceny <span style="margin-left:4px">o kwotę: </span><span style="border-bottom:1px solid var(--black); display:inline-block; width:80px; margin-left:2px"></span></div>
+    <div class="check-row"><div class="box"></div> Odstąpienie od umowy / zwrot pieniędzy</div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title"><span class="sec-num">5</span>Załączniki</div>
+    <ul class="attach-list">
+      <li><div class="box"></div> Kopia dowodu zakupu (paragon/faktura)</li>
+      <li><div class="box"></div> Zdjęcia/nagranie wady</li>
+      <li><div class="box"></div> Inne: <span style="border-bottom:1px solid var(--black); display:inline-block; width:200px; margin-left:4px"></span></li>
+    </ul>
+  </div>
+
+  <div class="declaration">
+    Oświadczam, że opisana wada nie powstała z mojej winy (np. na skutek zalania, upadku, samowolnej ingerencji w
+    urządzenie) i zgłaszam ją zgodnie z warunkami gwarancji / rękojmi określonymi w Regulaminie sklepu kalkmate.pl.
+    Sprzedawca rozpatruje reklamacje w terminie do 14 dni kalendarzowych od daty otrzymania zgłoszenia.
+  </div>
+
+  <div class="sign-block">
+    <div><div style="height:36px"></div><div class="sign-line">Data</div></div>
+    <div><div style="height:36px"></div><div class="sign-line">Podpis zgłaszającego</div></div>
+  </div>
+
+  <div class="foot">
+    <div>KalkMate — formularz reklamacyjny</div>
+    <div>Wypełniony formularz prześlij na kontakt@kalkmate.pl razem z urządzeniem na adres: ul. Zastawie I 37, 16-070 Choroszcz</div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -51,11 +51,15 @@ struct KalkMateSettings {
     uint8_t sleepMinutes; // indeks 0-10 w tablicy czasow
     char    aiUnlockCode[12]; // sekwencja cyfr otwierajaca tryb AI (do 11 znakow)
     uint8_t panicKey;     // KalkKey ktory wraca z trybu AI do kalkulatora
+    bool    rotate180;    // obrot ekranu o 180 stopni wzgledem domyslnej orientacji
+    uint8_t camWbMode;    // balans bieli kamery: 0=Auto,1=Sloneczny,2=Pochmurno,3=Biuro,4=Dom
+    int8_t  camBrightness; // -2..2, korekta jasnosci zdjecia/podgladu kamery
 };
 
 // Domyslne: jasnosc 8, english, szczegolowy, autoSleep ON, 4 min,
-//           kod "1111", panic = KEY_MU (27)
-static KalkMateSettings kalkSettings = {8, 1, 0, true, 4, "1111", /*KEY_MU*/27};
+//           kod "1111", panic = KEY_MU (27), obrot ekranu OFF,
+//           kamera: WB auto, jasnosc 0
+static KalkMateSettings kalkSettings = {8, 1, 0, true, 4, "1111", /*KEY_MU*/27, false, 0, 0};
 
 // Zapis/odczyt ustawien w NVS (wszystkie razem). Definicje TUTAJ bo
 // musza byc po definicji kalkSettings - wifi_persist.h jest include'owany
@@ -68,6 +72,9 @@ static void kalkSaveSettings() {
     prefs.putUChar("solveMode", kalkSettings.solveMode);
     prefs.putBool ("autoSleep", kalkSettings.autoSleep);
     prefs.putUChar("sleepMin",  kalkSettings.sleepMinutes);
+    prefs.putBool ("rotate180", kalkSettings.rotate180);
+    prefs.putUChar("camWb",     kalkSettings.camWbMode);
+    prefs.putChar ("camBright", kalkSettings.camBrightness);
     prefs.end();
 }
 
@@ -79,11 +86,25 @@ static void kalkLoadSettings() {
     kalkSettings.solveMode    = prefs.getUChar("solveMode", 0);
     kalkSettings.autoSleep    = prefs.getBool ("autoSleep", true);
     kalkSettings.sleepMinutes = prefs.getUChar("sleepMin",  4);
+    kalkSettings.rotate180    = prefs.getBool ("rotate180", false);
+    kalkSettings.camWbMode    = prefs.getUChar("camWb",     0);
+    kalkSettings.camBrightness = prefs.getChar("camBright", 0);
     if (kalkSettings.brightness > 15)   kalkSettings.brightness = 8;
     if (kalkSettings.language > 2)      kalkSettings.language = 1;
     if (kalkSettings.solveMode > 2)     kalkSettings.solveMode = 0;
     if (kalkSettings.sleepMinutes > 10) kalkSettings.sleepMinutes = 4;
+    if (kalkSettings.camWbMode > 4)     kalkSettings.camWbMode = 0;
+    if (kalkSettings.camBrightness < -2 || kalkSettings.camBrightness > 2) kalkSettings.camBrightness = 0;
     prefs.end();
+}
+
+// Zastosuj biezace ustawienie obrotu ekranu (wywolac po u8g2.begin() na
+// starcie, oraz przy kazdej zmianie w ustawieniach dla podgladu na zywo).
+// Domyslna orientacja (rotate180=false) to ta z konstruktora u8g2 w main.cpp
+// (U8G2_R2 — plytka ma OLED zamontowany "do gory nogami"); U8G2_R0 jest od
+// niej odwrocone o dokladnie 180 stopni.
+static void kalkApplyRotation(U8G2 &d) {
+    d.setDisplayRotation(kalkSettings.rotate180 ? U8G2_R0 : U8G2_R2);
 }
 
 // Tablica wartosci czasu uśpienia (indeks 0-10)
@@ -105,6 +126,11 @@ static const char* T(const char* pl, const char* en, const char* de) {
 // ota_update.h jest wlaczony wyzej w tym pliku, PRZED definicja kalkSettings.
 int otaGetLanguage() { return kalkSettings.language; }
 
+// Implementacja forward-deklaracji z camera.h (analogicznie do otaGetLanguage) —
+// camera.h jest wlaczony wyzej, PRZED definicja kalkSettings.
+uint8_t camGetWbMode()     { return kalkSettings.camWbMode; }
+int8_t  camGetBrightness() { return kalkSettings.camBrightness; }
+
 // ---------------------------------------------------------------------------
 // Stale menu — 15 pozycji, ulozone tematycznie:
 //   Preferencje:    Jasnosc, Jezyk, Tryb, Sleep, Kod AI, Panic
@@ -112,31 +138,33 @@ int otaGetLanguage() { return kalkSettings.language; }
 //   System:         Aktualizacje
 //   Diagnostyka:    Test ekranu, Test kamery, Test klawiatury, Skaner, Pin Driver
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        17
+#define _SET_ITEMS        19
 // --- Preferencje ---
 #define _SET_BRIGHTNESS   0
-#define _SET_LANGUAGE     1
-#define _SET_SOLVEMODE    2
-#define _SET_AUTOSLEEP    3
-#define _SET_AICODE       4
-#define _SET_PANICKEY     5
+#define _SET_ROTATION     1
+#define _SET_CAMERA       2
+#define _SET_LANGUAGE     3
+#define _SET_SOLVEMODE    4
+#define _SET_AUTOSLEEP    5
+#define _SET_AICODE       6
+#define _SET_PANICKEY     7
 // --- Konto / siec ---
-#define _SET_WIFI         6
-#define _SET_ACCOUNT      7
-#define _SET_DEVICEID     8
+#define _SET_WIFI         8
+#define _SET_ACCOUNT      9
+#define _SET_DEVICEID     10
 // --- System ---
-#define _SET_UPDATE       9
-#define _SET_FACTORY      10
+#define _SET_UPDATE       11
+#define _SET_FACTORY      12
 // --- Diagnostyka ---
-#define _SET_SCREENTEST   11
-#define _SET_CAMTEST      12
-#define _SET_KEYTEST      13
-#define _SET_KEYSCAN      14
-#define _SET_PINDRIVER    15
-#define _SET_BATTERY      16
+#define _SET_SCREENTEST   13
+#define _SET_CAMTEST      14
+#define _SET_KEYTEST      15
+#define _SET_KEYSCAN      16
+#define _SET_PINDRIVER    17
+#define _SET_BATTERY      18
 
 // Wspolrzedne Y - 4 widoczne, scrollowanie
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -228,7 +256,19 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         snprintf(lines[_SET_BRIGHTNESS], sizeof(lines[0]), "%s%s %s", prefix,
                  T("Jasnosc:  ", "Bright:   ", "Hell:     "), bar);
     }
-    // 1: Jezyk
+    // 1: Obrot ekranu 180
+    {
+        prefix[0] = (cursor == _SET_ROTATION) ? '>' : ' ';
+        snprintf(lines[_SET_ROTATION], sizeof(lines[0]), "%s%s [%-10s]", prefix,
+                 T("Obrot:    ", "Rotate:   ", "Drehung:  "), kalkSettings.rotate180 ? "180" : "0");
+    }
+    // 2: Kamera (WB + jasnosc)
+    {
+        prefix[0] = (cursor == _SET_CAMERA) ? '>' : ' ';
+        snprintf(lines[_SET_CAMERA], sizeof(lines[0]), "%s%s",
+                 prefix, T("Kamera...", "Camera...", "Kamera..."));
+    }
+    // 3: Jezyk
     {
         prefix[0] = (cursor == _SET_LANGUAGE) ? '>' : ' ';
         static const char* const _LANG_NAMES[3] = {"Polski", "English", "Deutsch"};
@@ -412,6 +452,166 @@ static void _editBrightness(U8G2 &d) {
             kalkSaveSettings();   // persist
             _setWaitRelease();
             return;
+        }
+
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Edycja: Obrot ekranu o 180 stopni
+// ---------------------------------------------------------------------------
+static void _editRotation(U8G2 &d) {
+    bool val = kalkSettings.rotate180;
+    _setWaitRelease();
+
+    while (true) {
+        if (_panicRequested) return;
+        kalkSettings.rotate180 = val;
+        kalkApplyRotation(d);   // podglad na zywo, jak przy jasnosci
+
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 10, T("Obrot ekranu:", "Screen rotation:", "Bildschirmdrehung:"));
+        d.drawHLine(0, 12, 256);
+        d.drawStr(2, 35, val ? "[180]" : "[0  ]");
+        d.drawHLine(0, 57, 256);
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 63, T("< / > przelacz   OK: zatwierdz", "< / > toggle   OK: confirm", "< / > umschalten OK: bestaetigen"));
+        d.sendBuffer();
+
+        if (_setBtn(BTN_LEFT) || _setBtn(BTN_RIGHT)) {
+            val = !val;
+        } else if (_setBtn(BTN_OK)) {
+            kalkSettings.rotate180 = val;
+            kalkApplyRotation(d);
+            kalkSaveSettings();   // persist
+            _setWaitRelease();
+            return;
+        }
+
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Edycja: Kamera (balans bieli + korekta jasnosci), z zywym podgladem —
+// pomaga w trudnym oswietleniu i na plytkach ze starszym auto-AWB/AEC.
+// Wlasna, uproszczona kopia dithering-podgladu z _setCamPreviewLoop (bez
+// paska ostrosci — tu nie jest potrzebny), zeby miec wlasny prawy panel.
+// ---------------------------------------------------------------------------
+static void _editCameraTuning(U8G2 &d) {
+    uint8_t wbVal = kalkSettings.camWbMode;
+    int8_t  brVal = kalkSettings.camBrightness;
+    int field = 0; // 0 = balans bieli, 1 = jasnosc
+    _setWaitRelease();
+
+    static const char* const _WB_NAMES_PL[5] = {"Auto", "Sloneczny", "Pochmurno", "Biuro", "Dom"};
+    static const char* const _WB_NAMES_EN[5] = {"Auto", "Sunny", "Cloudy", "Office", "Home"};
+    static const char* const _WB_NAMES_DE[5] = {"Auto", "Sonnig", "Bewoelkt", "Buero", "Zuhause"};
+
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 32, T("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau..."));
+    d.sendBuffer();
+
+    if (!camBeginPreview()) {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 14, T("=== Kamera ===", "=== Camera ===", "=== Kamera ==="));
+        d.drawHLine(0, 16, 256);
+        d.drawStr(2, 32, T("Init NIEUDANY", "Init FAILED", "Init FEHLGESCHLAGEN"));
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(2, 62, T("< = wyjscie", "< = exit", "< = beenden"));
+        d.sendBuffer();
+        _setWaitRelease();
+        while (true) {
+            if (_panicRequested) return;
+            if (_setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) { _setWaitRelease(); return; }
+            delay(20);
+        }
+    }
+
+    sensor_t* s = esp_camera_sensor_get();
+
+    static const int PV_W = 160, PV_H = 64;
+    static const int XBM_STRIDE = (PV_W + 7) / 8;
+    static uint8_t xbm[XBM_STRIDE * PV_H];
+    static const uint8_t bayer4[4][4] = {
+        {  0,  8,  2, 10},
+        { 12,  4, 14,  6},
+        {  3, 11,  1,  9},
+        { 15,  7, 13,  5}
+    };
+
+    while (true) {
+        if (_panicRequested) { camEnd(); return; }
+
+        if (s) {
+            s->set_wb_mode(s, wbVal);
+            s->set_brightness(s, brVal);
+        }
+
+        camera_fb_t* fb = esp_camera_fb_get();
+        if (fb && fb->buf && fb->width >= PV_W && fb->height >= PV_H) {
+            const int sw = fb->width, sh = fb->height;
+            const int row0 = (sh - PV_H) / 2;
+            memset(xbm, 0, sizeof(xbm));
+            for (int y = 0; y < PV_H; y++) {
+                const uint8_t* row  = fb->buf + (size_t)(row0 + y) * sw;
+                uint8_t*       xrow = xbm + (size_t)y * XBM_STRIDE;
+                const uint8_t* brow = bayer4[y & 3];
+                for (int x = 0; x < PV_W; x++) {
+                    uint8_t thr = (uint8_t)(brow[x & 3] * 16);
+                    if (row[x] > thr) xrow[x >> 3] |= (1 << (x & 7));
+                }
+            }
+        }
+        if (fb) esp_camera_fb_return(fb);
+
+        d.clearBuffer();
+        d.drawXBM(0, 0, PV_W, PV_H, xbm);
+        d.drawFrame(0, 0, PV_W, PV_H);
+
+        d.setFont(u8g2_font_5x7_tf);
+        d.drawStr(166, 8, T("KAMERA", "CAMERA", "KAMERA"));
+
+        const char* const* wbNames = (kalkSettings.language == 0) ? _WB_NAMES_PL
+                                    : (kalkSettings.language == 1) ? _WB_NAMES_EN : _WB_NAMES_DE;
+        char line[24];
+        snprintf(line, sizeof(line), "%cWB: %s", field == 0 ? '>' : ' ', wbNames[wbVal]);
+        d.drawStr(166, 22, line);
+        snprintf(line, sizeof(line), "%cJasn: %+d", field == 1 ? '>' : ' ', brVal);
+        d.drawStr(166, 34, line);
+
+        d.setFont(u8g2_font_4x6_tf);
+        d.drawStr(166, 48, T("UP/DN pole", "UP/DN field", "UP/DN Feld"));
+        d.drawStr(166, 56, T("</> zmien", "</> change", "</> aendern"));
+        d.drawStr(2, 63, T("OK=zapisz  CCE=anuluj", "OK=save  CCE=cancel", "OK=speichern CCE=abbr."));
+        d.sendBuffer();
+
+        if (_setBtn(BTN_OK)) {
+            kalkSettings.camWbMode     = wbVal;
+            kalkSettings.camBrightness = brVal;
+            kalkSaveSettings();   // persist
+            camEnd();
+            _setWaitRelease();
+            return;
+        }
+        if (inputKeyConsume(KEY_CCE)) {
+            camEnd();   // odrzuc zmiany (kalkSettings nietkniete)
+            _setWaitRelease();
+            return;
+        }
+        if (_setBtn(BTN_UP))   field = 0;
+        if (_setBtn(BTN_DOWN)) field = 1;
+        if (_setBtn(BTN_LEFT)) {
+            if (field == 0) wbVal = (wbVal == 0) ? 4 : wbVal - 1;
+            else            brVal = (brVal <= -2) ? -2 : brVal - 1;
+        }
+        if (_setBtn(BTN_RIGHT)) {
+            if (field == 0) wbVal = (wbVal >= 4) ? 0 : wbVal + 1;
+            else            brVal = (brVal >= 2) ? 2 : brVal + 1;
         }
 
         delay(20);
@@ -1524,6 +1724,8 @@ void showSettings(U8G2 &display) {
             _setWaitRelease();
             switch (cursor) {
                 case _SET_BRIGHTNESS: _editBrightness(display); break;
+                case _SET_ROTATION:   _editRotation(display);   break;
+                case _SET_CAMERA:     _editCameraTuning(display); break;
                 case _SET_LANGUAGE:   _editLanguage(display);   break;
                 case _SET_SOLVEMODE:  _editSolveMode(display);  break;
                 case _SET_AUTOSLEEP:  _editAutoSleep(display);  break;

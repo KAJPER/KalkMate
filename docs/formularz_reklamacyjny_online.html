@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KalkMate — Formularz reklamacyjny online</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --black:#0a0a0a;
+  --white:#ffffff;
+  --gray1:#1a1a1a;
+  --gray2:#333;
+  --gray3:#555;
+  --gray4:#888;
+  --gray5:#bbb;
+  --gray6:#e8e8e8;
+  --gray7:#f7f7f5;
+  --accent:#D8FF3D;
+  --err:#c0392b;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
+}
+
+body{
+  font-family:var(--sans);
+  background:var(--gray7);
+  color:var(--black);
+  line-height:1.5;
+  padding:32px 16px 80px;
+}
+
+.wrap{ max-width:760px; margin:0 auto; }
+
+/* HEADER */
+header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  border-bottom:3px solid var(--black);
+  padding-bottom:10px;
+  margin-bottom:8px;
+  flex-wrap:wrap;
+  gap:10px;
+}
+.brand{
+  font-family:var(--mono);
+  font-size:30px;
+  font-weight:700;
+  letter-spacing:-1px;
+  line-height:1;
+}
+.brand span{
+  font-size:11px;
+  font-weight:400;
+  color:var(--gray3);
+  display:block;
+  letter-spacing:1px;
+  margin-top:3px;
+  font-family:var(--sans);
+  text-transform:uppercase;
+}
+.doc-title{ font-size:10px; color:var(--gray3); text-align:right; letter-spacing:0.5px; line-height:1.6; }
+.doc-title b{ color:var(--black); font-size:13px; display:block; }
+
+.intro{
+  font-size:12.5px;
+  color:var(--gray2);
+  background:#fff;
+  border:1px solid var(--gray6);
+  border-left:3px solid var(--black);
+  padding:12px 14px;
+  margin:18px 0 22px;
+}
+.intro b{ display:block; margin-bottom:4px; }
+
+/* CARD / SECTION */
+.card{
+  background:#fff;
+  border:1px solid var(--gray6);
+  border-radius:6px;
+  padding:20px 22px;
+  margin-bottom:18px;
+}
+.sec-title{
+  font-family:var(--mono);
+  font-weight:700;
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:16px;
+}
+.sec-num{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;height:20px;
+  background:var(--black);
+  color:#fff;
+  font-size:11px;
+  border-radius:3px;
+  flex:0 0 auto;
+}
+
+.grid{ display:grid; gap:14px; }
+.grid-2{ grid-template-columns:1fr 1fr; }
+.grid-3{ grid-template-columns:1fr 1fr 1fr; }
+@media (max-width:600px){ .grid-2,.grid-3{ grid-template-columns:1fr; } }
+
+.field label{
+  display:block;
+  font-size:10.5px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:0.4px;
+  color:var(--gray3);
+  margin-bottom:5px;
+}
+.field label .req{ color:var(--err); margin-left:2px; }
+.field .hint{ font-size:10px; color:var(--gray4); margin-top:4px; }
+
+input[type=text],input[type=email],input[type=tel],input[type=date],select,textarea{
+  width:100%;
+  font-family:var(--sans);
+  font-size:13px;
+  padding:9px 10px;
+  border:1.5px solid var(--gray5);
+  border-radius:4px;
+  background:#fff;
+  color:var(--black);
+}
+textarea{ resize:vertical; min-height:90px; }
+input:focus,select:focus,textarea:focus{
+  outline:none;
+  border-color:var(--black);
+  box-shadow:0 0 0 3px rgba(10,10,10,0.08);
+}
+input.invalid,textarea.invalid,select.invalid{ border-color:var(--err); }
+
+.radio-group{ display:flex; flex-direction:column; gap:8px; }
+.radio-opt{
+  display:flex; align-items:flex-start; gap:8px;
+  border:1.5px solid var(--gray6);
+  border-radius:4px;
+  padding:9px 11px;
+  cursor:pointer;
+  font-size:12.5px;
+  transition:border-color .15s, background .15s;
+}
+.radio-opt:hover{ border-color:var(--gray4); }
+.radio-opt input{ margin-top:2px; accent-color:var(--black); flex:0 0 auto; }
+.radio-opt.checked{ border-color:var(--black); background:var(--gray7); font-weight:600; }
+.radio-opt .sub{ display:block; font-weight:400; color:var(--gray4); font-size:10.5px; margin-top:2px; }
+
+.check-opt{
+  display:flex; align-items:center; gap:8px;
+  font-size:12.5px;
+  margin-bottom:8px;
+}
+.check-opt input{ accent-color:var(--black); width:15px; height:15px; }
+
+.file-drop{
+  border:1.5px dashed var(--gray5);
+  border-radius:4px;
+  padding:16px;
+  text-align:center;
+  font-size:12px;
+  color:var(--gray4);
+  cursor:pointer;
+}
+.file-drop:hover{ border-color:var(--black); color:var(--gray2); }
+#fileList{ margin-top:8px; font-size:11px; color:var(--gray3); }
+#fileList div{ padding:2px 0; }
+
+.declaration-box{
+  background:var(--gray7);
+  border:1px solid var(--gray6);
+  border-radius:4px;
+  padding:12px 14px;
+  font-size:11.5px;
+  color:var(--gray2);
+  margin-bottom:14px;
+  line-height:1.6;
+}
+
+.seller-note{
+  font-size:10.5px;
+  color:var(--gray4);
+  border-top:1px solid var(--gray6);
+  padding-top:10px;
+  margin-top:4px;
+}
+
+/* ACTIONS */
+.actions{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-top:6px;
+}
+button{
+  font-family:var(--mono);
+  font-weight:700;
+  font-size:13px;
+  letter-spacing:0.3px;
+  border:none;
+  border-radius:5px;
+  padding:13px 22px;
+  cursor:pointer;
+}
+.btn-primary{ background:var(--black); color:#fff; }
+.btn-primary:hover{ background:#000; opacity:0.88; }
+.btn-secondary{ background:#fff; color:var(--black); border:1.5px solid var(--black); }
+.btn-secondary:hover{ background:var(--gray7); }
+#statusMsg{ font-size:11.5px; color:var(--gray3); margin-top:10px; }
+#statusMsg.ok{ color:#0a7d33; }
+#statusMsg.err{ color:var(--err); }
+
+footer{
+  text-align:center;
+  font-size:10px;
+  color:var(--gray4);
+  margin-top:30px;
+}
+
+@media print{
+  body{ background:#fff; padding:0; }
+  .actions,.file-drop,footer{ display:none; }
+  .card{ border:none; padding:0; page-break-inside:avoid; }
+  input,select,textarea{ border:1px solid #999; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">KalkMate</div>
+    <div class="doc-title"><b>FORMULARZ REKLAMACYJNY</b>wypełnij online</div>
+  </header>
+
+  <div class="intro">
+    <b>Jak to działa</b>
+    Wypełnij poniższy formularz, a po kliknięciu „Wyślij zgłoszenie" otworzy się Twój program pocztowy z gotową,
+    wypełnioną wiadomością do <b>kontakt@kalkmate.pl</b> — wystarczy dołączyć zdjęcia/nagranie wady (jeśli je masz)
+    i wysłać. Możesz też wydrukować wypełniony formularz przyciskiem „Drukuj".
+  </div>
+
+  <form id="reklForm" novalidate>
+
+    <div class="card">
+      <div class="sec-title"><span class="sec-num">1</span>Dane zgłaszającego</div>
+      <div class="grid grid-2">
+        <div class="field">
+          <label>Imię i nazwisko<span class="req">*</span></label>
+          <input type="text" name="imie" required>
+        </div>
+        <div class="field">
+          <label>Telefon kontaktowy<span class="req">*</span></label>
+          <input type="tel" name="telefon" required>
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Adres (ulica, nr, kod pocztowy, miejscowość)<span class="req">*</span></label>
+          <input type="text" name="adres" required>
+        </div>
+        <div class="field">
+          <label>E-mail<span class="req">*</span></label>
+          <input type="email" name="email" required>
+        </div>
+        <div class="field">
+          <label>Numer konta do zwrotu <span style="text-transform:none;font-weight:400">(jeśli dotyczy zwrotu pieniędzy)</span></label>
+          <input type="text" name="konto">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title"><span class="sec-num">2</span>Dane zakupu</div>
+      <div class="grid grid-3">
+        <div class="field">
+          <label>Numer zamówienia<span class="req">*</span></label>
+          <input type="text" name="zamowienie" required>
+        </div>
+        <div class="field">
+          <label>Data zakupu<span class="req">*</span></label>
+          <input type="date" name="dataZakupu" required>
+        </div>
+        <div class="field">
+          <label>Dowód zakupu</label>
+          <input type="text" name="dowod" placeholder="np. faktura nr FV/2026/...">
+        </div>
+        <div class="field">
+          <label>Numer seryjny urządzenia</label>
+          <input type="text" name="sn" placeholder="jeśli znany">
+        </div>
+        <div class="field">
+          <label>Wersja firmware</label>
+          <input type="text" name="fw" placeholder="jeśli znana, np. 1.7.2">
+        </div>
+        <div class="field">
+          <label>Data stwierdzenia wady<span class="req">*</span></label>
+          <input type="date" name="dataWady" required>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title"><span class="sec-num">3</span>Opis wady / niezgodności</div>
+      <div class="field">
+        <label>Co się stało — opisz dokładnie usterkę, okoliczności wystąpienia i czy jest odtwarzalna<span class="req">*</span></label>
+        <textarea name="opis" required placeholder="Np.: Urządzenie nie włącza się od wczoraj / ekran jest pusty po naciśnięciu ON / kamera nie robi zdjęć / urządzenie zablokowało się po błędnym kodzie / inne..."></textarea>
+        <div class="hint">Podaj też, czy próbowano już czegoś (np. ładowania, resetu) i z jakim skutkiem.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title"><span class="sec-num">4</span>Żądanie reklamującego</div>
+      <div class="radio-group" id="zadanieGroup">
+        <label class="radio-opt">
+          <input type="radio" name="zadanie" value="Naprawa urządzenia" required>
+          <span>Naprawa urządzenia</span>
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="zadanie" value="Wymiana na nowy egzemplarz" required>
+          <span>Wymiana na nowy egzemplarz</span>
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="zadanie" value="Obniżenie ceny" required>
+          <span>Obniżenie ceny<span class="sub">Sprzedawca zaproponuje kwotę po ocenie wady</span></span>
+        </label>
+        <label class="radio-opt">
+          <input type="radio" name="zadanie" value="Odstąpienie od umowy / zwrot pieniędzy" required>
+          <span>Odstąpienie od umowy / zwrot pieniędzy</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title"><span class="sec-num">5</span>Załączniki</div>
+      <label class="file-drop" for="fileInput">
+        📎 Wybierz zdjęcia / nagranie wady oraz kopię dowodu zakupu
+        <div style="font-size:10.5px;margin-top:4px;color:var(--gray5)">(pliki zostaną dołączone ręcznie — program pocztowy nie robi tego automatycznie, przypomnimy o tym przed wysyłką)</div>
+      </label>
+      <input type="file" id="fileInput" multiple style="display:none">
+      <div id="fileList"></div>
+    </div>
+
+    <div class="card">
+      <div class="declaration-box">
+        <label class="check-opt">
+          <input type="checkbox" name="oswiadczenie" required>
+          Oświadczam, że opisana wada nie powstała z mojej winy (np. na skutek zalania, upadku, samowolnej
+          ingerencji w urządzenie) i zgłaszam ją zgodnie z warunkami gwarancji / rękojmi określonymi w Regulaminie
+          sklepu kalkmate.pl.
+        </label>
+        <label class="check-opt">
+          <input type="checkbox" name="rodo" required>
+          Wyrażam zgodę na przetwarzanie podanych danych osobowych w celu rozpatrzenia niniejszej reklamacji.
+        </label>
+      </div>
+      <div class="seller-note">
+        <b>Sprzedawca:</b> KAJPA Kacper Popko, ul. Zastawie I 37, 16-070 Choroszcz · NIP: 9662222951 · REGON: 545011444<br>
+        Reklamacje rozpatrywane są w terminie do 14 dni kalendarzowych od daty zgłoszenia. Gwarancja: 24 miesiące od daty zakupu.
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="btn-primary">Wyślij zgłoszenie →</button>
+      <button type="button" class="btn-secondary" onclick="window.print()">Drukuj wypełniony formularz</button>
+    </div>
+    <div id="statusMsg"></div>
+  </form>
+
+  <footer>KalkMate — formularz reklamacyjny online · kontakt@kalkmate.pl</footer>
+</div>
+
+<script>
+const form = document.getElementById('reklForm');
+const fileInput = document.getElementById('fileInput');
+const fileList = document.getElementById('fileList');
+
+fileInput.addEventListener('change', () => {
+  fileList.innerHTML = '';
+  Array.from(fileInput.files).forEach(f => {
+    const d = document.createElement('div');
+    d.textContent = '✓ ' + f.name;
+    fileList.appendChild(d);
+  });
+});
+
+document.querySelectorAll('#zadanieGroup input[type=radio]').forEach(r => {
+  r.addEventListener('change', () => {
+    document.querySelectorAll('.radio-opt').forEach(o => o.classList.remove('checked'));
+    r.closest('.radio-opt').classList.add('checked');
+  });
+});
+
+function clearInvalid(){
+  form.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
+}
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  clearInvalid();
+  const status = document.getElementById('statusMsg');
+
+  const requiredFields = form.querySelectorAll('[required]');
+  let firstInvalid = null;
+  let valid = true;
+
+  requiredFields.forEach(el => {
+    let ok = true;
+    if (el.type === 'radio') {
+      ok = form.querySelector(`input[name="${el.name}"]:checked`) !== null;
+    } else if (el.type === 'checkbox') {
+      ok = el.checked;
+    } else {
+      ok = el.value.trim() !== '';
+    }
+    if (!ok) {
+      valid = false;
+      if (el.type !== 'radio') el.classList.add('invalid');
+      else el.closest('.radio-group').style.outline = '1.5px solid var(--err)';
+      if (!firstInvalid) firstInvalid = el;
+    }
+  });
+
+  if (!valid) {
+    status.textContent = 'Uzupełnij wymagane pola oznaczone gwiazdką (*) przed wysłaniem.';
+    status.className = 'err';
+    if (firstInvalid) firstInvalid.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+
+  const d = Object.fromEntries(new FormData(form).entries());
+
+  const body = [
+    'FORMULARZ REKLAMACYJNY — KalkMate',
+    '',
+    '1. DANE ZGŁASZAJĄCEGO',
+    'Imię i nazwisko: ' + d.imie,
+    'Telefon: ' + d.telefon,
+    'Adres: ' + d.adres,
+    'E-mail: ' + d.email,
+    'Numer konta do zwrotu: ' + (d.konto || '-'),
+    '',
+    '2. DANE ZAKUPU',
+    'Numer zamówienia: ' + d.zamowienie,
+    'Data zakupu: ' + d.dataZakupu,
+    'Dowód zakupu: ' + (d.dowod || '-'),
+    'Numer seryjny: ' + (d.sn || '-'),
+    'Wersja firmware: ' + (d.fw || '-'),
+    'Data stwierdzenia wady: ' + d.dataWady,
+    '',
+    '3. OPIS WADY',
+    d.opis,
+    '',
+    '4. ŻĄDANIE',
+    d.zadanie,
+    '',
+    '5. ZAŁĄCZNIKI',
+    fileInput.files.length
+      ? 'Do wiadomości zostaną ręcznie dołączone: ' + Array.from(fileInput.files).map(f => f.name).join(', ')
+      : 'Brak załączonych plików — proszę dołączyć zdjęcia/nagranie wady ręcznie.',
+    '',
+    'Oświadczam, że opisana wada nie powstała z mojej winy i zgłaszam ją zgodnie z warunkami gwarancji / rękojmi',
+    'określonymi w Regulaminie sklepu kalkmate.pl.'
+  ].join('\n');
+
+  const subject = encodeURIComponent('Reklamacja — zamówienie ' + d.zamowienie);
+  const mailto = 'mailto:kontakt@kalkmate.pl?subject=' + subject + '&body=' + encodeURIComponent(body);
+
+  status.textContent = fileInput.files.length
+    ? 'Otwieram Twój program pocztowy — pamiętaj o ręcznym dołączeniu wybranych plików przed wysłaniem!'
+    : 'Otwieram Twój program pocztowy z gotową wiadomością...';
+  status.className = 'ok';
+
+  window.location.href = mailto;
+});
+</script>
+</body>
+</html>

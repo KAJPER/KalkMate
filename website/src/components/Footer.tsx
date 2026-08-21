@@ -19,6 +19,7 @@ const content: Record<Locale, {
     terms: string;
     privacy: string;
     ce: string;
+    complaint: string;
   };
   fields: {
     seller: string;
@@ -50,6 +51,7 @@ const content: Record<Locale, {
       terms: "Regulamin",
       privacy: "Polityka prywatności",
       ce: "Deklaracja zgodności CE",
+      complaint: "Formularz reklamacyjny",
     },
     fields: {
       seller: "Sprzedawca",
@@ -81,6 +83,7 @@ const content: Record<Locale, {
       terms: "Terms of Service",
       privacy: "Privacy Policy",
       ce: "CE Declaration of Conformity",
+      complaint: "Complaint form",
     },
     fields: {
       seller: "Seller",
@@ -112,6 +115,7 @@ const content: Record<Locale, {
       terms: "AGB",
       privacy: "Datenschutzerklärung",
       ce: "CE-Konformitätserklärung",
+      complaint: "Reklamationsformular",
     },
     fields: {
       seller: "Verkäufer",
@@ -167,6 +171,7 @@ export default function Footer({ lang = "pl" }: { lang?: Locale }) {
             <ul className="space-y-2.5">
               <li><a href="/regulamin" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">{t.links.terms}</a></li>
               <li><a href="/polityka-prywatnosci" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">{t.links.privacy}</a></li>
+              <li><a href="/reklamacja" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">{t.links.complaint}</a></li>
               <li><a href="/docs/ce-declaration.pdf" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]" target="_blank" rel="noopener noreferrer">{t.links.ce}</a></li>
               <li>
                 <a href="mailto:kontakt@kalkmate.pl" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">

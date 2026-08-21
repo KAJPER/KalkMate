@@ -32,6 +32,11 @@
 #include <esp_camera.h>
 #include "input.h"   // _inMcp (MCP23017) dla PWDN/RESET
 
+// kalkSettings jest zdefiniowany dopiero w settings_screen.h, ktory jest
+// includowany PO camera.h — analogicznie do otaGetLanguage()/_accGetUnlockCode().
+extern uint8_t camGetWbMode();      // 0=Auto,1=Sloneczny,2=Pochmurno,3=Biuro,4=Dom
+extern int8_t  camGetBrightness();  // -2..2
+
 #ifdef KALK_HW_LEGACY
   // Stary PCB nie ma kamery — wszystkie pinout-y do -1, camBegin zwraca false
   #define CAM_PIN_VSYNC     -1
@@ -132,13 +137,13 @@ static void _camFillCommonConfig(camera_config_t& config) {
 static void _camApplyCommonSensor() {
     sensor_t* s = esp_camera_sensor_get();
     if (!s) return;
-    s->set_brightness(s,    0);   // -2..2
+    s->set_brightness(s,    camGetBrightness());  // -2..2, korekta z ustawien
     s->set_contrast(s,      0);   // -2..2
     s->set_saturation(s,    0);   // -2..2
     s->set_special_effect(s, 0);  // 0=none, 1=negative, 2=grayscale...
     s->set_whitebal(s,      1);   // AWB on - elimnuje zielony tint
     s->set_awb_gain(s,      1);
-    s->set_wb_mode(s,       0);   // 0=auto
+    s->set_wb_mode(s,       camGetWbMode());  // 0=auto, wg ustawien
     s->set_exposure_ctrl(s, 1);   // AEC on - auto-ekspozycja
     s->set_aec2(s,          1);   // AEC algorithm v2 (lepszy)
     s->set_ae_level(s,      0);   // -2..2

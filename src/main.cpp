@@ -35,7 +35,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.8.3"
+#define FW_VERSION "1.8.6"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -1051,6 +1051,7 @@ void setup() {
         uint16_t c = (uint16_t)kalkSettings.brightness * 7;  // max 15*7=105
         if (c < 25) c = 25;   // minimum zeby ekran byl widoczny
         u8g2.setContrast((uint8_t)c);
+        kalkApplyRotation(u8g2);   // obrot ekranu 180 (Ustawienia -> Obrot)
         Serial.printf("[CFG] bright=%u lang=%u solveMode=%u sleep=%d/%u\n",
                       kalkSettings.brightness, kalkSettings.language,
                       kalkSettings.solveMode, (int)kalkSettings.autoSleep,
