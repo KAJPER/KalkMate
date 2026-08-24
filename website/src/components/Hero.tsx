@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { type ReactNode } from "react";
 import { type Locale } from "@/lib/i18n";
 
@@ -231,15 +230,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
             <div className="absolute -bottom-2 -left-2 w-5 h-5 border-l border-b border-[#D8FF3D]" />
             <div className="absolute -bottom-2 -right-2 w-5 h-5 border-r border-b border-[#D8FF3D]" />
 
-            <div className="absolute inset-0 overflow-hidden">
-              <Image
-                src="/KalkMate3.png"
-                alt={t.imageAlt}
-                fill
-                quality={60}
-                sizes="(min-width: 1400px) 460px, 40vw"
-                className="object-cover grayscale-[10%] contrast-[1.05]"
-              />
+            <div className="absolute inset-0 overflow-hidden bg-[#0B0B0B]">
               <div className="hidden lg:block absolute inset-0 bg-gradient-to-t from-[#0B0B0B] via-transparent to-transparent" />
             </div>
 

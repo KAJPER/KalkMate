@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import Image from "next/image";
 
 const timeline = [
   { date: "Grudzień 2025", label: "Projekt PCB ukończony", done: true },
@@ -58,52 +57,9 @@ export default function Prototype() {
               key={n}
               className="relative aspect-[4/3] rounded-xl border-2 border-dashed border-gray-300 dark:border-[#3F4147] bg-[#F5F5F5] dark:bg-[#313338] flex flex-col items-center justify-center overflow-hidden"
             >
-              {n === 0 ? (
-                <>
-                  <Image
-                    src="/KalkMate4.png"
-                    alt="Prototyp v3.0 - pierwszy działający prototyp kalkulatora KalkMate"
-                    fill
-                    className="object-cover"
-                    quality={85}
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    loading="lazy"
-                  />
-                  <span className="absolute bottom-2 left-0 right-0 text-center text-xs text-white drop-shadow-md">
-                    {label}
-                  </span>
-                </>
-              ) : n === 2 ? (
-                <>
-                  <Image
-                    src="/KalkMate2.png"
-                    alt="Urządzenie docelowe - finalna wersja kalkulatora KalkMate"
-                    fill
-                    className="object-cover object-[center_70%]"
-                    quality={85}
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    loading="lazy"
-                  />
-                  <span className="absolute bottom-2 left-0 right-0 text-center text-xs text-white drop-shadow-md">
-                    {label}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Image
-                    src="/KalkMate5.png"
-                    alt="Płytka PCB - elektronika kalkulatora KalkMate"
-                    fill
-                    className="object-cover"
-                    quality={85}
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    loading="lazy"
-                  />
-                  <span className="absolute bottom-2 left-0 right-0 text-center text-xs text-white drop-shadow-md">
-                    {label}
-                  </span>
-                </>
-              )}
+              <span className="text-sm text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40">
+                {label}
+              </span>
             </div>
           ))}
         </motion.div>

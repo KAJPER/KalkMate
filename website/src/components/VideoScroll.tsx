@@ -66,6 +66,9 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
     if (!section) return;
 
     const startLoading = () => {
+      // Product-photo frames temporarily disabled — do not load/draw them.
+      return;
+      // eslint-disable-next-line no-unreachable
       if (framesRef.current.length > 0) return;
       const imgs: HTMLImageElement[] = new Array(FRAME_COUNT);
 

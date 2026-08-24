@@ -82,7 +82,6 @@ export async function POST(request: NextRequest) {
             product_data: {
               name: "KalkMate AI Chat - Subskrypcja miesięczna",
               description: "Nielimitowany dostęp do AI chatbota KalkMate",
-              images: ["https://kalkmate.pl/KalkMate.png"],
             },
             unit_amount: SUBSCRIPTION_PRICING.REGULAR_MONTH, // 15 zł
             recurring: {

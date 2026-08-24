@@ -21,7 +21,6 @@ export function productJsonLd(locale: Locale) {
     "@context": "https://schema.org",
     "@type": "Product",
     name: productName[locale],
-    image: `${SITE_URL}/KalkMate.png`,
     description: productDescription[locale],
     sku: "KM-V3",
     brand: { "@type": "Brand", name: "KalkMate" },
@@ -88,7 +87,6 @@ export function organizationJsonLd(): string {
     name: "KalkMate",
     legalName: "KAJPA Kacper Popko",
     url: SITE_URL,
-    logo: `${SITE_URL}/KalkMate.png`,
     email: "kontakt@kalkmate.pl",
     telephone: "+48600580888",
     address: {

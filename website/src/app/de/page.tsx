@@ -52,16 +52,12 @@ export const metadata: Metadata = {
     locale: "de_DE",
     url: `${SITE_URL}/de`,
     siteName: "KalkMate",
-    images: [
-      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — KI-Taschenrechner" },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "KalkMate — KI-Taschenrechner",
     description:
       "Foto → KI → Lösung. Der intelligente Taschenrechner, der Mathe-, Physik-, Chemie- und Biologie-Aufgaben löst.",
-    images: ["/KalkMate.png"],
   },
   robots: {
     index: true,

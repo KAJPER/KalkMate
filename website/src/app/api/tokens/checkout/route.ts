@@ -82,7 +82,6 @@ export async function POST(request: NextRequest) {
             product_data: {
               name: `KalkMate — ${pack.label}`,
               description: "Doładowanie tokenów AI dla kalkulatora KalkMate",
-              images: ["https://kalkmate.pl/KalkMate.png"],
             },
             unit_amount: pack.priceEurCents,
           },

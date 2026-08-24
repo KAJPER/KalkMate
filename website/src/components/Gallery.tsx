@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { type Locale } from "@/lib/i18n";
 
@@ -167,15 +166,8 @@ export default function Gallery({ lang = "pl" }: { lang?: Locale }) {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.2 }}
               transition={{ duration: 0.6, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
-              className={`relative overflow-hidden border border-[rgba(242,237,227,0.10)] group ${s.span}`}
+              className={`relative overflow-hidden border border-[rgba(242,237,227,0.10)] bg-[#1a1a1a] group ${s.span}`}
             >
-              <Image
-                src={s.src}
-                alt={s.caption}
-                fill
-                sizes="(max-width: 768px) 100vw, 50vw"
-                className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
-              />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0B]/85 via-transparent to-transparent" />
               <figcaption className="absolute bottom-0 left-0 right-0 p-4 lg:p-5 flex items-end justify-between gap-3">
                 <div>

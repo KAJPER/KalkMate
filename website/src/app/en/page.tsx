@@ -49,16 +49,12 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: `${SITE_URL}/en`,
     siteName: "KalkMate",
-    images: [
-      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — AI Calculator with Camera" },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "KalkMate — AI Calculator with Camera",
     description:
       "Photo → AI → Solution. The AI calculator with camera that solves math, physics, chemistry and biology problems.",
-    images: ["/KalkMate.png"],
   },
   robots: {
     index: true,

@@ -71,16 +71,12 @@ export const metadata: Metadata = {
     locale: "pl_PL",
     url: "https://kalkmate.pl",
     siteName: "KalkMate",
-    images: [
-      { url: "/KalkMate.png", width: 1200, height: 630, alt: "KalkMate — Kalkulator AI" },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "KalkMate — Kalkulator AI",
     description:
       "Kalkulator z AI. Zrób zdjęcie zadania — dostaniesz rozwiązanie. Matematyka, fizyka, chemia, biologia.",
-    images: ["/KalkMate.png"],
   },
   robots: {
     index: true,

@@ -111,7 +111,6 @@ export async function POST(request: NextRequest) {
             product_data: {
               name: `KalkMate AI Chat - ${planName}`,
               description: "Nielimitowany dostęp do AI chatbota KalkMate",
-              images: ["https://kalkmate.pl/KalkMate.png"],
             },
             unit_amount: priceAmount,
             recurring: {

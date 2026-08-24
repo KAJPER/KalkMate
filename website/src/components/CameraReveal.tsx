@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import Image from "next/image";
 
 export default function CameraReveal() {
   const [sliderPosition, setSliderPosition] = useState(50);
@@ -67,33 +66,13 @@ export default function CameraReveal() {
             onTouchEnd={handleEnd}
           >
             {/* Image with camera revealed */}
-            <div className="absolute inset-0">
-              <Image
-                src="/kalkulator-kalkmate-kamera-odkryta.png"
-                alt="Kalkulator KalkMate z odkrytą kamerą - widoczna pozycja kamery"
-                fill
-                className="object-cover"
-                quality={90}
-                priority
-                sizes="(max-width: 1200px) 100vw, 1200px"
-              />
-            </div>
+            <div className="absolute inset-0 bg-[#1a1a1a]" />
 
             {/* Image without camera (overlay) */}
             <div
-              className="absolute inset-0 overflow-hidden"
+              className="absolute inset-0 overflow-hidden bg-[#1a1a1a]"
               style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
-            >
-              <Image
-                src="/kalkulator-kalkmate-ukryta-kamera-zamknieta.png"
-                alt="Kalkulator KalkMate z ukrytą kamerą - niewidoczna dla oka"
-                fill
-                className="object-cover"
-                quality={90}
-                priority
-                sizes="(max-width: 1200px) 100vw, 1200px"
-              />
-            </div>
+            />
 
             {/* Slider handle */}
             <div
