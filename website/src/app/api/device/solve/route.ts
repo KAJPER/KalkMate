@@ -83,13 +83,13 @@ async function callOpenRouter(
         { role: "user", content },
       ],
       temperature: 0.2,
-      // OpenRouter rezerwuje srodki pod max_tokens PRZED policzeniem realnego
-      // zuzycia ("given your current in-flight requests" / "can only afford X") —
-      // przy niskim saldzie kazde takie zawyzone zadanie blokuje kolejne, mimo
-      // ze realna odpowiedz to raczej setki, nie tysiace tokenow (patrz log
-      // DeviceSolve: pelne rozwiazanie ~625 znakow). 16000 bylo naduzyciem,
-      // ktore samo w sobie wywolywalo 402 po pierwszym udanym zapytaniu.
-      max_tokens: 4096,
+      // UWAGA: OpenRouter rezerwuje srodki pod max_tokens PRZED policzeniem
+      // realnego zuzycia ("given your current in-flight requests" / "can only
+      // afford X") — przy niskim saldzie na koncie kazde zadanie z tak wysokim
+      // limitem moze znowu zaczac odbijac sie 402 (dokladnie to, co bylo
+      // naprawione obnizeniem do 4096). Trzymane na 16000 na wyrazne zyczenie —
+      // upewnij sie, ze saldo OpenRoutera jest wystarczajace.
+      max_tokens: 16000,
     }),
   });
   if (!res.ok) {
