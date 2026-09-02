@@ -56,6 +56,11 @@ const navItems = [
     icon: "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z"
   },
   {
+    href: "/admin/remote",
+    label: "Zdalna pomoc",
+    icon: "M9.75 17L15 21.75V17h4a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h4.75z"
+  },
+  {
     href: "/admin/analytics",
     label: "Analityka",
     icon: "M3 3v18h18M9 17V9m4 8V5m4 12v-4"

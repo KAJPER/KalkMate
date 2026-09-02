@@ -108,6 +108,45 @@ static uint32_t _inputLastActivity = 0;
 inline void inputActivityReset() { _inputLastActivity = millis(); }
 inline uint32_t inputLastActivity() { return _inputLastActivity; }
 
+// =====================================================================
+//  Wirtualne (zdalne) nacisniecia klawiszy — dla trybu "Zdalna pomoc"
+//  (remote_session.h). Wstrzykniety klawisz wchodzi do TEGO SAMEGO
+//  pipeline'u co fizyczny (debounce/edge/consume), wiec zdalne "kliknięcie"
+//  dziala identycznie jak prawdziwy klawisz w KAZDYM ekranie UI, bez
+//  zadnych zmian w tych ekranach.
+// =====================================================================
+static uint32_t _kalkKeyVirtualUntil[KEY_COUNT] = {0};
+
+// Symuluje przytrzymanie klawisza k przez holdMs (domyslnie 150ms — dosc
+// dlugo, zeby debounce (2 skany * 30ms) na pewno zlapal edge, ale krotko
+// zeby nie blokowac nawigacji ktoś fizycznie uzywajacej klawiatury w tym
+// samym czasie).
+inline void inputInjectKey(KalkKey k, uint32_t holdMs = 150) {
+    if (k == KEY_NONE || k >= KEY_COUNT) return;
+    _kalkKeyVirtualUntil[k] = millis() + holdMs;
+}
+
+// Stan sesji zdalnej pomocy — flaga globalna, ustawiana przez
+// _editRemoteHelp() (remote_session.h) po tym jak uzytkownik jawnie wejdzie
+// w Ustawienia -> Zdalna pomoc. inputScan() odpytuje serwer w tle gdy ta
+// flaga jest true, NIEZALEZNIE od tego jaki ekran jest akurat aktywny —
+// dzieki temu zdalny podglad/sterowanie dziala z kazdego miejsca w UI.
+static bool _remoteSessionActive = false;
+inline bool remoteSessionActive() { return _remoteSessionActive; }
+inline void remoteSessionSetActive(bool v) { _remoteSessionActive = v; }
+
+// Implementacja w remote_session.h (wlaczony w main.cpp PO input.h) — ten
+// sam wzorzec forward-deklaracji co otaGetLanguage()/camGetWbMode().
+// Wolane z inputScan() (patrz nizej), samo sie throttluje wewnetrznie
+// (nie odpytuje serwera co 30ms — tylko gdy minelo ~500ms od ostatniego).
+extern void remoteHeartbeatTick();
+
+// Dostep do globalnego obiektu u8g2 (zdefiniowanego w main.cpp) — potrzebny
+// remote_session.h zeby zlapac aktualna zawartosc ekranu (screenshot) i
+// domalowac wskaznik aktywnej sesji. Ten sam wzorzec forward-deklaracji.
+extern uint8_t* remoteGetScreenBuffer();   // u8g2.getBufferPtr() — 2048 B, 256x64 1bpp
+extern void     remoteSendBuffer();        // u8g2.sendBuffer() — wypycha bufor na ekran
+
 // === I2C / MCP23017 ===
 // Legacy (WROVER):  SDA=21, SCL=22
 // v4 (ESP32-S3):    SDA=40, SCL=39
@@ -361,6 +400,8 @@ inline void _inUpdateVirtBtns() {
         if (_kalkMap[i].pinB == _KALK_MAP_NONE) continue;
         uint16_t idx = _inPinIdx(_kalkMap[i].pinA) * 10 + _inPinIdx(_kalkMap[i].pinB);
         if (_inStatePair[idx]) keyNow[i] = true;
+        // Zdalne "nacisniecie" (Zdalna pomoc) — patrz inputInjectKey().
+        if (millis() < _kalkKeyVirtualUntil[i]) keyNow[i] = true;
     }
 
     // Wirtualne BTN_xx — derywowane z KalkKey state (po remappingu)
@@ -409,6 +450,11 @@ inline void inputScan() {
         }
     }
     _inUpdateVirtBtns();
+
+    // Zdalna pomoc: dziala z KAZDEGO ekranu, bo inputScan() jest wolane
+    // z inputBtn()/_setBtn()/_solBtn() w petli praktycznie kazdego UI.
+    // remoteHeartbeatTick() throttluje sie sam (nie robi requestu co 30ms).
+    if (_remoteSessionActive) remoteHeartbeatTick();
 }
 
 // ---------------------------------------------------------------------

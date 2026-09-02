@@ -35,7 +35,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.8.6"
+#define FW_VERSION "1.9.0"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -51,6 +51,7 @@
 #include "screen_test.h"
 #include "device_account.h"    // Rejestracja kalkulator -> serwer + status konta (przed solve_screen)
 #include "solve_screen.h"      // Rozwiazywanie zadan AI
+#include "remote_session.h"    // Zdalna pomoc: live podglad ekranu + zdalne klawisze
 #include "splash_screen.h"     // Ekran powitalny
 #include "calculator.h"        // Tryb kalkulatora + unlock code
 #include "panic.h"             // Globalny panic button (powrot do kalkulatora)
@@ -83,6 +84,12 @@ const char* _accGetUnlockCode() { return kalkSettings.aiUnlockCode; }
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI u8g2(
     U8G2_R2, /*cs=*/OLED_PIN_CS, /*dc=*/OLED_PIN_DC, /*reset=*/OLED_PIN_RST
 );
+
+// Implementacja forward-deklaracji z input.h (patrz komentarz tam) —
+// remote_session.h potrzebuje surowego bufora ekranu, ale u8g2 jest
+// zdefiniowany dopiero tutaj.
+uint8_t* remoteGetScreenBuffer() { return u8g2.getBufferPtr(); }
+void     remoteSendBuffer()      { u8g2.sendBuffer(); }
 
 // === Boost MT3608 EN ===
 //   Legacy: MCP23017 GPA7 (przez ekspander)

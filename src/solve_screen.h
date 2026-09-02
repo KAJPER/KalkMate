@@ -630,8 +630,11 @@ static bool _solEnsureWifi(U8G2 &d) {
 // ---------------------------------------------------------------------------
 // _solSendText — wyslij zadanie tekstowe do API i pokaz wynik.
 // Wymaga aktywnego WiFi. Tekst w taskText (C-string).
+// Zwraca true tylko gdy odpowiedz AI faktycznie dotarla i zostala pokazana —
+// wolajacy (live-send i _solProcessQueue) polega na tym, zeby wiedziec czy
+// zadanie mozna bezpiecznie odrzucic, czy trzeba je zachowac do ponowienia.
 // ---------------------------------------------------------------------------
-static void _solSendText(U8G2 &d, const char* taskText) {
+static bool _solSendText(U8G2 &d, const char* taskText) {
     char licKey[40];
     wifiLoadLicense(licKey, sizeof(licKey));
 
@@ -671,6 +674,11 @@ static void _solSendText(U8G2 &d, const char* taskText) {
     d.sendBuffer();
 
     int httpCode = http.POST(jsonBody);
+    if (httpCode <= 0) {
+        http.end();
+        _solDrawError(d, _solT("Blad polaczenia", "Connection error", "Verbindungsfehler"), "");
+        return false;
+    }
     String resp  = http.getString();
     http.end();
 
@@ -680,7 +688,7 @@ static void _solSendText(U8G2 &d, const char* taskText) {
         // Serwer zwraca 402 gdy saldo tokenow < 1000 (skonczyly sie).
         _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!"),
                       _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl"));
-        return;
+        return false;
     }
 
     if (httpCode != 200) {
@@ -693,11 +701,11 @@ static void _solSendText(U8G2 &d, const char* taskText) {
             snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
         }
         _solDrawError(d, _solT("Blad API:", "API error:", "API Fehler:"), errMsg);
-        return;
+        return false;
     }
 
     int solIdx = resp.indexOf("\"solution\":\"");
-    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer", "Keine Antwort"), ""); return; }
+    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer", "Keine Antwort"), ""); return false; }
 
     int solStart = solIdx + 12;
     static char _stSolution[_SOL_SOLUTION_MAX + 1];
@@ -719,13 +727,16 @@ static void _solSendText(U8G2 &d, const char* taskText) {
 
     historySave(String(taskText), String(_stSolution));
     _solDisplaySolution(d, _stSolution);
+    return true;
 }
 
 // ---------------------------------------------------------------------------
 // _solSendJpeg — wyslij JPEG do API przez multipart/form-data i pokaz wynik.
 // Wymaga aktywnego WiFi. jpegBuf zarzadzany przez wywolujacego (nie zwalniany tu).
+// Zwraca true tylko gdy odpowiedz AI faktycznie dotarla i zostala pokazana —
+// patrz komentarz przy _solSendText (ten sam kontrakt).
 // ---------------------------------------------------------------------------
-static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
+static bool _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     char licKey[40];
     wifiLoadLicense(licKey, sizeof(licKey));
 
@@ -742,7 +753,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     uint8_t* bodyBuf = (uint8_t*)ps_malloc(bodySize);
     if (!bodyBuf) {
         _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!"), "");
-        return;
+        return false;
     }
     memcpy(bodyBuf,                   _mpHdr, hdrLen);
     memcpy(bodyBuf + hdrLen,          jpegBuf, jpegLen);
@@ -776,7 +787,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     if (httpCode <= 0) {
         http.end();
         _solDrawError(d, _solT("Blad polaczenia", "Connection error", "Verbindungsfehler"), "");
-        return;
+        return false;
     }
 
     String resp = http.getString();
@@ -786,7 +797,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
         // Serwer zwraca 402 gdy saldo tokenow < 1000 (skonczyly sie).
         _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!"),
                       _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl"));
-        return;
+        return false;
     }
 
     if (httpCode != 200) {
@@ -799,11 +810,11 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
             snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
         }
         _solDrawError(d, _solT("Blad API:", "API error:", "API Fehler:"), errMsg);
-        return;
+        return false;
     }
 
     int solIdx = resp.indexOf("\"solution\":\"");
-    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer", "Keine Antwort"), ""); return; }
+    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer", "Keine Antwort"), ""); return false; }
 
     int solStart = solIdx + 12;
     static char _jpSolution[_SOL_SOLUTION_MAX + 1];
@@ -825,6 +836,7 @@ static void _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
 
     historySave(String("[Zdjecie]"), String(_jpSolution));
     _solDisplaySolution(d, _jpSolution);
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -865,7 +877,12 @@ static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
         }
         return;
     }
-    _solSendText(d, taskText);
+    // WiFi bylo "polaczone", ale samo wyslanie moglo mimo to zawiesc
+    // (chwilowy zanik internetu, timeout, blad serwera) — bez tego zdjecie/
+    // zadanie po prostu ginelo bezpowrotnie. Zakolejkuj do ponowienia.
+    if (!_solSendText(d, taskText)) {
+        offlineQueueAddText(taskText);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1068,7 +1085,14 @@ static void _solRunPhotoMode(U8G2 &d) {
         return;
     }
 
-    _solSendJpeg(d, jpegBuf, jpegLen);
+    // WiFi bylo "polaczone", ale samo wyslanie moglo mimo to zawiesc
+    // (chwilowy zanik internetu, timeout, blad serwera) — bez tego zdjecie
+    // po prostu ginelo bezpowrotnie mimo ze kamera je zrobila. Zakolejkuj
+    // do ponowienia (offlineQueueAddPhoto kopiuje bajty do SPIFFS od razu,
+    // wiec jpegBuf mozna zwolnic zaraz potem w obu przypadkach).
+    if (!_solSendJpeg(d, jpegBuf, jpegLen)) {
+        offlineQueueAddPhoto(jpegBuf, jpegLen);
+    }
     free(jpegBuf);
 }
 
@@ -1843,13 +1867,22 @@ static void _solProcessQueue(U8G2 &d) {
     d.sendBuffer();
     delay(1000);
 
-    // Wyslij FIFO — _solSendText/_solSendJpeg pokazuja wyniki kolejno
+    // Wyslij FIFO — _solSendText/_solSendJpeg pokazuja wyniki kolejno.
+    // WAZNE: dequeue (offlineQueueRemoveFirst) TYLKO po udanym wyslaniu —
+    // wczesniej byl tu bezwarunkowy dequeue, wiec kazde nieudane zadanie
+    // (chwilowy brak neta, 402 z powodu wyczerpanych tokenow AI, blad 5xx)
+    // znikalo z kolejki i z SPIFFS na zawsze, mimo ze nigdy nie dotarlo do
+    // serwera — dokladnie to zglosil klient ("robi zdjecia, a nie ma ich
+    // na serwerze"). Przy porazce przerywamy caly drain (break) zamiast
+    // proboway kolejnej pozycji — jesli siec/serwer wlasnie nie dziala,
+    // dalsze proby w tej samej petli i tak by sie nie udaly.
     while (offlineQueueCount() > 0) {
         OfflineTask task;
         if (!offlineQueuePeek(0, task)) break;
 
+        bool sent;
         if (task.type == 0) {
-            _solSendText(d, task.text.c_str());
+            sent = _solSendText(d, task.text.c_str());
         } else {
             // Wczytaj JPEG z SPIFFS do PSRAM, wyslij, zwolnij
             if (!SPIFFS.begin(false)) { offlineQueueRemoveFirst(); continue; }
@@ -1860,10 +1893,15 @@ static void _solProcessQueue(U8G2 &d) {
             if (!buf) { f.close(); offlineQueueRemoveFirst(); continue; }
             f.read(buf, sz);
             f.close();
-            _solSendJpeg(d, buf, sz);
+            sent = _solSendJpeg(d, buf, sz);
             free(buf);
         }
-        offlineQueueRemoveFirst();
+
+        if (sent) {
+            offlineQueueRemoveFirst();
+        } else {
+            break;   // zachowaj te i pozostale pozycje, sprobuj przy nastepnym wejsciu
+        }
     }
 }
 

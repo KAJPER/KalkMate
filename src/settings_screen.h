@@ -131,6 +131,11 @@ int otaGetLanguage() { return kalkSettings.language; }
 uint8_t camGetWbMode()     { return kalkSettings.camWbMode; }
 int8_t  camGetBrightness() { return kalkSettings.camBrightness; }
 
+// Zaimplementowane w remote_session.h, wlaczonym w main.cpp PO solve_screen.h
+// (potrzebuje _solDrawError). Forward-deklaracja zeby switch w showSettings()
+// (dalej w tym pliku) mogl to wywolac.
+void _editRemoteHelp(U8G2 &d);
+
 // ---------------------------------------------------------------------------
 // Stale menu — 15 pozycji, ulozone tematycznie:
 //   Preferencje:    Jasnosc, Jezyk, Tryb, Sleep, Kod AI, Panic
@@ -138,7 +143,7 @@ int8_t  camGetBrightness() { return kalkSettings.camBrightness; }
 //   System:         Aktualizacje
 //   Diagnostyka:    Test ekranu, Test kamery, Test klawiatury, Skaner, Pin Driver
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        19
+#define _SET_ITEMS        20
 // --- Preferencje ---
 #define _SET_BRIGHTNESS   0
 #define _SET_ROTATION     1
@@ -152,19 +157,20 @@ int8_t  camGetBrightness() { return kalkSettings.camBrightness; }
 #define _SET_WIFI         8
 #define _SET_ACCOUNT      9
 #define _SET_DEVICEID     10
+#define _SET_REMOTE       11
 // --- System ---
-#define _SET_UPDATE       11
-#define _SET_FACTORY      12
+#define _SET_UPDATE       12
+#define _SET_FACTORY      13
 // --- Diagnostyka ---
-#define _SET_SCREENTEST   13
-#define _SET_CAMTEST      14
-#define _SET_KEYTEST      15
-#define _SET_KEYSCAN      16
-#define _SET_PINDRIVER    17
-#define _SET_BATTERY      18
+#define _SET_SCREENTEST   14
+#define _SET_CAMTEST      15
+#define _SET_KEYTEST      16
+#define _SET_KEYSCAN      17
+#define _SET_PINDRIVER    18
+#define _SET_BATTERY      19
 
 // Wspolrzedne Y - 4 widoczne, scrollowanie
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -328,6 +334,13 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         prefix[0] = (cursor == _SET_DEVICEID) ? '>' : ' ';
         snprintf(lines[_SET_DEVICEID], sizeof(lines[0]), "%s%s",
                  prefix, T("Device ID + QR", "Device ID + QR", "Geraete-ID + QR"));
+    }
+    // 9: Zdalna pomoc
+    {
+        prefix[0] = (cursor == _SET_REMOTE) ? '>' : ' ';
+        snprintf(lines[_SET_REMOTE], sizeof(lines[0]), "%s%s [%-8s]",
+                 prefix, T("Zdalna pomoc", "Remote help", "Fernhilfe"),
+                 remoteSessionActive() ? T("AKTYWNA", "ACTIVE", "AKTIV") : T("wylaczona", "off", "aus"));
     }
 
     // === SYSTEM ===
@@ -1727,6 +1740,7 @@ void showSettings(U8G2 &display) {
                 case _SET_ROTATION:   _editRotation(display);   break;
                 case _SET_CAMERA:     _editCameraTuning(display); break;
                 case _SET_LANGUAGE:   _editLanguage(display);   break;
+                case _SET_REMOTE:     _editRemoteHelp(display); break;
                 case _SET_SOLVEMODE:  _editSolveMode(display);  break;
                 case _SET_AUTOSLEEP:  _editAutoSleep(display);  break;
                 case _SET_AICODE:     _editAiCode(display);     break;
