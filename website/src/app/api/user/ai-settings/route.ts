@@ -27,7 +27,7 @@ export async function GET() {
     ok: true,
     aiModel: row?.aiModel || "default",
     aiMode: row?.aiMode === "raw" ? "raw" : "matura",
-    tokenBalance: row?.tokenBalance ?? 0,
+    tokenBalance: Number(row?.tokenBalance ?? 0),
     models: AI_MODELS,
   });
 }

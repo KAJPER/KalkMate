@@ -68,7 +68,7 @@ export async function PATCH(
       const rows = await prisma.$queryRaw<{ tokenBalance: number }[]>`
         SELECT "tokenBalance" FROM "User" WHERE "id" = ${id} LIMIT 1
       `;
-      return NextResponse.json({ success: true, tokenBalance: rows[0]?.tokenBalance ?? 0 });
+      return NextResponse.json({ success: true, tokenBalance: Number(rows[0]?.tokenBalance ?? 0) });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

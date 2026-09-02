@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         const tokenRow = await prisma.$queryRaw<{ tokenBalance: number | null }[]>`
           SELECT "tokenBalance" FROM "User" WHERE "id" = ${user.id} LIMIT 1
         `.catch(() => []);
-        const tokenBalance = tokenRow[0]?.tokenBalance ?? 0;
+        const tokenBalance = Number(tokenRow[0]?.tokenBalance ?? 0);
         const tokensPurchased = await sumTokensPurchasedByUser(user.id).catch(() => ({ tokens: 0, count: 0 }));
 
         return {

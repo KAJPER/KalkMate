@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
 
     // 5. Build per-user data
     const users = userRows.map((u) => {
-      const tokenBalance = u.tokenBalance ?? TOKEN_GRANT;
+      const tokenBalance = Number(u.tokenBalance ?? TOKEN_GRANT);
       const tokensConsumed = Math.max(0, TOKEN_GRANT - tokenBalance);
       const chatMessages = chatCountByUser.get(u.id) ?? 0;
       const deviceSolves = solveCountByUser.get(u.id) ?? 0;

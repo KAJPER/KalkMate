@@ -1302,7 +1302,7 @@ export async function POST(request: NextRequest) {
     const balanceRows = await prisma.$queryRaw<{ tokenBalance: number }[]>`
       SELECT "tokenBalance" FROM "User" WHERE "id" = ${user.id} LIMIT 1
     `.catch(() => null);
-    const tokenBalance = balanceRows?.[0]?.tokenBalance ?? 0;
+    const tokenBalance = Number(balanceRows?.[0]?.tokenBalance ?? 0);
     if (tokenBalance < 1000) {
       return NextResponse.json(
         { error: `Brak tokenów (${tokenBalance}). Odnów subskrypcję w panelu.` },

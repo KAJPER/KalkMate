@@ -86,7 +86,7 @@ export async function sumTokensPurchasedByUser(userId: string): Promise<{ tokens
   const rows = await prisma.$queryRaw<{ tokens: number | null; count: number }[]>`
     SELECT SUM(tokens) as tokens, COUNT(*) as count FROM TokenPurchase WHERE userId = ${userId} AND status = 'paid'
   `;
-  return { tokens: rows[0]?.tokens ?? 0, count: Number(rows[0]?.count ?? 0) };
+  return { tokens: Number(rows[0]?.tokens ?? 0), count: Number(rows[0]?.count ?? 0) };
 }
 
 export async function listTokenPurchasesByUser(userId: string): Promise<TokenPurchaseRow[]> {
