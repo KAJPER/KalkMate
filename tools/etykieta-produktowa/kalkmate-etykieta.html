@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>KalkMate — etykieta produktowa (100x150mm)</title>
+<style>
+  @page { size: 100mm 150mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 100mm; height: 150mm;
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+  }
+  .label {
+    width: 100mm; height: 150mm;
+    padding: 4mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    page-break-after: always;
+  }
+  .label:last-of-type { page-break-after: auto; }
+
+  /* --- Naglowek --- */
+  .brand {
+    text-align: center;
+  }
+  .brand .logo {
+    font-size: 9mm;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+  .brand .tagline {
+    font-size: 3mm;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #333;
+    margin-top: 1mm;
+  }
+  .rule {
+    border: none;
+    border-top: 0.4mm solid #000;
+    margin: 2.5mm 0;
+  }
+
+  /* --- Nazwa produktu --- */
+  .product-name {
+    text-align: center;
+    font-size: 5mm;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .product-desc {
+    text-align: center;
+    font-size: 2.9mm;
+    color: #222;
+    line-height: 1.35;
+    margin-top: 2mm;
+  }
+  .product-desc-multi {
+    margin-top: 2mm;
+    font-size: 2.15mm;
+    line-height: 1.3;
+    color: #222;
+  }
+  .product-desc-multi div { margin-bottom: 1.2mm; }
+  .product-desc-multi b {
+    display: inline-block;
+    width: 5mm;
+    color: #000;
+    font-size: 2.15mm;
+  }
+
+  /* --- Specyfikacja --- */
+  .specs {
+    font-size: 2.8mm;
+    line-height: 1.6;
+    border-top: 0.3mm solid #999;
+    border-bottom: 0.3mm solid #999;
+    padding: 2mm 0;
+  }
+  .specs .row { display: flex; justify-content: space-between; }
+  .specs .row b { font-weight: 700; }
+
+  /* --- Kod kreskowy --- */
+  .barcode-wrap {
+    text-align: center;
+  }
+  .barcode-wrap svg { display: block; margin: 0 auto; }
+  .gtin-text {
+    font-size: 3mm;
+    letter-spacing: 1px;
+    margin-top: 0.5mm;
+  }
+
+  /* --- Stopka --- */
+  .footer {
+    text-align: center;
+    font-size: 2.3mm;
+    color: #333;
+    line-height: 1.4;
+  }
+
+  /* --- Blok zgodnosci: CE / RoHS / dane producenta / SN / WEEE --- */
+  .compliance {
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+    border-top: 0.35mm solid #000;
+    border-bottom: 0.35mm solid #000;
+    padding: 2mm 0;
+  }
+  .compliance .marks {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2mm;
+    flex: 0 0 auto;
+  }
+  .compliance .marks svg.ce-mark { width: 9.8mm; height: 7mm; }
+  .compliance .marks .rohs {
+    font-size: 2.8mm;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+  }
+  .compliance .info {
+    flex: 1 1 auto;
+    font-size: 2.3mm;
+    line-height: 1.45;
+  }
+  .compliance .info .model {
+    font-size: 3.4mm;
+    font-weight: 800;
+    margin-bottom: 0.5mm;
+  }
+  .compliance .info .label-i { color: #555; }
+  .compliance .info .sn-box {
+    display: inline-block;
+    border: 0.3mm solid #000;
+    padding: 0.3mm 1.8mm;
+    margin-top: 1mm;
+    font-size: 2.4mm;
+    font-weight: 700;
+  }
+  .compliance .weee { flex: 0 0 auto; }
+  .compliance .weee svg { width: 7.5mm; height: 9mm; }
+
+  /* Pole numeru seryjnego — widoczne tylko na ekranie, nie na wydruku */
+  .sn-controls {
+    max-width: 100mm;
+    margin: 0 auto 4mm;
+    padding: 3mm;
+    background: #fffbe6;
+    border: 1px solid #e0c94a;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+  }
+  .sn-controls input {
+    font-size: 14px;
+    padding: 4px 8px;
+    width: 120px;
+  }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sn-controls { display: none; }
+  }
+
+  /* --- Etykieta przednia (strona 2) --- */
+  .label-front {
+    text-align: center;
+    align-items: center;
+  }
+  .label-front .brand .logo { font-size: 13mm; }
+  .label-front .brand .tagline { font-size: 3.4mm; margin-top: 1.5mm; }
+
+  .front-icons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3mm;
+  }
+  .front-icons svg { width: 13mm; height: 13mm; }
+  .front-icons .arrow { width: 6mm; height: 6mm; opacity: 0.35; }
+
+  .front-headline {
+    font-size: 6mm;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .front-features {
+    width: 100%;
+    text-align: left;
+    font-size: 3mm;
+    line-height: 1.5;
+    border-top: 0.3mm solid #999;
+    border-bottom: 0.3mm solid #999;
+    padding: 3mm 0;
+  }
+  .front-features .feat {
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+    margin: 2mm 0;
+  }
+  .front-features svg { width: 7mm; height: 7mm; flex: 0 0 auto; }
+  .front-features b { display: block; font-size: 3.1mm; }
+  .front-features span { color: #333; font-size: 2.6mm; }
+
+  .front-bottom .model { font-size: 4mm; font-weight: 800; }
+  .front-bottom .site { font-size: 3mm; color: #333; margin-top: 1mm; }
+</style>
+</head>
+<body>
+
+  <div class="sn-controls">
+    Numer seryjny na etykiecie: <input type="text" id="snInput" value="06"> (edytuj przed drukiem każdej sztuki, ten pasek się nie drukuje)
+  </div>
+
+  <div class="label">
+
+    <div>
+      <div class="brand">
+        <div class="logo">KalkMate</div>
+        <div class="tagline">Kalkulator AI</div>
+      </div>
+      <hr class="rule">
+
+      <div class="product-name">Kalkulator AI KalkMate</div>
+      <div class="product-desc-multi">
+        <div><b>PL</b> Kalkulator edukacyjny z kamerą i wbudowaną AI — fotografuje zadanie i pokazuje pełne rozwiązanie krok po kroku na ekranie OLED. Matematyka, fizyka, chemia, biologia.</div>
+        <div><b>EN</b> Educational calculator with a camera and built-in AI — photographs the problem and shows the full step-by-step solution on the OLED screen. Math, physics, chemistry, biology.</div>
+        <div><b>DE</b> Bildungsrechner mit Kamera und integrierter KI — fotografiert die Aufgabe und zeigt die vollständige Lösung Schritt für Schritt auf dem OLED-Display. Mathematik, Physik, Chemie, Biologie.</div>
+      </div>
+    </div>
+
+    <div class="specs">
+      <div class="row"><span>Ekran</span><b>OLED 256×64 px</b></div>
+      <div class="row"><span>Zasilanie</span><b>Akumulator LiPo, USB-C</b></div>
+      <div class="row"><span>Łączność</span><b>WiFi</b></div>
+      <div class="row"><span>Kraj pochodzenia</span><b>Polska</b></div>
+    </div>
+
+    <div class="barcode-wrap">
+      <svg id="barcode" height="88"></svg>
+      <div class="gtin-text" id="gtin-text"></div>
+    </div>
+
+    <div class="compliance">
+      <div class="marks">
+        <!-- Oficjalny znak CE (Conformite Europeenne (logo).svg) — dokladne
+             oficjalne proporcje wg specyfikacji technicznej UE. -->
+        <svg class="ce-mark" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
+          <path d="M110,199.498744A100,100 0 0 1 100,200A100,100 0 0 1 100,0A100,100 0 0 1 110,0.501256L110,30.501256A70,70 0 0 0 100,30A70,70 0 0 0 100,170A70,70 0 0 0 110,169.498744Z" fill="#000"/>
+          <path d="M280,199.498744A100,100 0 0 1 270,200A100,100 0 0 1 270,0A100,100 0 0 1 280,0.501256L280,30.501256A70,70 0 0 0 270,30A70,70 0 0 0 201.620283,85L260,85L260,115L201.620283,115A70,70 0 0 0 270,170A70,70 0 0 0 280,169.498744Z" fill="#000"/>
+        </svg>
+        <div class="rohs">RoHS</div>
+      </div>
+
+      <div class="info">
+        <div class="model">KalkMate v3</div>
+        <div><span class="label-i">Producent:</span> <b>KAJPA Kacper Popko</b></div>
+        <div>Zastawie I 37, 16-070 Choroszcz</div>
+        <div>Made in Poland · Li-Po 3.7V 1500mAh, USB-C 5V</div>
+        <div class="sn-box">SN: <span id="sn-value">06</span></div>
+      </div>
+
+      <div class="weee">
+        <!-- Symbol przekreslonego kontenera na odpady (dyrektywa WEEE) —
+             przyblizenie graficzne standardowego piktogramu EN 50419. -->
+        <svg viewBox="0 0 40 50" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="15" y="4" width="10" height="5" />
+          <rect x="6" y="10" width="28" height="4" />
+          <path d="M9,14 L11,43 A2,2 0 0 0 13,45 H27 A2,2 0 0 0 29,43 L31,14" />
+          <line x1="15" y1="19" x2="15.7" y2="40" />
+          <line x1="20" y1="19" x2="20" y2="40" />
+          <line x1="25" y1="19" x2="24.3" y2="40" />
+          <line x1="2" y1="47" x2="38" y2="3" stroke-width="2.4" />
+        </svg>
+      </div>
+    </div>
+
+    <div class="footer">
+      kalkmate.pl&nbsp;&nbsp;·&nbsp;&nbsp;kontakt@kalkmate.pl
+    </div>
+
+  </div>
+
+  <!-- ===================================================================
+       ETYKIETA PRZEDNIA (strona 2 wydruku) — bez zdjecia produktu: po
+       sprawie z Esperanza swiadomie zero fotografii, tylko wlasna
+       ikonografia + branding, zeby nie powtorzyc tego samego problemu.
+       =================================================================== -->
+  <div class="label label-front">
+
+    <div class="brand">
+      <div class="logo">KalkMate</div>
+      <div class="tagline">Kalkulator AI</div>
+    </div>
+
+    <div class="front-icons">
+      <!-- kamera -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <rect x="9" y="4" width="6" height="3"/>
+        <rect x="3" y="7" width="18" height="12" rx="2"/>
+        <circle cx="12" cy="13" r="3.5"/>
+      </svg>
+      <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <line x1="3" y1="12" x2="21" y2="12"/><polyline points="14,5 21,12 14,19"/>
+      </svg>
+      <!-- AI (iskra) -->
+      <svg viewBox="0 0 24 24" fill="#000" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12,2 L14.2,9.8 L22,12 L14.2,14.2 L12,22 L9.8,14.2 L2,12 L9.8,9.8 Z"/>
+      </svg>
+      <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <line x1="3" y1="12" x2="21" y2="12"/><polyline points="14,5 21,12 14,19"/>
+      </svg>
+      <!-- ekran OLED z rozwiazaniem -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="5" width="20" height="14" rx="1.5"/>
+        <polyline points="5,15 9,10 12,13 19,8"/>
+      </svg>
+    </div>
+
+    <div class="front-headline">Zrób zdjęcie.<br>Otrzymaj rozwiązanie.</div>
+
+    <div class="front-features">
+      <div class="feat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+          <rect x="9" y="4" width="6" height="3"/><rect x="3" y="7" width="18" height="12" rx="2"/><circle cx="12" cy="13" r="3.5"/>
+        </svg>
+        <div><b>Kamera + AI</b><span> — sfotografuj zadanie, reszta dzieje się sama</span></div>
+      </div>
+      <div class="feat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="5" width="20" height="14" rx="1.5"/><polyline points="5,15 9,10 12,13 19,8"/>
+        </svg>
+        <div><b>Ekran OLED 256×64</b><span> — pełne rozwiązanie krok po kroku</span></div>
+      </div>
+      <div class="feat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12,3 L4,7 V12 C4,17 7.5,20.5 12,22 C16.5,20.5 20,17 20,12 V7 Z"/>
+        </svg>
+        <div><b>Matematyka · Fizyka</b><span> — Chemia · Biologia</span></div>
+      </div>
+      <div class="feat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="8" width="17" height="8" rx="1.5"/><rect x="19" y="10.5" width="2.5" height="3" fill="#000" stroke="none"/><rect x="4" y="10" width="8" height="4" fill="#000" stroke="none"/>
+        </svg>
+        <div><b>Bateria na cały dzień</b><span> — ładowanie USB-C</span></div>
+      </div>
+    </div>
+
+    <div class="front-bottom">
+      <div class="model">KalkMate v3</div>
+      <div class="site">kalkmate.pl</div>
+    </div>
+
+  </div>
+
+<script>
+// ---------------------------------------------------------------------
+// Generator kodu EAN-13 (czysty JS/SVG, bez zaleznosci zewnetrznych —
+// dziala offline, wazne bo to plik do druku, nie strona online).
+// ---------------------------------------------------------------------
+const GTIN = "5908202546201";
+
+const L_CODE = { // lewa strona, parzystosc nieparzysta (odd/L)
+  "0":"0001101","1":"0011001","2":"0010011","3":"0111101","4":"0100011",
+  "5":"0110001","6":"0101111","7":"0111011","8":"0110111","9":"0001011"
+};
+const G_CODE = { // lewa strona, parzystosc parzysta (even/G)
+  "0":"0100111","1":"0110011","2":"0011011","3":"0100001","4":"0011101",
+  "5":"0111001","6":"0000101","7":"0010001","8":"0001001","9":"0010111"
+};
+const R_CODE = { // prawa strona
+  "0":"1110010","1":"1100110","2":"1101100","3":"1000010","4":"1011100",
+  "5":"1001110","6":"1010000","7":"1000100","8":"1001000","9":"1110100"
+};
+// Wzorzec L/G dla 6 cyfr po pierwszej, w zaleznosci od pierwszej cyfry.
+const PARITY = {
+  "0":"LLLLLL","1":"LLGLGG","2":"LLGGLG","3":"LLGGGL","4":"LGLLGG",
+  "5":"LGGLLG","6":"LGGGLL","7":"LGLGLG","8":"LGLGGL","9":"LGGLGL"
+};
+
+function ean13Bits(digits) {
+  const first = digits[0];
+  const left = digits.slice(1, 7).split("");
+  const right = digits.slice(7, 13).split("");
+  const parity = PARITY[first];
+
+  let bits = "101"; // start guard
+  left.forEach((d, i) => {
+    bits += (parity[i] === "L" ? L_CODE[d] : G_CODE[d]);
+  });
+  bits += "01010"; // middle guard
+  right.forEach(d => { bits += R_CODE[d]; });
+  bits += "101"; // end guard
+  return bits;
+}
+
+function drawEan13(svgEl, digits, moduleW, height) {
+  const bits = ean13Bits(digits);
+  const guardExtra = 6; // guardy (start/middle/end) rysowane troche dluzsze
+  const totalW = bits.length * moduleW;
+  svgEl.setAttribute("width", totalW);
+  svgEl.setAttribute("viewBox", `0 0 ${totalW} ${height}`);
+
+  // Indeksy modulow nalezace do guardow (start, middle, end) — te slupki
+  // wystaja ponizej, tak jak na prawdziwych kodach EAN.
+  const guardRanges = [[0,3], [45,50], [92,95]];
+  const isGuard = (i) => guardRanges.some(([a,b]) => i >= a && i < b);
+
+  let x = 0;
+  let svgContent = "";
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] === "1") {
+      const h = isGuard(i) ? height : height - guardExtra;
+      svgContent += `<rect x="${x}" y="0" width="${moduleW}" height="${h}" fill="#000"/>`;
+    }
+    x += moduleW;
+  }
+  svgEl.innerHTML = svgContent;
+}
+
+drawEan13(document.getElementById("barcode"), GTIN, 2.4, 88);
+
+// Human-readable GTIN pod kodem, z odstepami jak na oryginalnych etykietach:
+// pierwsza cyfra / 6 cyfr / 6 cyfr
+document.getElementById("gtin-text").textContent =
+  GTIN[0] + "  " + GTIN.slice(1,7) + "  " + GTIN.slice(7,13);
+
+// Numer seryjny — edytowalny na ekranie (pasek .sn-controls, nie drukuje sie),
+// zeby mozna bylo wydrukowac serie etykiet z roznym SN bez edycji pliku.
+const snInput = document.getElementById("snInput");
+const snValue = document.getElementById("sn-value");
+snInput.addEventListener("input", () => { snValue.textContent = snInput.value; });
+</script>
+</body>
+</html>
