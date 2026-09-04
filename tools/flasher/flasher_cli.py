@@ -20,6 +20,7 @@ import subprocess
 from datetime import datetime
 
 try:
+    import serial
     from serial.tools import list_ports
 except ImportError:
     print("BLAD: brak pyserial. Zainstaluj: pip install pyserial")
@@ -140,7 +141,54 @@ def run_step(cmd, prefix=""):
         raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
-def flash_device(cfg, port, mode):
+def provision_code(code, mac):
+    """Wysyla KALKPROV:SETCODE:XXXX na natywny port CDC firmware'u (PID
+    0x4001 — INNY port niz ten uzywany do flashowania). Dziala tylko w 3s
+    oknie zaraz po boocie — patrz main.cpp. Niepowodzenie NIE jest bledem
+    flashowania — klient i tak moze wpisac kod recznie w Ustawieniach."""
+    if not (len(code) == 4 and code.isdigit()):
+        print(f"{C_YEL}  [!] Kod '{code}' nie ma 4 cyfr — pomijam personalizacje{C_RST}")
+        return
+    print(f"{C_CYN}[prov] Szukam portu CDC firmware'u (PID 0x4001) dla kodu {code}...{C_RST}")
+    cdc_port = None
+    t0 = time.time()
+    while time.time() - t0 < 6.0:
+        for p in list_ports.comports():
+            if p.vid == 0x303A and p.pid == 0x4001:
+                cdc_port = p.device
+                break
+        if cdc_port:
+            break
+        time.sleep(0.3)
+    if not cdc_port:
+        print(f"{C_YEL}  [!] Nie znaleziono portu CDC firmware'u w 6s — "
+              f"kod NIE zostal wgrany, ustaw recznie w Ustawieniach.{C_RST}")
+        return
+    print(f"{C_CYN}  [prov] Port CDC: {cdc_port}, wysylam komende...{C_RST}")
+    try:
+        time.sleep(0.4)
+        with serial.Serial(cdc_port, 115200, timeout=1.5) as ser:
+            ser.write(f"KALKPROV:SETCODE:{code}\n".encode("ascii"))
+            ser.flush()
+            deadline = time.time() + 2.0
+            resp = ""
+            while time.time() < deadline:
+                line = ser.readline().decode("ascii", errors="ignore").strip()
+                if line:
+                    resp = line
+                    if resp.startswith("KALKPROV:"):
+                        break
+            if resp == "KALKPROV:OK":
+                print(f"{C_GRN}  [prov] OK — kod {code} wgrany na {mac}{C_RST}")
+            elif resp:
+                print(f"{C_YEL}  [!] Odpowiedz urzadzenia: {resp}{C_RST}")
+            else:
+                print(f"{C_YEL}  [!] Brak odpowiedzi — okno 3s moglo juz minac{C_RST}")
+    except Exception as e:
+        print(f"{C_YEL}  [!] Blad portu szeregowego: {e}{C_RST}")
+
+
+def flash_device(cfg, port, mode, client_code=None):
     """Wykonaj pelny flash + ewentualne eFuse na konkretnym porcie."""
     print(f"\n{C_BOLD}=== FLASH START: port={port}, mode={mode} ==={C_RST}")
 
@@ -194,6 +242,11 @@ def flash_device(cfg, port, mode):
                "--do-not-confirm"]
         run_step(cmd, "espefuse")
 
+    # Personalizacja klienta (kod AI z /admin/orders) — patrz komentarz
+    # przy provision_code() i w main.cpp ("[PROV]").
+    if client_code:
+        provision_code(client_code, mac)
+
     print(f"{C_GRN}{C_BOLD}=== SUKCES: {mac} ==={C_RST}\n")
     log_event(mac, port, mode, "OK")
     return mac
@@ -207,7 +260,17 @@ def main():
                     help="Flash Encryption RELEASE mode (PERMANENT!)")
     ap.add_argument("--auto", action="store_true",
                     help="Auto-flash kazdy wykryty chip, czekaj na nastepny")
+    ap.add_argument("--code", default=None,
+                    help="Kod AI klienta (4 cyfry, z /admin/orders) do wgrania "
+                         "przez okno prowizjonowania zaraz po flashu. UWAGA: "
+                         "z --auto ten sam kod poszedlby na KAZDE urzadzenie "
+                         "w petli — uzywaj --code tylko przy flashu pojedynczej sztuki.")
     args = ap.parse_args()
+
+    if args.code and args.auto:
+        print(f"{C_RED}BLAD: --code razem z --auto wgraloby ten sam kod na "
+              f"wszystkie urzadzenia. Uzyj --code bez --auto (jedna sztuka na raz).{C_RST}")
+        sys.exit(1)
 
     mode = "DEV"
     if args.prod_dev:
@@ -245,7 +308,7 @@ def main():
                     input(f"Enter aby flashowac (Ctrl+C aby pominac)...")
 
                 try:
-                    flash_device(cfg, port, mode)
+                    flash_device(cfg, port, mode, client_code=args.code)
                     if not args.auto:
                         print(f"{C_CYN}Odlacz urzadzenie i podlacz nastepne, "
                               f"lub Ctrl+C aby zakonczyc.{C_RST}")

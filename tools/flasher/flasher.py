@@ -504,6 +504,13 @@ class FlasherApp:
             except Exception:
                 self.log("  (reset przez esptool nie powiodl sie — nacisnij RESET recznie)", "#F88")
 
+            # Personalizacja klienta — kod AI z pola w GUI, wgrywany przez
+            # okno nasluchu w firmware (main.cpp, "[PROV]"). Dziala TYLKO
+            # przy tym pierwszym boocie po flashu — patrz komentarz w main.cpp.
+            client_code = self.client_code_var.get().strip()
+            if client_code:
+                self._provision_code(client_code, mac)
+
             self.log(f"=== FLASH SUKCES: {mac} ===\n", "#0F0")
             self.status_label.config(text=f"SUKCES — odlacz urzadzenie",
                                       fg="#0F0")
@@ -519,6 +526,56 @@ class FlasherApp:
             log_event(mac, port, mode, "FAIL", str(e))
         finally:
             self.busy = False
+
+    def _provision_code(self, code, mac):
+        """Wysyla KALKPROV:SETCODE:XXXX na natywny port CDC firmware'u
+        (PID 0x4001 — INNY port niz ten uzywany do flashowania! Patrz
+        komentarz przy ESP32S3_USB_IDS). Dziala tylko w 3s oknie zaraz po
+        boocie — patrz main.cpp. Niepowodzenie tego kroku NIE jest
+        traktowane jako blad flashowania (firmware juz jest wgrane
+        poprawnie) — klient i tak moze wpisac kod recznie w Ustawieniach.
+        """
+        if not (len(code) == 4 and code.isdigit()):
+            self.log(f"  [!] Kod '{code}' nie ma 4 cyfr — pomijam personalizacje", "#F88")
+            return
+        self.log(f"[prov] Szukam portu CDC firmware'u (PID 0x4001) dla kodu {code}...", "#88F")
+        cdc_port = None
+        t0 = time.time()
+        while time.time() - t0 < 6.0:
+            for p in list_ports.comports():
+                if p.vid == 0x303A and p.pid == 0x4001:
+                    cdc_port = p.device
+                    break
+            if cdc_port:
+                break
+            time.sleep(0.3)
+        if not cdc_port:
+            self.log("  [!] Nie znaleziono portu CDC firmware'u w 6s — "
+                     "kod NIE zostal wgrany, ustaw recznie w Ustawieniach na urzadzeniu.", "#F88")
+            return
+        self.log(f"  [prov] Port CDC: {cdc_port}, wysylam komende...", "#88F")
+        try:
+            time.sleep(0.4)  # CDC settle po enumeracji
+            with serial.Serial(cdc_port, 115200, timeout=1.5) as ser:
+                ser.write(f"KALKPROV:SETCODE:{code}\n".encode("ascii"))
+                ser.flush()
+                deadline = time.time() + 2.0
+                resp = ""
+                while time.time() < deadline:
+                    line = ser.readline().decode("ascii", errors="ignore").strip()
+                    if line:
+                        resp = line
+                        if resp.startswith("KALKPROV:"):
+                            break
+                if resp == "KALKPROV:OK":
+                    self.log(f"  [prov] OK — kod {code} wgrany na {mac}", "#0F0")
+                elif resp:
+                    self.log(f"  [!] Odpowiedz urzadzenia: {resp}", "#F88")
+                else:
+                    self.log("  [!] Brak odpowiedzi — okno 3s w firmware moglo juz minac "
+                             "(port CDC wolniej sie zenumerowal niz oczekiwano)", "#F88")
+        except Exception as e:
+            self.log(f"  [!] Blad portu szeregowego: {e}", "#F88")
 
     def _run_subprocess(self, cmd, prefix="", stdin_input=None):
         """Odpal subprocess i streamuj jego stdout/stderr do console."""
