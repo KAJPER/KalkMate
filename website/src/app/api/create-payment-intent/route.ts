@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getCoupon, computeDiscount } from "@/lib/coupons";
+import { validatePersonalization } from "@/lib/orderPersonalization";
 
 const EU_COUNTRIES = new Set([
   "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE",
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
       street, postcode, city,
       country, currency, shippingCents,
       couponCode,
+      unlockCode, personalizeName,
     } = body;
     const email = user.email!;
     const resolvedCountry = (country || "PL") as string;
@@ -49,6 +51,14 @@ export async function POST(request: NextRequest) {
 
     if (!name || !phone) {
       return NextResponse.json({ error: "Imie i telefon sa wymagane." }, { status: 400 });
+    }
+    // Personalizacja obowiazkowa dla kazdego zamowienia fizycznego urzadzenia
+    // — patrz lib/orderPersonalization.ts (podstawa wylaczenia prawa
+    // odstapienia, art. 38 pkt 3 ustawy o prawach konsumenta). Przekazywana
+    // dalej przez Stripe metadata, bo Order powstaje dopiero w webhooku.
+    const personalization = validatePersonalization(unlockCode, personalizeName);
+    if (!personalization.ok) {
+      return NextResponse.json({ error: personalization.error }, { status: 400 });
     }
     if (isPoland && !pickupPoint) {
       return NextResponse.json({ error: "Paczkomat jest wymagany dla dostaw do Polski." }, { status: 400 });
@@ -115,6 +125,8 @@ export async function POST(request: NextRequest) {
         shipping_amount: String(resolvedShipping),
         coupon_code: appliedCoupon,
         discount_amount: String(discountAmount),
+        personalized_code: personalization.code,
+        personalized_name: personalization.name,
       },
       receipt_email: email,
       description: "KalkMate v3.0 - AI Calculator",

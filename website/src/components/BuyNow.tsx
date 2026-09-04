@@ -84,7 +84,13 @@ const content: Record<Locale, {
   selectParcel: string;
   intlDeliveryTitle: string; intlDeliveryNote1: string; intlDeliveryNote2: string;
   consent1: string; consentTerms: string; consent2: string;
+  personalizeTitle: string;
+  personalizeCodeLabel: string; personalizeCodePlaceholder: string; personalizeCodeHint: string;
+  personalizeNameLabel: string; personalizeNamePlaceholder: string; personalizeNameHint: string;
+  personalizeNotice: string;
+  personalizeConsent: string;
   errPickupPoint: string; errFullAddress: string; errDeliveryAddress: string;
+  errPersonalizeCode: string; errPersonalizeName: string; errPersonalizeConsent: string;
   serverError: string; unexpectedError: string;
   loading: string; continueToPayment: string;
   selectParcelTitle: string; back: string; loadingMap: string;
@@ -102,7 +108,7 @@ const content: Record<Locale, {
       "Miesiąc AI Chat gratis",
       "Instrukcja obsługi",
     ],
-    badges: ["Bezpieczna płatność", "14 dni na zwrot", "Gwarancja 24 mc", "Wysyłka międzynarodowa"],
+    badges: ["Bezpieczna płatność", "Personalizowany dla Ciebie", "Gwarancja 24 mc", "Wysyłka międzynarodowa"],
     stockAvailable: (n) => `${n} szt. dostępnych`,
     preSalePrice: "Cena przedsprzedażowa",
     discountPln: "Przedsprzedaż · darmowa wysyłka InPost",
@@ -127,7 +133,15 @@ const content: Record<Locale, {
     selectParcel: "Wybierz Paczkomat InPost →",
     intlDeliveryTitle: "/ International delivery", intlDeliveryNote1: "Courier delivery to your address.", intlDeliveryNote2: "shipping fee · approx. 2–4 weeks",
     consent1: "Akceptuję ", consentTerms: "Regulamin Sklepu", consent2: " i wyrażam zgodę na przetwarzanie danych osobowych w celu realizacji zamówienia.",
+    personalizeTitle: "/ Personalizacja Twojego egzemplarza",
+    personalizeCodeLabel: "Twój kod odblokowania AI (4 cyfry)", personalizeCodePlaceholder: "np. 4271",
+    personalizeCodeHint: "Wgramy ten kod do Twojego egzemplarza przed wysyłką.",
+    personalizeNameLabel: "Imię/nick na etykiecie urządzenia", personalizeNamePlaceholder: "np. Kacper",
+    personalizeNameHint: "Wydrukujemy je na etykiecie Twojej sztuki.",
+    personalizeNotice: "Każdy KalkMate jest personalizowany indywidualnie pod zamówienie (wybrany przez Ciebie kod AI wgrywany do tej konkretnej sztuki + imię na etykiecie). Zgodnie z art. 38 pkt 3 ustawy o prawach konsumenta, produkty personalizowane nie podlegają zwrotowi w ramach 14-dniowego prawa odstąpienia od umowy. Gwarancja 24 miesiące na wady nadal obowiązuje na standardowych zasadach.",
+    personalizeConsent: "Rozumiem, że ten egzemplarz będzie personalizowany na moje życzenie i w związku z tym nie przysługuje mi prawo odstąpienia od umowy (zwrotu w ciągu 14 dni). Prawo do reklamacji z tytułu gwarancji i rękojmi pozostaje bez zmian.",
     errPickupPoint: "Wybierz punkt odbioru.", errFullAddress: "Podaj pełny adres (ulica, kod pocztowy, miasto) — wymagany do wystawienia faktury.", errDeliveryAddress: "Podaj pełny adres dostawy.",
+    errPersonalizeCode: "Podaj 4-cyfrowy kod odblokowania AI.", errPersonalizeName: "Podaj imię/nick do etykiety.", errPersonalizeConsent: "Musisz potwierdzić zgodę na personalizację (wpływa na prawo zwrotu).",
     serverError: "Błąd serwera", unexpectedError: "Nieoczekiwany błąd.",
     loading: "Ładowanie...", continueToPayment: "Przejdź do płatności →",
     selectParcelTitle: "Wybierz Paczkomat", back: "← Wstecz", loadingMap: "Ładowanie mapy...",
@@ -145,7 +159,7 @@ const content: Record<Locale, {
       "One month of AI Chat free",
       "User manual",
     ],
-    badges: ["Secure payment", "14-day returns", "24-month warranty", "International shipping"],
+    badges: ["Secure payment", "Personalized for you", "24-month warranty", "International shipping"],
     stockAvailable: (n) => `${n} in stock`,
     preSalePrice: "Pre-sale price",
     discountPln: "Pre-sale · free InPost shipping",
@@ -170,7 +184,15 @@ const content: Record<Locale, {
     selectParcel: "Choose InPost Parcel Locker →",
     intlDeliveryTitle: "/ International delivery", intlDeliveryNote1: "Courier delivery to your address.", intlDeliveryNote2: "shipping fee · approx. 2–4 weeks",
     consent1: "I accept the ", consentTerms: "Terms and Conditions", consent2: " and consent to the processing of my personal data for order fulfillment.",
+    personalizeTitle: "/ Personalize your unit",
+    personalizeCodeLabel: "Your AI unlock code (4 digits)", personalizeCodePlaceholder: "e.g. 4271",
+    personalizeCodeHint: "We'll flash this code onto your specific unit before shipping.",
+    personalizeNameLabel: "Name/nickname for the device label", personalizeNamePlaceholder: "e.g. Alex",
+    personalizeNameHint: "We'll print it on your unit's label.",
+    personalizeNotice: "Each KalkMate is individually personalized for your order (the AI code you choose is flashed onto this specific unit + your name is printed on its label). Under EU consumer law (custom-made goods), personalized products are excluded from the standard 14-day right of withdrawal. The 24-month warranty for defects remains unaffected.",
+    personalizeConsent: "I understand this unit will be personalized at my request and therefore I do not have the right to withdraw from the contract (14-day return). My statutory warranty rights remain unaffected.",
     errPickupPoint: "Choose a pickup point.", errFullAddress: "Please provide your full address (street, postcode, city) — required for the invoice.", errDeliveryAddress: "Please provide your full delivery address.",
+    errPersonalizeCode: "Please provide a 4-digit AI unlock code.", errPersonalizeName: "Please provide a name/nickname for the label.", errPersonalizeConsent: "You must confirm the personalization consent (it affects your return rights).",
     serverError: "Server error", unexpectedError: "Unexpected error.",
     loading: "Loading...", continueToPayment: "Continue to payment →",
     selectParcelTitle: "Choose Parcel Locker", back: "← Back", loadingMap: "Loading map...",
@@ -188,7 +210,7 @@ const content: Record<Locale, {
       "Ein Monat AI Chat gratis",
       "Bedienungsanleitung",
     ],
-    badges: ["Sichere Zahlung", "14 Tage Rückgaberecht", "24 Monate Garantie", "Internationaler Versand"],
+    badges: ["Sichere Zahlung", "Für dich personalisiert", "24 Monate Garantie", "Internationaler Versand"],
     stockAvailable: (n) => `${n} auf Lager`,
     preSalePrice: "Vorverkaufspreis",
     discountPln: "Vorverkauf · kostenloser InPost-Versand",
@@ -213,7 +235,15 @@ const content: Record<Locale, {
     selectParcel: "InPost-Paketstation wählen →",
     intlDeliveryTitle: "/ Internationale Lieferung", intlDeliveryNote1: "Kurierlieferung an Ihre Adresse.", intlDeliveryNote2: "Versandkosten · ca. 2–4 Wochen",
     consent1: "Ich akzeptiere die ", consentTerms: "AGB", consent2: " und willige in die Verarbeitung meiner personenbezogenen Daten zur Auftragsabwicklung ein.",
+    personalizeTitle: "/ Personalisiere dein Gerät",
+    personalizeCodeLabel: "Dein KI-Freischaltcode (4 Ziffern)", personalizeCodePlaceholder: "z. B. 4271",
+    personalizeCodeHint: "Wir spielen diesen Code vor dem Versand auf dein Gerät auf.",
+    personalizeNameLabel: "Name/Spitzname für das Geräteetikett", personalizeNamePlaceholder: "z. B. Alex",
+    personalizeNameHint: "Wir drucken ihn auf das Etikett deines Geräts.",
+    personalizeNotice: "Jedes KalkMate wird individuell für deine Bestellung personalisiert (der von dir gewählte KI-Code wird auf dieses Gerät aufgespielt + dein Name wird auf dem Etikett gedruckt). Gemäß EU-Verbraucherrecht sind personalisierte/nach Kundenspezifikation angefertigte Waren vom 14-tägigen Widerrufsrecht ausgeschlossen. Die 24-monatige Gewährleistung für Mängel bleibt davon unberührt.",
+    personalizeConsent: "Ich verstehe, dass dieses Gerät auf meinen Wunsch personalisiert wird und mir daher kein Widerrufsrecht (14-tägige Rückgabe) zusteht. Meine gesetzlichen Gewährleistungsrechte bleiben unberührt.",
     errPickupPoint: "Bitte einen Abholpunkt wählen.", errFullAddress: "Bitte vollständige Adresse angeben (Straße, Postleitzahl, Stadt) — für die Rechnung erforderlich.", errDeliveryAddress: "Bitte geben Sie Ihre vollständige Lieferadresse an.",
+    errPersonalizeCode: "Bitte einen 4-stelligen KI-Freischaltcode angeben.", errPersonalizeName: "Bitte einen Namen/Spitznamen für das Etikett angeben.", errPersonalizeConsent: "Du musst der Personalisierung zustimmen (betrifft dein Rückgaberecht).",
     serverError: "Serverfehler", unexpectedError: "Unerwarteter Fehler.",
     loading: "Wird geladen...", continueToPayment: "Zur Zahlung →",
     selectParcelTitle: "Paketstation wählen", back: "← Zurück", loadingMap: "Karte wird geladen...",
@@ -244,7 +274,9 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
     street: "", postcode: "", city: "",
     country: defaultCountry,
     consent: false,
+    unlockCode: "", personalizeName: "",
   });
+  const [personalizeConsent, setPersonalizeConsent] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState<InPostPoint | null>(null);
   const [stockLeft, setStockLeft] = useState(9);
   const [showEUR, setShowEUR] = useState(defaultCountry !== "PL");
@@ -443,6 +475,18 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
     }
     if (!isPoland && (!formData.street || !formData.city)) {
       setErrorMessage(t.errDeliveryAddress);
+      return;
+    }
+    if (!/^\d{4}$/.test(formData.unlockCode)) {
+      setErrorMessage(t.errPersonalizeCode);
+      return;
+    }
+    if (!formData.personalizeName.trim()) {
+      setErrorMessage(t.errPersonalizeName);
+      return;
+    }
+    if (!personalizeConsent) {
+      setErrorMessage(t.errPersonalizeConsent);
       return;
     }
     setErrorMessage("");
@@ -886,6 +930,49 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                         </p>
                       </div>
                     )}
+
+                    {/* Personalizacja — kod AI wgrywany do TEJ sztuki + imie na etykiete.
+                        Wymagane dla kazdego zamowienia: to podstawa wylaczenia prawa
+                        odstapienia (art. 38 pkt 3 ustawy o prawach konsumenta) —
+                        patrz lib/orderPersonalization.ts i regulamin/page.tsx §5. */}
+                    <div className="border border-[#D8FF3D]/30 bg-[#D8FF3D]/[0.03] p-4 space-y-4">
+                      <p className="km-mono-eyebrow text-[#D8FF3D] text-xs">
+                        {t.personalizeTitle}
+                      </p>
+                      <div>
+                        <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
+                          {t.personalizeCodeLabel}
+                        </label>
+                        <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} required
+                          value={formData.unlockCode}
+                          onChange={(e) => setFormData({ ...formData, unlockCode: e.target.value.replace(/\D/g, "").slice(0, 4) })}
+                          className={inputClass}
+                          placeholder={t.personalizeCodePlaceholder} />
+                        <p className="text-xs text-[#F2EDE3]/40 mt-1.5 leading-relaxed">{t.personalizeCodeHint}</p>
+                      </div>
+                      <div>
+                        <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
+                          {t.personalizeNameLabel}
+                        </label>
+                        <input type="text" required maxLength={40}
+                          value={formData.personalizeName}
+                          onChange={(e) => setFormData({ ...formData, personalizeName: e.target.value })}
+                          className={inputClass}
+                          placeholder={t.personalizeNamePlaceholder} />
+                        <p className="text-xs text-[#F2EDE3]/40 mt-1.5 leading-relaxed">{t.personalizeNameHint}</p>
+                      </div>
+                      <p className="text-xs text-[#F2EDE3]/55 leading-relaxed border-t border-[#D8FF3D]/20 pt-3">
+                        {t.personalizeNotice}
+                      </p>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" required checked={personalizeConsent}
+                          onChange={(e) => setPersonalizeConsent(e.target.checked)}
+                          className="mt-1 accent-[#D8FF3D]" />
+                        <span className="text-xs text-[#F2EDE3]/70 leading-relaxed">
+                          {t.personalizeConsent}
+                        </span>
+                      </label>
+                    </div>
 
                     <label className="flex items-start gap-3 cursor-pointer">
                       <input type="checkbox" required checked={formData.consent}

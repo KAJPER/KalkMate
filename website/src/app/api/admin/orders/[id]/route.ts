@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
+import { ensureOrderPersonalizationColumns } from "@/lib/orderPersonalization";
 import { sendMail } from "@/lib/mailer";
 import {
   statusInProgressEmail,
@@ -30,6 +31,13 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
+  // Personalizacja (kod AI + imie na etykiete) — kolumny poza Prisma schema.
+  await ensureOrderPersonalizationColumns();
+  const persRows = await prisma.$queryRaw<
+    { personalizedCode: string | null; personalizedName: string | null }[]
+  >`SELECT "personalizedCode", "personalizedName" FROM "Order" WHERE id = ${id} LIMIT 1`;
+  const personalization = persRows[0] || { personalizedCode: null, personalizedName: null };
+
   return NextResponse.json({
     order: {
       id: order.id,
@@ -57,6 +65,8 @@ export async function GET(
       invoice_sent_at: order.invoiceSentAt ? order.invoiceSentAt.toISOString() : null,
       invoice_filename: order.invoiceFilename || "",
       payment_provider: order.paymentProvider,
+      personalized_code: personalization.personalizedCode || null,
+      personalized_name: personalization.personalizedName || null,
     },
   });
 }

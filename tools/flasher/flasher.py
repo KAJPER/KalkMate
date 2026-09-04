@@ -51,6 +51,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 
 try:
+    import serial
     from serial.tools import list_ports
 except ImportError:
     print("BLAD: brak pyserial. Zainstaluj: pip install pyserial")
@@ -234,6 +235,22 @@ class FlasherApp:
                 activebackground="#1a1a1a", activeforeground="#D8FF3D",
                 font=("Arial", 9)
             ).pack(anchor="w", padx=10, pady=1)
+
+        # === Personalizacja klienta (kod AI z zamowienia, /admin/orders) ===
+        prov_frame = tk.LabelFrame(
+            root, text=" Personalizacja klienta (opcjonalnie) ",
+            bg="#1a1a1a", fg="#F2EDE3", font=("Arial", 10, "bold"))
+        prov_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        row = tk.Frame(prov_frame, bg="#1a1a1a")
+        row.pack(fill=tk.X, padx=10, pady=5)
+        tk.Label(row, text="Kod AI klienta (4 cyfry):", bg="#1a1a1a",
+                 fg="#F2EDE3", width=22, anchor="w").pack(side=tk.LEFT)
+        self.client_code_var = tk.StringVar(value="")
+        tk.Entry(row, textvariable=self.client_code_var, width=8,
+                 font=("Consolas", 12, "bold"), justify="center").pack(side=tk.LEFT)
+        tk.Label(row, text="  puste = zostaw domyślny 1111", bg="#1a1a1a",
+                 fg="#888", font=("Arial", 8)).pack(side=tk.LEFT, padx=5)
 
         # === Action buttons ===
         btn_frame = tk.Frame(root, bg="#1a1a1a")

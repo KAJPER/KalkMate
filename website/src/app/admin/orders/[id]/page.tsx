@@ -31,6 +31,8 @@ interface OrderDetail {
   invoice_filename: string;
   metadata: Record<string, string>;
   payment_provider: "stripe" | "p24";
+  personalized_code: string | null;
+  personalized_name: string | null;
 }
 
 
@@ -375,6 +377,25 @@ export default function OrderDetailPage({
                   {order.pickup_point_address}
                 </p>
               </div>
+
+              {/* Personalizacja — kod AI do wgrania + imie na etykiete, PRZED wyslka.
+                  To podstawa wylaczenia prawa odstapienia (art. 38 pkt 3),
+                  wiec musi byc realnie wykonana na tej konkretnej sztuce. */}
+              {order.personalized_code && (
+                <div className="border-t border-[#3F4147] pt-3">
+                  <p className="text-xs text-amber-400 uppercase tracking-wider font-medium mb-2">
+                    ⚠ Personalizacja — zrób przed wysyłką
+                  </p>
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-1">
+                    <p className="text-[#E0E0E0]">
+                      Kod odblokowania AI: <span className="font-mono font-bold">{order.personalized_code}</span>
+                    </p>
+                    <p className="text-[#E0E0E0]">
+                      Imię na etykietę: <span className="font-bold">{order.personalized_name}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Furgonetka info if exists */}
               {furgonetkaPackageId && (

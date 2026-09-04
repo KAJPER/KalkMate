@@ -1043,6 +1043,56 @@ void setup() {
         Serial.println("[FATAL] MCP23017 brak — klawiatura nie dziala");
     }
 
+    // === Prowizjonowanie fabryczne (flasher.py) ===
+    // Jednorazowe okno nasluchu na porcie USB tuz po zaflashowaniu, zeby
+    // wgrac kod odblokowania AI wybrany przez klienta w zamowieniu — bez
+    // recznego wpisywania go na klawiaturze 5x5 na linii produkcyjnej.
+    // Protokol (linia tekstowa zakonczona \n):
+    //   PC wysyla:  KALKPROV:SETCODE:1234
+    //   ESP32 odp:  KALKPROV:OK               (albo KALKPROV:ERR:BADCODE)
+    // Gate na fladze "done" w NVS ("kalkprov") — dziala TYLKO przy
+    // pierwszym boocie po flashu (swiezy NVS). Dla kazdego kolejnego bootu
+    // (czyli realnie caly czas u klienta) ten blok jest pomijany calkowicie,
+    // zero opoznienia/zero ryzyka ze przypadkowe dane na UART cos zmienia.
+    {
+        Preferences provPrefs;
+        provPrefs.begin("kalkprov", false);
+        if (!provPrefs.getBool("done", false)) {
+            Serial.println("[PROV] Pierwszy boot — okno 3s na KALKPROV:SETCODE:XXXX");
+            unsigned long provT0 = millis();
+            String provLine = "";
+            while (millis() - provT0 < 3000) {
+                while (Serial.available()) {
+                    char c = (char)Serial.read();
+                    if (c == '\n') {
+                        provLine.trim();
+                        if (provLine.startsWith("KALKPROV:SETCODE:")) {
+                            String code = provLine.substring(18);
+                            code.trim();
+                            bool ok = (code.length() == 4);
+                            for (int i = 0; ok && i < 4; i++) {
+                                if (!isDigit((unsigned char)code[i])) ok = false;
+                            }
+                            if (ok) {
+                                saveAiCode(code.c_str());
+                                Serial.println("KALKPROV:OK");
+                                Serial.printf("[PROV] Kod AI ustawiony: %s\n", code.c_str());
+                            } else {
+                                Serial.println("KALKPROV:ERR:BADCODE");
+                            }
+                        }
+                        provLine = "";
+                    } else if (c != '\r') {
+                        provLine += c;
+                    }
+                }
+                delay(5);
+            }
+            provPrefs.putBool("done", true);
+        }
+        provPrefs.end();
+    }
+
     // Wczytaj wszystkie zapisane ustawienia z NVS
     {
         char buf[12];

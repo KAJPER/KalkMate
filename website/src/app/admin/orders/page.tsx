@@ -16,6 +16,8 @@ interface Order {
   customer_phone: string;
   pickup_point: string;
   fulfillment_status: string;
+  personalized_code: string | null;
+  personalized_name: string | null;
 }
 
 function formatAmount(amount: number, currency: string): string {
@@ -109,6 +111,9 @@ export default function OrdersPage() {
                 <th className="px-4 py-3 text-xs font-medium text-[#E0E0E0]/50 uppercase tracking-wider hidden md:table-cell">
                   Paczkomat
                 </th>
+                <th className="px-4 py-3 text-xs font-medium text-[#E0E0E0]/50 uppercase tracking-wider hidden lg:table-cell">
+                  Personalizacja
+                </th>
                 <th className="px-4 py-3 text-xs font-medium text-[#E0E0E0]/50 uppercase tracking-wider">
                   Kwota
                 </th>
@@ -143,6 +148,16 @@ export default function OrdersPage() {
                   <td className="px-4 py-3 text-[#E0E0E0]/60 hidden md:table-cell">
                     {order.pickup_point || "—"}
                   </td>
+                  <td className="px-4 py-3 hidden lg:table-cell">
+                    {order.personalized_code ? (
+                      <div className="text-xs">
+                        <p className="text-[#E0E0E0] font-mono">Kod: {order.personalized_code}</p>
+                        <p className="text-[#E0E0E0]/50">{order.personalized_name}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-[#E0E0E0]/30">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-[#E0E0E0] font-medium whitespace-nowrap">
                     {formatAmount(order.amount, order.currency)}
                   </td>
@@ -160,7 +175,7 @@ export default function OrdersPage() {
               {filtered.length === 0 && !loading && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-8 text-center text-[#E0E0E0]/40 text-sm"
                   >
                     Brak zamówień

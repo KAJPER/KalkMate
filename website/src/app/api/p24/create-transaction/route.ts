@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getCoupon, computeDiscount } from "@/lib/coupons";
 import { registerTransaction, paymentUrl } from "@/lib/przelewy24";
 import { randomUUID } from "crypto";
+import { ensureOrderPersonalizationColumns, validatePersonalization } from "@/lib/orderPersonalization";
 
 const EU_COUNTRIES = new Set([
   "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE",
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       street, postcode, city,
       country, currency, shippingCents, couponCode,
       blikMode = false,
+      unlockCode, personalizeName,
     } = body;
 
     const email = user.email!;
@@ -49,6 +51,13 @@ export async function POST(request: NextRequest) {
 
     if (!name || !phone) {
       return NextResponse.json({ error: "Imię i telefon są wymagane." }, { status: 400 });
+    }
+    // Personalizacja jest obowiazkowa dla kazdego zamowienia fizycznego
+    // urzadzenia — patrz komentarz w lib/orderPersonalization.ts (podstawa
+    // wylaczenia prawa odstapienia, art. 38 pkt 3 ustawy o prawach konsumenta).
+    const personalization = validatePersonalization(unlockCode, personalizeName);
+    if (!personalization.ok) {
+      return NextResponse.json({ error: personalization.error }, { status: 400 });
     }
     if (isPoland && !pickupPoint) {
       return NextResponse.json({ error: "Paczkomat jest wymagany dla dostaw do Polski." }, { status: 400 });
@@ -112,6 +121,7 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
 
     // Store pending order — raw SQL to use new columns before client regeneration
+    await ensureOrderPersonalizationColumns();
     await prisma.$executeRaw`
       INSERT INTO "Order" (
         id, "userId", "orderNumber", status,
@@ -120,6 +130,7 @@ export async function POST(request: NextRequest) {
         "customerAddressStreet", "customerAddressPostcode", "customerAddressCity", "customerCountry",
         amount, currency,
         "paymentProvider", "p24SessionId",
+        "personalizedCode", "personalizedName",
         "createdAt", "updatedAt"
       ) VALUES (
         ${orderId}, ${user.id}, ${orderNumber}, 'pending',
@@ -129,6 +140,7 @@ export async function POST(request: NextRequest) {
         ${street || ""}, ${postcode || ""}, ${city || ""}, ${resolvedCountry},
         ${totalAmount}, ${resolvedCurrency.toLowerCase()},
         'p24', ${sessionId},
+        ${personalization.code}, ${personalization.name},
         ${now}, ${now}
       )
     `;

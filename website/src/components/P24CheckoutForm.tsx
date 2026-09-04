@@ -12,6 +12,8 @@ interface FormData {
   postcode: string;
   city: string;
   country: string;
+  unlockCode: string;
+  personalizeName: string;
 }
 
 interface P24CheckoutFormProps {

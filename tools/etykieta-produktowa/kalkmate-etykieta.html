@@ -217,7 +217,9 @@
 <body>
 
   <div class="sn-controls">
-    Numer seryjny na etykiecie: <input type="text" id="snInput" value="06"> (edytuj przed drukiem każdej sztuki, ten pasek się nie drukuje)
+    Numer seryjny na etykiecie: <input type="text" id="snInput" value="06">
+    &nbsp;&nbsp;Personalizacja (imię/nick z zamówienia): <input type="text" id="nameInput" value="">
+    <br>(edytuj przed drukiem każdej sztuki — imię bierzesz z panelu /admin/orders, ten pasek się nie drukuje)
   </div>
 
   <div class="label">
@@ -265,7 +267,10 @@
         <div><span class="label-i">Producent:</span> <b>KAJPA Kacper Popko</b></div>
         <div>Zastawie I 37, 16-070 Choroszcz</div>
         <div>Made in Poland · Li-Po 3.7V 1500mAh, USB-C 5V</div>
-        <div class="sn-box">SN: <span id="sn-value">06</span></div>
+        <div style="display:flex; gap:2mm; flex-wrap:wrap;">
+          <div class="sn-box">SN: <span id="sn-value">06</span></div>
+          <div class="sn-box" id="name-box" style="display:none;">Dla: <span id="name-value"></span></div>
+        </div>
       </div>
 
       <div class="weee">
@@ -438,6 +443,16 @@ document.getElementById("gtin-text").textContent =
 const snInput = document.getElementById("snInput");
 const snValue = document.getElementById("sn-value");
 snInput.addEventListener("input", () => { snValue.textContent = snInput.value; });
+
+// Personalizacja (imie/nick z zamowienia, patrz /admin/orders) — pole
+// opcjonalne, box na etykiecie pokazuje sie tylko gdy cos wpisano.
+const nameInput = document.getElementById("nameInput");
+const nameValue = document.getElementById("name-value");
+const nameBox = document.getElementById("name-box");
+nameInput.addEventListener("input", () => {
+  nameValue.textContent = nameInput.value;
+  nameBox.style.display = nameInput.value.trim() ? "inline-block" : "none";
+});
 </script>
 </body>
 </html>

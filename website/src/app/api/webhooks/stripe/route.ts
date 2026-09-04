@@ -6,6 +6,7 @@ import { purchaseConfirmationEmail, localeFromCountry, EMAIL_SUBJECTS } from "@/
 import { prisma } from "@/lib/db";
 import { incrementCouponUsage } from "@/lib/coupons";
 import { createPaidTokenPurchase } from "@/lib/tokenPurchases";
+import { setOrderPersonalization } from "@/lib/orderPersonalization";
 import { randomUUID } from "crypto";
 
 export async function POST(request: NextRequest) {
@@ -151,11 +152,12 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 
   // Generate order number (e.g., KM-20260220-1234)
   const orderNumber = `KM-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const orderId = randomUUID();
 
   // Zapisz zamowienie z userId
   await prisma.order.create({
     data: {
-      id: require("crypto").randomUUID(),
+      id: orderId,
       userId: existingUser?.id,
       orderNumber,
       status: "paid",
@@ -175,6 +177,13 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
       updatedAt: new Date(),
     },
   });
+
+  // Personalizacja (kod AI + imie na etykiete) — podstawa wylaczenia prawa
+  // odstapienia, patrz lib/orderPersonalization.ts. Order nie ma tych kolumn
+  // w Prisma schemie, wiec dopisujemy raw SQL zaraz po create().
+  if (meta.personalized_code && meta.personalized_name) {
+    await setOrderPersonalization(orderId, meta.personalized_code, meta.personalized_name);
+  }
 
   // Jeśli użytkownik już ma konto, upgrade subskrypcji do 30 dni
   if (existingUser) {
@@ -236,7 +245,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 
 async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
   console.log("[WEBHOOK] handleCalculatorPurchase called", { sessionId: session.id, metadata: session.metadata });
-  const { name, email, phone, pickupPoint, pickupPointAddress } = session.metadata || {};
+  const { name, email, phone, pickupPoint, pickupPointAddress, personalized_code, personalized_name } = session.metadata || {};
 
   if (!email) {
     console.error("[WEBHOOK] Missing email in checkout session metadata");
@@ -252,11 +261,12 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
 
   // Generate order number (e.g., KM-20260220-1234)
   const orderNumber = `KM-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const orderId = randomUUID();
 
   // Zapisz zamówienie (z userId jeśli użytkownik istnieje, bez userId jeśli nie)
   await prisma.order.create({
     data: {
-      id: require("crypto").randomUUID(),
+      id: orderId,
       userId: existingUser?.id, // Może być undefined - wtedy NULL w bazie
       orderNumber,
       status: "paid",
@@ -272,6 +282,11 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
       updatedAt: new Date(),
     },
   });
+
+  // Personalizacja (kod AI + imie na etykiete) — jak w handlePaymentIntentSucceeded.
+  if (personalized_code && personalized_name) {
+    await setOrderPersonalization(orderId, personalized_code, personalized_name);
+  }
 
   // Jeśli użytkownik już ma konto, upgrade subskrypcji do 30 dni
   if (existingUser) {
