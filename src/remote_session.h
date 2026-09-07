@@ -12,17 +12,22 @@
 //       sesja jest aktywna (kwadracik w prawym gornym rogu, dorysowywany
 //       przy kazdym "tick" ponizej — patrz remoteHeartbeatTick()).
 //    3. Od tego momentu — z KAZDEGO ekranu w UI (bo hak jest w
-//       inputScan(), patrz input.h) — kalkulator co ~500ms:
-//         a) dorysowuje wskaznik do biezacego bufora ekranu (cokolwiek
-//            akurat jest wyswietlone) i wysyla go na fizyczny OLED
-//            (krotki "flash" — pelny wzor jest przywracany przy nastepnym
-//            normalnym rysowaniu danego ekranu, ~20-50ms pozniej),
-//         b) wysyla ten sam bufor (2048 B, base64) do serwera,
-//         c) odbiera ewentualny oczekujacy zdalny klawisz i "wciska" go
-//            przez inputInjectKey() — dziala jak prawdziwy klawisz w
-//            KAZDYM ekranie, bez zadnych zmian w tych ekranach.
-//    4. Sesja konczy sie sama po ~10 min (serwer) albo recznie w panelu —
-//       kolejny tick dostanie active:false, wylaczy flage i WiFi.
+//       inputScan(), patrz input.h) — watek UI co ~500ms dorysowuje
+//       wskaznik do biezacego bufora ekranu i wysyla go na fizyczny OLED
+//       (krotki "flash" — pelny wzor wraca przy nastepnym normalnym
+//       rysowaniu danego ekranu, ~20-50ms pozniej), po czym kopiuje ten
+//       sam bufor dla watku sieciowego. CALA komunikacja z serwerem
+//       (w tym pelny handshake TLS) dzieje sie w OSOBNYM watku FreeRTOS
+//       na Core 0 (_remoteTaskFn) — watek UI (Core 1) nigdy na nia nie
+//       czeka, wiec klawiatura/ekran nie zamrazaja sie na czas sieci.
+//       Watek sieciowy dostaje tylko kopie bufora i oddaje tylko maly
+//       int/bool (klawisz, flaga stop) — jedyne dane dzielone miedzy
+//       watkami, pod mutexem. Watek NIGDY nie dotyka u8g2/SPI.
+//    4. Odebrany klawisz jest wstrzykiwany przez inputInjectKey() —
+//       dziala jak prawdziwy klawisz w KAZDYM ekranie, bez zmian w nich.
+//    5. Sesja konczy sie sama po ~10 min (serwer) albo recznie w panelu —
+//       kolejny tick watku sieciowego dostanie active:false, watek UI to
+//       zauwazy i wylaczy flage + WiFi.
 //
 //  Wymaga: input.h (remoteSessionActive/SetActive, inputInjectKey,
 //  remoteGetScreenBuffer/remoteSendBuffer), wifi_persist.h, kalkmate_certs.h,
@@ -34,6 +39,9 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
 
 #define _REMOTE_CHECKIN_ENDPOINT  KALK_SERVER_URL "/api/device/remote/checkin"
 #define _REMOTE_TICK_MS           500    // co ile odpytujemy serwer podczas sesji
@@ -70,10 +78,9 @@ static void _remoteStampIndicator() {
     }
 }
 
-// Zakoduj biezacy bufor ekranu do base64 (2048 B -> ok. 2732 znakow).
-static String _remoteFrameBase64() {
-    uint8_t* buf = remoteGetScreenBuffer();
-    if (!buf) return String();
+// Zakoduj podany bufor (kopia, NIE bezposrednio z u8g2 — patrz nizej dlaczego)
+// do base64 (2048 B -> ok. 2732 znakow).
+static String _remoteEncodeFrame(const uint8_t* buf) {
     static const char* tbl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     String out;
     out.reserve(((_REMOTE_BUF_LEN + 2) / 3) * 4);
@@ -89,52 +96,131 @@ static String _remoteFrameBase64() {
     return out;
 }
 
+// =====================================================================
+//  Watek sieciowy w tle (Core 0) — PRAWDZIWA asynchronicznosc.
+//
+//  Zasada, ktorej ten kod PILNUJE: watek siecowy NIGDY nie dotyka u8g2 ani
+//  SPI. To jedyne miejsce gdzie dwa watki na raz moglyby sie realnie
+//  pogryzc (dwie rownoczesne transakcje SPI na tej samej magistrali =
+//  ryzyko zaciecia/zaszumienia ekranu). Caly kontakt z ekranem
+//  (_remoteStampIndicator/remoteSendBuffer) zostaje na watku glownym,
+//  wywolywany jak dotychczas z inputScan(). Watek w tle dostaje tylko
+//  KOPIE bufora (mutex) i oddaje z powrotem tylko maly int/bool (klawisz,
+//  flaga stop) — to jedyne dane dzielone miedzy watkami.
+// =====================================================================
+static TaskHandle_t      _remoteTaskHandle = nullptr;
+static SemaphoreHandle_t _remoteMutex      = nullptr;
+static uint8_t  _remoteFrameShared[_REMOTE_BUF_LEN];
+static volatile bool _remoteFrameReady     = false;  // watek UI wpisal nowa klatke do wyslania
+static volatile int  _remotePendingKey     = -1;     // watek siecowy odebral klawisz do wstrzykniecia
+static volatile bool _remoteStopRequested  = false;  // serwer kazal zakonczyc sesje
+
+// Wykonuje siebie w petli na Core 0. Cale IO sieciowe (w tym pelny
+// handshake TLS przy pierwszym polaczeniu) dzieje sie TU — watek UI
+// (Core 1, loop()) nigdy na to nie czeka.
+static void _remoteTaskFn(void* /*arg*/) {
+    WiFiClientSecure client;
+    HTTPClient http;
+    bool clientReady = false;
+
+    for (;;) {
+        if (!remoteSessionActive()) { vTaskDelay(pdMS_TO_TICKS(200)); continue; }
+        if (WiFi.status() != WL_CONNECTED) { vTaskDelay(pdMS_TO_TICKS(200)); continue; }
+
+        uint8_t localFrame[_REMOTE_BUF_LEN];
+        bool haveFrame = false;
+        if (xSemaphoreTake(_remoteMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            if (_remoteFrameReady) {
+                memcpy(localFrame, _remoteFrameShared, _REMOTE_BUF_LEN);
+                haveFrame = true;
+            }
+            xSemaphoreGive(_remoteMutex);
+        }
+        if (!haveFrame) { vTaskDelay(pdMS_TO_TICKS(50)); continue; }
+
+        String frame = _remoteEncodeFrame(localFrame);
+
+        if (!clientReady) {
+            client.setCACert(KALKMATE_CA_CERT);
+            client.setTimeout(10);
+            clientReady = true;
+        }
+        http.begin(client, _REMOTE_CHECKIN_ENDPOINT);
+        http.setReuse(true);   // keep-alive miedzy tickami tego watku — patrz komentarz w v1.9.3
+        http.addHeader("Content-Type", "application/json");
+        http.addHeader("x-api-key", KALK_API_KEY);
+        http.addHeader("x-device-id", _remoteDeviceId());
+        http.setTimeout(_REMOTE_HTTP_TIMEOUT_MS);
+
+        String body = String("{\"frame\":\"") + frame + "\"}";
+        int httpCode = http.POST(body);
+        if (httpCode == 200) {
+            String resp = http.getString();
+            http.end();
+            if (resp.indexOf("\"active\":false") >= 0) {
+                _remoteStopRequested = true;
+                clientReady = false;
+            } else {
+                int keyIdx = resp.indexOf("\"key\":");
+                if (keyIdx >= 0) {
+                    int val = atoi(resp.c_str() + keyIdx + 6);
+                    if (val > 0 && val < KEY_COUNT) _remotePendingKey = val;
+                }
+            }
+        } else {
+            http.end();
+            clientReady = false;   // polaczenie moglo padnac — pelny reconnect nastepnym razem
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(_REMOTE_TICK_MS));
+    }
+}
+
+// Odbiera wyniki z watku siecowego i aplikuje je (wstrzykniecie klawisza,
+// wylaczenie sesji) — TO wywolywac tylko z watku UI.
+static void _remoteDrainResults() {
+    int key = _remotePendingKey;
+    if (key > 0) {
+        _remotePendingKey = -1;
+        inputInjectKey((KalkKey)key);
+    }
+    if (_remoteStopRequested) {
+        _remoteStopRequested = false;
+        remoteSessionSetActive(false);
+        WiFi.mode(WIFI_OFF);   // koniec sesji — oszczedzaj baterie jak wszedzie indziej w projekcie
+        // Watku NIE zabijamy — sam sie usypia (remoteSessionActive()==false -> vTaskDelay
+        // 200ms w petli) i obudzi przy nastepnej sesji. Prosciej i bezpieczniej niz
+        // tworzenie/niszczenie tasku za kazdym razem.
+    }
+}
+
 // Wywolywane z inputScan() (input.h) gdy remoteSessionActive()==true.
-// Throttluje sie samo do _REMOTE_TICK_MS — bezpieczne wolac czesto.
+// Throttluje sie samo do _REMOTE_TICK_MS. To jest juz TYLKO watek UI:
+// dorysowanie wskaznika + wyslanie na fizyczny OLED (musi zostac tutaj,
+// patrz komentarz przy tasku) + skopiowanie klatki dla watku sieciowego.
+// Zero blokujacego IO w tej funkcji — stad "prawdziwa" asynchronicznosc.
 void remoteHeartbeatTick() {
+    // Start watku siecowego raz, przy pierwszym wejsciu w sesje.
+    if (!_remoteTaskHandle) {
+        _remoteMutex = xSemaphoreCreateMutex();
+        xTaskCreatePinnedToCore(_remoteTaskFn, "remoteHelp", 12288, nullptr, 1, &_remoteTaskHandle, 0);
+    }
+
+    _remoteDrainResults();   // tanie (kilka porownan) — rob to co kazdy scan, nie tylko co tick
+
     static uint32_t lastTick = 0;
     uint32_t now = millis();
     if (now - lastTick < _REMOTE_TICK_MS) return;
     lastTick = now;
 
-    if (WiFi.status() != WL_CONNECTED) return;  // brak sieci — sprobuj przy nastepnym tick
-
     _remoteStampIndicator();
-    remoteSendBuffer();   // krotki "flash" wskaznika na fizycznym OLED
-    String frame = _remoteFrameBase64();
+    remoteSendBuffer();   // krotki "flash" wskaznika na fizycznym OLED — TYLKO watek UI dotyka SPI
 
-    WiFiClientSecure client;
-    client.setCACert(KALKMATE_CA_CERT);
-    client.setTimeout(10);
-    HTTPClient http;
-    http.begin(client, _REMOTE_CHECKIN_ENDPOINT);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("x-api-key", KALK_API_KEY);
-    http.addHeader("x-device-id", _remoteDeviceId());
-    http.setTimeout(_REMOTE_HTTP_TIMEOUT_MS);
-
-    String body = String("{\"frame\":\"") + frame + "\"}";
-    int httpCode = http.POST(body);
-    if (httpCode != 200) {
-        http.end();
-        return;   // chwilowy blad — kolejny tick i tak sprobuje ponownie
-    }
-    String resp = http.getString();
-    http.end();
-
-    if (resp.indexOf("\"active\":false") >= 0) {
-        remoteSessionSetActive(false);
-        WiFi.mode(WIFI_OFF);   // koniec sesji — oszczedzaj baterie jak wszedzie indziej w projekcie
-        return;
-    }
-
-    int keyIdx = resp.indexOf("\"key\":");
-    if (keyIdx >= 0) {
-        int numStart = keyIdx + 6;
-        int val = atoi(resp.c_str() + numStart);
-        if (val > 0 && val < KEY_COUNT) {
-            inputInjectKey((KalkKey)val);
-        }
+    uint8_t* buf = remoteGetScreenBuffer();
+    if (buf && xSemaphoreTake(_remoteMutex, 0) == pdTRUE) {
+        memcpy(_remoteFrameShared, buf, _REMOTE_BUF_LEN);
+        _remoteFrameReady = true;
+        xSemaphoreGive(_remoteMutex);
     }
 }
 

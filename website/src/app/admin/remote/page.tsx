@@ -70,7 +70,15 @@ export default function RemoteControlPage() {
         const byte = bytes[page * SCREEN_W + x] ?? 0;
         const on = (byte >> bit) & 1;
         const v = on ? 255 : 0;
-        const idx = (y * SCREEN_W + x) * 4;
+        // Konstruktor u8g2 na urzadzeniu uzywa U8G2_R2 (obrot 180°, bo fizyczny
+        // panel OLED jest zamontowany "do gory nogami" na plytce) — u8g2
+        // aplikuje ten obrot PRZED zapisem do bufora, wiec surowe bajty z
+        // getBufferPtr() sa juz w ukladzie obroconym o 180° wzgledem
+        // "logicznego" ekranu. Kompensujemy tutaj (lustro x i y), zeby
+        // podglad w przegladarce wygladal tak jak na fizycznym ekranie.
+        const rx = SCREEN_W - 1 - x;
+        const ry = SCREEN_H - 1 - y;
+        const idx = (ry * SCREEN_W + rx) * 4;
         img.data[idx] = v;
         img.data[idx + 1] = v;
         img.data[idx + 2] = v;

@@ -117,11 +117,16 @@ inline uint32_t inputLastActivity() { return _inputLastActivity; }
 // =====================================================================
 static uint32_t _kalkKeyVirtualUntil[KEY_COUNT] = {0};
 
-// Symuluje przytrzymanie klawisza k przez holdMs (domyslnie 150ms — dosc
-// dlugo, zeby debounce (2 skany * 30ms) na pewno zlapal edge, ale krotko
-// zeby nie blokowac nawigacji ktoś fizycznie uzywajacej klawiatury w tym
-// samym czasie).
-inline void inputInjectKey(KalkKey k, uint32_t holdMs = 150) {
+// Symuluje przytrzymanie klawisza k przez holdMs. WAZNE: _setBtn() w
+// settings_screen.h dziala na zasadzie "trzymaj i powtarzaj co 200ms"
+// (zeby dalo sie przytrzymac strzalke i przewijac liste) — NIE jest to
+// pojedyncze wykrycie zbocza. Jesli holdMs >= 200ms, jedno zdalne
+// "klikniecie" zostanie odczytane jako DWA (albo wiecej) powtorzen w tym
+// samym oknie. 120ms daje spory zapas ponad skan (30ms) i asynchroniczny
+// watek Zdalnej pomocy (patrz remote_session.h — v1.9.4+, UI juz nie
+// blokuje sie na sieci, wiec nie trzeba tu dlugiego trzymania), a wciaz
+// bezpiecznie ponizej progu powtorzenia.
+inline void inputInjectKey(KalkKey k, uint32_t holdMs = 120) {
     if (k == KEY_NONE || k >= KEY_COUNT) return;
     _kalkKeyVirtualUntil[k] = millis() + holdMs;
 }
