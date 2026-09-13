@@ -143,6 +143,20 @@ def load_config():
     return defaults
 
 
+def _tool_cmd(path):
+    """Zbuduj prefiks komendy dla esptool/espefuse/espsecure.
+
+    Na Windows subprocess.run/Popen woła CreateProcess bezposrednio (bez
+    shell=True), ktore NIE zna skojarzen plikow — probujac odpalic ".py"
+    jako natywny .exe dostajemy [WinError 193] "%1 nie jest prawidlowa
+    aplikacja systemu Win32". Trzeba jawnie przepuscic przez interpreter,
+    ktorym ten GUI wlasnie dziala (sys.executable).
+    """
+    if path.endswith(".py"):
+        return [sys.executable, path]
+    return [path]
+
+
 def find_esp32s3_ports():
     """Zwraca liste portow ktore wygladaja na ESP32-S3."""
     found = []
@@ -344,7 +358,8 @@ class FlasherApp:
     def read_chip_info(self):
         """Odczytaj MAC + chip type przez esptool chip_id."""
         try:
-            cmd = [self.cfg["esptool"], "--chip", self.cfg["chip"],
+            cmd = _tool_cmd(self.cfg["esptool"]) + [
+                   "--chip", self.cfg["chip"],
                    "--port", self.current_port, "--baud", "115200",
                    "--after", "no_reset",
                    "chip_id"]
@@ -437,7 +452,7 @@ class FlasherApp:
                     (self.cfg["flash_addr_firmware"],   self.cfg["firmware_bin"]),
                 ]:
                     dst = os.path.join(enc_dir, os.path.basename(src).replace(".bin", "_enc.bin"))
-                    cmd = [espsecure, "encrypt-flash-data",
+                    cmd = _tool_cmd(espsecure) + ["encrypt_flash_data",
                            "--aes-xts", "--keyfile", key_file,
                            "--address", addr, "--output", dst, src]
                     self._run_subprocess(cmd, prefix="espsecure")
@@ -450,11 +465,11 @@ class FlasherApp:
 
             self.log(f"[1/3] Flashuje bootloader + partitions + firmware...")
             force_flag = ["--force"] if mode in ("PROD_DEV", "PROD_REL") else []
-            cmd = [
-                self.cfg["esptool"], "--chip", self.cfg["chip"],
+            cmd = _tool_cmd(self.cfg["esptool"]) + [
+                "--chip", self.cfg["chip"],
                 "--port", port, "--baud", str(self.cfg["baud"]),
-                "--after", "no-reset",
-                "write-flash", *force_flag,
+                "--after", "no_reset",
+                "write_flash", *force_flag,
                 self.cfg["flash_addr_bootloader"], boot_bin,
                 self.cfg["flash_addr_partitions"], part_bin,
                 self.cfg["flash_addr_firmware"],   fw_bin,
@@ -474,15 +489,15 @@ class FlasherApp:
             if mode == "PROD_DEV":
                 self.log("[2/3] Wypalanie Flash Encryption eFuse...")
                 # Wypal klucz w BLOCK_KEY0
-                cmd = [self.cfg["espefuse"], "--chip", self.cfg["chip"],
+                cmd = _tool_cmd(self.cfg["espefuse"]) + ["--chip", self.cfg["chip"],
                        "--port", port,
-                       "burn-key", "BLOCK_KEY0",
+                       "burn_key", "BLOCK_KEY0",
                        key_file, "XTS_AES_256_KEY"]
                 self._run_subprocess(cmd, prefix="espefuse-key", stdin_input="BURN\n")
                 # Wlacz Flash Encryption
-                cmd = [self.cfg["espefuse"], "--chip", self.cfg["chip"],
+                cmd = _tool_cmd(self.cfg["espefuse"]) + ["--chip", self.cfg["chip"],
                        "--port", port,
-                       "burn-efuse", "SPI_BOOT_CRYPT_CNT", "1"]
+                       "burn_efuse", "SPI_BOOT_CRYPT_CNT", "1"]
                 self._run_subprocess(cmd, prefix="espefuse-en", stdin_input="BURN\n")
             elif mode == "PROD_REL":
                 self.log("[2/3] Pomijam wypalanie klucza (juz zrobione w PROD_DEV)")
@@ -490,15 +505,15 @@ class FlasherApp:
             # Step 3 (tylko PROD_REL): zamknij Flash Encryption Release
             if mode == "PROD_REL":
                 self.log("[3/3] Przelaczenie FE na RELEASE mode (PERMANENT!)...")
-                cmd = [self.cfg["espefuse"], "--chip", self.cfg["chip"],
+                cmd = _tool_cmd(self.cfg["espefuse"]) + ["--chip", self.cfg["chip"],
                        "--port", port,
-                       "burn-efuse", "DIS_DOWNLOAD_MANUAL_ENCRYPT", "1"]
+                       "burn_efuse", "DIS_DOWNLOAD_MANUAL_ENCRYPT", "1"]
                 self._run_subprocess(cmd, prefix="espefuse-release", stdin_input="BURN\n")
 
             # Reset chip zeby dostal sie z bootloader mode do normalnego bootu
             self.log("Resetuje urzadzenie...")
             try:
-                cmd = [self.cfg["esptool"], "--chip", self.cfg["chip"],
+                cmd = _tool_cmd(self.cfg["esptool"]) + ["--chip", self.cfg["chip"],
                        "--port", port, "--baud", "115200", "run"]
                 self._run_subprocess(cmd, prefix="esptool-reset")
             except Exception:

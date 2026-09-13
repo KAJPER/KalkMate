@@ -97,6 +97,15 @@ def load_config():
     return defaults
 
 
+def _tool_cmd(path):
+    """Zbuduj prefiks komendy dla esptool/espefuse (patrz flasher.py — ten
+    sam [WinError 193] gdy subprocess probuje odpalic ".py" bezposrednio
+    jako natywny .exe na Windows)."""
+    if path.endswith(".py"):
+        return [sys.executable, path]
+    return [path]
+
+
 def find_ports():
     out = []
     for p in list_ports.comports():
@@ -119,7 +128,7 @@ def log_event(mac, port, mode, result, error=""):
 
 def read_mac(cfg, port):
     """Odczytaj MAC chipa przez esptool chip_id."""
-    cmd = [cfg["esptool"], "--chip", cfg["chip"],
+    cmd = _tool_cmd(cfg["esptool"]) + ["--chip", cfg["chip"],
            "--port", port, "--baud", "115200", "chip_id"]
     res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
     out = res.stdout + res.stderr
@@ -206,8 +215,8 @@ def flash_device(cfg, port, mode, client_code=None):
 
     # 2. Flash firmware
     print(f"{C_YEL}[1/3] Flashuje bootloader + partitions + firmware...{C_RST}")
-    cmd = [
-        cfg["esptool"], "--chip", cfg["chip"],
+    cmd = _tool_cmd(cfg["esptool"]) + [
+        "--chip", cfg["chip"],
         "--port", port, "--baud", str(cfg["baud"]),
         "write_flash", "-z",
         cfg["flash_addr_bootloader"], cfg["bootloader_bin"],
@@ -226,18 +235,18 @@ def flash_device(cfg, port, mode, client_code=None):
             print(f"  *** ZBACKUPUJ TEN PLIK NA OSOBNYM NOSNIKU ***{C_RST}")
             with open(key_file, "wb") as f:
                 f.write(os.urandom(32))
-        cmd = [cfg["espefuse"], "--chip", cfg["chip"], "--port", port,
+        cmd = _tool_cmd(cfg["espefuse"]) + ["--chip", cfg["chip"], "--port", port,
                "burn_key", "BLOCK_KEY0", key_file, "XTS_AES_256_KEY",
                "--do-not-confirm"]
         run_step(cmd, "espefuse")
-        cmd = [cfg["espefuse"], "--chip", cfg["chip"], "--port", port,
+        cmd = _tool_cmd(cfg["espefuse"]) + ["--chip", cfg["chip"], "--port", port,
                "burn_efuse", "SPI_BOOT_CRYPT_CNT", "1", "--do-not-confirm"]
         run_step(cmd, "espefuse")
 
     # 4. Release lock
     if mode == "PROD_REL":
         print(f"{C_RED}[3/3] FE -> RELEASE mode (PERMANENT)...{C_RST}")
-        cmd = [cfg["espefuse"], "--chip", cfg["chip"], "--port", port,
+        cmd = _tool_cmd(cfg["espefuse"]) + ["--chip", cfg["chip"], "--port", port,
                "burn_efuse", "DIS_DOWNLOAD_MANUAL_ENCRYPT", "1",
                "--do-not-confirm"]
         run_step(cmd, "espefuse")

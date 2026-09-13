@@ -17,6 +17,7 @@ interface OrderDetail {
   customer_address_street: string;
   customer_address_postcode: string;
   customer_address_city: string;
+  customer_country: string;
   pickup_point: string;
   pickup_point_address: string;
   product: string;
@@ -253,6 +254,126 @@ export default function OrderDetailPage({
     } finally {
       setDocumentLoading(false);
     }
+  };
+
+  // ---------------------------------------------------------------------
+  // Eksport CSV do masowego wgrania w panelu kuriera ("Importuj zamowienia
+  // z pliku CSV") — alternatywa dla etykiety tworzonej przez API
+  // Furgonetka powyzej, przydatne gdy wolisz wgrac przesylke recznie.
+  //
+  // Wartosci ponizej sa zgodne z dokladnymi opcjami z tooltipow "wiecej
+  // informacji" na ich formularzu (potwierdzone przez uzytkownika):
+  //   rodzaj przesylki: paczka | koperta | paleta | niestandardowa
+  //   ksztalt i rodzaj opakowania: standardowa | niestandardowa
+  //   sposob nadania: odbior przez kuriera | dostarcz przesylke do punktu
+  //   sposob doreczenia: kurier | punkt odbioru
+  const FURGONETKA_CSV = {
+    // --- Paczka (te same dla kazdego zamowienia — jeden model, jedno pudelko) ---
+    dlugosc: "18",
+    szerokosc: "12",
+    wysokosc: "4",
+    waga: "1", // kg
+    rodzajPrzesylki: "paczka",
+    ksztaltOpakowania: "standardowa",
+    zawartosc: "Kalkulator elektroniczny",
+    sposobNadania: "dostarcze przesylke do punktu",
+    // --- Nadawca (stale dane firmy — z CLAUDE.md / stopki strony) ---
+    nadawcaImie: "Kacper Popko",
+    nadawcaFirma: "KAJPA Kacper Popko",
+    nadawcaUlica: "ul. Zastawie I",
+    nadawcaNumer: "37",
+    nadawcaKod: "16-070",
+    nadawcaMiasto: "Choroszcz",
+    nadawcaEmail: "kacper@kajpa.pl",
+    nadawcaTelefon: "600580888",
+  };
+
+  // Rozdziela "Marszalkowska 1/2" -> { street: "Marszalkowska", number: "1/2" }.
+  // Furgonetka chce numer budynku w osobnej kolumnie, a u nas to jedno pole.
+  function splitStreetAndNumber(full: string): { street: string; number: string } {
+    const trimmed = (full || "").trim();
+    const m = trimmed.match(/^(.*?)[\s,]+(\d+[a-zA-Z]?(?:\/\d+[a-zA-Z]?)?)$/);
+    if (m) return { street: m[1].trim(), number: m[2].trim() };
+    return { street: trimmed, number: "" };
+  }
+
+  // CSV-escapuje pole: cudzyslowia jesli zawiera srednik/cudzyslow/nowa linie.
+  function csvField(v: string): string {
+    const s = v ?? "";
+    if (/[;"\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  }
+
+  const handleExportFurgonetkaCsv = () => {
+    if (!order) return;
+    const { street: recvStreet, number: recvNumber } = splitStreetAndNumber(order.customer_address_street);
+    const isPaczkomat = !!order.pickup_point;
+
+    // Kolejnosc/liczba kolumn (40) zweryfikowana 1:1 z przyklad-import-zamowien-v2.csv
+    // pobranym z panelu — TAM jest zrodlo prawdy, nie z listy pol na stronie
+    // formularza (ktora zawierala dodatkowe pole "zniesienie" nieobecne w CSV).
+    const headers = [
+      "rodzaj przesylki", "dlugosc", "szerokosc", "wysokosc", "waga",
+      "ksztalt i rodzaj opakowania", "zawartosc przesylki", "sposob nadania", "sposob doreczenia",
+      "imie i nazwisko odbiorcy", "nazwa firmy odbiorcy", "ulica odbiorcy", "numer budynku odbiorcy",
+      "numer mieszkania odbiorcy", "kraj odbiorcy", "kod pocztowy odbiorcy", "miasto odbiorcy",
+      "adres e-mail odbiorcy", "numer telefonu odbiorcy", "kurier",
+      "imie i nazwisko nadawcy", "nazwa firmy nadawcy", "ulica nadawcy", "numer budynku nadawcy",
+      "numer mieszkania nadawcy", "kod pocztowy nadawcy", "miasto nadawcy", "adres e-mail nadawcy",
+      "numer telefonu nadawcy", "data odbioru", "godzina odbioru od", "godzina odbioru do",
+      "kod punktu odbioru", "ubezpieczenie", "pobranie", "paczka w weekend", "ostroznie",
+      "wniesienie", "wniesienie i rozpakowanie", "zwrot palet",
+    ];
+
+    const row = [
+      FURGONETKA_CSV.rodzajPrzesylki,                              // rodzaj przesylki *
+      FURGONETKA_CSV.dlugosc,                                      // dlugosc *
+      FURGONETKA_CSV.szerokosc,                                    // szerokosc *
+      FURGONETKA_CSV.wysokosc,                                     // wysokosc *
+      FURGONETKA_CSV.waga,                                         // waga *
+      FURGONETKA_CSV.ksztaltOpakowania,                            // ksztalt i rodzaj opakowania *
+      FURGONETKA_CSV.zawartosc,                                    // zawartosc przesylki *
+      FURGONETKA_CSV.sposobNadania,                                // sposob nadania *
+      isPaczkomat ? "punkt odbioru" : "kurier",                    // sposob doreczenia *
+      order.customer_name,                                         // imie i nazwisko odbiorcy *
+      "",                                                          // nazwa firmy odbiorcy
+      recvStreet,                                                  // ulica odbiorcy *
+      recvNumber,                                                  // numer budynku odbiorcy *
+      "",                                                          // numer mieszkania odbiorcy
+      order.customer_country || "PL",                              // kraj odbiorcy *
+      order.customer_address_postcode,                             // kod pocztowy odbiorcy *
+      order.customer_address_city,                                 // miasto odbiorcy *
+      order.customer_email,                                        // adres e-mail odbiorcy *
+      order.customer_phone,                                        // numer telefonu odbiorcy *
+      isPaczkomat ? "paczkomaty" : "",                             // kurier
+      FURGONETKA_CSV.nadawcaImie,                                  // imie i nazwisko nadawcy
+      FURGONETKA_CSV.nadawcaFirma,                                 // nazwa firmy nadawcy
+      FURGONETKA_CSV.nadawcaUlica,                                 // ulica nadawcy
+      FURGONETKA_CSV.nadawcaNumer,                                 // numer budynku nadawcy
+      "",                                                          // numer mieszkania nadawcy
+      FURGONETKA_CSV.nadawcaKod,                                   // kod pocztowy nadawcy
+      FURGONETKA_CSV.nadawcaMiasto,                                // miasto nadawcy
+      FURGONETKA_CSV.nadawcaEmail,                                 // adres e-mail nadawcy
+      FURGONETKA_CSV.nadawcaTelefon,                               // numer telefonu nadawcy
+      "", "", "",                                                  // data/godziny odbioru
+      isPaczkomat ? order.pickup_point : "",                       // kod punktu odbioru
+      "", "", "", "",                                              // ubezpieczenie/pobranie/weekend/ostroznie
+      "", "", "",                                                  // wniesienie/wniesienie i rozpakowanie/zwrot palet
+    ];
+
+    // BEZ BOM — realny szablon platformy nie toleruje BOM przed pierwszym
+    // naglowkiem (psuje rozpoznanie kolumny "rodzaj przesylki"). Polskie
+    // znaki i tak dojda poprawnie, bo Blob ma charset=utf-8.
+    const csv = [headers, row].map((r) => r.map(csvField).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `furgonetka-${order.id.slice(-8)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const formatDate = (ts: number) =>
@@ -708,6 +829,43 @@ export default function OrderDetailPage({
               <p className="text-xs text-[#E0E0E0]/30 mt-2">
                 Przesyłka zostanie nadana w Paczkomacie InPost. Punkt odbioru: {order.pickup_point || "—"}
               </p>
+            </div>
+
+            {/* Eksport CSV — alternatywa dla API Furgonetka powyzej, do recznego wgrania */}
+            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center flex-shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="12" y1="18" x2="12" y2="12"/>
+                    <line x1="9" y1="15" x2="15" y2="15"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-[#E0E0E0]">Eksport CSV (kurier)</h2>
+                  <p className="text-xs text-[#E0E0E0]/50">Do ręcznego wgrania przez "Importuj zamówienia z pliku CSV"</p>
+                </div>
+              </div>
+
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3">
+                <p className="text-xs text-green-400 leading-relaxed">
+                  ✓ Wszystkie pola (rodzaj przesyłki, opakowanie, sposób nadania/doręczenia, waga,
+                  wymiary, dane nadawcy) zweryfikowane z formularzem importu.
+                </p>
+              </div>
+
+              <button
+                onClick={handleExportFurgonetkaCsv}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm text-white bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 shadow-lg shadow-teal-500/20 transition-all"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Pobierz CSV
+              </button>
             </div>
 
             {/* Invoice section */}

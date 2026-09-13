@@ -52,6 +52,7 @@ export async function GET(
       customer_address_street: order.customerAddressStreet || "",
       customer_address_postcode: order.customerAddressPostcode || "",
       customer_address_city: order.customerAddressCity || "",
+      customer_country: order.customerCountry || "",
       pickup_point: order.pickupPoint || "",
       pickup_point_address: order.pickupPointAddress || "",
       product: "KalkMate v3.0",
