@@ -195,7 +195,7 @@ Next.js (App Router) + Prisma + Tailwind CSS, deployed on a VPS behind `kalkmate
 
 ## Security
 
-OTA updates are signed (ECDSA P-256 + SHA-256) and verified before installation — the device rejects unsigned or incorrectly signed firmware. Known hardening areas (a shared device API key, no Flash Encryption/Secure Boot on older boards) are deliberately documented in `SECURITY_AUDIT.md` and `security-repairs.md` — treat them as a roadmap, not a finished production state.
+OTA updates are signed (ECDSA P-256 + SHA-256) and verified before installation — the device rejects unsigned or incorrectly signed firmware. Known hardening areas (a shared device API key, no Flash Encryption/Secure Boot on older boards) are deliberately documented in `docs/security/SECURITY_AUDIT.md` and `docs/security/security-repairs.md` — treat them as a roadmap, not a finished production state.
 
 ## Project history
 

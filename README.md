@@ -195,7 +195,7 @@ Next.js (App Router) + Prisma + Tailwind CSS, wdrożone na VPS pod `kalkmate.pl`
 
 ## Bezpieczeństwo
 
-Aktualizacje OTA są podpisywane (ECDSA P-256 + SHA-256) i weryfikowane przed instalacją — urządzenie odrzuca niepodpisany lub błędnie podpisany firmware. Znane obszary do dalszego utwardzenia (współdzielony klucz API urządzeń, brak Flash Encryption/Secure Boot na starszych płytkach) są świadomie udokumentowane w `SECURITY_AUDIT.md` i `security-repairs.md` — traktuj je jako plan rozwoju, nie jako gotowy stan produkcyjny.
+Aktualizacje OTA są podpisywane (ECDSA P-256 + SHA-256) i weryfikowane przed instalacją — urządzenie odrzuca niepodpisany lub błędnie podpisany firmware. Znane obszary do dalszego utwardzenia (współdzielony klucz API urządzeń, brak Flash Encryption/Secure Boot na starszych płytkach) są świadomie udokumentowane w `docs/security/SECURITY_AUDIT.md` i `docs/security/security-repairs.md` — traktuj je jako plan rozwoju, nie jako gotowy stan produkcyjny.
 
 ## Rozwój projektu
 
