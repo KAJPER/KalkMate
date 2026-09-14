@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
+import Image from "next/image";
 import { type Locale } from "@/lib/i18n";
 
 type HeroContent = {
@@ -231,6 +232,16 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
             <div className="absolute -bottom-2 -right-2 w-5 h-5 border-r border-b border-[#D8FF3D]" />
 
             <div className="absolute inset-0 overflow-hidden bg-[#0B0B0B]">
+              <Image
+                src="/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp"
+                alt={t.imageAlt}
+                fill
+                priority
+                sizes="(min-width: 1024px) 460px, 0px"
+                className="object-cover"
+                style={{ objectPosition: "center 82%" }}
+              />
+              <div className="hidden lg:block absolute inset-0 bg-gradient-to-b from-[#0B0B0B] via-transparent to-transparent" />
               <div className="hidden lg:block absolute inset-0 bg-gradient-to-t from-[#0B0B0B] via-transparent to-transparent" />
             </div>
 

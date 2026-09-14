@@ -32,10 +32,6 @@ export const faqs: Record<Locale, FaqItem[]> = {
       a: "Zdjęcia i zapytania przesyłamy szyfrowanym HTTPS. Po przetworzeniu nie przechowujemy zdjęć — są usuwane z serwera natychmiast po wysłaniu odpowiedzi.",
     },
     {
-      q: "Czy mogę zwrócić produkt?",
-      a: "Tak. Masz 14 dni na zwrot bez podania przyczyny, zgodnie z prawem konsumenckim. Zwracamy pełną kwotę po otrzymaniu urządzenia.",
-    },
-    {
       q: "Kiedy dostanę zamówienie?",
       a: "Standardowy czas realizacji to 1–2 tygodnie od zaksięgowania płatności (maksymalnie 4 tygodnie). Po wysyłce dostawa Paczkomatem InPost zajmuje 1–2 dni robocze. Numer przesyłki dostajesz mailem.",
     },
@@ -70,10 +66,6 @@ export const faqs: Record<Locale, FaqItem[]> = {
       a: "Photos and queries are sent over encrypted HTTPS. We don't store photos after processing — they are deleted from the server immediately once the answer is sent.",
     },
     {
-      q: "Can I return the product?",
-      a: "Yes. You have 14 days to return it without giving a reason, in line with consumer law. We refund the full amount once we receive the device.",
-    },
-    {
       q: "When will I get my order?",
       a: "Standard processing time is 1–2 weeks from payment confirmation (up to 4 weeks maximum). After dispatch, InPost parcel-locker delivery takes 1–2 business days. You'll get your tracking number by email.",
     },
@@ -106,10 +98,6 @@ export const faqs: Record<Locale, FaqItem[]> = {
     {
       q: "Sind meine Daten sicher?",
       a: "Fotos und Anfragen werden verschlüsselt über HTTPS übertragen. Nach der Verarbeitung speichern wir keine Fotos — sie werden sofort nach dem Senden der Antwort vom Server gelöscht.",
-    },
-    {
-      q: "Kann ich das Produkt zurückgeben?",
-      a: "Ja. Du hast 14 Tage Rückgaberecht ohne Angabe von Gründen, gemäß Verbraucherrecht. Den vollen Betrag erstatten wir, sobald wir das Gerät erhalten haben.",
     },
     {
       q: "Wann erhalte ich meine Bestellung?",
