@@ -1173,7 +1173,7 @@ static void _editUpdate(U8G2 &d) {
 
 // Forward declarations — implementacje w innych plikach
 extern void showDeviceIdQrScreen(U8G2 &d);
-extern void showAccountStatusScreen(U8G2 &d);   // implementacja w main.cpp
+extern void showAccountStatusScreen(U8G2 &d);   // implementacja w account_screen.h
 // Z innych UI files (wifi_settings.h, screen_test.h):
 void showWifiSettings(U8G2 &display);
 void showScreenTest(U8G2 &display);

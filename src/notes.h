@@ -309,3 +309,233 @@ inline void notesClear() {
     if (!_notesEnsureFs()) return;
     if (SPIFFS.exists(_NOTES_FILE)) SPIFFS.remove(_NOTES_FILE);
 }
+
+// =====================================================================
+//  Ekran Notatki — lista offline + sync z serwera
+//
+//  Przeniesione tu z main.cpp (bylo jedynym ekranem UI trzymanym poza
+//  swoim plikiem). Uzywa mT()/btnPressed() zdefiniowanych w main.cpp
+//  zaraz po include settings_screen.h — notes.h jest wlaczany PO tym
+//  punkcie, wiec sa juz widoczne.
+// =====================================================================
+inline void showNotesScreen(U8G2 &d) {
+    inputWaitRelease();
+
+    auto drawList = [&](int cursor, int count) {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        char hdr[40];
+        snprintf(hdr, sizeof(hdr),
+                 mT("Notatki (%d)", "Notes (%d)", "Notizen (%d)"),
+                 count);
+        d.drawStr(2, 10, hdr);
+        d.drawHLine(0, 12, 256);
+
+        if (count == 0) {
+            d.drawStr(2, 30,
+                mT("Brak notatek. Dodaj je",
+                   "No notes. Add them",
+                   "Keine Notizen. Fuege sie"));
+            d.drawStr(2, 42,
+                mT("w panelu klienta i zsynchron.",
+                   "in user panel and sync.",
+                   "im Kundenpanel hinzu und sync."));
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62,
+                mT("OK = sync   < = wyjscie",
+                   "OK = sync   < = exit",
+                   "OK = sync   < = beenden"));
+        } else {
+            // Pokaz 4 widoczne tytuly
+            int scroll = (cursor < 4) ? 0 : cursor - 3;
+            d.setFont(u8g2_font_6x10_tf);
+            for (int i = 0; i < 4 && (scroll + i) < count; i++) {
+                int idx = scroll + i;
+                int y = 25 + i * 10;
+                NoteEntry n;
+                if (notesGet(idx, n)) {
+                    String t = n.title;
+                    if (t.length() == 0) t = "(bez tytulu)";
+                    if (t.length() > 38) t = t.substring(0, 36) + "..";
+                    if (idx == cursor) {
+                        d.setDrawColor(1);
+                        d.drawBox(0, y - 9, 256, 11);
+                        d.setDrawColor(0);
+                        d.drawStr(4, y, t.c_str());
+                        d.setDrawColor(1);
+                    } else {
+                        d.drawStr(4, y, t.c_str());
+                    }
+                }
+            }
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62,
+                mT("OK = otworz   v = sync   < = wyjscie",
+                   "OK = open   v = sync   < = exit",
+                   "OK = oeffnen  v = sync  < = beenden"));
+        }
+        d.sendBuffer();
+    };
+
+    auto drawDetail = [&](const NoteEntry& n) {
+        powerSetInhibit(true);   // user czyta — bez sleep
+        // Strony scrollowane
+        int scrollLine = 0;
+        // Rozbij content na linie po 40 znakow
+        std::vector<String> lines;
+        String content = n.content;
+        while (content.length() > 0) {
+            int nl = content.indexOf('\n');
+            String chunk = nl >= 0 ? content.substring(0, nl) : content;
+            content = nl >= 0 ? content.substring(nl + 1) : "";
+            // Wrap po ~42 znaki dla czcionki 6x10
+            while (chunk.length() > 42) {
+                lines.push_back(chunk.substring(0, 42));
+                chunk = chunk.substring(42);
+            }
+            lines.push_back(chunk);
+        }
+
+        while (true) {
+            powerCheckSleep();
+            if (panicTriggered()) { powerSetInhibit(false); return; }
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            String t = n.title.length() == 0 ? "(bez tytulu)" : n.title;
+            if (t.length() > 40) t = t.substring(0, 38) + "..";
+            d.drawStr(2, 10, t.c_str());
+            d.drawHLine(0, 12, 256);
+
+            for (int i = 0; i < 4; i++) {
+                int idx = scrollLine + i;
+                if (idx >= (int)lines.size()) break;
+                d.drawStr(2, 24 + i * 11, lines[idx].c_str());
+            }
+
+            d.setFont(u8g2_font_5x7_tf);
+            char info[24];
+            snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
+            d.drawStr(220, 62, info);
+            d.drawStr(2, 62,
+                mT("^/v scroll   < = wstecz",
+                   "^/v scroll   < = back",
+                   "^/v scroll   < = zurueck"));
+            d.sendBuffer();
+
+            inputScan();
+            if (inputKeyConsume(KEY_PLUS) || inputKeyConsume(KEY_8)) {
+                if (scrollLine > 0) scrollLine--;
+            }
+            if (inputKeyConsume(KEY_MINUS) || inputKeyConsume(KEY_2)) {
+                if (scrollLine < (int)lines.size() - 4) scrollLine++;
+            }
+            if (inputKeyConsume(KEY_PLUSMINUS) || inputKeyConsume(KEY_4) ||
+                inputKeyConsume(KEY_CCE)) {
+                powerSetInhibit(false);
+                inputWaitRelease();
+                return;
+            }
+            delay(20);
+        }
+    };
+
+    auto syncFromServer = [&]() {
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        d.drawStr(2, 24,
+            mT("Synchronizacja...", "Syncing...", "Synchronisiere..."));
+        d.drawStr(2, 38,
+            mT("Lacze z serwerem", "Connecting to server", "Verbinde mit Server"));
+        d.sendBuffer();
+
+        // Ensure WiFi connected (uzyj zapisanego SSID/pass)
+        if (WiFi.status() != WL_CONNECTED) {
+            char ssid[33] = "", pass[64] = "";
+            if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
+                WiFi.mode(WIFI_STA);
+                WiFi.begin(ssid, pass);
+                uint32_t t0 = millis();
+                while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
+                    delay(100);
+                }
+            }
+        }
+        if (WiFi.status() != WL_CONNECTED) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 30,
+                mT("Brak WiFi", "No WiFi", "Kein WLAN"));
+            d.sendBuffer();
+            delay(2000);
+            return -1;
+        }
+
+        // Licencja opcjonalna - nowy model uzywa deviceId. Stara licencja
+        // moze byc dalej obecna jako fallback.
+        char licKey[40];
+        wifiLoadLicense(licKey, sizeof(licKey));
+        int n = notesSync(licKey, KALK_API_KEY);
+        d.clearBuffer();
+        d.setFont(u8g2_font_6x10_tf);
+        if (n < 0) {
+            d.drawStr(2, 30,
+                mT("Blad synchronizacji", "Sync error", "Sync-Fehler"));
+        } else {
+            char buf[40];
+            snprintf(buf, sizeof(buf),
+                mT("Pobrano: %d notatek", "Downloaded: %d notes", "Geladen: %d Notizen"),
+                n);
+            d.drawStr(2, 30, buf);
+        }
+        d.sendBuffer();
+        delay(1500);
+        return n;
+    };
+
+    int cursor = 0;
+    int count = (int)notesCount();
+    drawList(cursor, count);
+
+    while (true) {
+        powerCheckSleep();
+        if (panicTriggered()) return;
+        if (btnPressed(BTN_UP)) {
+            if (cursor > 0) cursor--;
+            drawList(cursor, count);
+        }
+        if (btnPressed(BTN_DOWN)) {
+            if (count == 0) {
+                // gdy lista pusta i naciskasz DOWN — sync
+                syncFromServer();
+                count = (int)notesCount();
+                cursor = 0;
+                drawList(cursor, count);
+            } else {
+                if (cursor < count - 1) cursor++;
+                else {
+                    // ostatnia pozycja + DOWN = sync
+                    syncFromServer();
+                    count = (int)notesCount();
+                    if (cursor >= count) cursor = count > 0 ? count - 1 : 0;
+                }
+                drawList(cursor, count);
+            }
+        }
+        if (btnPressed(BTN_OK)) {
+            if (count == 0) {
+                syncFromServer();
+                count = (int)notesCount();
+                cursor = 0;
+                drawList(cursor, count);
+            } else {
+                NoteEntry n;
+                if (notesGet(cursor, n)) drawDetail(n);
+                drawList(cursor, count);
+            }
+        }
+        if (btnPressed(BTN_LEFT)) {
+            return;
+        }
+        delay(20);
+    }
+}

@@ -44,6 +44,35 @@
 #include "input.h"
 
 #include "settings_screen.h"   // kalkSettings
+
+// Trojjezyczny helper (0=Polski, 1=English, 2=Deutsch) — musi byc
+// zdefiniowany TUTAJ (zaraz po kalkSettings), bo notes.h/tests.h/
+// account_screen.h wlaczane ponizej go uzywaja, a w C++ include widzi
+// tylko to co juz zdefiniowane wczesniej w tym samym pliku.
+static inline const char* mT(const char* pl, const char* en, const char* de) {
+    if (kalkSettings.language == 0) return pl;
+    if (kalkSettings.language == 1) return en;
+    return de;
+}
+
+// Debounce nawigacji w menu (oddzielny od debounce klawiatury matrycowej).
+// Przeniesione tu z tego samego powodu co mT() powyzej — showNotesScreen/
+// showTestsScreen (teraz w notes.h/tests.h) go uzywaja.
+static unsigned long lastPress = 0;
+#define DEBOUNCE_MS 200
+
+// Drop-in replacement dla btnPressed z test_ui.cpp — z debouncem na poziomie
+// menu. Wirtualne BTN_xx są aktualizowane przez inputScan() w loop().
+bool btnPressed(int pin) {
+    if (inputBtn(pin) == LOW) {
+        if (millis() - lastPress > DEBOUNCE_MS) {
+            lastPress = millis();
+            return true;
+        }
+    }
+    return false;
+}
+
 #include "wifi_persist.h"      // NVS WiFi + licencja
 #include "wifi_settings.h"     // WiFi UI + klawiatura ekranowa
 #include "about_screen.h"
@@ -60,6 +89,7 @@
 #include "tests.h"             // Sprawdziany (dev mode)
 #include "battery.h"           // Pomiar baterii LiPo (PCB v4)
 #include <qrcode.h>            // QR generator dla device ID (lib ricmoo/QRCode)
+#include "account_screen.h"    // Ekrany "Status konta" + "Device ID + QR"
 
 // Implementacja helpera z device_account.h (potrzebuje pelnej def kalkSettings).
 const char* _accGetUnlockCode() { return kalkSettings.aiUnlockCode; }
@@ -128,13 +158,8 @@ const char* menuItemsDE[] = {
 const int MENU_COUNT = 6;
 const int VISIBLE_LINES = 4;
 
-// Trojjezyczny helper (0=Polski, 1=English, 2=Deutsch) � uzywany w main.cpp
-// zamiast lokalnego T() z settings_screen.h (inna konwencja nazewnictwa pliku).
-static inline const char* mT(const char* pl, const char* en, const char* de) {
-    if (kalkSettings.language == 0) return pl;
-    if (kalkSettings.language == 1) return en;
-    return de;
-}
+// mT() zdefiniowane wczesniej w pliku (zaraz po include settings_screen.h) —
+// patrz komentarz tam.
 static inline const char* mMenuItem(int idx) {
     if (kalkSettings.language == 0) return menuItemsPL[idx];
     if (kalkSettings.language == 1) return menuItemsEN[idx];
@@ -143,10 +168,6 @@ static inline const char* mMenuItem(int idx) {
 
 int selectedItem = 0;
 int scrollOffset = 0;
-
-// Debounce nawigacji w menu (oddzielny od debounce klawiatury matrycowej)
-unsigned long lastPress = 0;
-#define DEBOUNCE_MS 200
 
 // Forward declaration
 void drawMenu();
@@ -159,18 +180,6 @@ static void _wifiAutoConnectLazy();
 // Aktywnosc trzymana w input.h (auto-reset przy kazdym klawiszu).
 // Te helpery zostawione jako kompat alias.
 inline void resetActivity() { inputActivityReset(); }
-
-// Drop-in replacement dla btnPressed z test_ui.cpp — z debouncem na poziomie
-// menu. Wirtualne BTN_xx są aktualizowane przez inputScan() w loop().
-bool btnPressed(int pin) {
-    if (inputBtn(pin) == LOW) {
-        if (millis() - lastPress > DEBOUNCE_MS) {
-            lastPress = millis();
-            return true;
-        }
-    }
-    return false;
-}
 
 void drawMenu() {
     u8g2.clearBuffer();
@@ -214,689 +223,6 @@ void showSelected() {
     u8g2.drawStr(10, 50, label);
     u8g2.sendBuffer();
     delay(1500);
-}
-
-// =====================================================================
-//  Ekran Notatki — lista offline + sync z serwera
-// =====================================================================
-static void showNotesScreen() {
-    inputWaitRelease();
-
-    auto drawList = [&](int cursor, int count) {
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_6x10_tf);
-        char hdr[40];
-        snprintf(hdr, sizeof(hdr),
-                 mT("Notatki (%d)", "Notes (%d)", "Notizen (%d)"),
-                 count);
-        u8g2.drawStr(2, 10, hdr);
-        u8g2.drawHLine(0, 12, 256);
-
-        if (count == 0) {
-            u8g2.drawStr(2, 30,
-                mT("Brak notatek. Dodaj je",
-                   "No notes. Add them",
-                   "Keine Notizen. Fuege sie"));
-            u8g2.drawStr(2, 42,
-                mT("w panelu klienta i zsynchron.",
-                   "in user panel and sync.",
-                   "im Kundenpanel hinzu und sync."));
-            u8g2.setFont(u8g2_font_5x7_tf);
-            u8g2.drawStr(2, 62,
-                mT("OK = sync   < = wyjscie",
-                   "OK = sync   < = exit",
-                   "OK = sync   < = beenden"));
-        } else {
-            // Pokaz 4 widoczne tytuly
-            int scroll = (cursor < 4) ? 0 : cursor - 3;
-            u8g2.setFont(u8g2_font_6x10_tf);
-            for (int i = 0; i < 4 && (scroll + i) < count; i++) {
-                int idx = scroll + i;
-                int y = 25 + i * 10;
-                NoteEntry n;
-                if (notesGet(idx, n)) {
-                    String t = n.title;
-                    if (t.length() == 0) t = "(bez tytulu)";
-                    if (t.length() > 38) t = t.substring(0, 36) + "..";
-                    if (idx == cursor) {
-                        u8g2.setDrawColor(1);
-                        u8g2.drawBox(0, y - 9, 256, 11);
-                        u8g2.setDrawColor(0);
-                        u8g2.drawStr(4, y, t.c_str());
-                        u8g2.setDrawColor(1);
-                    } else {
-                        u8g2.drawStr(4, y, t.c_str());
-                    }
-                }
-            }
-            u8g2.setFont(u8g2_font_5x7_tf);
-            u8g2.drawStr(2, 62,
-                mT("OK = otworz   v = sync   < = wyjscie",
-                   "OK = open   v = sync   < = exit",
-                   "OK = oeffnen  v = sync  < = beenden"));
-        }
-        u8g2.sendBuffer();
-    };
-
-    auto drawDetail = [&](const NoteEntry& n) {
-        powerSetInhibit(true);   // user czyta — bez sleep
-        // Strony scrollowane
-        int scrollLine = 0;
-        // Rozbij content na linie po 40 znakow
-        std::vector<String> lines;
-        String content = n.content;
-        while (content.length() > 0) {
-            int nl = content.indexOf('\n');
-            String chunk = nl >= 0 ? content.substring(0, nl) : content;
-            content = nl >= 0 ? content.substring(nl + 1) : "";
-            // Wrap po ~42 znaki dla czcionki 6x10
-            while (chunk.length() > 42) {
-                lines.push_back(chunk.substring(0, 42));
-                chunk = chunk.substring(42);
-            }
-            lines.push_back(chunk);
-        }
-
-        while (true) {
-            powerCheckSleep();
-            if (panicTriggered()) { powerSetInhibit(false); return; }
-            u8g2.clearBuffer();
-            u8g2.setFont(u8g2_font_6x10_tf);
-            String t = n.title.length() == 0 ? "(bez tytulu)" : n.title;
-            if (t.length() > 40) t = t.substring(0, 38) + "..";
-            u8g2.drawStr(2, 10, t.c_str());
-            u8g2.drawHLine(0, 12, 256);
-
-            for (int i = 0; i < 4; i++) {
-                int idx = scrollLine + i;
-                if (idx >= (int)lines.size()) break;
-                u8g2.drawStr(2, 24 + i * 11, lines[idx].c_str());
-            }
-
-            u8g2.setFont(u8g2_font_5x7_tf);
-            char info[24];
-            snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
-            u8g2.drawStr(220, 62, info);
-            u8g2.drawStr(2, 62,
-                mT("^/v scroll   < = wstecz",
-                   "^/v scroll   < = back",
-                   "^/v scroll   < = zurueck"));
-            u8g2.sendBuffer();
-
-            inputScan();
-            if (inputKeyConsume(KEY_PLUS) || inputKeyConsume(KEY_8)) {
-                if (scrollLine > 0) scrollLine--;
-            }
-            if (inputKeyConsume(KEY_MINUS) || inputKeyConsume(KEY_2)) {
-                if (scrollLine < (int)lines.size() - 4) scrollLine++;
-            }
-            if (inputKeyConsume(KEY_PLUSMINUS) || inputKeyConsume(KEY_4) ||
-                inputKeyConsume(KEY_CCE)) {
-                powerSetInhibit(false);
-                inputWaitRelease();
-                return;
-            }
-            delay(20);
-        }
-    };
-
-    auto syncFromServer = [&]() {
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_6x10_tf);
-        u8g2.drawStr(2, 24,
-            mT("Synchronizacja...", "Syncing...", "Synchronisiere..."));
-        u8g2.drawStr(2, 38,
-            mT("Lacze z serwerem", "Connecting to server", "Verbinde mit Server"));
-        u8g2.sendBuffer();
-
-        // Ensure WiFi connected (uzyj zapisanego SSID/pass)
-        if (WiFi.status() != WL_CONNECTED) {
-            char ssid[33] = "", pass[64] = "";
-            if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
-                WiFi.mode(WIFI_STA);
-                WiFi.begin(ssid, pass);
-                uint32_t t0 = millis();
-                while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
-                    delay(100);
-                }
-            }
-        }
-        if (WiFi.status() != WL_CONNECTED) {
-            u8g2.clearBuffer();
-            u8g2.setFont(u8g2_font_6x10_tf);
-            u8g2.drawStr(2, 30,
-                mT("Brak WiFi", "No WiFi", "Kein WLAN"));
-            u8g2.sendBuffer();
-            delay(2000);
-            return -1;
-        }
-
-        // Licencja opcjonalna - nowy model uzywa deviceId. Stara licencja
-        // moze byc dalej obecna jako fallback.
-        char licKey[40];
-        wifiLoadLicense(licKey, sizeof(licKey));
-        int n = notesSync(licKey, KALK_API_KEY);
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_6x10_tf);
-        if (n < 0) {
-            u8g2.drawStr(2, 30,
-                mT("Blad synchronizacji", "Sync error", "Sync-Fehler"));
-        } else {
-            char buf[40];
-            snprintf(buf, sizeof(buf),
-                mT("Pobrano: %d notatek", "Downloaded: %d notes", "Geladen: %d Notizen"),
-                n);
-            u8g2.drawStr(2, 30, buf);
-        }
-        u8g2.sendBuffer();
-        delay(1500);
-        return n;
-    };
-
-    int cursor = 0;
-    int count = (int)notesCount();
-    drawList(cursor, count);
-
-    while (true) {
-        powerCheckSleep();
-        if (panicTriggered()) return;
-        if (btnPressed(BTN_UP)) {
-            if (cursor > 0) cursor--;
-            drawList(cursor, count);
-        }
-        if (btnPressed(BTN_DOWN)) {
-            if (count == 0) {
-                // gdy lista pusta i naciskasz DOWN — sync
-                syncFromServer();
-                count = (int)notesCount();
-                cursor = 0;
-                drawList(cursor, count);
-            } else {
-                if (cursor < count - 1) cursor++;
-                else {
-                    // ostatnia pozycja + DOWN = sync
-                    syncFromServer();
-                    count = (int)notesCount();
-                    if (cursor >= count) cursor = count > 0 ? count - 1 : 0;
-                }
-                drawList(cursor, count);
-            }
-        }
-        if (btnPressed(BTN_OK)) {
-            if (count == 0) {
-                syncFromServer();
-                count = (int)notesCount();
-                cursor = 0;
-                drawList(cursor, count);
-            } else {
-                NoteEntry n;
-                if (notesGet(cursor, n)) drawDetail(n);
-                drawList(cursor, count);
-            }
-        }
-        if (btnPressed(BTN_LEFT)) {
-            return;
-        }
-        delay(20);
-    }
-}
-
-// =====================================================================
-//  Ekran "Device ID + QR" — w ustawieniach pozycja "Device ID + QR"
-//  Pokazuje MAC ESP32 jako device ID + QR code z linkiem do claim'u.
-//  Skanowanie -> /claim?d=<MAC>&c=<licencja>
-// =====================================================================
-static String _mainDeviceMac() {
-    uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%02X%02X%02X%02X%02X%02X",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    return String(buf);
-}
-
-// Pokazuje status sparowania urzadzenia z kontem (Settings -> Status konta).
-// Wymaga WiFi. Pyta serwer GET /api/device/account-status.
-void showAccountStatusScreen(U8G2 &d) {
-    inputWaitRelease();
-    powerSetInhibit(true);
-
-    auto exitWait = [&]() {
-        inputWaitRelease();
-        powerSetInhibit(false);
-    };
-
-    // Render: laczenie / rejestracja
-    auto drawBusy = [&](const char* msg) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
-        d.drawHLine(0, 12, 256);
-        d.drawStr(2, 32, msg);
-        d.sendBuffer();
-    };
-
-    drawBusy(mT("Sprawdzam WiFi...", "Checking WiFi...", "Pruefe WLAN..."));
-    if (WiFi.status() != WL_CONNECTED) {
-        char ssid[33] = "", pass[64] = "";
-        wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
-        if (ssid[0] == '\0') {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
-            d.drawHLine(0, 12, 256);
-            d.drawStr(2, 32, mT("Brak zapisanego WiFi.", "No saved WiFi.", "Kein gespeichertes WLAN."));
-            d.drawStr(2, 44, mT("Settings -> Ustaw WiFi", "Settings -> Set up WiFi", "Settings -> WLAN einrichten"));
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
-            d.sendBuffer();
-            while (true) {
-                if (_panicRequested) { exitWait(); return; }
-                if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
-                delay(20);
-            }
-        }
-        drawBusy(mT("Lacze z WiFi...", "Connecting to WiFi...", "Verbinde mit WLAN..."));
-        WiFi.mode(WIFI_STA);
-        WiFi.begin(ssid, pass);
-        unsigned long t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && millis() - t0 < 12000) delay(150);
-    }
-
-    if (WiFi.status() != WL_CONNECTED) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
-        d.drawHLine(0, 12, 256);
-        d.drawStr(2, 32, mT("Brak polaczenia z WiFi.", "No WiFi connection.", "Keine WLAN-Verbindung."));
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
-        d.sendBuffer();
-        while (true) {
-            if (_panicRequested) { exitWait(); return; }
-            if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
-            delay(20);
-        }
-    }
-
-    // Zarejestruj device (zaktualizuj unlock code) + pobierz status
-    drawBusy(mT("Rejestruje urzadzenie...", "Registering device...", "Registriere Geraet..."));
-    accountRegister();
-
-    drawBusy(mT("Pobieram status...", "Fetching status...", "Lade Status..."));
-    AccountStatus st;
-    bool ok = accountFetchStatus(st);
-
-    // Render
-    while (true) {
-        if (_panicRequested) { exitWait(); return; }
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
-        d.drawHLine(0, 12, 256);
-
-        d.setFont(u8g2_font_5x7_tf);
-        char line[80];
-        if (!ok) {
-            d.drawStr(2, 22, mT("Blad pobierania:", "Fetch error:", "Ladefehler:"));
-            snprintf(line, sizeof(line), "%s", st.error.c_str());
-            d.drawStr(2, 32, line);
-        } else if (!st.paired) {
-            d.drawStr(2, 22, mT("Status:  NIEPODLACZONE", "Status:  NOT LINKED", "Status:  NICHT VERBUNDEN"));
-            d.drawStr(2, 34, mT("Sparuj na stronie:", "Pair on the website:", "Koppeln auf der Website:"));
-            d.drawStr(2, 44, "kalkmate.pl/panel -> Kalkulator");
-            d.drawStr(2, 54, mT("Wpisz Device ID + kod odblokowania.",
-                                 "Enter Device ID + unlock code.",
-                                 "Geraete-ID + Freischaltcode eingeben."));
-        } else {
-            d.drawStr(2, 21, mT("Status:  PODLACZONE", "Status:  LINKED", "Status:  VERBUNDEN"));
-            snprintf(line, sizeof(line), mT("Konto: %.34s", "Account: %.34s", "Konto: %.34s"), st.userEmail.c_str());
-            d.drawStr(2, 30, line);
-            if (st.hasLicense) {
-                const char* lic_s = (st.licenseStatus == "active") ? "OK" :
-                                    (st.licenseStatus == "trial")  ? mT("trial", "trial", "Test")
-                                                                    : mT("wygas", "expired", "abgelaufen");
-                snprintf(line, sizeof(line), mT("Lic: %.14s (%s)", "Lic: %.14s (%s)", "Lizenz: %.14s (%s)"),
-                         st.licenseCode.c_str(), lic_s);
-                d.drawStr(2, 39, line);
-
-                // Dni + aktywny model AI na jednej linii
-                char combo[64] = "";
-                if (st.daysLeft >= 0)
-                    snprintf(combo, sizeof(combo), mT("Dni: %d", "Days: %d", "Tage: %d"), st.daysLeft);
-                if (st.aiModel.length() > 0) {
-                    // Skroc do nazwy po '/' (np. "google/gemini-2.5-pro" -> "gemini-2.5-pro")
-                    int sl = st.aiModel.lastIndexOf('/');
-                    String m = (sl >= 0) ? st.aiModel.substring(sl + 1) : st.aiModel;
-                    if (m.length() > 13) m = m.substring(0, 11) + "..";
-                    char tmp[40];
-                    snprintf(tmp, sizeof(tmp), "%sAI:%s",
-                             combo[0] ? "  " : "", m.c_str());
-                    strncat(combo, tmp, sizeof(combo) - strlen(combo) - 1);
-                }
-                if (combo[0]) d.drawStr(2, 48, combo);
-
-                if (st.aiMode.length() > 0) {
-                    snprintf(line, sizeof(line), mT("Tryb: %.28s", "Mode: %.28s", "Modus: %.28s"), st.aiMode.c_str());
-                    d.drawStr(2, 57, line);
-                }
-            } else {
-                d.drawStr(2, 39, mT("Brak licencji na koncie", "No license on account", "Keine Lizenz im Konto"));
-            }
-        }
-
-        d.drawStr(2, 63, mT("C/CE = wyjscie   OK = odswiez", "C/CE = exit   OK = refresh", "C/CE = beenden   OK = aktualisieren"));
-        d.sendBuffer();
-
-        if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
-        if (_setBtn(BTN_OK)) {
-            drawBusy(mT("Odswiezam...", "Refreshing...", "Aktualisiere..."));
-            accountRegister();
-            ok = accountFetchStatus(st);
-            inputWaitRelease();
-        }
-        delay(30);
-    }
-}
-
-void showDeviceIdQrScreen(U8G2 &d) {
-    inputWaitRelease();
-
-    String deviceId = _mainDeviceMac();
-
-    // Sprobuj zarejestrowac device na serwerze (zapisac unlockCode).
-    // Robi sie raz — jesli WiFi off, ladujemy zapisane creds i probujemy.
-    {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, "Device ID + QR");
-        d.drawHLine(0, 12, 256);
-        d.drawStr(2, 32, mT("Rejestruje na serwerze...", "Registering with server...", "Registriere beim Server..."));
-        d.sendBuffer();
-
-        if (WiFi.status() != WL_CONNECTED) {
-            char ssid[33] = "", pass[64] = "";
-            wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
-            if (ssid[0]) {
-                WiFi.mode(WIFI_STA);
-                WiFi.begin(ssid, pass);
-                unsigned long t0 = millis();
-                while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) {
-                    delay(150);
-                    if (panicTriggered()) return;
-                }
-            }
-        }
-        if (WiFi.status() == WL_CONNECTED) {
-            accountRegister();   // POST /api/device/register z unlockCode
-        }
-    }
-
-    // URL: kalkmate.pl/claim?d=<MAC>  (po sparowaniu nie trzeba kodu licencji,
-    // user na stronie wpisze unlockCode)
-    String url = String(KALK_SERVER_URL) + "/claim?d=" + deviceId;
-
-    // Generuj QR code (wersja 4 = 33x33 modules, mieści się 70+ znakow ASCII)
-    QRCode qrcode;
-    uint8_t qrcodeBytes[qrcode_getBufferSize(4)];
-    qrcode_initText(&qrcode, qrcodeBytes, 4, ECC_LOW, url.c_str());
-
-    while (true) {
-        if (panicTriggered()) return;
-        d.clearBuffer();
-
-        // Lewa strona: device ID + info
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 8, "Device ID:");
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 20, deviceId.c_str());
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 32, mT("Skanuj QR -> podlaczenie",
-                             "Scan QR -> link to account",
-                             "QR scannen -> Konto verknuepfen"));
-        d.drawStr(2, 42, mT("do panelu klienta.",
-                             "in user panel.",
-                             "im Kundenpanel."));
-        d.drawStr(2, 60, mT("OK / < = wyjscie",
-                             "OK / < = exit",
-                             "OK / < = beenden"));
-
-        // Prawa strona: QR (po prawej, 64x64 px max)
-        // QR wersja 4 = 33 modules, kazdy 1px = 33x33. Mieści się prawo.
-        int qrSize = qrcode.size;   // 33
-        int scale = 1;              // 1px per module
-        int qrPx = qrSize * scale;
-        int xOff = 256 - qrPx - 4;
-        int yOff = (64 - qrPx) / 2;
-        for (uint8_t y = 0; y < qrSize; y++) {
-            for (uint8_t x = 0; x < qrSize; x++) {
-                if (qrcode_getModule(&qrcode, x, y)) {
-                    d.drawPixel(xOff + x * scale, yOff + y * scale);
-                }
-            }
-        }
-
-        d.sendBuffer();
-
-        if (_panicRequested) return;
-        inputScan();
-        if (inputBtn(BTN_OK) == LOW || inputBtn(BTN_LEFT) == LOW ||
-            inputKeyConsume(KEY_CCE)) {
-            inputWaitRelease();
-            return;
-        }
-        delay(30);
-    }
-}
-
-// =====================================================================
-//  Ekran "Sprawdzian" (dev mode) — analogiczny do Notatek ale z formatowaniem
-// =====================================================================
-static void showTestsScreen() {
-    inputWaitRelease();
-    testsBuildTitleCache();   // raz na wejscie - eliminuje lagi listy
-
-    auto drawList = [&](int cursor, int count) {
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_6x10_tf);
-        char hdr[40];
-        snprintf(hdr, sizeof(hdr),
-            mT("Sprawdzian (%d)", "Tests (%d)", "Tests (%d)"), count);
-        u8g2.drawStr(2, 10, hdr);
-        u8g2.drawHLine(0, 12, 256);
-
-        if (count == 0) {
-            u8g2.drawStr(2, 30, mT("Brak sprawdzianow.",
-                                    "No tests.",
-                                    "Keine Tests."));
-            u8g2.drawStr(2, 42, mT("Dodaj w panelu klienta i sync.",
-                                    "Add in user panel and sync.",
-                                    "Im Kundenpanel hinzufuegen u. sync."));
-            u8g2.setFont(u8g2_font_5x7_tf);
-            u8g2.drawStr(2, 62, mT("OK = sync   < = wyjscie",
-                                    "OK = sync   < = exit",
-                                    "OK = sync   < = beenden"));
-        } else {
-            int scroll = (cursor < 4) ? 0 : cursor - 3;
-            for (int i = 0; i < 4 && (scroll + i) < count; i++) {
-                int idx = scroll + i;
-                int y = 25 + i * 10;
-                // Cache tytulow - bez I/O na kazda ramke
-                String title = testsTitleAt(idx);
-                if (title.length() == 0) title = "(bez tytulu)";
-                if (title.length() > 38) title = title.substring(0, 36) + "..";
-                if (idx == cursor) {
-                    u8g2.setDrawColor(1);
-                    u8g2.drawBox(0, y - 9, 256, 11);
-                    u8g2.setDrawColor(0);
-                    u8g2.drawStr(4, y, title.c_str());
-                    u8g2.setDrawColor(1);
-                } else {
-                    u8g2.drawStr(4, y, title.c_str());
-                }
-            }
-            u8g2.setFont(u8g2_font_5x7_tf);
-            u8g2.drawStr(2, 62, mT("OK=otworz  v=sync  <=wyjscie",
-                                    "OK=open  v=sync  <=exit",
-                                    "OK=oeffnen v=sync <=beenden"));
-        }
-        u8g2.sendBuffer();
-    };
-
-    auto drawDetail = [&](const TestEntry& t) {
-        powerSetInhibit(true);
-        // Format LaTeX/markdown -> ASCII
-        String formatted = testsFormat(t.content);
-
-        // Linie po ~42 znaki dla fontu 6x10
-        std::vector<String> lines;
-        String content = formatted;
-        while (content.length() > 0) {
-            int nl = content.indexOf('\n');
-            String chunk = nl >= 0 ? content.substring(0, nl) : content;
-            content = nl >= 0 ? content.substring(nl + 1) : "";
-            while (chunk.length() > 42) {
-                int breakPos = 42;
-                int spacePos = chunk.lastIndexOf(' ', 42);
-                if (spacePos > 30) breakPos = spacePos;
-                lines.push_back(chunk.substring(0, breakPos));
-                chunk = chunk.substring(breakPos);
-                if (chunk.length() > 0 && chunk[0] == ' ') chunk = chunk.substring(1);
-            }
-            lines.push_back(chunk);
-        }
-
-        int scrollLine = 0;
-        while (true) {
-            panicCheck();
-            if (panicTriggered()) { powerSetInhibit(false); return; }
-
-            u8g2.clearBuffer();
-            u8g2.setFont(u8g2_font_6x10_tf);
-            String title = t.title.length() == 0 ? String("(bez tytulu)") : t.title;
-            if (title.length() > 40) title = title.substring(0, 38) + "..";
-            u8g2.drawStr(2, 10, title.c_str());
-            u8g2.drawHLine(0, 12, 256);
-
-            for (int i = 0; i < 4; i++) {
-                int idx = scrollLine + i;
-                if (idx >= (int)lines.size()) break;
-                testsDrawLine(u8g2, 2, 24 + i * 11, lines[idx]);
-            }
-
-            u8g2.setFont(u8g2_font_5x7_tf);
-            char info[24];
-            snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
-            u8g2.drawStr(220, 62, info);
-            u8g2.drawStr(2, 62, mT("^/v scroll  < wstecz",
-                                    "^/v scroll  < back",
-                                    "^/v scroll  < zurueck"));
-            u8g2.sendBuffer();
-
-            inputScan();
-            if (inputKeyConsume(KEY_PLUS) || inputKeyConsume(KEY_8)) {
-                if (scrollLine > 0) scrollLine--;
-            }
-            if (inputKeyConsume(KEY_MINUS) || inputKeyConsume(KEY_2)) {
-                if (scrollLine < (int)lines.size() - 4) scrollLine++;
-            }
-            if (inputKeyConsume(KEY_PLUSMINUS) || inputKeyConsume(KEY_4) ||
-                inputKeyConsume(KEY_CCE)) {
-                powerSetInhibit(false);
-                inputWaitRelease();
-                return;
-            }
-            delay(20);
-        }
-    };
-
-    auto syncFromServer = [&]() {
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_6x10_tf);
-        u8g2.drawStr(2, 30, mT("Synchronizacja...", "Syncing...", "Synchronisiere..."));
-        u8g2.sendBuffer();
-
-        if (WiFi.status() != WL_CONNECTED) {
-            char ssid[33] = "", pass[64] = "";
-            if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
-                WiFi.mode(WIFI_STA);
-                WiFi.begin(ssid, pass);
-                uint32_t t0 = millis();
-                while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) delay(100);
-            }
-        }
-        if (WiFi.status() != WL_CONNECTED) {
-            u8g2.clearBuffer();
-            u8g2.setFont(u8g2_font_6x10_tf);
-            u8g2.drawStr(2, 30, mT("Brak WiFi", "No WiFi", "Kein WLAN"));
-            u8g2.sendBuffer();
-            delay(2000);
-            return -1;
-        }
-        // Licencja opcjonalna - nowy model uzywa deviceId.
-        char licKey[40];
-        wifiLoadLicense(licKey, sizeof(licKey));
-        int n = testsSync(licKey, KALK_API_KEY);
-        // Plik sie zmienil - przebuduj cache tytulow
-        testsBuildTitleCache();
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_6x10_tf);
-        if (n < 0) {
-            u8g2.drawStr(2, 30, mT("Blad synchronizacji", "Sync error", "Sync-Fehler"));
-        } else {
-            char buf[40];
-            snprintf(buf, sizeof(buf),
-                mT("Pobrano: %d sprawdz.", "Downloaded: %d tests", "Geladen: %d Tests"), n);
-            u8g2.drawStr(2, 30, buf);
-        }
-        u8g2.sendBuffer();
-        delay(1500);
-        return n;
-    };
-
-    int cursor = 0;
-    int count = (int)testsCount();
-    drawList(cursor, count);
-
-    while (true) {
-        powerCheckSleep();
-        if (panicTriggered()) return;
-
-        if (btnPressed(BTN_UP)) {
-            if (cursor > 0) cursor--;
-            drawList(cursor, count);
-        }
-        if (btnPressed(BTN_DOWN)) {
-            if (count == 0) {
-                syncFromServer();
-                count = (int)testsCount();
-                cursor = 0;
-                drawList(cursor, count);
-            } else if (cursor >= count - 1) {
-                syncFromServer();
-                count = (int)testsCount();
-                if (cursor >= count) cursor = count > 0 ? count - 1 : 0;
-                drawList(cursor, count);
-            } else {
-                cursor++;
-                drawList(cursor, count);
-            }
-        }
-        if (btnPressed(BTN_OK)) {
-            if (count == 0) {
-                syncFromServer();
-                count = (int)testsCount();
-                cursor = 0;
-                drawList(cursor, count);
-            } else {
-                TestEntry t;
-                if (testsGet(cursor, t)) drawDetail(t);
-                drawList(cursor, count);
-            }
-        }
-        if (btnPressed(BTN_LEFT)) return;
-        delay(20);
-    }
 }
 
 void setup() {
@@ -1281,8 +607,8 @@ void loop() {
         Serial.printf("BTN OK - wybrano: %s\n", label);
         switch (selectedItem) {
             case 0: showSolveScreen(u8g2);  break;
-            case 1: showNotesScreen();      break;
-            case 2: showTestsScreen();      break;   // Sprawdzian
+            case 1: showNotesScreen(u8g2);  break;
+            case 2: showTestsScreen(u8g2);  break;   // Sprawdzian
             case 3: showInfo(u8g2);         break;
             case 4: showSettings(u8g2);     break;   // WiFi/Test/Camera teraz tutaj
             case 5: showAboutScreen(u8g2);  break;
