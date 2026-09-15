@@ -64,6 +64,7 @@ const content: Record<Locale, {
   preSalePrice: string;
   discountPln: string;
   shippingEur: string;
+  lowestPrice30d: string;
   production: string;
   productionNote1: string; productionNoteHand: string; productionNote2: string; productionNoteWeeks: string;
   orderNowPln: string; orderNowEur: string;
@@ -113,6 +114,7 @@ const content: Record<Locale, {
     preSalePrice: "Cena przedsprzedażowa",
     discountPln: "Przedsprzedaż · darmowa wysyłka InPost",
     shippingEur: "InPost PL free · EU 20€ · World 35€",
+    lowestPrice30d: "Najniższa cena z ostatnich 30 dni",
     production: "/ produkcja",
     productionNote1: "Urządzenia są ", productionNoteHand: "ręcznie składane", productionNote2: ". Czas realizacji do ", productionNoteWeeks: "4 tygodni",
     orderNowPln: "Zamów teraz · 699 zł", orderNowEur: "Zamów teraz · 169 EUR",
@@ -164,6 +166,7 @@ const content: Record<Locale, {
     preSalePrice: "Pre-sale price",
     discountPln: "Pre-sale · free InPost shipping",
     shippingEur: "InPost PL free · EU 20€ · World 35€",
+    lowestPrice30d: "Lowest price in the last 30 days",
     production: "/ production",
     productionNote1: "Devices are ", productionNoteHand: "hand-assembled", productionNote2: ". Lead time up to ", productionNoteWeeks: "4 weeks",
     orderNowPln: "Order now · 699 zł", orderNowEur: "Order now · 169 EUR",
@@ -215,6 +218,7 @@ const content: Record<Locale, {
     preSalePrice: "Vorverkaufspreis",
     discountPln: "Vorverkauf · kostenloser InPost-Versand",
     shippingEur: "InPost PL gratis · EU 20€ · Welt 35€",
+    lowestPrice30d: "Niedrigster Preis der letzten 30 Tage",
     production: "/ Produktion",
     productionNote1: "Die Geräte werden ", productionNoteHand: "handmontiert", productionNote2: ". Lieferzeit bis zu ", productionNoteWeeks: "4 Wochen",
     orderNowPln: "Jetzt bestellen · 699 zł", orderNowEur: "Jetzt bestellen · 169 EUR",
@@ -644,6 +648,9 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                   </div>
                   <p className="mt-3 km-mono-eyebrow text-[#D8FF3D]">
                     {showEUR ? t.shippingEur : t.discountPln}
+                  </p>
+                  <p className="mt-2 km-mono-eyebrow text-[#F2EDE3]/35 text-[11px]">
+                    {t.lowestPrice30d}: {showEUR ? "169 €" : "699 zł"}
                   </p>
 
                   <div ref={stripeMessagingRef} className="mt-6 [&_iframe]:!min-h-0 opacity-80">

@@ -4,6 +4,11 @@ import { useEffect, useRef } from "react";
 import { type Locale } from "@/lib/i18n";
 
 const FRAME_COUNT = 90;
+// Klatki maja Cache-Control: immutable, max-age=1 rok (next.config.ts) —
+// przy podmianie plikow pod tymi samymi nazwami trzeba podbic ta wersje,
+// inaczej przegladarki ktore juz raz wczytaly strone NIGDY nie pobiora
+// nowej wersji (immutable = zero rewalidacji az do wygasniecia).
+const FRAME_VERSION = "2";
 
 interface Benefit {
   side: "left" | "right";
@@ -66,15 +71,12 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
     if (!section) return;
 
     const startLoading = () => {
-      // Product-photo frames temporarily disabled — do not load/draw them.
-      return;
-      // eslint-disable-next-line no-unreachable
       if (framesRef.current.length > 0) return;
       const imgs: HTMLImageElement[] = new Array(FRAME_COUNT);
 
       // Load frame 1 first — draw it immediately so canvas has content fast
       const first = new window.Image();
-      first.src = `/frames/frame_001.webp`;
+      first.src = `/frames/frame_001.webp?v=${FRAME_VERSION}`;
       imgs[0] = first;
       framesRef.current = imgs;
 
@@ -88,7 +90,7 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
         // Load remaining frames only after first is drawn
         for (let i = 2; i <= FRAME_COUNT; i++) {
           const img = new window.Image();
-          img.src = `/frames/frame_${String(i).padStart(3, "0")}.webp`;
+          img.src = `/frames/frame_${String(i).padStart(3, "0")}.webp?v=${FRAME_VERSION}`;
           imgs[i - 1] = img;
         }
       };
