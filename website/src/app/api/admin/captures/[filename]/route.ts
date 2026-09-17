@@ -1,12 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { readCapture } from "@/lib/captures";
 
 // GET /api/admin/captures/[filename] — serwuje JPEG.
-// Auth: middleware sprawdza admin_session (caly /api/admin/* oprocz auth/visits).
+// Auth: middleware sprawdza admin_session (caly /api/admin/* oprocz auth/visits;
+// defense-in-depth: sprawdzamy tez tutaj).
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ filename: string }> },
 ) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   const { filename } = await params;
   const buf = await readCapture(filename);
   if (!buf) return new NextResponse("Not found", { status: 404 });

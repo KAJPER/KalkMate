@@ -1,25 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRemoteSession, isSessionLive, setRemoteFrame, consumePendingKey } from "@/lib/remoteSessions";
+import { verifyDeviceAuth } from "@/lib/device-auth";
 
 // POST /api/device/remote/checkin — wywolywane przez kalkulator co ~500ms
 // PODCZAS aktywnej sesji "Zdalna pomoc" (Ustawienia -> Zdalna pomoc).
-// Headers: x-api-key, x-device-id (jak /api/device/solve).
+// Headers: x-api-key, x-device-id, x-device-token (fw >= 1.9.6).
 // Body: { frame?: "<base64, 2048 B, 1bpp u8g2 vertical_top_lsb>" }
 // Response: { active: bool, key: number|null }
 //   active=false -> urzadzenie ma natychmiast zakonczyc tryb zdalny
 //   (wylaczyc WiFi, przestac odpytywac, zdjac wskaznik).
-const CALCULATOR_API_KEY = process.env.CALCULATOR_API_KEY;
+//
+// Audyt 2026-09-17: wczesniej sprawdzany byl tylko wspolny x-api-key +
+// x-device-id z naglowka — kazdy z kluczem mogl podszyc sie pod cudze
+// urzadzenie, przechwycic klawisze wysylane przez admina (dostarczane
+// jednorazowo) i podstawic falszywy obraz ekranu. Teraz przez
+// verifyDeviceAuth(): token urzadzenia z bazy, jesli zostal juz nadany.
 
 export async function POST(request: NextRequest) {
-  const apiKey = request.headers.get("x-api-key");
-  if (!apiKey || apiKey !== CALCULATOR_API_KEY) {
-    return NextResponse.json({ active: false, error: "Unauthorized" }, { status: 401 });
+  const auth = await verifyDeviceAuth(request);
+  if (!auth.ok) {
+    return NextResponse.json({ active: false, error: auth.error }, { status: auth.status });
   }
-
-  const deviceId = (request.headers.get("x-device-id") || "").trim().toUpperCase();
-  if (!deviceId) {
-    return NextResponse.json({ active: false, error: "Brak x-device-id" }, { status: 400 });
-  }
+  const deviceId = auth.deviceId;
 
   const row = await getRemoteSession(deviceId);
   if (!isSessionLive(row)) {

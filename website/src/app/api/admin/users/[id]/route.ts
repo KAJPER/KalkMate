@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
-
-const ADMIN_SESSION_TOKEN = process.env.ADMIN_SESSION_TOKEN;
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get(COOKIE_NAME)?.value;
-
-    if (!sessionToken || sessionToken !== ADMIN_SESSION_TOKEN) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
     const body = await request.json();
     const { action, data } = body;
@@ -82,14 +73,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get(COOKIE_NAME)?.value;
-
-    if (!sessionToken || sessionToken !== ADMIN_SESSION_TOKEN) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
 
     // Delete user (cascade will handle related data)

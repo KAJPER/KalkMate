@@ -37,7 +37,7 @@ function cleanReferer(ref: string | null): string {
 }
 
 export async function GET(request: NextRequest) {
-  const authErr = requireAdminAuth(request);
+  const authErr = await requireAdminAuth(request);
   if (authErr) return authErr;
 
   try {

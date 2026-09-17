@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 // Inventory NIE jest w Prisma schemie (kolumny tylko w sqlite) — wszystko raw SQL.
 // Tabela: id TEXT PK, name TEXT, count INT, notes TEXT, updatedAt DATETIME.
@@ -13,11 +13,6 @@ interface InventoryRow {
   updatedAt: string;
 }
 
-function isAdmin(req: NextRequest) {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
-  return token === process.env.ADMIN_SESSION_TOKEN;
-}
-
 function slugify(s: string) {
   return s
     .toLowerCase()
@@ -28,7 +23,7 @@ function slugify(s: string) {
 
 // GET /api/admin/inventory — lista pozycji magazynu
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     const rows = await prisma.$queryRaw<InventoryRow[]>`
       SELECT id, name, count, notes, updatedAt FROM Inventory ORDER BY name ASC
@@ -44,7 +39,7 @@ export async function GET(req: NextRequest) {
 // POST /api/admin/inventory — dodaj nowa pozycje
 // Body: { name: string, count?: number, notes?: string }
 export async function POST(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     const body = await req.json().catch(() => ({}));
     const name = String(body?.name || "").trim();
@@ -82,7 +77,7 @@ export async function POST(req: NextRequest) {
 // Body: { count?: number, name?: string, notes?: string, delta?: number }
 // delta = inkrement/dekrement (np. +1, -1) — wygodne dla przyciskow
 export async function PATCH(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     const id = new URL(req.url).searchParams.get("id");
     if (!id) return NextResponse.json({ ok: false, error: "Brak id" }, { status: 400 });
@@ -121,7 +116,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/admin/inventory?id=... — usun pozycje
 export async function DELETE(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     const id = new URL(req.url).searchParams.get("id");
     if (!id) return NextResponse.json({ ok: false, error: "Brak id" }, { status: 400 });

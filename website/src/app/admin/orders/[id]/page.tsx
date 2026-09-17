@@ -51,18 +51,10 @@ export default function OrderDetailPage({
   const [notes, setNotes] = useState("");
   const [saveMsg, setSaveMsg] = useState("");
 
-  // Furgonetka state
-  const [furgonetkaLoading, setFurgonetkaLoading] = useState(false);
-  const [furgonetkaMsg, setFurgonetkaMsg] = useState("");
-  const [furgonetkaError, setFurgonetkaError] = useState("");
+  // Identyfikator przesylki kurierskiej — kolumny furgonetka* w bazie sa
+  // reuzywane przez Base Courier (furgonetkaStatus === "basecourier").
   const [furgonetkaPackageId, setFurgonetkaPackageId] = useState("");
-  const [furgonetkaOrderUuid, setFurgonetkaOrderUuid] = useState("");
   const [furgonetkaStatus, setFurgonetkaStatus] = useState("");
-  const [serviceId, setServiceId] = useState("");
-  const [documentUrl, setDocumentUrl] = useState("");
-  const [documentLoading, setDocumentLoading] = useState(false);
-  const [furgonetkaServices, setFurgonetkaServices] = useState<Array<{ id: number; name: string; courier?: string; carrier?: string }>>([]);
-  const [loadingServices, setLoadingServices] = useState(false);
 
   // Invoice state
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
@@ -80,7 +72,6 @@ export default function OrderDetailPage({
           setTracking(data.order.tracking_number);
           setNotes(data.order.admin_notes);
           setFurgonetkaPackageId(data.order.furgonetka_package_id || "");
-          setFurgonetkaOrderUuid(data.order.furgonetka_order_uuid || "");
           setFurgonetkaStatus(data.order.furgonetka_status || "");
         }
       } catch (error) {
@@ -91,6 +82,137 @@ export default function OrderDetailPage({
     }
     load();
   }, [id]);
+
+  // Sledzenie InPost (automat + przycisk "Sprawdz status InPost")
+  const [trackingSyncing, setTrackingSyncing] = useState(false);
+  const [trackingInfo, setTrackingInfo] = useState<{
+    status: string;
+    targetMachineId: string | null;
+    updatedAt: string | null;
+    events: { status: string; datetime: string }[];
+  } | null>(null);
+  const [trackingMsg, setTrackingMsg] = useState("");
+
+  const applyTrackingSync = (sync: { changed?: boolean; newStatus?: string; emailSent?: boolean; note?: string } | null) => {
+    if (!sync) return;
+    if (sync.changed && sync.newStatus) {
+      setFulfillment(sync.newStatus);
+      setTrackingMsg(`Status zamówienia zmieniony na „${sync.newStatus}"${sync.emailSent ? " — mail do klienta wysłany" : ""}`);
+    } else if (sync.note === "inpost_unavailable") {
+      setTrackingMsg("InPost nie odpowiada / numer nieznany");
+    } else if (sync.note === "return_flagged") {
+      setTrackingMsg("⚠ Zwrot/awizo — zobacz notatki, wymaga ręcznej decyzji");
+    } else {
+      setTrackingMsg("Bez zmian statusu");
+    }
+  };
+
+  const handleTrackingSync = async () => {
+    setTrackingSyncing(true);
+    setTrackingMsg("");
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/tracking-sync`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setTrackingMsg(data.error || "Błąd sprawdzania");
+        return;
+      }
+      setTrackingInfo(data.tracking);
+      applyTrackingSync(data.sync);
+    } catch {
+      setTrackingMsg("Błąd sieci");
+    } finally {
+      setTrackingSyncing(false);
+    }
+  };
+
+  // Base Courier — nadanie InPost Paczkomat przez API (basecourier.com)
+  const [bcLoading, setBcLoading] = useState(false);
+  const [bcMsg, setBcMsg] = useState("");
+  const [bcPreview, setBcPreview] = useState<{
+    receiver: { name: string; email: string; phone: string; lockerCode: string; street?: string; postal?: string; city?: string };
+    valuation: { price: { value: string; netto: string; vat: string } | null };
+  } | null>(null);
+
+  const handleBcPreview = async () => {
+    setBcLoading(true);
+    setBcMsg("");
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/basecourier`);
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setBcMsg(data.error || "Błąd wyceny");
+        return;
+      }
+      setBcPreview({ receiver: data.receiver, valuation: data.valuation });
+    } catch {
+      setBcMsg("Błąd sieci");
+    } finally {
+      setBcLoading(false);
+    }
+  };
+
+  const handleBcCreate = async () => {
+    const price = bcPreview?.valuation?.price?.value;
+    if (
+      !confirm(
+        `Nadać przesyłkę InPost Paczkomat przez Base Courier?\n\n` +
+          `Odbiorca: ${bcPreview?.receiver.name || order?.customer_name}\n` +
+          `Paczkomat: ${bcPreview?.receiver.lockerCode || order?.pickup_point}\n` +
+          `Koszt: ${price ? price + " zł brutto" : "wg cennika"} — pobierany z Twojego konta Base Courier.\n\n` +
+          `Tej operacji nie da się cofnąć z panelu.`
+      )
+    )
+      return;
+    setBcLoading(true);
+    setBcMsg("");
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/basecourier`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setBcMsg(data.error || "Błąd nadania");
+        return;
+      }
+      setFurgonetkaStatus("basecourier");
+      if (data.basecourierOrderId) setFurgonetkaPackageId(String(data.basecourierOrderId));
+      if (data.trackingNumber) setTracking(data.trackingNumber);
+      applyTrackingSync(data.trackingSync);
+      setBcMsg(
+        data.trackingNumber
+          ? `Nadano. Numer przesyłki: ${data.trackingNumber}`
+          : "Nadano — numer przesyłki nie wrócił w odpowiedzi, sprawdź w panelu Base Courier"
+      );
+    } catch {
+      setBcMsg("Błąd sieci");
+    } finally {
+      setBcLoading(false);
+    }
+  };
+
+  // Cichy druk etykiety — tylko w aplikacji desktopowej (window.kalkmateDesktop
+  // z preload.js). Aplikacja pobiera PDF swoja sesja i drukuje bez okna dialogu
+  // z ustawieniami: drukarka etykiet, pionowo, 1 kopia, monochromatycznie.
+  const [canPrintLabel, setCanPrintLabel] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printMsg, setPrintMsg] = useState("");
+  useEffect(() => {
+    setCanPrintLabel(typeof window.kalkmateDesktop?.printLabel === "function");
+  }, []);
+
+  const handlePrintLabel = async () => {
+    const bridge = window.kalkmateDesktop;
+    if (!bridge?.printLabel) return;
+    setPrinting(true);
+    setPrintMsg("");
+    try {
+      const r = await bridge.printLabel(`/api/admin/orders/${id}/basecourier/label`);
+      setPrintMsg(r.ok ? `Wysłano do druku (${r.printer || "drukarka etykiet"})` : r.error || "Błąd drukowania");
+    } catch (e) {
+      setPrintMsg(`Błąd drukowania: ${(e as Error).message}`);
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -110,6 +232,9 @@ export default function OrderDetailPage({
       if (res.ok) {
         setSaveMsg("Zapisano");
         setTimeout(() => setSaveMsg(""), 3000);
+        // Nowy numer InPost -> serwer od razu sprawdzil status
+        const data = await res.json().catch(() => null);
+        if (data?.trackingSync) applyTrackingSync(data.trackingSync);
       } else {
         setSaveMsg("Błąd zapisu");
       }
@@ -142,124 +267,10 @@ export default function OrderDetailPage({
     }
   };
 
-  const handleFetchServices = async () => {
-    setLoadingServices(true);
-    try {
-      const res = await fetch("/api/admin/furgonetka/services");
-      const data = await res.json();
-      if (res.ok) {
-        const list = Array.isArray(data.services) ? data.services : (Array.isArray(data.services?.services) ? data.services.services : []);
-        setFurgonetkaServices(list);
-      } else {
-        setFurgonetkaError(data.error || "Błąd pobierania usług");
-      }
-    } catch (e) {
-      setFurgonetkaError((e as Error).message);
-    } finally {
-      setLoadingServices(false);
-    }
-  };
-
-  const handleCreateFurgonetkaLabel = async () => {
-    setFurgonetkaLoading(true);
-    setFurgonetkaError("");
-    setFurgonetkaMsg("Tworzenie przesyłki...");
-
-    try {
-      const body: Record<string, unknown> = { action: "create" };
-      if (serviceId) body.serviceId = parseInt(serviceId, 10);
-
-      const res = await fetch(`/api/admin/orders/${id}/furgonetka`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Błąd tworzenia etykiety");
-      }
-
-      setFurgonetkaPackageId(data.package_id || "");
-      setFurgonetkaOrderUuid(data.order_uuid || "");
-      setFurgonetkaStatus(data.command_status?.status || "");
-      setFurgonetkaMsg(
-        `Przesyłka utworzona! ID: ${data.package_id} · Status: ${data.command_status?.status || "—"}`
-      );
-    } catch (e) {
-      setFurgonetkaError((e as Error).message);
-      setFurgonetkaMsg("");
-    } finally {
-      setFurgonetkaLoading(false);
-    }
-  };
-
-  const handleDownloadLabel = async () => {
-    if (!furgonetkaPackageId) {
-      setFurgonetkaError("Brak ID przesyłki. Najpierw utwórz etykietę.");
-      return;
-    }
-
-    setDocumentLoading(true);
-    setFurgonetkaError("");
-    setFurgonetkaMsg("Generowanie etykiety PDF...");
-
-    try {
-      // Step 1: Request documents
-      const reqRes = await fetch(`/api/admin/orders/${id}/furgonetka`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "request_documents" }),
-      });
-
-      const reqData = await reqRes.json();
-      if (!reqRes.ok) throw new Error(reqData.error || "Błąd żądania dokumentów");
-
-      const docUuid = reqData.uuid;
-      setFurgonetkaMsg("Oczekiwanie na dokument...");
-
-      // Step 2: Poll for document URL
-      let url = "";
-      const pollDeadline = Date.now() + 35_000;
-
-      while (Date.now() < pollDeadline) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const pollRes = await fetch(`/api/admin/orders/${id}/furgonetka`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "documents", commandUuid: docUuid }),
-        });
-        const pollData = await pollRes.json();
-
-        if (pollData.url) {
-          url = pollData.url;
-          break;
-        }
-        if (!pollData.pending) {
-          throw new Error(pollData.message || "Nie udało się pobrać dokumentu");
-        }
-      }
-
-      if (!url) {
-        throw new Error("Generowanie etykiety przekroczyło czas");
-      }
-
-      setDocumentUrl(url);
-      setFurgonetkaMsg("Etykieta gotowa! Kliknij poniżej aby pobrać.");
-      window.open(url, "_blank");
-    } catch (e) {
-      setFurgonetkaError((e as Error).message);
-      setFurgonetkaMsg("");
-    } finally {
-      setDocumentLoading(false);
-    }
-  };
-
   // ---------------------------------------------------------------------
   // Eksport CSV do masowego wgrania w panelu kuriera ("Importuj zamowienia
-  // z pliku CSV") — alternatywa dla etykiety tworzonej przez API
-  // Furgonetka powyzej, przydatne gdy wolisz wgrac przesylke recznie.
+  // z pliku CSV") — alternatywa dla nadania przez API Base Courier,
+  // przydatne gdy wolisz wgrac przesylke recznie.
   //
   // Wartosci ponizej sa zgodne z dokladnymi opcjami z tooltipow "wiecej
   // informacji" na ich formularzu (potwierdzone przez uzytkownika):
@@ -585,13 +596,57 @@ export default function OrderDetailPage({
                 <label className="block text-sm text-[#E0E0E0]/70 mb-1">
                   Numer przesyłki
                 </label>
-                <input
-                  type="text"
-                  value={tracking}
-                  onChange={(e) => setTracking(e.target.value)}
-                  className={inputClass}
-                  placeholder="np. 620012345678901234"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tracking}
+                    onChange={(e) => setTracking(e.target.value)}
+                    className={inputClass}
+                    placeholder="np. 620012345678901234"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTrackingSync}
+                    disabled={trackingSyncing || !order.tracking_number}
+                    title={order.tracking_number ? "Odpytaj InPost i zaktualizuj status zamówienia" : "Najpierw zapisz numer przesyłki"}
+                    className="shrink-0 px-3 py-2 rounded-lg text-xs font-medium border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {trackingSyncing ? "Sprawdzam…" : "Sprawdź status InPost"}
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-[#E0E0E0]/40">
+                  Numery InPost są sprawdzane automatycznie co godzinę — status „Wysłane" po odbiorze przez kuriera, „Zrealizowane" gdy paczka jest w Paczkomacie.
+                </p>
+                {trackingMsg && (
+                  <p className="mt-1 text-xs text-amber-300">{trackingMsg}</p>
+                )}
+                {trackingInfo && (
+                  <div className="mt-2 rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-mono text-[#E0E0E0]">
+                        InPost: <span className="text-amber-300">{trackingInfo.status}</span>
+                        {trackingInfo.targetMachineId && (
+                          <span className="text-[#E0E0E0]/50"> · {trackingInfo.targetMachineId}</span>
+                        )}
+                      </span>
+                      {trackingInfo.updatedAt && (
+                        <span className="text-[#E0E0E0]/40">
+                          {new Date(trackingInfo.updatedAt).toLocaleString("pl-PL")}
+                        </span>
+                      )}
+                    </div>
+                    <ul className="space-y-0.5 max-h-40 overflow-y-auto">
+                      {trackingInfo.events.map((ev, i) => (
+                        <li key={i} className="flex gap-3 text-[#E0E0E0]/70">
+                          <span className="text-[#E0E0E0]/40 shrink-0 font-mono">
+                            {new Date(ev.datetime).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span>{ev.status}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -637,198 +692,93 @@ export default function OrderDetailPage({
               </div>
             </div>
 
-            {/* Furgonetka Label Section */}
+            {/* Base Courier — nadanie InPost Paczkomat przez API (basecourier.com) */}
             <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center flex-shrink-0">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="1" y="3" width="15" height="13"/>
-                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
-                    <circle cx="5.5" cy="18.5" r="2.5"/>
-                    <circle cx="18.5" cy="18.5" r="2.5"/>
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center flex-shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
                   </svg>
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-[#E0E0E0]">Furgonetka — Etykieta</h2>
-                  <p className="text-xs text-[#E0E0E0]/50">Utwórz i pobierz etykietę paczkomatową</p>
+                  <h2 className="text-lg font-bold text-[#E0E0E0]">Base Courier — nadaj przesyłkę</h2>
+                  <p className="text-xs text-[#E0E0E0]/50">InPost Paczkomat przez API basecourier.com · pudełko 18×12×4 cm, 1 kg · nadanie w Paczkomacie (bez kuriera)</p>
                 </div>
               </div>
 
-              {/* Status badge */}
-              {furgonetkaPackageId && (
-                <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-400">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    <p className="text-sm text-green-400 font-medium">
-                      Przesyłka utworzona
-                    </p>
-                  </div>
-                  <p className="text-xs text-green-400/70 mt-1 font-mono">ID: {furgonetkaPackageId}</p>
-                </div>
-              )}
-
-              {/* Service ID input */}
-              {!furgonetkaPackageId && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <label className="block text-sm text-[#E0E0E0]/70 mb-1">
-                        Service ID Furgonetka
-                        <span className="text-xs text-[#E0E0E0]/40 ml-2">(domyślnie z .env)</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={serviceId}
-                        onChange={(e) => setServiceId(e.target.value)}
-                        className={inputClass}
-                        placeholder="np. 12345"
-                      />
-                    </div>
-                    <button
-                      onClick={handleFetchServices}
-                      disabled={loadingServices}
-                      className="mt-6 px-3 py-2 rounded-lg bg-[#3F4147] hover:bg-[#4a4d55] text-[#E0E0E0] text-xs font-medium transition-colors whitespace-nowrap disabled:opacity-50"
+              {furgonetkaStatus === "basecourier" ? (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 space-y-2">
+                  <p className="text-sm text-green-400 font-medium">✓ Przesyłka nadana przez Base Courier</p>
+                  {furgonetkaPackageId && (
+                    <p className="text-xs text-green-400/70 font-mono">ID zlecenia: {furgonetkaPackageId}</p>
+                  )}
+                  {tracking && <p className="text-xs text-green-400/70 font-mono">Numer: {tracking}</p>}
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    {canPrintLabel && (
+                      <button
+                        type="button"
+                        onClick={handlePrintLabel}
+                        disabled={printing}
+                        title="Drukuje od razu na drukarce etykiet (pionowo, 1 kopia, mono) — bez okna wyboru"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-50"
+                      >
+                        🖨 {printing ? "Drukuję…" : "Drukuj etykietę"}
+                      </button>
+                    )}
+                    <a
+                      href={`/api/admin/orders/${id}/basecourier/label`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-green-500/20 hover:bg-green-500/30 text-green-300 transition-colors"
                     >
-                      {loadingServices ? "..." : "Pobierz listę usług"}
-                    </button>
+                      Pobierz etykietę PDF
+                    </a>
                   </div>
-
-                  {/* Lista dostępnych usług Furgonetka */}
-                  {furgonetkaServices.length > 0 && (
-                    <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] overflow-hidden">
-                      <div className="px-3 py-2 border-b border-[#3F4147] text-xs text-[#E0E0E0]/50 font-medium">
-                        Kliknij usługę, aby wybrać jej ID:
-                      </div>
-                      <div className="max-h-48 overflow-y-auto divide-y divide-[#3F4147]/50">
-                        {furgonetkaServices.map((s) => (
-                          <button
-                            key={s.id}
-                            onClick={() => setServiceId(String(s.id))}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-[#313338] transition-colors ${
-                              serviceId === String(s.id) ? "bg-[#3B82F6]/10 border-l-2 border-[#3B82F6]" : ""
-                            }`}
-                          >
-                            <span className="text-sm text-[#E0E0E0]">{s.name || s.carrier || "Usługa"}</span>
-                            <span className="text-xs font-mono text-[#D8FF3D] ml-4 shrink-0">ID: {s.id}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  {printMsg && (
+                    <p className={`text-xs ${printMsg.startsWith("Wysłano") ? "text-green-400" : "text-red-400"}`}>{printMsg}</p>
                   )}
                 </div>
-              )}
-
-              {/* Info about receiver address */}
-              {!order.customer_address_street && !order.pickup_point && (
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
-                  <p className="text-sm text-amber-400">
-                    ⚠️ Brak adresu klienta ani punktu odbioru. Etykieta może wymagać ręcznego adresu.
+              ) : (
+                <>
+                  {bcPreview && (
+                    <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs text-[#E0E0E0]/80 space-y-1">
+                      <p><span className="text-[#E0E0E0]/50">Odbiorca:</span> {bcPreview.receiver.name} · {bcPreview.receiver.phone} · {bcPreview.receiver.email}</p>
+                      <p><span className="text-[#E0E0E0]/50">Paczkomat:</span> <span className="font-mono text-amber-300">{bcPreview.receiver.lockerCode || "— BRAK —"}</span></p>
+                      <p>
+                        <span className="text-[#E0E0E0]/50">Koszt nadania:</span>{" "}
+                        {bcPreview.valuation.price
+                          ? <span className="text-[#E0E0E0]">{bcPreview.valuation.price.value} zł brutto ({bcPreview.valuation.price.netto} netto)</span>
+                          : "brak wyceny"}
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleBcPreview}
+                      disabled={bcLoading}
+                      className="px-4 py-2 rounded-lg bg-[#3F4147] hover:bg-[#4a4d55] text-[#E0E0E0] text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                      {bcLoading && !bcPreview ? "Wyceniam…" : "Sprawdź dane i wycenę"}
+                    </button>
+                    <button
+                      onClick={handleBcCreate}
+                      disabled={bcLoading || !bcPreview || !bcPreview.receiver.lockerCode}
+                      title={!bcPreview ? "Najpierw sprawdź dane i wycenę" : ""}
+                      className="px-5 py-2 rounded-lg font-medium text-sm text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {bcLoading && bcPreview ? "Nadaję…" : "Nadaj przesyłkę (płatne)"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#E0E0E0]/40">
+                    Koszt pobierany ze Skarbonki na koncie Base Courier — pilnuj salda. Po nadaniu numer przesyłki zapisuje się w zamówieniu i status aktualizuje się automatycznie ze śledzenia InPost.
                   </p>
-                </div>
+                </>
               )}
-
-              {/* Messages */}
-              {furgonetkaMsg && (
-                <div className="bg-[#2B2D31] border border-[#3F4147] rounded-lg px-4 py-3">
-                  <p className="text-sm text-[#E0E0E0]/80">{furgonetkaMsg}</p>
-                </div>
+              {bcMsg && (
+                <p className={`text-xs ${bcMsg.startsWith("Nadano") ? "text-green-400" : "text-red-400"}`}>{bcMsg}</p>
               )}
-              {furgonetkaError && (
-                <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
-                  <p className="text-sm text-red-400">{furgonetkaError}</p>
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="flex flex-wrap gap-3">
-                {!furgonetkaPackageId ? (
-                  <button
-                    onClick={handleCreateFurgonetkaLabel}
-                    disabled={furgonetkaLoading}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm text-white transition-all ${
-                      furgonetkaLoading
-                        ? "bg-orange-500/50 cursor-not-allowed"
-                        : "bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-500/20"
-                    }`}
-                  >
-                    {furgonetkaLoading ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Tworzenie...
-                      </>
-                    ) : (
-                      <>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M12 5v14M5 12h14"/>
-                        </svg>
-                        Utwórz etykietę
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={handleDownloadLabel}
-                      disabled={documentLoading}
-                      className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm text-white transition-all ${
-                        documentLoading
-                          ? "bg-blue-500/50 cursor-not-allowed"
-                          : "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/20"
-                      }`}
-                    >
-                      {documentLoading ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Generowanie...
-                        </>
-                      ) : (
-                        <>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                          </svg>
-                          Pobierz etykietę PDF
-                        </>
-                      )}
-                    </button>
-
-                    {documentUrl && (
-                      <a
-                        href={documentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm text-white bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 shadow-lg shadow-green-500/20 transition-all"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="6 9 6 2 18 2 18 9"/>
-                          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-                          <rect x="6" y="14" width="12" height="8"/>
-                        </svg>
-                        Drukuj etykietę
-                      </a>
-                    )}
-
-                    <button
-                      onClick={handleCreateFurgonetkaLabel}
-                      disabled={furgonetkaLoading}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm text-[#E0E0E0] bg-[#3F4147] hover:bg-[#4A4D55] transition-colors"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="23 4 23 10 17 10"/>
-                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                      </svg>
-                      Utwórz nową
-                    </button>
-                  </>
-                )}
-              </div>
-
-              <p className="text-xs text-[#E0E0E0]/30 mt-2">
-                Przesyłka zostanie nadana w Paczkomacie InPost. Punkt odbioru: {order.pickup_point || "—"}
-              </p>
             </div>
 
             {/* Eksport CSV — alternatywa dla API Furgonetka powyzej, do recznego wgrania */}

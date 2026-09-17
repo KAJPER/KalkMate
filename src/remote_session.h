@@ -150,6 +150,19 @@ static void _remoteTaskFn(void* /*arg*/) {
         http.addHeader("Content-Type", "application/json");
         http.addHeader("x-api-key", KALK_API_KEY);
         http.addHeader("x-device-id", _remoteDeviceId());
+        // x-device-token: od fw 1.9.6 serwer weryfikuje checkin przez
+        // verifyDeviceAuth() (audyt 2026-09-17 — bez tego kazdy z kluczem API
+        // mogl podszyc sie pod cudze urzadzenie i przejac sesje zdalnej
+        // pomocy). Token czytany z NVS raz na zycie taska, nie co 500 ms.
+        {
+            static char s_devToken[68] = "";
+            static bool  s_devTokenLoaded = false;
+            if (!s_devTokenLoaded) {
+                wifiLoadDeviceToken(s_devToken, sizeof(s_devToken));
+                s_devTokenLoaded = true;
+            }
+            if (s_devToken[0]) http.addHeader("x-device-token", s_devToken);
+        }
         http.setTimeout(_REMOTE_HTTP_TIMEOUT_MS);
 
         String body = String("{\"frame\":\"") + frame + "\"}";

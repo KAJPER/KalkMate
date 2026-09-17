@@ -37,7 +37,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authErr = requireAdminAuth(request); if (authErr) return authErr;
+  const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
 
   try {

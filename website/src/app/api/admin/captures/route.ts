@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { listAllCaptures } from "@/lib/captures";
 
 // GET /api/admin/captures — wszystkie zdjecia z wszystkich urzadzen.
-// Auth: middleware sprawdza admin_session.
+// Auth: middleware sprawdza admin_session (defense-in-depth: sprawdzamy tez tutaj).
 // Query: ?device=AABBCCDDEEFF — filtruj po deviceId
 export async function GET(req: NextRequest) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   const url = new URL(req.url);
   const deviceFilter = (url.searchParams.get("device") || "").trim().toUpperCase();
 

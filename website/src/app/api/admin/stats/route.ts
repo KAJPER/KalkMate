@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
-    // Verify admin using cookie
-    const token = req.cookies.get(COOKIE_NAME)?.value;
-    if (token !== process.env.ADMIN_SESSION_TOKEN) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     // Pobierz statystyki
     const [
       totalUsers,

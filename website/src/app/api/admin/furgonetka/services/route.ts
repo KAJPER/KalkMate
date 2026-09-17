@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFurgonetkaToken } from "@/lib/furgonetka";
-import { COOKIE_NAME } from "@/lib/admin-auth";
-
-function isAdmin(req: NextRequest) {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
-  return token === process.env.ADMIN_SESSION_TOKEN;
-}
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
 
   try {
     const token = await getFurgonetkaToken();

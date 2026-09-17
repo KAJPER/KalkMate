@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>KalkMate Admin – brak połączenia</title>
+  <style>
+    :root { color-scheme: light; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      background: #f6f7f9; color: #1a1d24;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    .card {
+      max-width: 420px; padding: 36px 40px; text-align: center;
+      background: #fff; border-radius: 16px;
+      box-shadow: 0 8px 30px rgba(20, 24, 40, .08);
+    }
+    .icon { font-size: 44px; line-height: 1; margin-bottom: 14px; }
+    h1 { font-size: 20px; margin: 0 0 8px; font-weight: 600; }
+    p { margin: 0 0 20px; color: #5a616e; font-size: 14px; line-height: 1.5; }
+    code { font-size: 12px; color: #8a909c; word-break: break-all; }
+    button {
+      cursor: pointer; border: 0; border-radius: 10px;
+      padding: 11px 22px; font-size: 15px; font-weight: 600;
+      background: #111827; color: #fff;
+    }
+    button:hover { background: #1f2937; }
+    button:active { transform: translateY(1px); }
+    .hint { margin-top: 18px; font-size: 12px; color: #8a909c; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📡</div>
+    <h1>Brak połączenia z kalkmate.pl</h1>
+    <p>Nie udało się załadować panelu. Sprawdź połączenie z internetem i spróbuj ponownie.</p>
+    <button id="retry" type="button" autofocus>Spróbuj ponownie</button>
+    <div class="hint"><code id="detail"></code></div>
+  </div>
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var target = params.get('url') || 'https://kalkmate.pl/admin';
+      var reason = params.get('reason') || '';
+      if (!/^https?:\/\//i.test(target)) target = 'https://kalkmate.pl/admin';
+      document.getElementById('detail').textContent = reason;
+      var btn = document.getElementById('retry');
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        btn.textContent = 'Łączenie…';
+        location.replace(target);
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === 'F5') btn.click();
+      });
+    })();
+  </script>
+</body>
+</html>

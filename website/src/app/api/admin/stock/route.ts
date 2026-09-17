@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 const STOCK_ID = "kalkmate-v1-stock";
 const STOCK_NAME = "KalkMate v3.0 — stan magazynowy (strona główna)";
 
-function isAdmin(req: NextRequest) {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
-  return token === process.env.ADMIN_SESSION_TOKEN;
-}
-
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     const rows = await prisma.$queryRaw<{ count: number }[]>`
       SELECT count FROM Inventory WHERE id = ${STOCK_ID} LIMIT 1
@@ -26,7 +21,7 @@ export async function GET(req: NextRequest) {
 // POST /api/admin/stock — ustaw stan (upsert)
 // Body: { stock: number }
 export async function POST(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     const body = await req.json().catch(() => ({}));
     const stock = Math.max(0, Math.floor(Number(body?.stock)));

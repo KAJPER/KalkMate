@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 // Gemini API pricing (as of 2024)
 // Gemini 1.5 Flash: ~$0.00001875 per 1K tokens (input), ~$0.000075 per 1K tokens (output)
@@ -12,13 +12,8 @@ const AVG_TOKENS_PER_USER_MESSAGE = 100;
 const AVG_TOKENS_PER_ASSISTANT_MESSAGE = 200;
 
 export async function GET(req: NextRequest) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
-    // Verify admin using cookie
-    const token = req.cookies.get(COOKIE_NAME)?.value;
-    if (token !== process.env.ADMIN_SESSION_TOKEN) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     // Get all chat message statistics
     const [
       totalMessages,

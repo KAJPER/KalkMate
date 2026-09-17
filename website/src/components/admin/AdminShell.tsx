@@ -1,8 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+
+// Most z aplikacja desktopowa (tools/kalkmate-admin-desktop, preload.js):
+// window.kalkmateDesktop istnieje TYLKO wewnatrz Electrona. W przegladarce
+// przycisk "Programator" sie nie pokazuje — flashowanie wymaga USB na tym
+// komputerze, wiec nie ma sensu poza aplikacja.
+declare global {
+  interface Window {
+    kalkmateDesktop?: {
+      isDesktop: boolean;
+      openFlasher: () => void;
+      // Cichy druk etykiety PDF na zapamietanej drukarce etykiet (VEVOR).
+      printLabel?: (url: string) => Promise<{ ok: boolean; printer?: string; error?: string }>;
+    };
+  }
+}
 
 const navItems = [
   {
@@ -71,6 +86,16 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    setIsDesktop(!!window.kalkmateDesktop?.isDesktop);
+  }, []);
+
+  const openFlasher = () => {
+    setSidebarOpen(false);
+    window.kalkmateDesktop?.openFlasher();
+  };
 
   const handleLogout = async () => {
     await fetch("/api/admin/auth", { method: "DELETE" });
@@ -130,6 +155,30 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               {item.label}
             </Link>
           ))}
+
+          {isDesktop && (
+            <button
+              type="button"
+              onClick={openFlasher}
+              title="Otwiera programator kalkulatorów (USB) — dostępny tylko w aplikacji desktopowej"
+              className="flex items-center gap-3 w-full px-3 py-2 mt-2 rounded-lg text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M5 12h2m10 0h2M12 5v2m0 10v2M9 9h6v6H9z" />
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+              </svg>
+              Programator kalkulatorów
+            </button>
+          )}
         </nav>
 
         <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-[#3F4147]">

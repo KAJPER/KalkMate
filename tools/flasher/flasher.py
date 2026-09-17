@@ -33,6 +33,23 @@ import subprocess
 import queue
 from datetime import datetime
 
+# === Tryb "frozen" (PyInstaller, tools/flasher/build_exe.ps1) ===
+# W paczce nie ma zewnetrznego esptool.py — pakiet `esptool` (pip, 4.x) jest
+# w srodku exe. Zeby zachowac dotychczasowa logike subprocess (streaming
+# logu, stdin "BURN"), exe wywoluje SAM SIEBIE z flaga --run-<tool> i tu,
+# zanim zaladuje sie tkinter, przekazuje sterowanie do danego narzedzia.
+FROZEN = bool(getattr(sys, "frozen", False))
+if len(sys.argv) > 1 and sys.argv[1] in ("--run-esptool", "--run-espefuse", "--run-espsecure"):
+    _tool = sys.argv[1][len("--run-"):]
+    sys.argv = [_tool + ".py"] + sys.argv[2:]
+    import importlib
+    _mod = importlib.import_module(_tool)
+    try:
+        _mod.main()
+    except SystemExit as _e:
+        raise
+    sys.exit(0)
+
 # === Fix dla zatrutego TCL_LIBRARY przez CSR BlueSuite / inne aplikacje ===
 # Tkinter szuka init.tcl w sciezkach z TCL_LIBRARY env. Niektore programy
 # (CSR BlueSuite, Mathematica, R) ustawiaja to globalnie na swoje wlasne
@@ -48,7 +65,7 @@ if sys.platform == "win32":
                 os.environ["TK_LIBRARY"] = _path
 
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox, scrolledtext, filedialog
 
 try:
     import serial
@@ -60,9 +77,28 @@ except ImportError:
 # === Konfiguracja ===
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
-CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
-LOG_PATH = os.path.join(SCRIPT_DIR, "production_log.csv")
-KEYS_DIR = os.path.join(SCRIPT_DIR, "keys")
+# Zasoby dolaczone do paczki PyInstaller (onedir: <exe_dir>/_internal).
+BUNDLE_DIR = getattr(sys, "_MEIPASS", SCRIPT_DIR)
+# Dane trwale (config, log, KLUCZE). W paczce NIE moga lezec obok exe —
+# folder instalacji jest nadpisywany przy aktualizacji, a klucze nie moga
+# byc czescia instalatora. Stad %APPDATA%\KalkMate\flasher.
+if FROZEN:
+    DATA_DIR = os.path.join(
+        os.environ.get("APPDATA", os.path.expanduser("~")), "KalkMate", "flasher")
+else:
+    DATA_DIR = SCRIPT_DIR
+os.makedirs(DATA_DIR, exist_ok=True)
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+LOG_PATH = os.path.join(DATA_DIR, "production_log.csv")
+KEYS_DIR = os.path.join(DATA_DIR, "keys")
+os.makedirs(KEYS_DIR, exist_ok=True)
+
+# Domyslny firmware: w paczce = biny dolaczone przy buildzie
+# (build_exe.ps1 kopiuje aktualny .pio/build/esp32s3), w dev = build PIO.
+if FROZEN:
+    DEFAULT_FW_DIR = os.path.join(BUNDLE_DIR, "firmware")
+else:
+    DEFAULT_FW_DIR = os.path.join(PROJECT_ROOT, ".pio", "build", "esp32s3")
 
 # ESP32-S3 native USB-Serial-JTAG: VID=0x303A, PID=0x1001
 # ESP32-S3 TinyUSB CDC: VID=0x303A, PID=0x4001
@@ -75,6 +111,9 @@ ESP32S3_USB_IDS = [
 
 def _autodetect_esptool():
     """Znajdz esptool/espefuse w typowych lokalizacjach (PIO venv, IDF, PATH)."""
+    if FROZEN:
+        # Narzedzia sa w srodku exe — markery obsluguje _tool_cmd().
+        return "<frozen>esptool", "<frozen>espefuse"
     candidates = []
     home = os.path.expanduser("~")
     # PlatformIO Windows venv
@@ -108,12 +147,9 @@ def load_config():
         "espefuse": auto_espefuse or "espefuse.py",
         "chip": "esp32s3",
         "baud": 921600,
-        "firmware_bin": os.path.join(
-            PROJECT_ROOT, ".pio", "build", "esp32s3", "firmware.bin"),
-        "bootloader_bin": os.path.join(
-            PROJECT_ROOT, ".pio", "build", "esp32s3", "bootloader.bin"),
-        "partitions_bin": os.path.join(
-            PROJECT_ROOT, ".pio", "build", "esp32s3", "partitions.bin"),
+        "firmware_bin": os.path.join(DEFAULT_FW_DIR, "firmware.bin"),
+        "bootloader_bin": os.path.join(DEFAULT_FW_DIR, "bootloader.bin"),
+        "partitions_bin": os.path.join(DEFAULT_FW_DIR, "partitions.bin"),
         "flash_addr_bootloader": "0x0",
         "flash_addr_partitions": "0x8000",
         "flash_addr_firmware":   "0x10000",
@@ -137,6 +173,15 @@ def load_config():
         elif (not os.path.isabs(v)) and autoval and os.path.isabs(autoval):
             # Bare name (np. "esptool.py") -> jezeli mamy lepszy abs, uzyj
             defaults[k] = autoval
+    # Firmware: config z innego komputera / stary build moze wskazywac na
+    # nieistniejacy folder -> wroc do domyslnego (w paczce: biny z instalatora).
+    for k, name in [("firmware_bin", "firmware.bin"),
+                    ("bootloader_bin", "bootloader.bin"),
+                    ("partitions_bin", "partitions.bin")]:
+        if not os.path.exists(defaults.get(k, "")):
+            defaults[k] = os.path.join(DEFAULT_FW_DIR, name)
+    # Klucz FE zawsze w KEYS_DIR biezacego komputera (nigdy sciezka z paczki).
+    defaults["fe_key_file"] = os.path.join(KEYS_DIR, "flash_encryption_key.bin")
     # Zapisz (nadpisuje config.json z aktualnymi wartosciami)
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(defaults, f, indent=2)
@@ -152,9 +197,18 @@ def _tool_cmd(path):
     aplikacja systemu Win32". Trzeba jawnie przepuscic przez interpreter,
     ktorym ten GUI wlasnie dziala (sys.executable).
     """
+    if path.startswith("<frozen>"):
+        # Paczka PyInstaller: exe uruchamia sam siebie w trybie narzedzia
+        # (dispatcher na gorze pliku, przed importem tkinter).
+        return [sys.executable, "--run-" + path[len("<frozen>"):]]
     if path.endswith(".py"):
         return [sys.executable, path]
     return [path]
+
+
+# Bez migajacych okien konsoli przy kazdym wywolaniu esptool (Windows);
+# w paczce --windowed exe i tak nie ma konsoli, ale dzieci by ja tworzyly.
+_SUBPROCESS_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
 
 
 def find_esp32s3_ports():
@@ -298,7 +352,21 @@ class FlasherApp:
             wrap=tk.WORD)
         self.console.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
+        # === Firmware (ktore biny zostana wgrane) ===
+        fw_frame = tk.LabelFrame(
+            root, text=" Firmware ", bg="#1a1a1a", fg="#F2EDE3",
+            font=("Arial", 10, "bold"))
+        fw_frame.pack(fill=tk.X, padx=10, pady=5, before=btn_frame)
+        fw_row = tk.Frame(fw_frame, bg="#1a1a1a")
+        fw_row.pack(fill=tk.X, padx=10, pady=4)
+        self.fw_dir_var = tk.StringVar(value=os.path.dirname(self.cfg["firmware_bin"]))
+        tk.Label(fw_row, textvariable=self.fw_dir_var, bg="#1a1a1a", fg="#F2EDE3",
+                 font=("Consolas", 9), anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Button(fw_row, text="Zmien folder...", bg="#333", fg="#F2EDE3",
+                  font=("Arial", 9), command=self.choose_firmware_dir).pack(side=tk.RIGHT)
+
         # Start poll loop + log queue drainer
+        self._log_startup_info()
         self.poll_ports()
         self.drain_log()
 
@@ -325,6 +393,46 @@ class FlasherApp:
             os.startfile(LOG_PATH)
         else:
             messagebox.showinfo("Log", "Brak wpisow yet — sflashuj pierwsze urzadzenie.")
+
+    # -- Firmware / info startowe -------------------------------------------
+    def _log_startup_info(self):
+        self.log(f"[i] Tryb: {'paczka (PyInstaller)' if FROZEN else 'dev (python)'}  dane: {DATA_DIR}")
+        for k, name in [("bootloader_bin", "bootloader"), ("partitions_bin", "partitions"),
+                        ("firmware_bin", "firmware")]:
+            p = self.cfg[k]
+            if os.path.exists(p):
+                st = os.stat(p)
+                self.log(f"[i] {name:<10} {st.st_size:>8} B  {datetime.fromtimestamp(st.st_mtime):%Y-%m-%d %H:%M}  {p}")
+            else:
+                self.log(f"[!] {name:<10} BRAK: {p}", "#F88")
+        key = self.cfg["fe_key_file"]
+        if os.path.exists(key):
+            self.log(f"[i] Klucz FE: {key}")
+        else:
+            self.log(f"[!] Brak klucza Flash Encryption: {key}", "#F88")
+            self.log("    DEV dziala bez klucza. Przed PROD_DEV/PROD_REL skopiuj "
+                     "flash_encryption_key.bin z glownego komputera do tego folderu — "
+                     "inaczej zostanie wygenerowany NOWY klucz (inny niz na dotychczasowych plytkach).", "#F88")
+
+    def choose_firmware_dir(self):
+        d = filedialog.askdirectory(
+            title="Folder z firmware (bootloader.bin, partitions.bin, firmware.bin)",
+            initialdir=self.fw_dir_var.get() or DEFAULT_FW_DIR)
+        if not d:
+            return
+        missing = [n for n in ("bootloader.bin", "partitions.bin", "firmware.bin")
+                   if not os.path.exists(os.path.join(d, n))]
+        if missing:
+            messagebox.showerror("Firmware", f"W folderze brakuje: {', '.join(missing)}")
+            return
+        self.cfg["bootloader_bin"] = os.path.join(d, "bootloader.bin")
+        self.cfg["partitions_bin"] = os.path.join(d, "partitions.bin")
+        self.cfg["firmware_bin"] = os.path.join(d, "firmware.bin")
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(self.cfg, f, indent=2)
+        self.fw_dir_var.set(d)
+        self.log(f"[i] Firmware: {d}")
+        self._log_startup_info()
 
     # -- USB port detection -----------------------------------------------
     def poll_ports(self):
@@ -364,7 +472,7 @@ class FlasherApp:
                    "--after", "no_reset",
                    "chip_id"]
             res = subprocess.run(cmd, capture_output=True, text=True,
-                                 timeout=15)
+                                 timeout=15, creationflags=_SUBPROCESS_FLAGS)
             output = res.stdout + res.stderr
             mac = None
             chip = self.cfg["chip"]
@@ -598,7 +706,7 @@ class FlasherApp:
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE if stdin_input else None,
-            text=True, bufsize=1)
+            text=True, bufsize=1, creationflags=_SUBPROCESS_FLAGS)
         if stdin_input:
             proc.stdin.write(stdin_input)
             proc.stdin.flush()

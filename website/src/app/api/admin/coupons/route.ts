@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import {
   ensureCouponTable,
   normalizeCode,
@@ -8,14 +8,9 @@ import {
 } from "@/lib/coupons";
 import { randomUUID } from "crypto";
 
-function isAdmin(req: NextRequest) {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
-  return token === process.env.ADMIN_SESSION_TOKEN;
-}
-
 // GET /api/admin/coupons — lista kuponow
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     await ensureCouponTable();
     const rows = await prisma.$queryRaw<CouponRow[]>`
@@ -33,7 +28,7 @@ export async function GET(req: NextRequest) {
 // Body: { code, type: 'percent'|'fixed', value, maxUses?, expiresAt? }
 //   value dla 'percent' = 1..100, dla 'fixed' = kwota w ZL (przeliczamy na grosze)
 export async function POST(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     await ensureCouponTable();
     const body = await req.json().catch(() => ({}));
@@ -103,7 +98,7 @@ export async function POST(req: NextRequest) {
 // PATCH /api/admin/coupons?id=... — wlacz/wylacz kupon
 // Body: { active: boolean }
 export async function PATCH(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     await ensureCouponTable();
     const id = new URL(req.url).searchParams.get("id");
@@ -120,7 +115,7 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE /api/admin/coupons?id=... — usun kupon
 export async function DELETE(req: NextRequest) {
-  if (!isAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     await ensureCouponTable();
     const id = new URL(req.url).searchParams.get("id");

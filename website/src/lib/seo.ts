@@ -22,6 +22,11 @@ export function productJsonLd(locale: Locale) {
     "@type": "Product",
     name: productName[locale],
     description: productDescription[locale],
+    image: [
+      `${SITE_URL}/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp`,
+      `${SITE_URL}/galeria/kalkulator-kalkmate-opakowanie-pudelko.webp`,
+      `${SITE_URL}/galeria/kalkulator-kalkmate-ekran-menu-glowne.webp`,
+    ],
     sku: "KM-V3",
     brand: { "@type": "Brand", name: "KalkMate" },
     offers: {

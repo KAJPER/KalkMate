@@ -1,43 +1,31 @@
 import { withAuth } from "next-auth/middleware";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminCookie } from "@/lib/admin-session";
 
-// Edge-runtime safe constant-time string comparison (no Node.js crypto)
-function timingSafeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
-function isValidAdminSession(value: string | undefined): boolean {
-  const expected = process.env.ADMIN_SESSION_TOKEN;
-  if (!expected || !value) return false;
-  return timingSafeCompare(value, expected);
-}
-
+// Middleware (Edge runtime — bez Prisma/node:crypto). Dla /admin i /api/admin
+// sprawdza PODPIS i DATE WYGASNIECIA cookie sesji admina (WebCrypto HMAC).
+// Odwolanie sesji (wylogowanie z innego urzadzenia) sprawdzaja dodatkowo
+// route'y przez requireAdminAuth() w bazie — patrz lib/admin-auth.ts.
 export default withAuth(
-  function middleware(request: NextRequest) {
+  async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Protect /admin pages (except login)
-    if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
-      const session = request.cookies.get("admin_session");
-      if (!session || !isValidAdminSession(session?.value)) {
-        return NextResponse.redirect(new URL("/admin/login", request.url));
-      }
-    }
-
-    // Protect admin API routes (except auth and visits POST)
-    if (
+    const isAdminPage = pathname.startsWith("/admin") && !pathname.startsWith("/admin/login");
+    const isAdminApi =
       pathname.startsWith("/api/admin") &&
       !pathname.startsWith("/api/admin/auth") &&
-      !pathname.startsWith("/api/admin/visits")
-      // /api/track jest całkowicie publiczne — obsługiwane poza tym blokiem
-    ) {
-      const session = request.cookies.get("admin_session");
-      if (!session || !isValidAdminSession(session?.value)) {
+      !pathname.startsWith("/api/admin/visits");
+    // /api/track jest całkowicie publiczne — poza tym blokiem
+
+    if (isAdminPage || isAdminApi) {
+      const session = await verifyAdminCookie(
+        request.cookies.get("admin_session")?.value,
+        process.env.ADMIN_SESSION_TOKEN
+      );
+      if (!session) {
+        if (isAdminPage) {
+          return NextResponse.redirect(new URL("/admin/login", request.url));
+        }
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
     }

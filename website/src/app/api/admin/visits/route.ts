@@ -36,7 +36,7 @@ export async function POST() {
 
 // GET: read (admin only)
 export async function GET(request: NextRequest) {
-  const authErr = requireAdminAuth(request); if (authErr) return authErr;
+  const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
     const product = await getOrCreateProduct();
     return NextResponse.json({

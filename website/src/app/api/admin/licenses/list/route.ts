@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
-
-const ADMIN_SESSION_TOKEN = process.env.ADMIN_SESSION_TOKEN;
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 export async function GET(request: NextRequest) {
+  const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get(COOKIE_NAME)?.value;
-
-    if (!sessionToken || sessionToken !== ADMIN_SESSION_TOKEN) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "50");
     const offset = parseInt(searchParams.get("offset") || "0");

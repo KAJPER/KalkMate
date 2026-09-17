@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
+import { requireAdminAuth } from "@/lib/admin-auth";
 
 // Generator licencji: 16 znaków, więcej cyfr i znaków specjalnych niż liter
 function generateLicenseCode(): string {
@@ -35,13 +35,8 @@ function generateLicenseCode(): string {
 }
 
 export async function POST(req: NextRequest) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
-    // Verify admin using cookie
-    const token = req.cookies.get(COOKIE_NAME)?.value;
-    if (token !== process.env.ADMIN_SESSION_TOKEN) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { count = 1, durationDays = 30, description } = await req.json();
 
     // Walidacja
@@ -100,13 +95,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
-    // Verify admin
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.ADMIN_SESSION_TOKEN}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "50");
     const showUsed = searchParams.get("showUsed") === "true";

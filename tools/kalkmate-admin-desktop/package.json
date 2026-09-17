@@ -1,0 +1,68 @@
+{
+  "name": "kalkmate-admin",
+  "productName": "KalkMate Admin",
+  "version": "1.2.0",
+  "description": "Panel administracyjny KalkMate (kalkmate.pl/admin) jako aplikacja Windows",
+  "main": "main.js",
+  "private": true,
+  "author": "KalkMate",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "pl.kalkmate.admin",
+    "productName": "KalkMate Admin",
+    "copyright": "KalkMate",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "error.html",
+      "assets/**"
+    ],
+    "asarUnpack": [
+      "node_modules/pdf-to-printer/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../flasher/dist/KalkMateFlasher",
+        "to": "flasher",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KalkMate Admin",
+      "artifactName": "KalkMate-Admin-Setup-${version}.exe",
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "pl_PL",
+        "en_US"
+      ],
+      "language": "1045"
+    }
+  },
+  "dependencies": {
+    "pdf-to-printer": "^5.8.1"
+  }
+}

@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
-
-function isAdmin(req: NextRequest) {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
-  return token === process.env.ADMIN_SESSION_TOKEN;
-}
+import { requireAdminAuth } from "@/lib/admin-auth";
+import { getRentalInfoBatch, setDeviceRental } from "@/lib/deviceRental";
 
 // GET /api/admin/devices — lista urzadzen + dane sparowanego usera
 export async function GET(req: NextRequest) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
-    if (!isAdmin(req)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const devices = await prisma.device.findMany({
       orderBy: { lastSeen: "desc" },
     });
@@ -30,10 +23,13 @@ export async function GET(req: NextRequest) {
         })
       : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
+    const rentalMap = await getRentalInfoBatch(devices.map((d) => d.deviceId));
 
     const enriched = devices.map((d) => ({
       ...d,
       User: d.userId ? userMap.get(d.userId) ?? null : null,
+      rentalUntil: rentalMap.get(d.deviceId)?.rentalUntil ?? null,
+      rentalLocked: rentalMap.get(d.deviceId)?.rentalLocked ?? false,
     }));
 
     const totalRequests = devices.reduce((sum, d) => sum + d.requestCount, 0);
@@ -60,14 +56,15 @@ export async function GET(req: NextRequest) {
 
 // PATCH /api/admin/devices?deviceId=... — odepnij urzadzenie (zostaw rekord)
 // Czysci userId + licenseCode zeby kalkulator mogl byc sparowany ponownie
+//
+// PATCH /api/admin/devices?deviceId=...&action=rental — ustaw/zmien najem.
+// Body: { rentalUntil: string|null (ISO), rentalLocked: boolean }
 export async function PATCH(req: NextRequest) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
-    if (!isAdmin(req)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const url = new URL(req.url);
     const deviceId = (url.searchParams.get("deviceId") || "").trim().toUpperCase();
+    const action = url.searchParams.get("action") || "unpair";
     if (!deviceId) {
       return NextResponse.json({ ok: false, error: "Brak deviceId" }, { status: 400 });
     }
@@ -75,6 +72,14 @@ export async function PATCH(req: NextRequest) {
     const device = await prisma.device.findUnique({ where: { deviceId } });
     if (!device) {
       return NextResponse.json({ ok: false, error: "Nie znaleziono" }, { status: 404 });
+    }
+
+    if (action === "rental") {
+      const body = await req.json().catch(() => ({}));
+      const rentalUntil = typeof body.rentalUntil === "string" ? body.rentalUntil : null;
+      const rentalLocked = !!body.rentalLocked;
+      await setDeviceRental(deviceId, rentalUntil, rentalLocked);
+      return NextResponse.json({ ok: true, action: "rental", deviceId, rentalUntil, rentalLocked });
     }
 
     const updated = await prisma.device.update({
@@ -92,11 +97,8 @@ export async function PATCH(req: NextRequest) {
 // DELETE /api/admin/devices?deviceId=... — usun urzadzenie z bazy
 // Kaskadowo usuwa DeviceSolve (relacja onDelete: Cascade w schemacie)
 export async function DELETE(req: NextRequest) {
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
-    if (!isAdmin(req)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const url = new URL(req.url);
     const deviceId = (url.searchParams.get("deviceId") || "").trim().toUpperCase();
     if (!deviceId) {

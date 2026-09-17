@@ -1,0 +1,10 @@
+# Artefakty PyInstaller (build_exe.ps1) — nie do repo (publiczne!)
+dist/
+build/
+build_firmware/
+*.spec
+__pycache__/
+# Dane runtime (w dev leza obok skryptu; w paczce w %APPDATA%) — tez w root .gitignore
+config.json
+production_log.csv
+keys/

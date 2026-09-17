@@ -22,12 +22,22 @@ setInterval(
   5 * 60 * 1000, // co 5 min
 );
 
+// Kolejnosc ma znaczenie (audyt 2026-09-17, potwierdzone na nginx):
+// nginx ustawia X-Real-IP z $remote_addr (nie do podrobienia), natomiast
+// X-Forwarded-For buduje przez $proxy_add_x_forwarded_for, czyli DOKLEJA
+// prawdziwy adres NA KONIEC listy przyslanej przez klienta. Poprzednie
+// `split(",")[0]` bralo wiec wartosc kontrolowana przez atakujacego —
+// losowy naglowek na kazde zadanie omijal limity logowania/TOTP/rejestracji.
+// Z XFF bierzemy ostatni element (ten dopisany przez nginx), nigdy pierwszy.
 export function clientIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  );
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return "unknown";
 }
 
 export interface RateLimitResult {

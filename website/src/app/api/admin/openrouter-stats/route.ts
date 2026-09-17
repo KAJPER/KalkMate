@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { COOKIE_NAME } from "@/lib/admin-auth";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { AI_MODELS } from "@/lib/aiModels";
 
 const TOKEN_GRANT = 1_000_000;
@@ -8,10 +8,7 @@ const TOKEN_GRANT = 1_000_000;
 const COST_PER_EFFECTIVE_TOKEN = 1.40 / 1_000_000;
 
 export async function GET(req: NextRequest) {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
-  if (token !== process.env.ADMIN_SESSION_TOKEN) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authErr = await requireAdminAuth(req); if (authErr) return authErr;
 
   try {
     // 1. Users with AI settings (raw SQL — aiModel/aiMode not in Prisma schema)

@@ -3,7 +3,7 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 import { stripe } from "@/lib/stripe";
 
 export async function GET(request: NextRequest) {
-  const authErr = requireAdminAuth(request); if (authErr) return authErr;
+  const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
     const allIntents: Array<{
       status: string;

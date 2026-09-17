@@ -14,6 +14,8 @@ interface Device {
   licenseCode: string | null;
   userId: string | null;
   User: { id: string; email: string; name: string | null } | null;
+  rentalUntil: string | null;
+  rentalLocked: boolean;
 }
 
 interface DeviceData {
@@ -86,6 +88,76 @@ export default function DevicesPage() {
       const j = await r.json();
       if (!j.ok) {
         alert(j.error || "Blad odpinania");
+      } else {
+        await load();
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Blad sieci");
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const setRental = async (deviceId: string, current: Device) => {
+    const input = prompt(
+      `Ustaw koniec najmu dla ${deviceId} (format RRRR-MM-DD, np. 2027-05-15).\n\nZostaw puste i zatwierdz, zeby wyczyscic date (bez limitu czasowego).`,
+      current.rentalUntil ? current.rentalUntil.slice(0, 10) : ""
+    );
+    if (input === null) return; // anulowano
+    let rentalUntil: string | null = null;
+    if (input.trim()) {
+      const d = new Date(input.trim() + "T23:59:59");
+      if (isNaN(d.getTime())) {
+        alert("Nieprawidlowy format daty. Uzyj RRRR-MM-DD.");
+        return;
+      }
+      rentalUntil = d.toISOString();
+    }
+    setActionBusy(deviceId);
+    try {
+      const r = await fetch(
+        `/api/admin/devices?deviceId=${encodeURIComponent(deviceId)}&action=rental`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rentalUntil, rentalLocked: current.rentalLocked }),
+        }
+      );
+      const j = await r.json();
+      if (!j.ok) {
+        alert(j.error || "Blad ustawiania najmu");
+      } else {
+        await load();
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Blad sieci");
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const toggleRentalLock = async (deviceId: string, current: Device) => {
+    const next = !current.rentalLocked;
+    if (
+      next &&
+      !confirm(
+        `Zablokowac ${deviceId} NATYCHMIAST?\n\nUrzadzenie straci dostep do AI (zostanie zwyklym kalkulatorem) do czasu recznego odblokowania.`
+      )
+    )
+      return;
+    setActionBusy(deviceId);
+    try {
+      const r = await fetch(
+        `/api/admin/devices?deviceId=${encodeURIComponent(deviceId)}&action=rental`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rentalUntil: current.rentalUntil, rentalLocked: next }),
+        }
+      );
+      const j = await r.json();
+      if (!j.ok) {
+        alert(j.error || "Blad blokady");
       } else {
         await load();
       }
@@ -255,6 +327,9 @@ export default function DevicesPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-[#E0E0E0]/60 uppercase">
                       Pierwsze użycie
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-[#E0E0E0]/60 uppercase">
+                      Najem
+                    </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-[#E0E0E0]/60 uppercase">
                       Akcje
                     </th>
@@ -264,7 +339,7 @@ export default function DevicesPage() {
                   {filteredDevices.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="text-center py-8 text-[#E0E0E0]/40"
                       >
                         {data.devices.length === 0
@@ -323,8 +398,56 @@ export default function DevicesPage() {
                           <td className="px-4 py-3 text-xs text-[#E0E0E0]/40">
                             {formatDate(d.firstSeen)}
                           </td>
+                          <td className="px-4 py-3 text-xs">
+                            {(() => {
+                              const expired =
+                                !!d.rentalUntil && new Date(d.rentalUntil).getTime() < Date.now();
+                              if (d.rentalLocked) {
+                                return (
+                                  <span className="text-red-400 font-semibold">
+                                    🔒 Zablokowane
+                                  </span>
+                                );
+                              }
+                              if (expired) {
+                                return (
+                                  <span className="text-red-400 font-semibold">
+                                    ⏰ Wygasl ({formatDate(d.rentalUntil as string)})
+                                  </span>
+                                );
+                              }
+                              if (d.rentalUntil) {
+                                return (
+                                  <span className="text-amber-400">
+                                    Do {formatDate(d.rentalUntil)}
+                                  </span>
+                                );
+                              }
+                              return <span className="text-[#E0E0E0]/30">— brak najmu —</span>;
+                            })()}
+                          </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => setRental(d.deviceId, d)}
+                                disabled={busy}
+                                className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Ustaw / zmien date konca najmu"
+                              >
+                                Najem
+                              </button>
+                              <button
+                                onClick={() => toggleRentalLock(d.deviceId, d)}
+                                disabled={busy}
+                                className={`px-3 py-1.5 border text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                  d.rentalLocked
+                                    ? "bg-green-500/10 hover:bg-green-500/20 border-green-500/30 text-green-400"
+                                    : "bg-red-500/10 hover:bg-red-500/20 border-red-500/30 text-red-400"
+                                }`}
+                                title={d.rentalLocked ? "Odblokuj dostep do AI" : "Zablokuj dostep do AI natychmiast"}
+                              >
+                                {d.rentalLocked ? "Odblokuj" : "Zablokuj"}
+                              </button>
                               {(d.userId || d.licenseCode) && (
                                 <button
                                   onClick={() => unpairDevice(d.deviceId)}
@@ -355,6 +478,10 @@ export default function DevicesPage() {
 
             <div className="mt-4 text-xs text-[#E0E0E0]/40">
               Auto-odświeżanie co 30 s. Aktywne = zapytanie w ostatnich 5 min.
+              <br />
+              <span className="text-blue-400">Najem</span> — ustawia datę końca najmu. Po tej dacie urządzenie automatycznie traci dostęp do AI (zostaje zwykłym kalkulatorem).
+              <br />
+              <span className="text-red-400">Zablokuj</span> / <span className="text-green-400">Odblokuj</span> — natychmiastowa ręczna blokada AI, niezależna od daty (np. brak zwrotu, zgłoszona kradzież).
               <br />
               <span className="text-amber-400">Odepnij</span> — czyści powiązanie z kontem, rekord urządzenia zostaje.
               <br />

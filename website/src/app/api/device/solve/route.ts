@@ -4,6 +4,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { AI_MODEL_IDS, getCostMultiplier, modelSupportsVision } from "@/lib/aiModels";
 import { rateLimit } from "@/lib/rate-limit";
+import { checkRentalLock } from "@/lib/deviceRental";
 
 // Endpoint dla kalkulatora ESP32 — rozwiązywanie zadań przez AI
 // POST /api/device/solve
@@ -260,6 +261,20 @@ export async function POST(request: NextRequest) {
     // subskrypcyjny nizej (dla userow z AI Chat ale bez fizycznej licencji).
     const licenseKey = request.headers.get("x-license-key");
     const deviceIdHeader = request.headers.get("x-device-id");
+
+    // Zdalna blokada wynajmowanych urzadzen — sprawdzana PRZED jakakolwiek
+    // logika licencji/subskrypcji i przed zuzyciem tokenow OpenRouter.
+    // Zablokowane urzadzenie dziala nadal jako zwykly kalkulator offline,
+    // traci tylko dostep do AI. Patrz src/lib/deviceRental.ts.
+    if (deviceIdHeader) {
+      const rentalCheck = await checkRentalLock(deviceIdHeader);
+      if (rentalCheck.locked) {
+        return NextResponse.json(
+          { ok: false, error: rentalCheck.reason },
+          { status: 403 }
+        );
+      }
+    }
 
     // Sprawdź licencję w bazie
     let license = licenseKey

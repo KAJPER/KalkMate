@@ -2,15 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
 import { ensureOrderPersonalizationColumns } from "@/lib/orderPersonalization";
-import { sendMail } from "@/lib/mailer";
-import {
-  statusInProgressEmail,
-  statusShippedEmail,
-  statusFulfilledEmail,
-  statusCancelledEmail,
-  localeFromCountry,
-  EMAIL_SUBJECTS,
-} from "@/lib/email-templates";
+import { applyFulfillmentStatus } from "@/lib/orderFulfillment";
+import { syncOrderTracking, looksLikeInPostNumber } from "@/lib/inpostTracking";
 
 const PAYMENT_STATUS: Record<string, string> = {
   pending: "requires_payment_method",
@@ -23,7 +16,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authErr = requireAdminAuth(request); if (authErr) return authErr;
+  const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
 
   const order = await prisma.order.findUnique({ where: { id } });
@@ -76,7 +69,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authErr = requireAdminAuth(request); if (authErr) return authErr;
+  const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
   const body = await request.json();
   const { fulfillment_status, tracking_number, notes } = body;
@@ -86,67 +79,26 @@ export async function PATCH(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  const previousStatus = order.fulfillmentStatus || "unfulfilled";
-  const now = new Date();
+  // Wspolna logika zmiany statusu + maili (src/lib/orderFulfillment.ts) —
+  // ta sama, ktorej uzywa automat sledzenia InPost.
+  const result = await applyFulfillmentStatus(id, fulfillment_status || undefined, {
+    source: "manual",
+    trackingNumber: tracking_number || undefined,
+    adminNotes: notes !== undefined ? notes : undefined,
+  });
 
-  const data: {
-    fulfillmentStatus?: string;
-    shippedAt?: Date;
-    trackingNumber?: string;
-    adminNotes?: string;
-  } = {};
-
-  if (fulfillment_status) {
-    data.fulfillmentStatus = fulfillment_status;
-    if (fulfillment_status === "shipped" || fulfillment_status === "fulfilled") {
-      data.shippedAt = now;
-    }
-  }
-  if (tracking_number) data.trackingNumber = tracking_number;
-  if (notes !== undefined) data.adminNotes = notes;
-
-  const updated = await prisma.order.update({ where: { id }, data });
-
-  // Send email notification if fulfillment status changed
-  if (
-    fulfillment_status &&
-    fulfillment_status !== previousStatus &&
-    order.customerEmail
-  ) {
-    const locale = localeFromCountry(order.customerCountry);
-    const emailData = {
-      customerName: order.customerName || "Customer",
-      product: "KalkMate v3.0",
-      trackingNumber: tracking_number || order.trackingNumber || "",
-      pickupPoint: order.pickupPoint || "",
-      pickupPointAddress: order.pickupPointAddress || "",
-    };
-
-    let html: string | null = null;
-    let subject = "";
-
-    if (fulfillment_status === "in_progress") {
-      html = statusInProgressEmail(emailData, locale);
-      subject = EMAIL_SUBJECTS.orderInProgress[locale];
-    } else if (fulfillment_status === "shipped") {
-      html = statusShippedEmail(emailData, locale);
-      subject = EMAIL_SUBJECTS.orderShipped[locale];
-    } else if (fulfillment_status === "fulfilled") {
-      html = statusFulfilledEmail(emailData, locale);
-      subject = EMAIL_SUBJECTS.orderFulfilled[locale];
-    } else if (fulfillment_status === "cancelled") {
-      html = statusCancelledEmail(emailData, locale);
-      subject = EMAIL_SUBJECTS.orderCancelled[locale];
-    }
-
-    if (html) {
-      try {
-        await sendMail({ to: order.customerEmail, subject, html });
-      } catch (emailError) {
-        console.error("Failed to send status email:", emailError);
-      }
+  // Nowy numer InPost wpisany recznie -> od razu sprawdz status, zeby admin
+  // nie musial czekac na cron (max 1h). Blad InPost nie psuje zapisu.
+  let trackingSync = null;
+  const newNumber = typeof tracking_number === "string" ? tracking_number.trim() : "";
+  if (newNumber && newNumber !== (order.trackingNumber || "") && looksLikeInPostNumber(newNumber)) {
+    try {
+      trackingSync = await syncOrderTracking(id);
+    } catch (e) {
+      console.error("[admin/orders PATCH] tracking sync failed:", e);
     }
   }
 
-  return NextResponse.json({ order: updated });
+  const updated = await prisma.order.findUnique({ where: { id } });
+  return NextResponse.json({ order: updated, fulfillment: result, trackingSync });
 }
