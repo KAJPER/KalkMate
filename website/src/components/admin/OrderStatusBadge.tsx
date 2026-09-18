@@ -4,6 +4,12 @@ interface OrderStatusBadgeProps {
 }
 
 const paymentColors: Record<string, string> = {
+  // Wartosci z tabeli Order.status (P24/Stripe checkout)
+  paid: "bg-green-500/10 text-green-400",
+  pending: "bg-amber-500/10 text-amber-400",
+  cancelled: "bg-red-500/10 text-red-400",
+  failed: "bg-red-500/10 text-red-400",
+  // Statusy Stripe PaymentIntent (stare zamowienia)
   succeeded: "bg-green-500/10 text-green-400",
   processing: "bg-amber-500/10 text-amber-400",
   requires_payment_method: "bg-amber-500/10 text-amber-400",
@@ -15,6 +21,10 @@ const paymentColors: Record<string, string> = {
 };
 
 const paymentLabels: Record<string, string> = {
+  paid: "Opłacone",
+  pending: "Oczekuje",
+  cancelled: "Anulowane",
+  failed: "Nieudana",
   succeeded: "Opłacone",
   processing: "Przetwarzanie",
   requires_payment_method: "Oczekuje",

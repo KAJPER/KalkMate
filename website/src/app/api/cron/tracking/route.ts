@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncAllPendingOrders } from "@/lib/inpostTracking";
+import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
 
 // GET /api/cron/tracking — wolane co godzine z crona na serwerze
 // (/home/ubuntu/kalkulator/tracking-cron.sh) z naglowkiem x-cron-secret.
+// Oprocz sledzenia InPost anuluje tez porzucone zamowienia (platnosc pending
+// starsza niz STALE_DAYS) — src/lib/orderCleanup.ts.
 //
 // Historia: poprzednia wersja iterowala po Stripe PaymentIntents (zamowienia
 // ida dzis przez P24 -> nic nie znajdowala), odpytywala zly URL InPost
@@ -20,6 +23,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Najpierw porzucone zamowienia — zeby sledzenie nie odpytywalo InPost
+    // o numery, ktorych i tak nie bedzie.
+    let stale: Awaited<ReturnType<typeof cancelStaleUnpaidOrders>> = { cancelled: [], skippedShipped: [] };
+    try {
+      stale = await cancelStaleUnpaidOrders();
+    } catch (e) {
+      console.error("[cron/tracking] stale order cleanup failed:", e);
+    }
+
     const results = await syncAllPendingOrders();
     const changed = results.filter((r) => r.changed);
     const summary = {
@@ -36,9 +48,14 @@ export async function GET(req: NextRequest) {
         from: r.previousStatus,
         to: r.newStatus,
       })),
+      staleUnpaid: {
+        olderThanDays: STALE_DAYS,
+        cancelled: stale.cancelled.map((o) => o.orderNumber),
+        skippedShipped: stale.skippedShipped.map((o) => o.orderNumber),
+      },
     };
     console.log(
-      `[cron/tracking] checked=${summary.checked} changed=${summary.changed} emails=${summary.emailsSent} unavailable=${summary.unavailable}`
+      `[cron/tracking] checked=${summary.checked} changed=${summary.changed} emails=${summary.emailsSent} unavailable=${summary.unavailable} staleCancelled=${stale.cancelled.length}`
     );
     return NextResponse.json(summary);
   } catch (e) {
