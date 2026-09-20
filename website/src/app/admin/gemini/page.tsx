@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
+import { AI_MODELS } from "@/lib/aiModels";
 
 interface UserStat {
   id: string;
@@ -29,6 +30,18 @@ interface StatsData {
     totalEstimatedCostUSD: number;
   };
   dailyActivity: Array<{ date: string; chat: number; device: number; total: number }>;
+  openrouterAccount:
+    | {
+        ok: true;
+        usageAllTimeUSD: number;
+        usageDailyUSD: number;
+        usageWeeklyUSD: number;
+        usageMonthlyUSD: number;
+        limitUSD: number | null;
+        limitRemainingUSD: number | null;
+        isFreeTier: boolean;
+      }
+    | { ok: false; error: string };
 }
 
 const TOKEN_GRANT = 1_000_000;
@@ -169,6 +182,79 @@ export default function OpenRouterPage() {
               </div>
             ))}
           </motion.div>
+
+          {/* Realny stan konta OpenRouter — zeby widziec czy nasz szacunek
+              (karta "Koszt API (est.)" wyzej) zgadza sie z tym, ile OpenRouter
+              faktycznie nalicza. Duzy rozjazd = albo bledy w naliczaniu, albo
+              zuzycie spoza mechanizmu odejmowania tokenow. */}
+          {data.openrouterAccount.ok ? (
+            (() => {
+              const real = data.openrouterAccount;
+              const estMonth = data.totals.totalEstimatedCostUSD; // od poczatku istnienia usera, nie "od poczatku miesiaca" — porownanie orientacyjne
+              const diffPct = real.usageAllTimeUSD > 0
+                ? ((real.usageAllTimeUSD - estMonth) / real.usageAllTimeUSD) * 100
+                : 0;
+              const bigGap = Math.abs(diffPct) > 15;
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.03 }}
+                  className="bg-gradient-to-br from-[#313338] to-[#2B2D31] rounded-2xl border border-[#3F4147] p-5 shadow-xl"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-semibold text-[#E0E0E0] flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Prawdziwy stan konta OpenRouter (live)
+                    </h2>
+                    {real.isFreeTier && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400">free tier</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    <div>
+                      <p className="text-[10px] text-[#E0E0E0]/40 uppercase tracking-wide">Dziś</p>
+                      <p className="text-lg font-bold text-[#E0E0E0]">${real.usageDailyUSD.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#E0E0E0]/40 uppercase tracking-wide">7 dni</p>
+                      <p className="text-lg font-bold text-[#E0E0E0]">${real.usageWeeklyUSD.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#E0E0E0]/40 uppercase tracking-wide">30 dni</p>
+                      <p className="text-lg font-bold text-[#E0E0E0]">${real.usageMonthlyUSD.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#E0E0E0]/40 uppercase tracking-wide">Łącznie (all-time)</p>
+                      <p className="text-lg font-bold text-red-400">${real.usageAllTimeUSD.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  {real.limitUSD !== null && (
+                    <p className="text-xs text-[#E0E0E0]/40 mb-2">
+                      Limit klucza: ${real.limitUSD.toFixed(2)}
+                      {real.limitRemainingUSD !== null && ` · pozostało $${real.limitRemainingUSD.toFixed(2)}`}
+                    </p>
+                  )}
+                  <div className={`rounded-lg px-3 py-2 text-xs ${bigGap ? "bg-red-500/10 border border-red-500/30 text-red-300" : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"}`}>
+                    Nasz szacunek naliczony userom (all-time): <span className="font-semibold">${estMonth.toFixed(2)}</span>
+                    {" "}vs realny koszt na OpenRouter: <span className="font-semibold">${real.usageAllTimeUSD.toFixed(2)}</span>.
+                    {bigGap
+                      ? ` Rozjazd ${diffPct > 0 ? "niedoszacowania" : "przeszacowania"} ~${Math.abs(diffPct).toFixed(0)}% — sprawdź czy usage.cost przychodzi z OpenRoutera dla używanych modeli.`
+                      : " Zgodne w granicach błędu."}
+                  </div>
+                </motion.div>
+              );
+            })()
+          ) : (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.03 }}
+              className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-4 text-sm text-yellow-300"
+            >
+              Nie udało się pobrać realnego stanu konta OpenRouter: {data.openrouterAccount.error}
+            </motion.div>
+          )}
 
           {/* Economy note */}
           <motion.div
@@ -391,20 +477,10 @@ export default function OpenRouterPage() {
               Mnożniki modeli (koszt efektywny)
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {[
-                { id: "default", label: "Domyślny (Gemini 2.5 Pro)", multiplier: 4 },
-                { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", multiplier: 5 },
-                { id: "google/gemini-3.5-flash", label: "Gemini 3.5 Flash", multiplier: 4 },
-                { id: "anthropic/claude-opus-4.6", label: "Claude Opus 4.6", multiplier: 10 },
-                { id: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6", multiplier: 6 },
-                { id: "openai/gpt-5.4", label: "GPT-5.4", multiplier: 6 },
-                { id: "x-ai/grok-4.3", label: "Grok 4.3", multiplier: 1.3 },
-                { id: "deepseek/deepseek-v3.2", label: "DeepSeek V3.2", multiplier: 0.2 },
-                { id: "qwen/qwen3-coder", label: "Qwen3 Coder", multiplier: 0.7 },
-                { id: "meta-llama/llama-4-maverick", label: "Llama 4 Maverick", multiplier: 0.3 },
-                { id: "mistralai/mistral-large-2512", label: "Mistral Large 3", multiplier: 0.7 },
-                { id: "perplexity/sonar-pro", label: "Sonar Pro", multiplier: 6 },
-              ].map((m) => {
+              {/* Zrodlo prawdy = src/lib/aiModels.ts (lista wybierana tez w panelu
+                  usera) — zeby te dwa miejsca nie rozjezdzaly sie znowu jak
+                  poprzednio (ten widok mial wlasna, zdezaktualizowana kopie). */}
+              {AI_MODELS.map((m) => {
                 const usersWithModel = data.users.filter((u) => u.aiModel === m.id).length;
                 return (
                   <div key={m.id} className="bg-[#2B2D31] rounded-lg border border-[#3F4147]/50 px-3 py-2.5 flex items-center justify-between gap-2">
@@ -413,11 +489,11 @@ export default function OpenRouterPage() {
                       <p className="text-xs text-[#E0E0E0]/40">{usersWithModel > 0 ? `${usersWithModel} user${usersWithModel > 1 ? "ów" : ""}` : "nieużywany"}</p>
                     </div>
                     <span className={`text-xs font-bold px-2 py-1 rounded-full flex-shrink-0 ${
-                      m.multiplier >= 6 ? "bg-red-500/20 text-red-400" :
-                      m.multiplier >= 2 ? "bg-yellow-500/20 text-yellow-400" :
+                      m.costMultiplier >= 6 ? "bg-red-500/20 text-red-400" :
+                      m.costMultiplier >= 2 ? "bg-yellow-500/20 text-yellow-400" :
                       "bg-emerald-500/20 text-emerald-400"
                     }`}>
-                      ×{m.multiplier}
+                      ×{m.costMultiplier}
                     </span>
                   </div>
                 );

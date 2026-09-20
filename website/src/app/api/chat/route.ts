@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AI_MODEL_IDS, getCostMultiplier } from "@/lib/aiModels";
+import { effectiveTokensFromUsage } from "@/lib/aiCost";
 import { rateLimit } from "@/lib/rate-limit";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -1370,7 +1371,12 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
     const aiResponse = data.choices?.[0]?.message?.content || "Przepraszam, nie mogłem wygenerować odpowiedzi.";
-    const effectiveTokens = Math.ceil((data.usage?.total_tokens ?? 0) * costMultiplier);
+    // Preferuje realny koszt zwrocony przez OpenRouter (usage.cost) zamiast
+    // szacunku total_tokens * costMultiplier — patrz src/lib/aiCost.ts.
+    const { effectiveTokens, source: costSource } = effectiveTokensFromUsage(data.usage, costMultiplier);
+    if (costSource === "estimate") {
+      console.warn(`[chat] usage.cost brak dla modelu ${modelToUse} — fallback na szacunek (tokens=${data.usage?.total_tokens}, mult=${costMultiplier})`);
+    }
 
     // Save messages to database - create conversation if needed
     try {

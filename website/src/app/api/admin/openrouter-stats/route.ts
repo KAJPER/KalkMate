@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { AI_MODELS } from "@/lib/aiModels";
+import { getOpenRouterAccountUsage } from "@/lib/openrouterAccount";
 
 const TOKEN_GRANT = 1_000_000;
 // $1.40 per 1M effective tokens (calibrated baseline — exact regardless of model)
@@ -106,7 +107,13 @@ export async function GET(req: NextRequest) {
       totalEstimatedCostUSD: users.reduce((s, u) => s + u.estimatedCostUSD, 0),
     };
 
-    return NextResponse.json({ users, totals, dailyActivity });
+    // Realny stan konta OpenRouter — do porownania z totalEstimatedCostUSD
+    // (ile MY naliczylismy userom vs ile OpenRouter faktycznie nam policzyl).
+    // Duzy rozjazd = albo bledy w naliczaniu (patrz src/lib/aiCost.ts), albo
+    // zuzycie spoza tego mechanizmu (np. testy reczne kluczem).
+    const openrouterAccount = await getOpenRouterAccountUsage();
+
+    return NextResponse.json({ users, totals, dailyActivity, openrouterAccount });
   } catch (err) {
     console.error("[openrouter-stats]", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

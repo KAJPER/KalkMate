@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { AI_MODEL_IDS, getCostMultiplier, modelSupportsVision } from "@/lib/aiModels";
+import { effectiveTokensFromUsage } from "@/lib/aiCost";
 import { rateLimit } from "@/lib/rate-limit";
 import { checkRentalLock } from "@/lib/deviceRental";
 
@@ -58,7 +59,7 @@ async function callOpenRouter(
   text: string,
   base64Data: string | null,
   imgMime: string,
-): Promise<{ ok: boolean; status: number; solution: string | null; detail: string; tokensUsed: number }> {
+): Promise<{ ok: boolean; status: number; solution: string | null; detail: string; tokensUsed: number; costUsd: number }> {
   const content: any[] = [];
   if (mode === "text") {
     content.push({ type: "text", text });
@@ -100,13 +101,14 @@ async function callOpenRouter(
       const j = JSON.parse(t);
       if (j?.error?.message) detail = String(j.error.message).slice(0, 200);
     } catch {}
-    return { ok: false, status: res.status, solution: null, detail, tokensUsed: 0 };
+    return { ok: false, status: res.status, solution: null, detail, tokensUsed: 0, costUsd: 0 };
   }
   const data = await res.json().catch(() => null);
   const sol = data?.choices?.[0]?.message?.content;
   const solution = typeof sol === "string" && sol.trim() ? sol.trim() : null;
   const tokensUsed: number = data?.usage?.total_tokens ?? 0;
-  return { ok: true, status: 200, solution, detail: "", tokensUsed };
+  const costUsd: number = Number(data?.usage?.cost) || 0;
+  return { ok: true, status: 200, solution, detail: "", tokensUsed, costUsd };
 }
 
 // Framing (przedmiot) — niezalezny od poziomu szczegolowosci (aiMode matura/raw).
@@ -618,9 +620,18 @@ export async function POST(request: NextRequest) {
     }
     solution = normalizeForCalc(r.solution);
 
-    // Odejmij tokeny po udanej odpowiedzi (fire-and-forget)
+    // Odejmij tokeny po udanej odpowiedzi (fire-and-forget). Preferuje realny
+    // koszt zwrocony przez OpenRouter (usage.cost) zamiast szacunku z
+        // costMultiplier — patrz src/lib/aiCost.ts (naprawa niedoszacowania kosztu
+    // przy dlugich odpowiedziach, np. max_tokens: 16000 wyzej).
     if (ownerUserId) {
-      const effectiveTokens = Math.ceil(r.tokensUsed * costMultiplier);
+      const { effectiveTokens, source } = effectiveTokensFromUsage(
+        { total_tokens: r.tokensUsed, cost: r.costUsd },
+        costMultiplier
+      );
+      if (source === "estimate") {
+        console.warn(`[solve] usage.cost brak dla modelu ${modelToUse} — fallback na szacunek (tokens=${r.tokensUsed}, mult=${costMultiplier})`);
+      }
       prisma.$executeRaw`
         UPDATE "User" SET "tokenBalance" = MAX(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${ownerUserId}
       `.catch((e: any) => console.error("[solve] token deduction fail:", e));
