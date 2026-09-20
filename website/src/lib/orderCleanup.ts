@@ -49,6 +49,9 @@ export async function cancelStaleUnpaidOrders(olderThanDays = STALE_DAYS): Promi
 
   const result: StaleCancelResult = { cancelled: [], skippedShipped: [] };
   const nowIso = new Date().toISOString();
+  // Integer ms dla kolumny "updatedAt" (Prisma/SQLite trzyma DateTime jako
+  // INTEGER) — nowIso zostaje tylko do tekstu notatki nizej.
+  const nowMs = Date.now();
 
   for (const row of rows) {
     if (row.fulfillmentStatus === "shipped" || row.fulfillmentStatus === "fulfilled") {
@@ -62,7 +65,7 @@ export async function cancelStaleUnpaidOrders(olderThanDays = STALE_DAYS): Promi
       UPDATE "Order"
       SET status = 'cancelled',
           "fulfillmentStatus" = 'cancelled',
-          "updatedAt" = ${nowIso},
+          "updatedAt" = ${nowMs},
           "adminNotes" = CASE
             WHEN "adminNotes" IS NULL OR "adminNotes" = '' THEN ${note}
             ELSE "adminNotes" || char(10) || ${note}

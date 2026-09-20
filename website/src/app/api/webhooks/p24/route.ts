@@ -118,12 +118,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Verify failed" }, { status: 500 });
   }
 
-  const now = new Date().toISOString();
+  // Integer ms (nie ISO string!) — Prisma/SQLite trzyma DateTime jako INTEGER,
+  // ISO string tutaj psuloby sortowanie "Order" po createdAt/updatedAt (SQLite
+  // sortuje TEXT i INTEGER w oddzielnych blokach — patrz src/lib/orderDates.ts).
+  const nowMs = Date.now();
 
   // Update order to paid
   await prisma.$executeRaw`
     UPDATE "Order"
-    SET status = 'paid', "paidAt" = ${now}, "updatedAt" = ${now}
+    SET status = 'paid', "paidAt" = ${nowMs}, "updatedAt" = ${nowMs}
     WHERE id = ${order.id}
   `;
 

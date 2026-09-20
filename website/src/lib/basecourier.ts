@@ -139,12 +139,12 @@ export function splitStreet(full: string | null | undefined): { street: string; 
   return { street: s || "-", house_no: "1" };
 }
 
-function courierSearch() {
+function courierSearch(courierCode = "paczkomaty", countryCode = "PL") {
   return {
-    courier_code: "paczkomaty",
+    courier_code: courierCode,
     type: "package",
     origin: "api",
-    country_code: "PL",
+    country_code: countryCode,
     weight: KALKMATE_PARCEL.weight,
     side_x: KALKMATE_PARCEL.side_x,
     side_y: KALKMATE_PARCEL.side_y,
@@ -174,6 +174,64 @@ export async function bcValuation(): Promise<BcValuation> {
     price: r?.Price ?? null,
     raw: env.data,
   };
+}
+
+// === Wycena zagraniczna (DE, US, ...) ===
+// InPost Paczkomat dziala tylko w Polsce, wiec zamowienia zagraniczne
+// (customerCountry != "PL") potrzebuja innych kurierow. Base Courier nie ma
+// jednego uniwersalnego kodu "kurier miedzynarodowy" — dostepnosc i cena
+// zaleza od kraju i wagi, wiec probujemy kilku sensownych kandydatow na raz
+// i pokazujemy wszystkie, ktore faktycznie zwrocily cene (reszta zwraca
+// "Brak wynikow..." dla naszej paczki 1kg/18x12x4 — to normalne, nie blad).
+//
+// Zweryfikowane na zywo dla paczki KalkMate (2026-09-20):
+//   DE: dpd 19.99 zl, euro_hermes 21.49 zl, spring 24.16 zl,
+//       ups_rest_standard 30.99 zl, gls 33.99 zl, ups_rest_saver 110 zl (express)
+//   US: tylko ups_rest_saver 115 zl i ups_rest_expedited 133 zl (express) —
+//       zwykle DPD/GLS/FedEx/DHL nie maja oferty na tak mala/lekka paczke do USA.
+const INTL_COURIER_CANDIDATES: { code: string; name: string }[] = [
+  { code: "dpd", name: "DPD" },
+  { code: "euro_hermes", name: "Eurohermes" },
+  { code: "spring", name: "Spring" },
+  { code: "ups_rest_standard", name: "UPS Standard" },
+  { code: "gls", name: "GLS" },
+  { code: "ups_rest_saver", name: "UPS Saver (express)" },
+  { code: "ups_rest_expedited", name: "UPS Expedited (express)" },
+];
+
+export interface BcIntlQuote {
+  courierCode: string;
+  courierName: string;
+  price: { value: string; netto: string; vat: string };
+}
+
+// "OTHER" (formularz zakupu ma opcje "Other country") nie jest kodem ISO —
+// Base Courier potrzebuje realnego kraju do wyceny, wiec traktujemy go jak US
+// (ta sama konwencja co przy rejestracji GTIN w BuyNow.tsx).
+export function normalizeCountryForShipping(countryCode: string): string {
+  const c = (countryCode || "").toUpperCase();
+  return c === "OTHER" || !c ? "US" : c;
+}
+
+export async function bcValuationInternational(countryCode: string): Promise<BcIntlQuote[]> {
+  const country = normalizeCountryForShipping(countryCode);
+  const results = await Promise.allSettled(
+    INTL_COURIER_CANDIDATES.map(async (c) => {
+      const env = await bcCall<{
+        results?: { Courier?: { courier_code?: string }; Price?: { value: string; netto: string; vat: string } }[];
+      }>("getValuation.json", { CourierSearch: courierSearch(c.code, country) });
+      if (!env.success) return null;
+      const r = env.data?.results?.[0];
+      if (!r?.Price) return null;
+      return { courierCode: c.code, courierName: c.name, price: r.Price } satisfies BcIntlQuote;
+    })
+  );
+  const quotes: BcIntlQuote[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) quotes.push(r.value);
+  }
+  quotes.sort((a, b) => parseFloat(a.price.value) - parseFloat(b.price.value));
+  return quotes;
 }
 
 export interface BcCreatedShipment {

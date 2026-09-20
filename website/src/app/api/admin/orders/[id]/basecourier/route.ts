@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
-import { bcCreateLockerShipment, bcValuation } from "@/lib/basecourier";
+import { bcCreateLockerShipment, bcValuation, bcValuationInternational } from "@/lib/basecourier";
 import { syncOrderTracking } from "@/lib/inpostTracking";
 
 // GET  /api/admin/orders/[id]/basecourier  — wycena + podglad danych, ktore
@@ -46,10 +46,35 @@ export async function GET(
   const order = await prisma.order.findUnique({ where: { id } });
   if (!order) return NextResponse.json({ ok: false, error: "Order not found" }, { status: 404 });
 
+  const country = (order.customerCountry || "PL").toUpperCase();
+  const isDomestic = country === "PL" || country === "";
+
+  // Zamowienia zagraniczne (np. DE, US) nie jada InPost Paczkomatem — tylko
+  // szacujemy koszt kilkoma kurierami Base Courier, bez mozliwosci nadania
+  // z tego panelu (patrz POST nizej — zostaje ograniczone do PL). Admin i tak
+  // widzi orientacyjna cene zeby wiedziec ile doliczyc / czy sie oplaca.
+  if (!isDomestic) {
+    try {
+      const quotes = await bcValuationInternational(country);
+      return NextResponse.json({
+        ok: true,
+        international: true,
+        country,
+        receiver: receiverFromOrder(order),
+        quotes,
+        alreadyCreated: order.furgonetkaStatus === "basecourier" ? order.furgonetkaPackageId : null,
+        trackingNumber: order.trackingNumber,
+      });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    }
+  }
+
   try {
     const valuation = await bcValuation();
     return NextResponse.json({
       ok: true,
+      international: false,
       receiver: receiverFromOrder(order),
       valuation: { price: valuation.price, courierSearchId: valuation.courierSearchId },
       alreadyCreated: order.furgonetkaStatus === "basecourier" ? order.furgonetkaPackageId : null,

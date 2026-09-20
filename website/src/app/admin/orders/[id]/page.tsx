@@ -130,8 +130,14 @@ export default function OrderDetailPage({
   const [bcLoading, setBcLoading] = useState(false);
   const [bcMsg, setBcMsg] = useState("");
   const [bcPreview, setBcPreview] = useState<{
+    international: boolean;
+    country?: string;
     receiver: { name: string; email: string; phone: string; lockerCode: string; street?: string; postal?: string; city?: string };
-    valuation: { price: { value: string; netto: string; vat: string } | null };
+    // Krajowe (Paczkomat) — jedna cena.
+    valuation?: { price: { value: string; netto: string; vat: string } | null };
+    // Zagraniczne (DE, US, ...) — kilku kurierow prubowanych na raz, tylko
+    // szacunek; nadanie z panelu zostaje ograniczone do Polski.
+    quotes?: { courierCode: string; courierName: string; price: { value: string; netto: string; vat: string } }[];
   } | null>(null);
 
   const handleBcPreview = async () => {
@@ -144,7 +150,13 @@ export default function OrderDetailPage({
         setBcMsg(data.error || "Błąd wyceny");
         return;
       }
-      setBcPreview({ receiver: data.receiver, valuation: data.valuation });
+      setBcPreview({
+        international: !!data.international,
+        country: data.country,
+        receiver: data.receiver,
+        valuation: data.valuation,
+        quotes: data.quotes,
+      });
     } catch {
       setBcMsg("Błąd sieci");
     } finally {
@@ -740,6 +752,38 @@ export default function OrderDetailPage({
                     <p className={`text-xs ${printMsg.startsWith("Wysłano") ? "text-green-400" : "text-red-400"}`}>{printMsg}</p>
                   )}
                 </div>
+              ) : bcPreview?.international ? (
+                <>
+                  <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs text-[#E0E0E0]/80 space-y-2">
+                    <p><span className="text-[#E0E0E0]/50">Odbiorca:</span> {bcPreview.receiver.name} · {bcPreview.receiver.phone} · {bcPreview.receiver.email}</p>
+                    <p><span className="text-[#E0E0E0]/50">Kraj:</span> <span className="font-mono text-amber-300">{bcPreview.country}</span> — poza Polską, bez Paczkomatów</p>
+                    {bcPreview.quotes && bcPreview.quotes.length > 0 ? (
+                      <div className="space-y-1 pt-1">
+                        <p className="text-[#E0E0E0]/50">Szacowany koszt (kilku kurierów naraz, ceny brutto):</p>
+                        {bcPreview.quotes.map((q) => (
+                          <div key={q.courierCode} className="flex items-center justify-between bg-[#1E1F22] rounded px-2 py-1">
+                            <span>{q.courierName}</span>
+                            <span className="font-mono text-[#E0E0E0]">{q.price.value} zł <span className="text-[#E0E0E0]/40">({q.price.netto} netto)</span></span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-red-400">Żaden kurier Base Courier nie zwrócił ceny dla tej paczki (1kg, 18×12×4cm) do tego kraju.</p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleBcPreview}
+                      disabled={bcLoading}
+                      className="px-4 py-2 rounded-lg bg-[#3F4147] hover:bg-[#4a4d55] text-[#E0E0E0] text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                      {bcLoading ? "Wyceniam…" : "Odśwież wycenę"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#E0E0E0]/40">
+                    To tylko orientacyjna wycena — nadanie zagranicznej przesyłki z tego panelu nie jest obsługiwane (wymaga danych celnych/innej integracji). Nadaj ręcznie w panelu basecourier.com wybranym kurierem, potem wklej numer śledzenia w sekcji „Śledzenie" niżej.
+                  </p>
+                </>
               ) : (
                 <>
                   {bcPreview && (
@@ -748,7 +792,7 @@ export default function OrderDetailPage({
                       <p><span className="text-[#E0E0E0]/50">Paczkomat:</span> <span className="font-mono text-amber-300">{bcPreview.receiver.lockerCode || "— BRAK —"}</span></p>
                       <p>
                         <span className="text-[#E0E0E0]/50">Koszt nadania:</span>{" "}
-                        {bcPreview.valuation.price
+                        {bcPreview.valuation?.price
                           ? <span className="text-[#E0E0E0]">{bcPreview.valuation.price.value} zł brutto ({bcPreview.valuation.price.netto} netto)</span>
                           : "brak wyceny"}
                       </p>

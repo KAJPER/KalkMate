@@ -118,7 +118,12 @@ export async function POST(request: NextRequest) {
 
     const orderNumber = `KM-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
     const orderId = randomUUID();
-    const now = new Date().toISOString();
+    // Integer ms (NIE string ISO!) — Prisma/SQLite trzyma DateTime jako INTEGER
+    // (tak zapisuja np. zamowienia Stripe przez ORM). ISO string tutaj psulby
+    // sortowanie "Order" po createdAt (SQLite sortuje TEXT i INTEGER w
+    // oddzielnych blokach niezaleznie od wartosci — stad bug "Stripe zawsze na
+    // dole listy", naprawiony 2026-09-20).
+    const now = Date.now();
 
     // Store pending order — raw SQL to use new columns before client regeneration
     await ensureOrderPersonalizationColumns();
