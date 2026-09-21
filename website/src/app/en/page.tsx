@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
+import { headers } from "next/headers";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd } from "@/lib/seo";
-import { SITE_URL, languageAlternates } from "@/lib/i18n";
+import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
@@ -17,63 +18,68 @@ const FAQ          = dynamic(() => import("@/components/FAQ"));
 
 const lang = "en" as const;
 
-export const metadata: Metadata = {
-  title: "KalkMate — AI Calculator with Camera | Smart Photo Calculator",
-  description:
-    "KalkMate is an AI calculator with camera built in — point it at any math, physics, chemistry or biology problem and get the full step-by-step solution on its OLED screen. 169 EUR, then from 4 EUR/month.",
-  keywords: [
-    "AI calculator",
-    "AI calculator with camera",
-    "calculator with camera",
-    "photo calculator AI",
-    "calculator with AI",
-    "AI math solver",
-    "camera calculator",
-    "calculator that solves problems",
-    "KalkMate",
-  ],
-  authors: [{ name: "KalkMate" }],
-  creator: "KalkMate",
-  publisher: "KalkMate",
-  formatDetection: { email: false, address: false, telephone: false },
-  metadataBase: new URL(SITE_URL),
-  alternates: {
-    canonical: `${SITE_URL}/en`,
-    languages: languageAlternates(),
-  },
-  openGraph: {
-    title: "KalkMate — AI Calculator with Camera",
+// Dynamiczne (nie staly obiekt) — patrz komentarz w src/app/page.tsx.
+export async function generateMetadata(): Promise<Metadata> {
+  const siteUrl = siteUrlFromHost((await headers()).get("host"));
+  return {
+    title: "KalkMate — AI Calculator with Camera | Smart Photo Calculator",
     description:
-      "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, subscription from 4 EUR/month.",
-    type: "website",
-    locale: "en_US",
-    url: `${SITE_URL}/en`,
-    siteName: "KalkMate",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "KalkMate — AI Calculator with Camera",
-    description:
-      "Photo → AI → Solution. The AI calculator with camera that solves math, physics, chemistry and biology problems.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
+      "KalkMate is an AI calculator with camera built in — point it at any math, physics, chemistry or biology problem and get the full step-by-step solution on its OLED screen. 169 EUR, then from 4 EUR/month.",
+    keywords: [
+      "AI calculator",
+      "AI calculator with camera",
+      "calculator with camera",
+      "photo calculator AI",
+      "calculator with AI",
+      "AI math solver",
+      "camera calculator",
+      "calculator that solves problems",
+      "KalkMate",
+    ],
+    authors: [{ name: "KalkMate" }],
+    creator: "KalkMate",
+    publisher: "KalkMate",
+    formatDetection: { email: false, address: false, telephone: false },
+    metadataBase: new URL(siteUrl),
+    alternates: {
+      canonical: `${siteUrl}/en`,
+      languages: languageAlternates(siteUrl),
+    },
+    openGraph: {
+      title: "KalkMate — AI Calculator with Camera",
+      description:
+        "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, subscription from 4 EUR/month.",
+      type: "website",
+      locale: "en_US",
+      url: `${siteUrl}/en`,
+      siteName: "KalkMate",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "KalkMate — AI Calculator with Camera",
+      description:
+        "Photo → AI → Solution. The AI calculator with camera that solves math, physics, chemistry and biology problems.",
+    },
+    robots: {
       index: true,
       follow: true,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-video-preview": -1,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+      },
     },
-  },
-};
+  };
+}
 
-export default function EnglishPage() {
+export default async function EnglishPage() {
+  const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return (
     <>
       <HtmlLang lang="en" />
-      {homeJsonLd(lang).map((json, i) => (
+      {homeJsonLd(lang, siteUrl).map((json, i) => (
         <script
           key={i}
           type="application/ld+json"

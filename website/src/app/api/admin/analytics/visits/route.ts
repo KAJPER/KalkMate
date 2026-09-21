@@ -7,8 +7,19 @@ type VisitRow = {
   userAgent: string | null;
   referer: string | null;
   page: string;
+  host: string | null;
   createdAt: Date;
 };
+
+// Normalizuje host do jednej z dwoch znanych domen — www./bez www. i wielkosc
+// liter nie maja znaczenia. Starsze wpisy (sprzed dodania kolumny "host")
+// maja host=null -> licza sie jako kalkmate.pl (caly ruch szedl tam, zanim
+// istnialo kalkmate.eu).
+function normalizeDomain(host: string | null): string {
+  const h = (host || "").toLowerCase().replace(/^www\./, "");
+  if (h === "kalkmate.eu") return "kalkmate.eu";
+  return "kalkmate.pl";
+}
 
 // Rozpoznaj typ urządzenia z user-agent
 function deviceType(ua: string): "mobile" | "desktop" {
@@ -53,7 +64,7 @@ export async function GET(request: NextRequest) {
     // ----------------------------------------------------------------
     const visits: VisitRow[] = await prisma.visit.findMany({
       where: { createdAt: { gte: since } },
-      select: { ipHash: true, userAgent: true, referer: true, page: true, createdAt: true },
+      select: { ipHash: true, userAgent: true, referer: true, page: true, host: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     });
 
@@ -159,6 +170,21 @@ export async function GET(request: NextRequest) {
     }
     const hourly = hourMap.map((count, hour) => ({ hour, count }));
 
+    // ----------------------------------------------------------------
+    // Podzial na domeny (kalkmate.pl vs kalkmate.eu) — patrz Visit.host
+    // ----------------------------------------------------------------
+    const domainMap = new Map<string, { views: number; ips: Set<string> }>();
+    for (const v of visits) {
+      const d = normalizeDomain(v.host);
+      if (!domainMap.has(d)) domainMap.set(d, { views: 0, ips: new Set() });
+      const entry = domainMap.get(d)!;
+      entry.views++;
+      entry.ips.add(v.ipHash);
+    }
+    const byDomain = Array.from(domainMap.entries())
+      .map(([domain, d]) => ({ domain, views: d.views, unique: d.ips.size }))
+      .sort((a, b) => b.views - a.views);
+
     return NextResponse.json({
       period: { days, since: since.toISOString() },
       overview: {
@@ -175,6 +201,7 @@ export async function GET(request: NextRequest) {
       devices: { mobile, desktop },
       funnel,
       hourly,
+      byDomain,
     });
   } catch (e) {
     console.error("[analytics/visits]", e);

@@ -22,6 +22,7 @@ interface VisitData {
   devices: { mobile: number; desktop: number };
   funnel: Array<{ page: string; views: number; unique: number }>;
   hourly: Array<{ hour: number; count: number }>;
+  byDomain: Array<{ domain: string; views: number; unique: number }>;
 }
 
 // ----------------------------------------------------------------
@@ -337,6 +338,28 @@ export default function AnalyticsPage() {
               keyUnique="unique"
             />
           </div>
+
+          {/* ---- Domeny (kalkmate.pl vs kalkmate.eu) ---- */}
+          {data.byDomain.length > 0 && (
+            <div className="bg-[#313338] border border-[#3F4147] rounded-xl p-6">
+              <h2 className="text-sm font-semibold text-[#E0E0E0] mb-4">
+                Ruch wg domeny
+              </h2>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {data.byDomain.map(({ domain, views, unique }) => (
+                  <div key={domain} className="bg-[#2B2D31] border border-[#3F4147]/50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-mono text-[#E0E0E0]">{domain}</span>
+                      <span className="text-xs text-[#E0E0E0]/40">{pct(views, data.overview.totalViews)}%</span>
+                    </div>
+                    <p className="text-2xl font-bold text-[#E0E0E0]">{views}</p>
+                    <p className="text-xs text-[#E0E0E0]/50">{unique} unikalnych</p>
+                    <MiniBar value={views} max={data.byDomain[0]?.views || 1} color="bg-[#3B82F6]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ---- Top pages + Referrers ---- */}
           <div className="grid lg:grid-cols-2 gap-6">

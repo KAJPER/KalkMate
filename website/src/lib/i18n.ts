@@ -9,6 +9,21 @@ export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "pl";
 
 export const SITE_URL = "https://kalkmate.pl";
+export const EU_SITE_URL = "https://kalkmate.eu";
+
+// kalkmate.eu serwuje TEN SAM kod co kalkmate.pl (wspolny backend/baza/panel
+// admina), ale ma byc WLASNYM bytem SEO — canonical/hreflang/JSON-LD musza
+// wskazywac na .eu, kiedy strona jest odwiedzana pod .eu, inaczej Google
+// nigdy nie zaindeksuje jej niezaleznie (zobaczylby wszedzie canonical na
+// kalkmate.pl i pominal .eu jako duplikat). Admin panel, transakcyjne maile
+// i wewnetrzne wywolania API (referer do OpenRoutera itp.) CELOWO zostaja
+// pod SITE_URL (kalkmate.pl) — to nie sa sygnaly SEO, tylko biznesowa
+// logika dzialajaca zawsze na tym samym, glownym adresie.
+export function siteUrlFromHost(host: string | null | undefined): string {
+  const h = (host || "").toLowerCase().split(":")[0]; // odetnij ewentualny port
+  if (h === "kalkmate.eu" || h === "www.kalkmate.eu") return EU_SITE_URL;
+  return SITE_URL;
+}
 
 /** Ścieżka strony głównej dla danego języka. */
 export function localeHome(locale: Locale): string {
@@ -24,8 +39,8 @@ export function localePath(locale: Locale, path: string): string {
 }
 
 /** Absolutny URL strony głównej dla danego języka. */
-export function localeHomeUrl(locale: Locale): string {
-  return locale === "pl" ? `${SITE_URL}/` : `${SITE_URL}/${locale}`;
+export function localeHomeUrl(locale: Locale, siteUrl: string = SITE_URL): string {
+  return locale === "pl" ? `${siteUrl}/` : `${siteUrl}/${locale}`;
 }
 
 /** Wykrycie języka na podstawie ścieżki (dla globalnego chrome bez propa). */
@@ -58,11 +73,11 @@ export const localeName: Record<Locale, string> = {
 };
 
 /** Mapa alternates dla metadata Next.js (hreflang). */
-export function languageAlternates(): Record<string, string> {
+export function languageAlternates(siteUrl: string = SITE_URL): Record<string, string> {
   return {
-    pl: `${SITE_URL}/`,
-    en: `${SITE_URL}/en`,
-    de: `${SITE_URL}/de`,
-    "x-default": `${SITE_URL}/`,
+    pl: `${siteUrl}/`,
+    en: `${siteUrl}/en`,
+    de: `${siteUrl}/de`,
+    "x-default": `${siteUrl}/`,
   };
 }

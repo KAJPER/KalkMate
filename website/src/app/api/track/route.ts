@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       .slice(0, 16);
 
     const referer = String(body?.referer || "").slice(0, 300) || null;
+    const host = (req.headers.get("host") || "").toLowerCase().split(":")[0].slice(0, 100) || null;
 
     await prisma.visit.create({
       data: {
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
         userAgent,
         referer,
         page,
+        host,
       },
     });
 

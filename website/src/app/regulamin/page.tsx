@@ -1,14 +1,20 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { siteUrlFromHost } from "@/lib/i18n";
 
-export const metadata: Metadata = {
-  title: "Regulamin Sklepu — KalkMate",
-  description: "Regulamin sklepu internetowego KalkMate",
-  robots: { index: true, follow: true },
-  alternates: { canonical: "https://kalkmate.pl/regulamin" },
-};
+// Dynamiczne (nie staly obiekt) — patrz komentarz w src/app/page.tsx (kalkmate.eu).
+export async function generateMetadata(): Promise<Metadata> {
+  const siteUrl = siteUrlFromHost((await headers()).get("host"));
+  return {
+    title: "Regulamin Sklepu — KalkMate",
+    description: "Regulamin sklepu internetowego KalkMate",
+    robots: { index: true, follow: true },
+    alternates: { canonical: `${siteUrl}/regulamin` },
+  };
+}
 
 const sections = [
   { id: "sek-1", eyebrow: "01", short: "Postanowienia ogólne",       title: "Postanowienia", accent: "ogólne" },

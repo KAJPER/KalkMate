@@ -15,7 +15,7 @@ const productDescription: Record<Locale, string> = {
 };
 
 /** Product JSON-LD (schema.org) dla strony głównej w danym języku. */
-export function productJsonLd(locale: Locale) {
+export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
   const isPl = locale === "pl";
   return {
     "@context": "https://schema.org",
@@ -23,15 +23,15 @@ export function productJsonLd(locale: Locale) {
     name: productName[locale],
     description: productDescription[locale],
     image: [
-      `${SITE_URL}/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp`,
-      `${SITE_URL}/galeria/kalkulator-kalkmate-opakowanie-pudelko.webp`,
-      `${SITE_URL}/galeria/kalkulator-kalkmate-ekran-menu-glowne.webp`,
+      `${siteUrl}/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp`,
+      `${siteUrl}/galeria/kalkulator-kalkmate-opakowanie-pudelko.webp`,
+      `${siteUrl}/galeria/kalkulator-kalkmate-ekran-menu-glowne.webp`,
     ],
     sku: "KM-V3",
     brand: { "@type": "Brand", name: "KalkMate" },
     offers: {
       "@type": "Offer",
-      url: localeHomeUrl(locale),
+      url: localeHomeUrl(locale, siteUrl),
       priceCurrency: isPl ? "PLN" : "EUR",
       price: isPl ? "699" : "169",
       priceValidUntil: "2026-12-31",
@@ -73,8 +73,8 @@ export function faqJsonLd(locale: Locale) {
 }
 
 /** Tablica skryptów JSON-LD jako stringi gotowe do wstrzyknięcia. */
-export function homeJsonLd(locale: Locale): string[] {
-  return [productJsonLd(locale), faqJsonLd(locale)].map((o) =>
+export function homeJsonLd(locale: Locale, siteUrl: string = SITE_URL): string[] {
+  return [productJsonLd(locale, siteUrl), faqJsonLd(locale)].map((o) =>
     JSON.stringify(o),
   );
 }
@@ -85,13 +85,13 @@ export function homeJsonLd(locale: Locale): string[] {
  * pomaga wyszukiwarkom i modelom AI rozpoznać "KalkMate" jako konkretny,
  * weryfikowalny podmiot (a nie tylko frazę w tekście).
  */
-export function organizationJsonLd(): string {
+export function organizationJsonLd(siteUrl: string = SITE_URL): string {
   return JSON.stringify({
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "KalkMate",
     legalName: "KAJPA Kacper Popko",
-    url: SITE_URL,
+    url: siteUrl,
     email: "kontakt@kalkmate.pl",
     telephone: "+48600580888",
     address: {

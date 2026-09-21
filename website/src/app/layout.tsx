@@ -27,6 +27,15 @@ const jetbrains = JetBrains_Mono({
   display: "swap",
 });
 
+// UWAGA kalkmate.eu: metadataBase/organizationJsonLd tutaj CELOWO zostaja
+// statyczne (kalkmate.pl) — root layout owija KAZDA strone, wiec gdyby
+// czytal headers() tutaj, cala witryna stracilaby prerenderowanie statyczne
+// (kazda podstrona stalaby sie dynamiczna). To, co faktycznie decyduje czy
+// Google zaindeksuje .eu osobno, to canonical/hreflang NA KONKRETNYCH
+// stronach (page.tsx, en/de, pomoc, sitemap.ts) — te SA dynamiczne per-host,
+// patrz siteUrlFromHost() w src/lib/i18n.ts. metadataBase tutaj sluzy tylko
+// jako fallback dla ewentualnych wzglednych URLi, nie jest realnym sygnalem
+// kanonicznosci (kazda strona i tak podaje pelny, absolutny canonical).
 export const metadata: Metadata = {
   title: "KalkMate — Kalkulator AI | Matematyka, Fizyka, Chemia, Biologia",
   description:

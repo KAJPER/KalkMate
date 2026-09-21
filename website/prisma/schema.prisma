@@ -247,6 +247,7 @@ model Visit {
   userAgent String?
   referer   String?
   page      String   @default("/")
+  host      String?  // domena z ktorej przyszlo zadanie (kalkmate.pl / kalkmate.eu) — do analityki per-domena
   createdAt DateTime @default(now())
 
   @@index([ipHash])

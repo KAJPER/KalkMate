@@ -32,7 +32,11 @@ export const authOptions: NextAuthOptions = {
             body: new URLSearchParams({
               grant_type: "authorization_code",
               code: params.code,
-              redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/callback/google`,
+              // provider.callbackUrl (nie process.env.NEXTAUTH_URL) — musi byc
+              // IDENTYCZNY z redirect_uri uzytym w kroku autoryzacji (Google
+              // tego wymaga). Dzieki AUTH_TRUST_HOST oba sa liczone z hosta
+              // requestu, wiec kalkmate.pl i kalkmate.eu dzialaja poprawnie.
+              redirect_uri: provider.callbackUrl,
               client_id: provider.clientId,
               client_secret: provider.clientSecret,
             }),
