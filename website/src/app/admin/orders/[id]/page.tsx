@@ -164,6 +164,9 @@ export default function OrderDetailPage({
     }
   };
 
+  // Kurier wybrany do nadania zagranicznego (jeden z bcPreview.quotes).
+  const [selectedCourier, setSelectedCourier] = useState<string>("");
+
   const handleBcCreate = async () => {
     const price = bcPreview?.valuation?.price?.value;
     if (
@@ -180,6 +183,49 @@ export default function OrderDetailPage({
     setBcMsg("");
     try {
       const res = await fetch(`/api/admin/orders/${id}/basecourier`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setBcMsg(data.error || "Błąd nadania");
+        return;
+      }
+      setFurgonetkaStatus("basecourier");
+      if (data.basecourierOrderId) setFurgonetkaPackageId(String(data.basecourierOrderId));
+      if (data.trackingNumber) setTracking(data.trackingNumber);
+      applyTrackingSync(data.trackingSync);
+      setBcMsg(
+        data.trackingNumber
+          ? `Nadano. Numer przesyłki: ${data.trackingNumber}`
+          : "Nadano — numer przesyłki nie wrócił w odpowiedzi, sprawdź w panelu Base Courier"
+      );
+    } catch {
+      setBcMsg("Błąd sieci");
+    } finally {
+      setBcLoading(false);
+    }
+  };
+
+  const handleBcCreateIntl = async () => {
+    if (!selectedCourier || !bcPreview?.quotes) return;
+    const q = bcPreview.quotes.find((x) => x.courierCode === selectedCourier);
+    if (
+      !confirm(
+        `Nadać przesyłkę zagraniczną przez Base Courier?\n\n` +
+          `Kurier: ${q?.courierName || selectedCourier}\n` +
+          `Kraj: ${bcPreview.country}\n` +
+          `Odbiorca: ${bcPreview.receiver.name}\n` +
+          `Koszt: ${q ? q.price.value + " zł brutto" : "wg cennika"} — pobierany z Twojego konta Base Courier.\n\n` +
+          `Tej operacji nie da się cofnąć z panelu.`
+      )
+    )
+      return;
+    setBcLoading(true);
+    setBcMsg("");
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/basecourier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courierCode: selectedCourier }),
+      });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setBcMsg(data.error || "Błąd nadania");
@@ -759,12 +805,27 @@ export default function OrderDetailPage({
                     <p><span className="text-[#E0E0E0]/50">Kraj:</span> <span className="font-mono text-amber-300">{bcPreview.country}</span> — poza Polską, bez Paczkomatów</p>
                     {bcPreview.quotes && bcPreview.quotes.length > 0 ? (
                       <div className="space-y-1 pt-1">
-                        <p className="text-[#E0E0E0]/50">Szacowany koszt (kilku kurierów naraz, ceny brutto):</p>
+                        <p className="text-[#E0E0E0]/50">Wybierz kuriera (ceny brutto):</p>
                         {bcPreview.quotes.map((q) => (
-                          <div key={q.courierCode} className="flex items-center justify-between bg-[#1E1F22] rounded px-2 py-1">
-                            <span>{q.courierName}</span>
+                          <label
+                            key={q.courierCode}
+                            className={`flex items-center justify-between rounded px-2 py-1.5 cursor-pointer border transition-colors ${
+                              selectedCourier === q.courierCode
+                                ? "bg-amber-500/10 border-amber-500/50"
+                                : "bg-[#1E1F22] border-transparent hover:border-[#3F4147]"
+                            }`}
+                          >
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="intl-courier"
+                                checked={selectedCourier === q.courierCode}
+                                onChange={() => setSelectedCourier(q.courierCode)}
+                              />
+                              {q.courierName}
+                            </span>
                             <span className="font-mono text-[#E0E0E0]">{q.price.value} zł <span className="text-[#E0E0E0]/40">({q.price.netto} netto)</span></span>
-                          </div>
+                          </label>
                         ))}
                       </div>
                     ) : (
@@ -779,9 +840,17 @@ export default function OrderDetailPage({
                     >
                       {bcLoading ? "Wyceniam…" : "Odśwież wycenę"}
                     </button>
+                    <button
+                      onClick={handleBcCreateIntl}
+                      disabled={bcLoading || !selectedCourier}
+                      title={!selectedCourier ? "Najpierw wybierz kuriera" : ""}
+                      className="px-5 py-2 rounded-lg font-medium text-sm text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {bcLoading ? "Nadaję…" : "Nadaj przesyłkę (płatne)"}
+                    </button>
                   </div>
                   <p className="text-[11px] text-[#E0E0E0]/40">
-                    To tylko orientacyjna wycena — nadanie zagranicznej przesyłki z tego panelu nie jest obsługiwane (wymaga danych celnych/innej integracji). Nadaj ręcznie w panelu basecourier.com wybranym kurierem, potem wklej numer śledzenia w sekcji „Śledzenie" niżej.
+                    Adres drzwi-drzwi z zamówienia (bez Paczkomatu). Koszt pobierany ze Skarbonki na koncie Base Courier.
                   </p>
                 </>
               ) : (

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
-import { bcCreateLockerShipment, bcValuation, bcValuationInternational } from "@/lib/basecourier";
+import {
+  bcCreateLockerShipment,
+  bcCreateInternationalShipment,
+  bcValuation,
+  bcValuationInternational,
+  INTL_COURIER_CANDIDATES,
+} from "@/lib/basecourier";
 import { syncOrderTracking } from "@/lib/inpostTracking";
 
 // GET  /api/admin/orders/[id]/basecourier  — wycena + podglad danych, ktore
@@ -100,10 +106,62 @@ export async function POST(
       { status: 409 }
     );
   }
-  if ((order.customerCountry || "PL") !== "PL") {
-    return NextResponse.json({ ok: false, error: "Base Courier / InPost Paczkomat: tylko dostawa w Polsce" }, { status: 400 });
-  }
+
+  const country = (order.customerCountry || "PL").toUpperCase();
+  const isDomestic = country === "PL" || country === "";
   const receiver = receiverFromOrder(order);
+
+  if (!isDomestic) {
+    // Nadanie zagraniczne — admin wybiera kuriera z listy wycen zwroconej
+    // przez GET (bcValuationInternational). Bez Paczkomatow, wiec wymagany
+    // jest pelny adres drzwi-drzwi (mamy go z formularza zamowienia).
+    const body = await request.json().catch(() => ({} as Record<string, unknown>));
+    const courierCode = typeof body?.courierCode === "string" ? body.courierCode : "";
+    if (!INTL_COURIER_CANDIDATES.some((c) => c.code === courierCode)) {
+      return NextResponse.json(
+        { ok: false, error: "Wybierz kuriera z listy wycen (courierCode) — nieznany lub brakujący kod." },
+        { status: 400 }
+      );
+    }
+    if (!receiver.street || !receiver.postal || !receiver.city) {
+      return NextResponse.json(
+        { ok: false, error: "Brak pelnego adresu odbiorcy (ulica/kod pocztowy/miasto) w zamowieniu — nie da sie nadac." },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const created = await bcCreateInternationalShipment(receiver, `KalkMate ${order.orderNumber}`, courierCode, country);
+      console.log("[basecourier] created (intl)", id, courierCode, country, JSON.stringify(created.raw).slice(0, 2000));
+
+      await prisma.order.update({
+        where: { id },
+        data: {
+          furgonetkaPackageId: created.orderId ?? undefined,
+          furgonetkaStatus: "basecourier",
+          ...(created.trackingNumber ? { trackingNumber: created.trackingNumber } : {}),
+        },
+      });
+
+      let trackingSync = null;
+      if (created.trackingNumber) {
+        try { trackingSync = await syncOrderTracking(id); } catch { /* kurier zagraniczny moze nie byc sledzony przez InPost */ }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        basecourierOrderId: created.orderId,
+        trackingNumber: created.trackingNumber,
+        waybillLink: created.waybillLink,
+        trackingSync,
+        raw: created.raw,
+      });
+    } catch (e) {
+      console.error("[basecourier] create failed (intl)", id, e);
+      return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 502 });
+    }
+  }
+
   if (!/^[A-Z]{3}\d{2,3}[A-Z0-9]*$/.test(receiver.lockerCode)) {
     return NextResponse.json({ ok: false, error: `Brak poprawnego kodu Paczkomatu w zamowieniu (pickupPoint="${order.pickupPoint}")` }, { status: 400 });
   }

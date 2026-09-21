@@ -189,7 +189,7 @@ export async function bcValuation(): Promise<BcValuation> {
 //       ups_rest_standard 30.99 zl, gls 33.99 zl, ups_rest_saver 110 zl (express)
 //   US: tylko ups_rest_saver 115 zl i ups_rest_expedited 133 zl (express) —
 //       zwykle DPD/GLS/FedEx/DHL nie maja oferty na tak mala/lekka paczke do USA.
-const INTL_COURIER_CANDIDATES: { code: string; name: string }[] = [
+export const INTL_COURIER_CANDIDATES: { code: string; name: string }[] = [
   { code: "dpd", name: "DPD" },
   { code: "euro_hermes", name: "Eurohermes" },
   { code: "spring", name: "Spring" },
@@ -257,11 +257,23 @@ function findTracking(obj: unknown, depth = 0): string | null {
   return null;
 }
 
-export async function bcCreateLockerShipment(receiver: BcReceiver, orderRef: string): Promise<BcCreatedShipment> {
-  const sender = await bcGetProfile();
+// Pola formularza nadania zweryfikowane w zrodle oficjalnej wtyczki WooCommerce
+// (wordpress.org/plugins/blpaczka, pobrana i przejrzana 2026-09-20):
+// resources/views/backend/order/_partials/shipment-meta-box/shipment-form.blade.php.
+// Ten SAM formularz (bez rozgalezien) obsluguje i Paczkomat, i kurierow
+// zagranicznych (DPD/GLS/Eurohermes/UPS...) — jedyna roznica to:
+//   - "Cart.0.Order.taker_point" jest OPCJONALNE (uzywane tylko dla Paczkomatu/
+//     punktow odbioru), adres (taker_street/house_no/postal/city) jest ZAWSZE
+//     wymagany i zawsze wysylany.
+//   - Kraj odbiorcy idzie do "CourierSearch.country_code" (NIE Order.taker_country
+//     — takiego pola w ogole nie ma).
+// W calym formularzu NIE MA zadnego pola celnego/deklaracji wartosci dla
+// eksportu (np. do USA) — Base Courier/kurier generuje dokumenty celne sam na
+// podstawie package_content, tak jak dla Polski. Stad wysylka do USA dziala
+// przez ten sam createOrderV2.json bez dodatkowych danych.
+function buildOrderPayload(receiver: BcReceiver, sender: BcProfile, orderRef: string): Record<string, unknown> {
   const recvAddr = splitStreet(receiver.street);
-
-  const order: Record<string, unknown> = {
+  return {
     // nadawca
     name: sender.name,
     vat_company: sender.vat_company ?? "",
@@ -276,7 +288,7 @@ export async function bcCreateLockerShipment(receiver: BcReceiver, orderRef: str
     taker_name: receiver.name,
     taker_email: receiver.email,
     taker_phone: receiver.phone.replace(/\s+/g, ""),
-    taker_point: receiver.lockerCode,
+    ...(receiver.lockerCode ? { taker_point: receiver.lockerCode } : {}),
     taker_street: receiver.street ? recvAddr.street : "",
     taker_house_no: receiver.street ? recvAddr.house_no : "",
     taker_postal: receiver.postal ?? "",
@@ -287,22 +299,9 @@ export async function bcCreateLockerShipment(receiver: BcReceiver, orderRef: str
     reference: orderRef,
     description: orderRef,
   };
+}
 
-  // Forma platnosci za nadanie: "bank" = Skarbonka (przedplata na koncie
-  // Base Courier), "pay_later" = faktura z odroczona platnoscia. Nazwa pola
-  // z oficjalnej wtyczki WooCommerce (CartOrder.payment) — w panelu Base
-  // Courier NIE ma tego ustawienia dla API, bez tego pola API odrzuca
-  // nadanie ("Nie wybrano formy platnosci za nadanie...").
-  const payment = process.env.BASECOURIER_PAYMENT || "bank";
-
-  const env = await bcCall<Record<string, unknown>>("createOrderV2.json", {
-    CartOrder: { payment },
-    CourierSearch: courierSearch(),
-    Cart: [{ Order: order }],
-  }, 40000);
-
-  if (!env.success) throw new Error(bcErrorMessage(env));
-  const d = env.data ?? {};
+function parseCreatedShipment(d: Record<string, unknown>): BcCreatedShipment {
   // Ksztalt odpowiedzi (zweryfikowany na pierwszym realnym nadaniu 2026-09-18):
   //   { CartOrder: { id_prefix, price, price_netto },
   //     Order: [ { id: "23584605", waybill_no: "6209...", name, type, price } ],
@@ -320,6 +319,54 @@ export async function bcCreateLockerShipment(receiver: BcReceiver, orderRef: str
     waybillLink: typeof d.waybill_link === "string" ? d.waybill_link : null,
     raw: d,
   };
+}
+
+// Forma platnosci za nadanie: "bank" = Skarbonka (przedplata na koncie Base
+// Courier), "pay_later" = faktura z odroczona platnoscia. Nazwa pola z
+// oficjalnej wtyczki WooCommerce (CartOrder.payment) — w panelu Base Courier
+// NIE MA tego ustawienia dla API, bez tego pola API odrzuca nadanie
+// ("Nie wybrano formy platnosci za nadanie...").
+function paymentMethod(): string {
+  return process.env.BASECOURIER_PAYMENT || "bank";
+}
+
+export async function bcCreateLockerShipment(receiver: BcReceiver, orderRef: string): Promise<BcCreatedShipment> {
+  const sender = await bcGetProfile();
+  const order = buildOrderPayload(receiver, sender, orderRef);
+
+  const env = await bcCall<Record<string, unknown>>("createOrderV2.json", {
+    CartOrder: { payment: paymentMethod() },
+    CourierSearch: courierSearch(),
+    Cart: [{ Order: order }],
+  }, 40000);
+
+  if (!env.success) throw new Error(bcErrorMessage(env));
+  return parseCreatedShipment(env.data ?? {});
+}
+
+// Nadanie zagraniczne (DE, US, ...) — drzwi-drzwi, wybranym kurierem z listy
+// zwroconej przez bcValuationInternational(). Bez taker_point (nie ma
+// Paczkomatow poza PL); adres odbiorcy musi byc kompletny (street/postal/city).
+export async function bcCreateInternationalShipment(
+  receiver: BcReceiver,
+  orderRef: string,
+  courierCode: string,
+  countryCode: string
+): Promise<BcCreatedShipment> {
+  if (!INTL_COURIER_CANDIDATES.some((c) => c.code === courierCode)) {
+    throw new Error(`Nieznany kurier: ${courierCode}`);
+  }
+  const sender = await bcGetProfile();
+  const order = buildOrderPayload(receiver, sender, orderRef);
+
+  const env = await bcCall<Record<string, unknown>>("createOrderV2.json", {
+    CartOrder: { payment: paymentMethod() },
+    CourierSearch: courierSearch(courierCode, normalizeCountryForShipping(countryCode)),
+    Cart: [{ Order: order }],
+  }, 40000);
+
+  if (!env.success) throw new Error(bcErrorMessage(env));
+  return parseCreatedShipment(env.data ?? {});
 }
 
 // Etykieta PDF. Kontrakt zweryfikowany na produkcji (2026-09-18):
