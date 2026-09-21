@@ -95,6 +95,11 @@ export default function MailboxPage() {
   const [translating, setTranslating] = useState(false);
   const [translateErr, setTranslateErr] = useState("");
 
+  // Szkic odpowiedzi wygenerowany przez AI (OpenRouter + dane zamowien z bazy)
+  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [draftErr, setDraftErr] = useState("");
+  const [draftOrdersFound, setDraftOrdersFound] = useState<number | null>(null);
+
   // Tlumaczenie szkicu odpowiedzi na jezyk klienta
   const [translatingReply, setTranslatingReply] = useState(false);
   const [replyTranslateErr, setReplyTranslateErr] = useState("");
@@ -167,6 +172,8 @@ export default function MailboxPage() {
     setReplyText("");
     setSendMsg("");
     setReplyTranslateErr("");
+    setDraftErr("");
+    setDraftOrdersFound(null);
     setReplyOpen(true);
   };
 
@@ -250,6 +257,38 @@ export default function MailboxPage() {
       setReplyTranslateErr("Błąd sieci");
     } finally {
       setTranslatingReply(false);
+    }
+  };
+
+  // Generuje szkic odpowiedzi przez AI (OpenRouter + prawdziwe zamowienia
+  // klienta z bazy). Zawsze tylko wypelnia pole tekstowe — wysylka to nadal
+  // osobny, reczny krok ("Wyslij"), zeby czlowiek zawsze widzial i mogl
+  // poprawic tresc zanim poleci realny mail do klienta.
+  const handleGenerateDraft = async () => {
+    if (!message) return;
+    const wasOpen = replyOpen;
+    if (wasOpen && replyText.trim() && !confirm("Zastąpić obecną treść odpowiedzi wygenerowaną przez AI?")) return;
+    if (!wasOpen) startReply();
+    setGeneratingDraft(true);
+    setDraftErr("");
+    setDraftOrdersFound(null);
+    try {
+      const res = await fetch(`/api/admin/mailbox/${message.uid}/draft-reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setDraftErr(data.error || "Błąd generowania");
+        return;
+      }
+      setReplyText(data.draft);
+      setDraftOrdersFound(data.ordersFound ?? 0);
+    } catch {
+      setDraftErr("Błąd sieci");
+    } finally {
+      setGeneratingDraft(false);
     }
   };
 
@@ -402,12 +441,23 @@ export default function MailboxPage() {
 
               <div className="p-4 border-t border-[#3F4147] flex-shrink-0">
                 {!replyOpen ? (
-                  <button
-                    onClick={startReply}
-                    className="px-4 py-2 rounded-lg text-sm font-medium bg-[#3B82F6] hover:bg-[#2f6fd6] text-white transition-colors"
-                  >
-                    ↩ Odpowiedz
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={startReply}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[#3B82F6] hover:bg-[#2f6fd6] text-white transition-colors"
+                    >
+                      ↩ Odpowiedz
+                    </button>
+                    <button
+                      onClick={handleGenerateDraft}
+                      disabled={generatingDraft}
+                      title="AI napisze szkic odpowiedzi na podstawie tresci maila i danych zamowien klienta z bazy — do przejrzenia przed wyslaniem"
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-[#2B2D31] border border-[#3F4147] text-[#E0E0E0]/80 hover:bg-[#3F4147] hover:text-[#E0E0E0] transition-colors disabled:opacity-50"
+                    >
+                      {generatingDraft ? "Generuję…" : "✨ Wygeneruj odpowiedź AI"}
+                    </button>
+                    {draftErr && <span className="text-xs text-red-400">{draftErr}</span>}
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-2 text-xs">
@@ -431,7 +481,7 @@ export default function MailboxPage() {
                       rows={6}
                       className="w-full bg-[#2B2D31] border border-[#3F4147] rounded-lg px-3 py-2.5 text-sm text-[#E0E0E0] focus:outline-none focus:border-[#3B82F6]"
                     />
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={sendReply}
                         disabled={sending || !replyText.trim() || !replyTo}
@@ -446,6 +496,14 @@ export default function MailboxPage() {
                         Anuluj
                       </button>
                       <button
+                        onClick={handleGenerateDraft}
+                        disabled={generatingDraft}
+                        title="AI napisze/przepisze szkic na podstawie tresci maila i danych zamowien klienta z bazy"
+                        className="px-4 py-2 rounded-lg text-sm font-medium bg-[#2B2D31] border border-[#3F4147] text-[#E0E0E0]/80 hover:bg-[#3F4147] hover:text-[#E0E0E0] transition-colors disabled:opacity-50"
+                      >
+                        {generatingDraft ? "Generuję…" : "✨ Wygeneruj odpowiedź AI"}
+                      </button>
+                      <button
                         onClick={handleTranslateReply}
                         disabled={translatingReply || !replyText.trim()}
                         title="Tłumaczy powyższą treść na język, w którym napisany jest oryginalny mail klienta"
@@ -457,6 +515,14 @@ export default function MailboxPage() {
                         <span className={`text-xs ${sendMsg === "Wysłano." ? "text-green-400" : "text-red-400"}`}>{sendMsg}</span>
                       )}
                       {replyTranslateErr && <span className="text-xs text-red-400">{replyTranslateErr}</span>}
+                      {draftErr && <span className="text-xs text-red-400">{draftErr}</span>}
+                      {draftOrdersFound !== null && (
+                        <span className="text-xs text-[#E0E0E0]/40">
+                          {draftOrdersFound > 0
+                            ? `AI widziało ${draftOrdersFound} zamówień(-ie) tego klienta`
+                            : "AI nie znalazło żadnego zamówienia tego adresu e-mail w bazie"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
