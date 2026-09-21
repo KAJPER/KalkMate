@@ -402,3 +402,56 @@ export async function bcGetWaybillPdf(blpaczkaOrderId: string): Promise<{ pdf: B
   }
   return { pdf: null, link: null, raw: d };
 }
+
+// Sledzenie — dziala dla KAZDEGO kuriera obslugiwanego przez Base Courier
+// (DPD, GLS, UPS...), nie tylko InPost. Kontrakt zweryfikowany na zywo
+// (2026-09-21) dla przesylki DPD Export Standard:
+//   POST getOrderDetails.json  { Order: { id: <int> } }
+//   -> { success: true, data: { Order: {...}, Tracking: [
+//        { TrackingStatus: { status, status_desc, delivered, event_time,
+//                             bl_status_mapped, received_by, terminal, error_desc } },
+//        ...
+//      ] } }
+// "bl_status_mapped" to znormalizowany status Base Courier (np. "STATUS_CREATE"
+// dla swiezo utworzonej etykiety, przed odbiorem/nadaniem) — wspolny dla
+// wszystkich kurierow, w przeciwienstwie do surowych kodow (status/status_desc),
+// ktore sa specyficzne dla danego przewoznika.
+export interface BcTrackingEvent {
+  status: string;
+  statusDesc: string | null;
+  blStatusMapped: string | null;
+  delivered: boolean;
+  eventTime: string | null;
+}
+
+export interface BcOrderDetails {
+  courierName: string | null;
+  noPickup: boolean | null;
+  events: BcTrackingEvent[];
+  raw: unknown;
+}
+
+export async function bcGetOrderDetails(blpaczkaOrderId: string): Promise<BcOrderDetails> {
+  const env = await bcCall<{ Order?: Record<string, unknown>; Tracking?: Array<{ TrackingStatus?: Record<string, unknown> }> }>(
+    "getOrderDetails.json",
+    { Order: { id: Number(blpaczkaOrderId) } }
+  );
+  if (!env.success) throw new Error(bcErrorMessage(env));
+  const d = env.data ?? {};
+  const events: BcTrackingEvent[] = (d.Tracking ?? [])
+    .map((t) => t.TrackingStatus)
+    .filter((s): s is Record<string, unknown> => !!s)
+    .map((s) => ({
+      status: typeof s.status === "string" ? s.status : "",
+      statusDesc: typeof s.status_desc === "string" ? s.status_desc : null,
+      blStatusMapped: typeof s.bl_status_mapped === "string" ? s.bl_status_mapped : null,
+      delivered: s.delivered === true,
+      eventTime: typeof s.event_time === "string" ? s.event_time : null,
+    }));
+  return {
+    courierName: typeof d.Order?.courier_name === "string" ? d.Order.courier_name : null,
+    noPickup: typeof d.Order?.no_pickup === "boolean" ? d.Order.no_pickup : null,
+    events,
+    raw: d,
+  };
+}

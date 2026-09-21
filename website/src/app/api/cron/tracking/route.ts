@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncAllPendingOrders } from "@/lib/inpostTracking";
+import { syncAllPendingBaseCourierOrders } from "@/lib/basecourierTracking";
 import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
 
 // GET /api/cron/tracking — wolane co godzine z crona na serwerze
 // (/home/ubuntu/kalkulator/tracking-cron.sh) z naglowkiem x-cron-secret.
-// Oprocz sledzenia InPost anuluje tez porzucone zamowienia (platnosc pending
-// starsza niz STALE_DAYS) — src/lib/orderCleanup.ts.
+// Sledzi InPost (Paczkomat, w tym Paczkomat nadany przez Base Courier) ORAZ
+// przesylki zagraniczne nadane przez Base Courier innym kurierem (DPD, GLS,
+// UPS...) — src/lib/basecourierTracking.ts. Oprocz tego anuluje porzucone
+// zamowienia (platnosc pending starsza niz STALE_DAYS) — src/lib/orderCleanup.ts.
 //
 // Historia: poprzednia wersja iterowala po Stripe PaymentIntents (zamowienia
 // ida dzis przez P24 -> nic nie znajdowala), odpytywala zly URL InPost
@@ -34,6 +37,15 @@ export async function GET(req: NextRequest) {
 
     const results = await syncAllPendingOrders();
     const changed = results.filter((r) => r.changed);
+
+    let bcResults: Awaited<ReturnType<typeof syncAllPendingBaseCourierOrders>> = [];
+    try {
+      bcResults = await syncAllPendingBaseCourierOrders();
+    } catch (e) {
+      console.error("[cron/tracking] basecourier sync failed:", e);
+    }
+    const bcChanged = bcResults.filter((r) => r.changed);
+
     const summary = {
       ok: true,
       checked: results.length,
@@ -48,6 +60,20 @@ export async function GET(req: NextRequest) {
         from: r.previousStatus,
         to: r.newStatus,
       })),
+      basecourier: {
+        checked: bcResults.length,
+        changed: bcChanged.length,
+        emailsSent: bcResults.filter((r) => r.emailSent).length,
+        unavailable: bcResults.filter((r) => r.note === "basecourier_unavailable").length,
+        returnsFlagged: bcResults.filter((r) => r.note === "return_flagged").length,
+        changes: bcChanged.map((r) => ({
+          orderId: r.orderId,
+          blpaczkaOrderId: r.blpaczkaOrderId,
+          status: r.status,
+          from: r.previousStatus,
+          to: r.newStatus,
+        })),
+      },
       staleUnpaid: {
         olderThanDays: STALE_DAYS,
         cancelled: stale.cancelled.map((o) => o.orderNumber),
@@ -55,7 +81,8 @@ export async function GET(req: NextRequest) {
       },
     };
     console.log(
-      `[cron/tracking] checked=${summary.checked} changed=${summary.changed} emails=${summary.emailsSent} unavailable=${summary.unavailable} staleCancelled=${stale.cancelled.length}`
+      `[cron/tracking] checked=${summary.checked} changed=${summary.changed} emails=${summary.emailsSent} unavailable=${summary.unavailable} ` +
+      `bcChecked=${summary.basecourier.checked} bcChanged=${summary.basecourier.changed} staleCancelled=${stale.cancelled.length}`
     );
     return NextResponse.json(summary);
   } catch (e) {

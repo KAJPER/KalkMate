@@ -108,7 +108,8 @@ function write(choice: Choice) {
 }
 
 export default function CookieBanner() {
-  const lang = localeFromPathname(usePathname());
+  const pathname = usePathname();
+  const lang = localeFromPathname(pathname);
   const t = content[lang];
   // null = jeszcze nie wiemy (SSR / pre-mount), false = nie pokazuj, true = pokaz
   const [show, setShow] = useState<boolean | null>(null);
@@ -117,6 +118,10 @@ export default function CookieBanner() {
     setShow(!read());
   }, []);
 
+  // Panel admina (/admin) to wewnetrzne narzedzie za logowaniem — zgoda na
+  // ciasteczka sklepu/analityki klienta nie ma tu zastosowania, a baner tylko
+  // zaslania tresc panelu (zaobserwowane realnie: nachodzil na karty admina).
+  if (pathname?.startsWith("/admin")) return null;
   if (!show) return null;
 
   const accept = (choice: Choice) => {

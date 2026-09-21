@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import SessionProvider from "@/components/SessionProvider";
@@ -53,6 +53,13 @@ export const metadata: Metadata = {
   publisher: "KalkMate",
   formatDetection: { email: false, address: false, telephone: false },
   metadataBase: new URL("https://kalkmate.pl"),
+  // manifest/appleWebApp ida przez Metadata API (nie recznie w <head> JSX
+  // ponizej) — dzieki temu src/app/admin/layout.tsx moze je NADPISAC dla
+  // /admin (osobny manifest/nazwa PWA), zamiast dublowac oba tagi na stronie
+  // (Next.js API "override" dziala tylko dla wartosci zadeklarowanych tutaj,
+  // recznych <link>/<meta> w JSX ponizej nie widzi i by ich nie usunal).
+  manifest: "/site.webmanifest",
+  appleWebApp: { title: "KalkMate" },
   // Weryfikacja Google Search Console metodą "tag HTML" — wystarczy ustawić
   // zmienną środowiskową GOOGLE_SITE_VERIFICATION (alternatywnie użyj weryfikacji
   // przez rekord DNS TXT, która nie wymaga zmian w kodzie).
@@ -91,6 +98,10 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#0B0B0B",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -101,9 +112,6 @@ export default function RootLayout({
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="shortcut icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <meta name="apple-mobile-web-app-title" content="KalkMate" />
-        <meta name="theme-color" content="#0B0B0B" />
-        <link rel="manifest" href="/site.webmanifest" />
         <meta name="geo.region" content="PL" />
       </head>
       <body

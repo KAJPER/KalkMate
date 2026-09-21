@@ -11,6 +11,8 @@ import OrdersPieChart from "@/components/admin/OrdersPieChart";
 
 interface Analytics {
   totalRevenue: number;
+  totalRefunded: number;
+  refundedOrders: number;
   totalOrders: number;
   succeededOrders: number;
   pendingOrders: number;
@@ -212,12 +214,18 @@ export default function AdminDashboard() {
       ) : analytics ? (
         <div className="space-y-6">
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <StatCard
               title="Przychód"
               value={`${(analytics.totalRevenue / 100).toLocaleString("pl-PL")} zł`}
               subtitle={`${analytics.succeededOrders} opłaconych`}
               color="green"
+            />
+            <StatCard
+              title="Zwrócono"
+              value={`${(analytics.totalRefunded / 100).toLocaleString("pl-PL")} zł`}
+              subtitle={`${analytics.refundedOrders} anulowanych — pieniądze oddane`}
+              color="red"
             />
             <StatCard
               title="Zamówienia"

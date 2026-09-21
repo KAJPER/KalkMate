@@ -54,8 +54,9 @@ export default function GeminiUsageChart({ data }: GeminiUsageChartProps) {
         <h3 className="text-lg font-bold text-[#E0E0E0]">Ruch AI (30 dni)</h3>
         <p className="text-sm text-[#E0E0E0]/60">Wiadomości od AI i użytkowników</p>
       </div>
+      {/* height=250 (nie "100%") — patrz komentarz w RevenueChart.tsx */}
       <div className="flex-1 w-full min-h-[250px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={250}>
           <LineChart data={formattedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#3F4147" vertical={false} />
             <XAxis 

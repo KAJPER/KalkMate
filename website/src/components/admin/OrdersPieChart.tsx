@@ -43,9 +43,10 @@ export default function OrdersPieChart({ succeeded, pending, canceled }: OrdersP
         <h3 className="text-lg font-bold text-[#E0E0E0]">Status Zamówień</h3>
         <p className="text-sm text-[#E0E0E0]/60">Proporcja wszystkich transakcji</p>
       </div>
+      {/* height=250 (nie "100%") — patrz komentarz w RevenueChart.tsx */}
       <div className="flex-1 w-full min-h-[250px]">
         {data.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie
                 data={data}

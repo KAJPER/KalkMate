@@ -83,13 +83,22 @@ export default function OrderDetailPage({
     load();
   }, [id]);
 
-  // Sledzenie InPost (automat + przycisk "Sprawdz status InPost")
+  // Sledzenie przesylki — InPost (Paczkomat) LUB inny kurier nadany przez
+  // Base Courier (DPD, GLS, UPS...); serwer sam wybiera zrodlo po numerze/
+  // furgonetkaStatus (patrz /api/admin/orders/[id]/tracking-sync).
   const [trackingSyncing, setTrackingSyncing] = useState(false);
+  const [trackingCourier, setTrackingCourier] = useState<"inpost" | "basecourier" | null>(null);
   const [trackingInfo, setTrackingInfo] = useState<{
-    status: string;
-    targetMachineId: string | null;
-    updatedAt: string | null;
-    events: { status: string; datetime: string }[];
+    status?: string;                 // InPost: kod statusu
+    targetMachineId?: string | null; // InPost: id Paczkomatu
+    updatedAt?: string | null;       // InPost
+    courierName?: string | null;     // Base Courier: nazwa uslugi (np. "DPD Export Standard")
+    events: Array<{
+      status?: string;               // InPost: kod
+      datetime?: string;             // InPost: znacznik czasu
+      statusDesc?: string | null;    // Base Courier: opis PL
+      eventTime?: string | null;     // Base Courier: znacznik czasu
+    }>;
   } | null>(null);
   const [trackingMsg, setTrackingMsg] = useState("");
 
@@ -100,6 +109,8 @@ export default function OrderDetailPage({
       setTrackingMsg(`Status zamówienia zmieniony na „${sync.newStatus}"${sync.emailSent ? " — mail do klienta wysłany" : ""}`);
     } else if (sync.note === "inpost_unavailable") {
       setTrackingMsg("InPost nie odpowiada / numer nieznany");
+    } else if (sync.note === "basecourier_unavailable") {
+      setTrackingMsg("Base Courier nie odpowiada");
     } else if (sync.note === "return_flagged") {
       setTrackingMsg("⚠ Zwrot/awizo — zobacz notatki, wymaga ręcznej decyzji");
     } else {
@@ -118,6 +129,7 @@ export default function OrderDetailPage({
         return;
       }
       setTrackingInfo(data.tracking);
+      setTrackingCourier(data.courier ?? null);
       applyTrackingSync(data.sync);
     } catch {
       setTrackingMsg("Błąd sieci");
@@ -666,14 +678,14 @@ export default function OrderDetailPage({
                     type="button"
                     onClick={handleTrackingSync}
                     disabled={trackingSyncing || !order.tracking_number}
-                    title={order.tracking_number ? "Odpytaj InPost i zaktualizuj status zamówienia" : "Najpierw zapisz numer przesyłki"}
+                    title={order.tracking_number ? "Sprawdź status u przewoźnika (InPost albo Base Courier) i zaktualizuj status zamówienia" : "Najpierw zapisz numer przesyłki"}
                     className="shrink-0 px-3 py-2 rounded-lg text-xs font-medium border border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    {trackingSyncing ? "Sprawdzam…" : "Sprawdź status InPost"}
+                    {trackingSyncing ? "Sprawdzam…" : "Sprawdź status przesyłki"}
                   </button>
                 </div>
                 <p className="mt-1 text-[11px] text-[#E0E0E0]/40">
-                  Numery InPost są sprawdzane automatycznie co godzinę — status „Wysłane" po odbiorze przez kuriera, „Zrealizowane" gdy paczka jest w Paczkomacie.
+                  Numery InPost są sprawdzane automatycznie co godzinę (status „Wysłane" po odbiorze przez kuriera, „Zrealizowane" gdy paczka jest w Paczkomacie) — tak samo przesyłki zagraniczne (DPD, GLS, UPS) nadane przez Base Courier.
                 </p>
                 {trackingMsg && (
                   <p className="mt-1 text-xs text-amber-300">{trackingMsg}</p>
@@ -682,9 +694,15 @@ export default function OrderDetailPage({
                   <div className="mt-2 rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-mono text-[#E0E0E0]">
-                        InPost: <span className="text-amber-300">{trackingInfo.status}</span>
-                        {trackingInfo.targetMachineId && (
-                          <span className="text-[#E0E0E0]/50"> · {trackingInfo.targetMachineId}</span>
+                        {trackingCourier === "basecourier" ? (
+                          <>{trackingInfo.courierName || "Base Courier"}</>
+                        ) : (
+                          <>
+                            InPost: <span className="text-amber-300">{trackingInfo.status}</span>
+                            {trackingInfo.targetMachineId && (
+                              <span className="text-[#E0E0E0]/50"> · {trackingInfo.targetMachineId}</span>
+                            )}
+                          </>
                         )}
                       </span>
                       {trackingInfo.updatedAt && (
@@ -694,14 +712,21 @@ export default function OrderDetailPage({
                       )}
                     </div>
                     <ul className="space-y-0.5 max-h-40 overflow-y-auto">
-                      {trackingInfo.events.map((ev, i) => (
-                        <li key={i} className="flex gap-3 text-[#E0E0E0]/70">
-                          <span className="text-[#E0E0E0]/40 shrink-0 font-mono">
-                            {new Date(ev.datetime).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          <span>{ev.status}</span>
-                        </li>
-                      ))}
+                      {trackingInfo.events.map((ev, i) => {
+                        // Base Courier zwraca "YYYY-MM-DD HH:MM:SS" (spacja, nie
+                        // "T") — Date.parse tego formalnie nie gwarantuje, wiec
+                        // normalizujemy do ISO przed sparsowaniem.
+                        const raw = ev.datetime || ev.eventTime;
+                        const when = raw && raw.includes(" ") && !raw.includes("T") ? raw.replace(" ", "T") : raw;
+                        return (
+                          <li key={i} className="flex gap-3 text-[#E0E0E0]/70">
+                            <span className="text-[#E0E0E0]/40 shrink-0 font-mono">
+                              {when ? new Date(when).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}
+                            </span>
+                            <span>{ev.statusDesc || ev.status}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}

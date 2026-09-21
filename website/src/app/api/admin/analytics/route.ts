@@ -1,47 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { stripe } from "@/lib/stripe";
+import { prisma } from "@/lib/db";
 
+// Kurs orientacyjny do zsumowania przychodu w jednej walucie (PLN) na
+// dashboardzie — realny kurs w dniu transakcji nie jest nigdzie zapisywany
+// (Stripe/P24 tego nie zwracaja), wiec to przyblizenie. Nadpisywalne przez
+// env bez redeployu kodu.
+const EUR_PLN_RATE = Number(process.env.EUR_PLN_RATE) || 4.3;
+const USD_PLN_RATE = Number(process.env.USD_PLN_RATE) || 3.9;
+
+function toPln(amountMinor: number, currency: string): number {
+  const c = currency.toLowerCase();
+  if (c === "pln") return amountMinor;
+  if (c === "eur") return Math.round(amountMinor * EUR_PLN_RATE);
+  if (c === "usd") return Math.round(amountMinor * USD_PLN_RATE);
+  // Nieznana waluta — nie powinno wystapic (dzis w bazie sa tylko pln/eur),
+  // ale nie chcemy cichej korupcji sumy: log + fallback 1:1.
+  console.warn(`[analytics] nieznana waluta zamowienia: ${currency}, licze 1:1 jako PLN`);
+  return amountMinor;
+}
+
+// Historia buga (naprawione 2026-09-22): poprzednia wersja liczyla przychod
+// WYLACZNIE z surowych Stripe PaymentIntents (stripe.paymentIntents.list) —
+// to:
+//   1) calkowicie pomijalo zamowienia oplacone przez P24 (Przelewy24), ktory
+//      jest teraz glownym kanalem platnosci w Polsce (14 oplaconych zamowien,
+//      9786 zl, zero z tego nie bylo widoczne na dashboardzie),
+//   2) traktowalo kwote z zamowien zagranicznych (EUR: 189/204 za sztuke) jako
+//      zlotowki 1:1 bez przeliczenia kursu (wlasciciel widzial "189 zl" za
+//      zamowienie, ktore realnie bylo warte 189 EUR ~ 810 zl).
+// Zamiast odpytywac Stripe, liczymy teraz z tabeli Order — tam obie metody
+// platnosci (Stripe + P24) sa juz ujednolicone (status/amount/currency), wiec
+// to jedno miejsce prawdy zamiast ponownego wnioskowania z surowego API.
 export async function GET(request: NextRequest) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
-    const allIntents: Array<{
-      status: string;
-      amount: number;
-      created: number;
-      metadata: Record<string, string>;
-    }> = [];
-    let hasMore = true;
-    let startingAfter: string | undefined;
+    const orders = await prisma.order.findMany({
+      select: {
+        status: true,
+        amount: true,
+        currency: true,
+        createdAt: true,
+        fulfillmentStatus: true,
+      },
+    });
 
-    while (hasMore) {
-      const params: Record<string, unknown> = { limit: 100 };
-      if (startingAfter) params.starting_after = startingAfter;
+    const succeeded = orders.filter((o) => o.status === "paid");
+    const pending = orders.filter((o) => o.status === "pending");
+    const canceled = orders.filter((o) => o.status === "cancelled" || o.status === "failed");
+    // Tylko "cancelled" (nie "failed") — failed = platnosc nigdy sie nie
+    // udala (np. odrzucona karta), wiec nie ma czego zwracac. "cancelled"
+    // wg wlasciciela zawsze oznacza, ze pieniadze zostaly juz oddane klientowi
+    // recznie (Stripe/P24 nie maja tu integracji zwrotow) — patrz
+    // project_cancelled_orders_refunded w pamieci.
+    const cancelledOnly = orders.filter((o) => o.status === "cancelled");
 
-      const batch = await stripe.paymentIntents.list(params);
-      for (const pi of batch.data) {
-        allIntents.push({
-          status: pi.status,
-          amount: pi.amount,
-          created: pi.created,
-          metadata: pi.metadata as Record<string, string>,
-        });
-      }
-      hasMore = batch.has_more;
-      if (batch.data.length > 0) {
-        startingAfter = batch.data[batch.data.length - 1].id;
-      }
-    }
+    const totalRevenue = succeeded.reduce((sum, o) => sum + toPln(o.amount, o.currency), 0);
+    const totalRefunded = cancelledOnly.reduce((sum, o) => sum + toPln(o.amount, o.currency), 0);
 
-    const succeeded = allIntents.filter((i) => i.status === "succeeded");
-    const pending = allIntents.filter((i) =>
-      ["requires_payment_method", "requires_confirmation", "requires_action", "processing"].includes(i.status)
-    );
-    const canceled = allIntents.filter((i) => i.status === "canceled");
-
-    const totalRevenue = succeeded.reduce((sum, i) => sum + i.amount, 0);
-
-    // Orders per day (last 30 days)
+    // Dzienny przychod (ostatnie 30 dni), w PLN po przeliczeniu.
     const now = Date.now();
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
     const dailyOrders: Record<string, { count: number; revenue: number }> = {};
@@ -53,24 +70,24 @@ export async function GET(request: NextRequest) {
     }
 
     succeeded
-      .filter((i) => i.created * 1000 > thirtyDaysAgo)
-      .forEach((i) => {
-        const key = new Date(i.created * 1000).toISOString().slice(0, 10);
+      .filter((o) => o.createdAt.getTime() > thirtyDaysAgo)
+      .forEach((o) => {
+        const key = o.createdAt.toISOString().slice(0, 10);
         if (dailyOrders[key]) {
           dailyOrders[key].count++;
-          dailyOrders[key].revenue += i.amount;
+          dailyOrders[key].revenue += toPln(o.amount, o.currency);
         }
       });
 
     const fulfilled = succeeded.filter(
-      (i) =>
-        i.metadata.fulfillment_status === "fulfilled" ||
-        i.metadata.fulfillment_status === "shipped"
+      (o) => o.fulfillmentStatus === "fulfilled" || o.fulfillmentStatus === "shipped"
     ).length;
 
     return NextResponse.json({
       totalRevenue,
-      totalOrders: allIntents.length,
+      totalRefunded,
+      refundedOrders: cancelledOnly.length,
+      totalOrders: orders.length,
       succeededOrders: succeeded.length,
       pendingOrders: pending.length,
       canceledOrders: canceled.length,

@@ -51,8 +51,12 @@ export default function RevenueChart({ data }: RevenueChartProps) {
         <h3 className="text-lg font-bold text-[#E0E0E0]">Przychód ze sprzedaży (30 dni)</h3>
         <p className="text-sm text-[#E0E0E0]/60">Dzienny przychód w PLN</p>
       </div>
+      {/* height=300 (nie "100%") — ResponsiveContainer procentowe czasem
+          mierzy wysokosc rodzica jako 0 gdy ten dziedziczy ja z flex/min-h
+          zamiast miec ja jawnie ustawiona (zaobserwowane na zywo: SVG w ogole
+          sie nie renderowal, pusta karta). Jawna liczba omija ten problem. */}
       <div className="flex-1 w-full min-h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
