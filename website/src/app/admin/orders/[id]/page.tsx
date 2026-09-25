@@ -842,39 +842,39 @@ export default function OrderDetailPage({
       ) : !order ? (
         <div className="text-red-400 text-sm">Nie znaleziono zamówienia.</div>
       ) : (
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Order info */}
-          <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+          <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-4 sm:p-6 space-y-4">
             <h2 className="text-lg font-bold text-[#E0E0E0]">
               Szczegóły zamówienia
             </h2>
 
             <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-[#E0E0E0]/50">ID</span>
-                <span className="text-[#E0E0E0] font-mono text-xs">
+                <span className="text-[#E0E0E0] font-mono text-xs break-all text-right min-w-0">
                   {order.id}
                 </span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-[#E0E0E0]/50">Data</span>
-                <span className="text-[#E0E0E0]">
+                <span className="text-[#E0E0E0] break-words text-right min-w-0">
                   {formatDate(order.created)}
                 </span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-[#E0E0E0]/50">Kwota</span>
                 <span className="text-[#E0E0E0] font-bold">
                   {formatAmount(order.amount, order.currency)}
                 </span>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center gap-3">
                 <span className="text-[#E0E0E0]/50">Status płatności</span>
                 <OrderStatusBadge status={order.status} type="payment" />
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-[#E0E0E0]/50">Produkt</span>
-                <span className="text-[#E0E0E0]">{order.product}</span>
+                <span className="text-[#E0E0E0] break-words text-right min-w-0">{order.product}</span>
               </div>
 
               {/* Customer data */}
@@ -883,24 +883,24 @@ export default function OrderDetailPage({
                   Dane klienta
                 </p>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-3">
                     <span className="text-[#E0E0E0]/50">Imię</span>
-                    <span className="text-[#E0E0E0]">
+                    <span className="text-[#E0E0E0] break-words text-right min-w-0">
                       {order.customer_name}
                     </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-3">
                     <span className="text-[#E0E0E0]/50">Email</span>
                     <a
                       href={`mailto:${order.customer_email}`}
-                      className="text-[#3B82F6] hover:underline"
+                      className="text-[#3B82F6] hover:underline break-all text-right min-w-0"
                     >
                       {order.customer_email}
                     </a>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between gap-3">
                     <span className="text-[#E0E0E0]/50">Telefon</span>
-                    <span className="text-[#E0E0E0]">
+                    <span className="text-[#E0E0E0] break-words text-right min-w-0">
                       {order.customer_phone}
                     </span>
                   </div>
@@ -956,12 +956,12 @@ export default function OrderDetailPage({
                     Furgonetka
                   </p>
                   <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-3">
                       <span className="text-[#E0E0E0]/50">ID Przesyłki</span>
-                      <span className="text-green-400 font-mono">{furgonetkaPackageId}</span>
+                      <span className="text-green-400 font-mono break-all text-right min-w-0">{furgonetkaPackageId}</span>
                     </div>
                     {furgonetkaStatus && (
-                      <div className="flex justify-between">
+                      <div className="flex justify-between gap-3">
                         <span className="text-[#E0E0E0]/50">Status</span>
                         <span className={`font-medium ${furgonetkaStatus === "done" || furgonetkaStatus === "completed" ? "text-green-400" : "text-amber-400"}`}>
                           {furgonetkaStatus}
@@ -992,7 +992,7 @@ export default function OrderDetailPage({
           {/* Right column: Fulfillment + Furgonetka */}
           <div className="space-y-6">
             {/* Fulfillment management */}
-            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-4 sm:p-6 space-y-4">
               <h2 className="text-lg font-bold text-[#E0E0E0]">Realizacja</h2>
 
               <div>
@@ -1126,7 +1126,7 @@ export default function OrderDetailPage({
             </div>
 
             {/* Base Courier — nadanie InPost Paczkomat przez API (basecourier.com) */}
-            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-4 sm:p-6 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center flex-shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1273,7 +1273,7 @@ export default function OrderDetailPage({
             </div>
 
             {/* Eksport CSV — alternatywa dla API Furgonetka powyzej, do recznego wgrania */}
-            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-4 sm:p-6 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center flex-shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1310,7 +1310,7 @@ export default function OrderDetailPage({
             </div>
 
             {/* Invoice section */}
-            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-4 sm:p-6 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center flex-shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1401,7 +1401,7 @@ export default function OrderDetailPage({
 
             {/* Compose email — jak w /admin/mailbox, ale wysylane z inicjatywy
                 admina (nie odpowiedz), przez to samo konto kontakt@kalkmate.pl. */}
-            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-4 sm:p-6 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1422,25 +1422,25 @@ export default function OrderDetailPage({
                   type="text"
                   value={emailSubject}
                   onChange={(e) => setEmailSubject(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-sm text-[#E0E0E0] focus:outline-none focus:border-blue-500/50"
+                  className="w-full px-4 py-2.5 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-base sm:text-sm text-[#E0E0E0] focus:outline-none focus:border-blue-500/50"
                 />
               </div>
 
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                <div className="flex-1 min-w-0">
                   <label className="block text-sm text-[#E0E0E0]/70 mb-2">Instrukcja dla AI (opcjonalnie)</label>
                   <input
                     type="text"
                     value={emailInstruction}
                     onChange={(e) => setEmailInstruction(e.target.value)}
                     placeholder="np. poinformuj o opóźnieniu wysyłki…"
-                    className="w-full px-4 py-2.5 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-sm text-[#E0E0E0] placeholder:text-[#E0E0E0]/30 focus:outline-none focus:border-blue-500/50"
+                    className="w-full px-4 py-2.5 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-base sm:text-sm text-[#E0E0E0] placeholder:text-[#E0E0E0]/30 focus:outline-none focus:border-blue-500/50"
                   />
                 </div>
                 <button
                   onClick={handleGenerateEmail}
                   disabled={emailGenerating}
-                  className="px-4 py-2.5 rounded-lg font-medium text-sm text-white bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-lg shadow-indigo-500/20"
+                  className="px-4 py-3 sm:py-2.5 rounded-lg font-medium text-sm text-white bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-lg shadow-indigo-500/20"
                 >
                   {emailGenerating ? "Generuję…" : "✨ Wygeneruj AI"}
                 </button>
@@ -1454,7 +1454,7 @@ export default function OrderDetailPage({
                   onChange={(e) => setEmailBody(e.target.value)}
                   rows={8}
                   placeholder="Treść wiadomości…"
-                  className="w-full px-4 py-3 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-sm text-[#E0E0E0] placeholder:text-[#E0E0E0]/30 focus:outline-none focus:border-blue-500/50 resize-y"
+                  className="w-full px-4 py-3 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-base sm:text-sm text-[#E0E0E0] placeholder:text-[#E0E0E0]/30 focus:outline-none focus:border-blue-500/50 resize-y min-h-[200px]"
                 />
               </div>
 

@@ -98,7 +98,42 @@ export default function OrdersPage() {
       </div>
 
       <div className="bg-[#313338] rounded-lg border border-[#3F4147] overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Telefon: karty zamiast tabeli (tabela nie miescila sie w szerokosci ekranu). */}
+        <div className="md:hidden divide-y divide-[#3F4147]">
+          {filtered.map((order) => (
+            <button
+              key={order.id}
+              type="button"
+              onClick={() => router.push(`/admin/orders/${order.id}`)}
+              className="block w-full text-left px-4 py-3.5 space-y-2 active:bg-[#3F4147]/30"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[#E0E0E0] font-medium truncate">{order.customer_name || "—"}</p>
+                  <p className="text-xs text-[#E0E0E0]/40 truncate">{order.customer_email || "—"}</p>
+                </div>
+                <p className="text-[#E0E0E0] font-semibold whitespace-nowrap">{formatAmount(order.amount, order.currency)}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <OrderStatusBadge status={order.status} type="payment" />
+                <OrderStatusBadge status={order.fulfillment_status} type="fulfillment" />
+                <span className="ml-auto text-xs text-[#E0E0E0]/40">{formatDate(order.created)}</span>
+              </div>
+              {(order.pickup_point || order.personalized_code) && (
+                <p className="text-xs text-[#E0E0E0]/50 break-words">
+                  {order.pickup_point ? `Paczkomat: ${order.pickup_point}` : ""}
+                  {order.pickup_point && order.personalized_code ? " · " : ""}
+                  {order.personalized_code ? `Kod: ${order.personalized_code}${order.personalized_name ? ` (${order.personalized_name})` : ""}` : ""}
+                </p>
+              )}
+            </button>
+          ))}
+          {filtered.length === 0 && !loading && (
+            <div className="px-4 py-8 text-center text-[#E0E0E0]/40 text-sm">Brak zamówień</div>
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#3F4147] text-left">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { getMessage, sendReply } from "@/lib/contactMailbox";
+import { getMessage, sendReply, markAnswered } from "@/lib/contactMailbox";
 
 // POST /api/admin/mailbox/[uid]/reply
 // Body: { folder?, toAddress?, toName?, subject?, html }
@@ -52,6 +52,8 @@ export async function POST(
     });
 
     if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
+    // Flaga \Answered na oryginale — lista pokazuje strzalke "odpowiedziano".
+    await markAnswered(uidNum, folder);
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[api/admin/mailbox/:uid/reply] failed:", e);
