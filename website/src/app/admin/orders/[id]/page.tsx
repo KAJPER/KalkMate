@@ -7,6 +7,7 @@ import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
 
 interface OrderDetail {
   id: string;
+  order_number: string;
   amount: number;
   currency: string;
   status: string;
@@ -61,6 +62,16 @@ export default function OrderDetailPage({
   const [invoiceSending, setInvoiceSending] = useState(false);
   const [invoiceMsg, setInvoiceMsg] = useState("");
 
+  // Mail do klienta — jak w /admin/mailbox, ale wysylany z inicjatywy admina
+  // (nie jest to odpowiedz na wiadomosc). Ten sam mechanizm (kontakt@kalkmate.pl).
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailInstruction, setEmailInstruction] = useState("");
+  const [emailGenerating, setEmailGenerating] = useState(false);
+  const [emailGenError, setEmailGenError] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailMsg, setEmailMsg] = useState("");
+
   useEffect(() => {
     async function load() {
       try {
@@ -73,6 +84,7 @@ export default function OrderDetailPage({
           setNotes(data.order.admin_notes);
           setFurgonetkaPackageId(data.order.furgonetka_package_id || "");
           setFurgonetkaStatus(data.order.furgonetka_status || "");
+          setEmailSubject(`Zamówienie #${data.order.order_number} - KalkMate`);
         }
       } catch (error) {
         console.error("Failed to load order:", error);
@@ -150,7 +162,147 @@ export default function OrderDetailPage({
     // Zagraniczne (DE, US, ...) — kilku kurierow prubowanych na raz, tylko
     // szacunek; nadanie z panelu zostaje ograniczone do Polski.
     quotes?: { courierCode: string; courierName: string; price: { value: string; netto: string; vat: string } }[];
+    // Podjazd kuriera: adresy do wyboru + daty (min = dzisiaj, domyslna = nast. dzien roboczy).
+    pickup?: { addresses: { key: string; label: string }[]; minDate: string; defaultDate: string };
+    // Poza UE — wymagane dokumenty celne (wersja papierowa + faktura do wydruku).
+    needsCustomsDocs?: boolean;
+    customsDefaults?: { value: number; currency: string; hsCode: string; origin: string };
   } | null>(null);
+
+  // Odbior przesylki: samodzielne nadanie albo podjazd kuriera z wybranego adresu.
+  const [bcPickupMode, setBcPickupMode] = useState<"self" | "courier">("self");
+  const [bcPickupAddr, setBcPickupAddr] = useState("");
+  const [bcPickupDate, setBcPickupDate] = useState("");
+  const [bcPickupFrom, setBcPickupFrom] = useState("10:00");
+  const [bcPickupTo, setBcPickupTo] = useState("16:00");
+
+  // Faktura celna (PDF) — dane do deklaracji, podpowiedzi z zamowienia.
+  const [customsValue, setCustomsValue] = useState("");
+  const [customsHs, setCustomsHs] = useState("8470.10");
+  const [customsOrigin, setCustomsOrigin] = useState("PL");
+
+  const pickupError = (() => {
+    if (bcPickupMode !== "courier") return "";
+    if (!bcPickupDate) return "Wybierz dzień odbioru.";
+    if (bcPreview?.pickup && bcPickupDate < bcPreview.pickup.minDate) return "Dzień odbioru nie może być w przeszłości.";
+    const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    if (!bcPickupFrom || !bcPickupTo) return "Podaj godziny podjazdu (od – do).";
+    if (mins(bcPickupTo) - mins(bcPickupFrom) < 120) return "Okno podjazdu musi trwać co najmniej 2 godziny.";
+    return "";
+  })();
+  const pickupIsWeekend = (() => {
+    if (bcPickupMode !== "courier" || !bcPickupDate) return false;
+    const day = new Date(`${bcPickupDate}T12:00:00`).getDay();
+    return day === 0 || day === 6;
+  })();
+  const pickupAddrLabel = bcPreview?.pickup?.addresses.find((a) => a.key === bcPickupAddr)?.label || "";
+
+  // Cialo POST: pickup tylko gdy zamawiasz podjazd.
+  const pickupPayload = () =>
+    bcPickupMode === "courier"
+      ? { pickup: { addressKey: bcPickupAddr, date: bcPickupDate, from: bcPickupFrom, to: bcPickupTo } }
+      : {};
+  const pickupConfirmLine = () =>
+    bcPickupMode === "courier"
+      ? `Podjazd kuriera: ${bcPickupDate}, ${bcPickupFrom}–${bcPickupTo}\nAdres odbioru: ${pickupAddrLabel}\n`
+      : `Odbiór: nadajesz sam (bez podjazdu kuriera)\n`;
+
+  const smallInput =
+    "rounded bg-[#1E1F22] border border-[#3F4147] px-2 py-1 text-xs text-[#E0E0E0] focus:outline-none focus:border-amber-500/50";
+
+  const pickupSection = bcPreview?.pickup ? (
+    <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs text-[#E0E0E0]/80 space-y-2">
+      <p className="text-[#E0E0E0]/50">Odbiór paczki:</p>
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input type="radio" name="bc-pickup-mode" checked={bcPickupMode === "self"} onChange={() => setBcPickupMode("self")} />
+        Nadam sam ({bcPreview.international ? "w punkcie kuriera" : "w Paczkomacie"}) — bez kuriera
+      </label>
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input type="radio" name="bc-pickup-mode" checked={bcPickupMode === "courier"} onChange={() => setBcPickupMode("courier")} />
+        Zamów podjazd kuriera
+      </label>
+      {bcPickupMode === "courier" && (
+        <div className="space-y-2 pl-5">
+          <div className="space-y-1">
+            <p className="text-[#E0E0E0]/50">Adres odbioru:</p>
+            {bcPreview.pickup.addresses.map((a) => (
+              <label
+                key={a.key}
+                className={`flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer border transition-colors ${
+                  bcPickupAddr === a.key ? "bg-amber-500/10 border-amber-500/50" : "bg-[#1E1F22] border-transparent hover:border-[#3F4147]"
+                }`}
+              >
+                <input type="radio" name="bc-pickup-addr" checked={bcPickupAddr === a.key} onChange={() => setBcPickupAddr(a.key)} />
+                {a.label}
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-1.5">
+              Dzień
+              <input
+                type="date"
+                min={bcPreview.pickup.minDate}
+                value={bcPickupDate}
+                onChange={(e) => setBcPickupDate(e.target.value)}
+                className={smallInput}
+              />
+            </label>
+            <label className="flex items-center gap-1.5">
+              od
+              <input type="time" value={bcPickupFrom} onChange={(e) => setBcPickupFrom(e.target.value)} className={smallInput} />
+            </label>
+            <label className="flex items-center gap-1.5">
+              do
+              <input type="time" value={bcPickupTo} onChange={(e) => setBcPickupTo(e.target.value)} className={smallInput} />
+            </label>
+          </div>
+          {pickupError && <p className="text-red-400">{pickupError}</p>}
+          {!pickupError && pickupIsWeekend && (
+            <p className="text-amber-400">Uwaga: to weekend — kurierzy zwykle nie odbierają paczek w soboty i niedziele.</p>
+          )}
+          <p className="text-[11px] text-[#E0E0E0]/40">Okno podjazdu musi trwać co najmniej 2 godziny. Adres nadawcy w zleceniu = wybrany adres odbioru.</p>
+        </div>
+      )}
+    </div>
+  ) : null;
+
+  const customsHref = `/api/admin/orders/${id}/customs-invoice?value=${encodeURIComponent(customsValue)}&hs=${encodeURIComponent(customsHs)}&origin=${encodeURIComponent(customsOrigin)}&from=${bcPickupMode === "courier" && bcPickupAddr ? bcPickupAddr : "choroszcz"}`;
+
+  const customsSection = bcPreview?.needsCustomsDocs ? (
+    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-[#E0E0E0]/80 space-y-2">
+      <p className="text-amber-300 font-medium">Dokumenty celne (kraj poza UE)</p>
+      <p>
+        Przesyłka zostanie nadana z opcją „wersja papierowa” dokumentów celnych. Wydrukuj fakturę celną w{" "}
+        <strong>3 egzemplarzach</strong> i włóż do foliowej kieszeni na paczce.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1">
+          Wartość ({bcPreview.customsDefaults?.currency || ""})
+          <input type="number" step="0.01" min="0" value={customsValue} onChange={(e) => setCustomsValue(e.target.value)} className={`${smallInput} w-28`} />
+        </label>
+        <label className="flex flex-col gap-1">
+          Kod HS
+          <input type="text" value={customsHs} onChange={(e) => setCustomsHs(e.target.value)} className={`${smallInput} w-24`} />
+        </label>
+        <label className="flex flex-col gap-1">
+          Kraj pochodzenia
+          <input type="text" maxLength={2} value={customsOrigin} onChange={(e) => setCustomsOrigin(e.target.value.toUpperCase())} className={`${smallInput} w-16`} />
+        </label>
+        <a
+          href={customsHref}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400"
+        >
+          Pobierz fakturę celną (PDF)
+        </a>
+      </div>
+      <p className="text-[11px] text-[#E0E0E0]/40">
+        Kod HS, kraj pochodzenia i wartość to Twoja deklaracja celna — sprawdź je przed wydrukiem (podpowiedzi: kalkulator 8470.10, kraj PL, kwota zamówienia).
+      </p>
+    </div>
+  ) : null;
 
   const handleBcPreview = async () => {
     setBcLoading(true);
@@ -168,7 +320,17 @@ export default function OrderDetailPage({
         receiver: data.receiver,
         valuation: data.valuation,
         quotes: data.quotes,
+        pickup: data.pickup,
+        needsCustomsDocs: data.needsCustomsDocs,
+        customsDefaults: data.customsDefaults,
       });
+      if (data.pickup) {
+        setBcPickupAddr((prev) => prev || data.pickup.addresses[0]?.key || "");
+        setBcPickupDate((prev) => prev || data.pickup.defaultDate);
+      }
+      if (data.customsDefaults) {
+        setCustomsValue((prev) => prev || String(data.customsDefaults.value));
+      }
     } catch {
       setBcMsg("Błąd sieci");
     } finally {
@@ -181,11 +343,16 @@ export default function OrderDetailPage({
 
   const handleBcCreate = async () => {
     const price = bcPreview?.valuation?.price?.value;
+    if (pickupError) {
+      setBcMsg(pickupError);
+      return;
+    }
     if (
       !confirm(
         `Nadać przesyłkę InPost Paczkomat przez Base Courier?\n\n` +
           `Odbiorca: ${bcPreview?.receiver.name || order?.customer_name}\n` +
           `Paczkomat: ${bcPreview?.receiver.lockerCode || order?.pickup_point}\n` +
+          pickupConfirmLine() +
           `Koszt: ${price ? price + " zł brutto" : "wg cennika"} — pobierany z Twojego konta Base Courier.\n\n` +
           `Tej operacji nie da się cofnąć z panelu.`
       )
@@ -194,7 +361,11 @@ export default function OrderDetailPage({
     setBcLoading(true);
     setBcMsg("");
     try {
-      const res = await fetch(`/api/admin/orders/${id}/basecourier`, { method: "POST" });
+      const res = await fetch(`/api/admin/orders/${id}/basecourier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pickupPayload()),
+      });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setBcMsg(data.error || "Błąd nadania");
@@ -219,12 +390,20 @@ export default function OrderDetailPage({
   const handleBcCreateIntl = async () => {
     if (!selectedCourier || !bcPreview?.quotes) return;
     const q = bcPreview.quotes.find((x) => x.courierCode === selectedCourier);
+    if (pickupError) {
+      setBcMsg(pickupError);
+      return;
+    }
     if (
       !confirm(
         `Nadać przesyłkę zagraniczną przez Base Courier?\n\n` +
           `Kurier: ${q?.courierName || selectedCourier}\n` +
           `Kraj: ${bcPreview.country}\n` +
           `Odbiorca: ${bcPreview.receiver.name}\n` +
+          pickupConfirmLine() +
+          (bcPreview.needsCustomsDocs
+            ? `Dokumenty celne: wersja papierowa — wydrukuj fakturę celną w 3 egz. i dołącz do paczki.\n`
+            : ``) +
           `Koszt: ${q ? q.price.value + " zł brutto" : "wg cennika"} — pobierany z Twojego konta Base Courier.\n\n` +
           `Tej operacji nie da się cofnąć z panelu.`
       )
@@ -236,7 +415,7 @@ export default function OrderDetailPage({
       const res = await fetch(`/api/admin/orders/${id}/basecourier`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courierCode: selectedCourier }),
+        body: JSON.stringify({ courierCode: selectedCourier, ...pickupPayload() }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -334,6 +513,56 @@ export default function OrderDetailPage({
       setInvoiceMsg(`Błąd: ${(e as Error).message}`);
     } finally {
       setInvoiceSending(false);
+    }
+  };
+
+  const handleGenerateEmail = async () => {
+    setEmailGenerating(true);
+    setEmailGenError("");
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/email-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction: emailInstruction }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setEmailGenError(data.error || "Błąd generowania");
+        return;
+      }
+      setEmailBody(data.draft);
+    } catch {
+      setEmailGenError("Błąd sieci");
+    } finally {
+      setEmailGenerating(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailSubject.trim() || !emailBody.trim()) return;
+    setEmailSending(true);
+    setEmailMsg("");
+    try {
+      const html = `<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">${emailBody
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")}</div>`;
+      const res = await fetch(`/api/admin/orders/${id}/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: emailSubject, html }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setEmailMsg(data.error || "Błąd wysyłki");
+        return;
+      }
+      setEmailMsg("✓ Wysłano.");
+      setEmailBody("");
+    } catch {
+      setEmailMsg("Błąd sieci");
+    } finally {
+      setEmailSending(false);
     }
   };
 
@@ -787,7 +1016,7 @@ export default function OrderDetailPage({
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-[#E0E0E0]">Base Courier — nadaj przesyłkę</h2>
-                  <p className="text-xs text-[#E0E0E0]/50">InPost Paczkomat przez API basecourier.com · pudełko 18×12×4 cm, 1 kg · nadanie w Paczkomacie (bez kuriera)</p>
+                  <p className="text-xs text-[#E0E0E0]/50">InPost Paczkomat / kurier zagraniczny przez API basecourier.com · pudełko 18×12×4 cm, 1 kg · nadanie samodzielne lub z podjazdem kuriera</p>
                 </div>
               </div>
 
@@ -857,6 +1086,8 @@ export default function OrderDetailPage({
                       <p className="text-red-400">Żaden kurier Base Courier nie zwrócił ceny dla tej paczki (1kg, 18×12×4cm) do tego kraju.</p>
                     )}
                   </div>
+                  {pickupSection}
+                  {customsSection}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={handleBcPreview}
@@ -867,8 +1098,8 @@ export default function OrderDetailPage({
                     </button>
                     <button
                       onClick={handleBcCreateIntl}
-                      disabled={bcLoading || !selectedCourier}
-                      title={!selectedCourier ? "Najpierw wybierz kuriera" : ""}
+                      disabled={bcLoading || !selectedCourier || !!pickupError}
+                      title={!selectedCourier ? "Najpierw wybierz kuriera" : pickupError}
                       className="px-5 py-2 rounded-lg font-medium text-sm text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {bcLoading ? "Nadaję…" : "Nadaj przesyłkę (płatne)"}
@@ -892,6 +1123,7 @@ export default function OrderDetailPage({
                       </p>
                     </div>
                   )}
+                  {pickupSection}
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={handleBcPreview}
@@ -902,8 +1134,8 @@ export default function OrderDetailPage({
                     </button>
                     <button
                       onClick={handleBcCreate}
-                      disabled={bcLoading || !bcPreview || !bcPreview.receiver.lockerCode}
-                      title={!bcPreview ? "Najpierw sprawdź dane i wycenę" : ""}
+                      disabled={bcLoading || !bcPreview || !bcPreview.receiver.lockerCode || !!pickupError}
+                      title={!bcPreview ? "Najpierw sprawdź dane i wycenę" : pickupError}
                       className="px-5 py-2 rounded-lg font-medium text-sm text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {bcLoading && bcPreview ? "Nadaję…" : "Nadaj przesyłkę (płatne)"}
@@ -1043,6 +1275,102 @@ export default function OrderDetailPage({
 
               <p className="text-xs text-[#E0E0E0]/30">
                 Email zostanie wysłany na: <span className="text-[#E0E0E0]/60">{order.customer_email}</span>
+              </p>
+            </div>
+
+            {/* Compose email — jak w /admin/mailbox, ale wysylane z inicjatywy
+                admina (nie odpowiedz), przez to samo konto kontakt@kalkmate.pl. */}
+            <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h16v16H4z" opacity="0"/>
+                    <path d="M22 6l-10 7L2 6"/>
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-[#E0E0E0]">Napisz maila do klienta</h2>
+                  <p className="text-xs text-[#E0E0E0]/50">Wysyłane z kontakt@kalkmate.pl, tak jak w Poczcie</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#E0E0E0]/70 mb-2">Temat</label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-sm text-[#E0E0E0] focus:outline-none focus:border-blue-500/50"
+                />
+              </div>
+
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-sm text-[#E0E0E0]/70 mb-2">Instrukcja dla AI (opcjonalnie)</label>
+                  <input
+                    type="text"
+                    value={emailInstruction}
+                    onChange={(e) => setEmailInstruction(e.target.value)}
+                    placeholder="np. poinformuj o opóźnieniu wysyłki…"
+                    className="w-full px-4 py-2.5 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-sm text-[#E0E0E0] placeholder:text-[#E0E0E0]/30 focus:outline-none focus:border-blue-500/50"
+                  />
+                </div>
+                <button
+                  onClick={handleGenerateEmail}
+                  disabled={emailGenerating}
+                  className="px-4 py-2.5 rounded-lg font-medium text-sm text-white bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-lg shadow-indigo-500/20"
+                >
+                  {emailGenerating ? "Generuję…" : "✨ Wygeneruj AI"}
+                </button>
+              </div>
+              {emailGenError && <p className="text-sm text-red-400">{emailGenError}</p>}
+
+              <div>
+                <label className="block text-sm text-[#E0E0E0]/70 mb-2">Treść</label>
+                <textarea
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  rows={8}
+                  placeholder="Treść wiadomości…"
+                  className="w-full px-4 py-3 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-sm text-[#E0E0E0] placeholder:text-[#E0E0E0]/30 focus:outline-none focus:border-blue-500/50 resize-y"
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSendEmail}
+                  disabled={!emailSubject.trim() || !emailBody.trim() || emailSending}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium text-sm text-white transition-all ${
+                    !emailSubject.trim() || !emailBody.trim() || emailSending
+                      ? "bg-blue-500/30 cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/20"
+                  }`}
+                >
+                  {emailSending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Wysyłanie…
+                    </>
+                  ) : (
+                    <>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                      </svg>
+                      Wyślij
+                    </>
+                  )}
+                </button>
+                {emailMsg && (
+                  <span className={`text-sm ${emailMsg.startsWith("✓") ? "text-green-400" : "text-red-400"}`}>
+                    {emailMsg}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-[#E0E0E0]/30">
+                Odbiorca: <span className="text-[#E0E0E0]/60">{order.customer_email}</span>
               </p>
             </div>
           </div>

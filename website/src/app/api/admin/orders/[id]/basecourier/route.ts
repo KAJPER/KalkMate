@@ -7,6 +7,10 @@ import {
   bcValuation,
   bcValuationInternational,
   INTL_COURIER_CANDIDATES,
+  needsCustomsDocs,
+  parsePickup,
+  pickupOptions,
+  type BcShipOptions,
 } from "@/lib/basecourier";
 import { syncOrderTracking } from "@/lib/inpostTracking";
 
@@ -68,6 +72,16 @@ export async function GET(
         country,
         receiver: receiverFromOrder(order),
         quotes,
+        pickup: pickupOptions(),
+        // Poza UE: nadanie wymaga dokumentow celnych — wysylamy opcje "wersja
+        // papierowa", a panel daje fakture do wydruku (customs-invoice/route.ts).
+        needsCustomsDocs: needsCustomsDocs(country),
+        customsDefaults: {
+          value: order.amount / 100,
+          currency: (order.currency || "eur").toUpperCase(),
+          hsCode: "8470.10",
+          origin: "PL",
+        },
         alreadyCreated: order.furgonetkaStatus === "basecourier" ? order.furgonetkaPackageId : null,
         trackingNumber: order.trackingNumber,
       });
@@ -83,6 +97,7 @@ export async function GET(
       international: false,
       receiver: receiverFromOrder(order),
       valuation: { price: valuation.price, courierSearchId: valuation.courierSearchId },
+      pickup: pickupOptions(),
       alreadyCreated: order.furgonetkaStatus === "basecourier" ? order.furgonetkaPackageId : null,
       trackingNumber: order.trackingNumber,
     });
@@ -111,11 +126,22 @@ export async function POST(
   const isDomestic = country === "PL" || country === "";
   const receiver = receiverFromOrder(order);
 
+  // Body jest opcjonalny (krajowe nadanie dawniej go nie wysylalo): { courierCode?, pickup? }.
+  // pickup = zamowienie podjazdu kuriera; bez niego admin sam nadaje paczke.
+  const body = await request.json().catch(() => ({} as Record<string, unknown>));
+  const shipOpts: BcShipOptions = {};
+  if (body?.pickup) {
+    const pk = parsePickup(body.pickup);
+    if (!pk.ok) return NextResponse.json({ ok: false, error: pk.error }, { status: 400 });
+    shipOpts.pickup = pk.pickup;
+  }
+
   if (!isDomestic) {
     // Nadanie zagraniczne — admin wybiera kuriera z listy wycen zwroconej
     // przez GET (bcValuationInternational). Bez Paczkomatow, wiec wymagany
     // jest pelny adres drzwi-drzwi (mamy go z formularza zamowienia).
-    const body = await request.json().catch(() => ({} as Record<string, unknown>));
+    // Poza UE zawsze wersja papierowa dokumentow celnych (inaczej API odrzuca).
+    shipOpts.customsPaper = needsCustomsDocs(country);
     const courierCode = typeof body?.courierCode === "string" ? body.courierCode : "";
     if (!INTL_COURIER_CANDIDATES.some((c) => c.code === courierCode)) {
       return NextResponse.json(
@@ -131,7 +157,7 @@ export async function POST(
     }
 
     try {
-      const created = await bcCreateInternationalShipment(receiver, `KalkMate ${order.orderNumber}`, courierCode, country);
+      const created = await bcCreateInternationalShipment(receiver, `KalkMate ${order.orderNumber}`, courierCode, country, shipOpts);
       console.log("[basecourier] created (intl)", id, courierCode, country, JSON.stringify(created.raw).slice(0, 2000));
 
       await prisma.order.update({
@@ -167,7 +193,7 @@ export async function POST(
   }
 
   try {
-    const created = await bcCreateLockerShipment(receiver, `KalkMate ${order.orderNumber}`);
+    const created = await bcCreateLockerShipment(receiver, `KalkMate ${order.orderNumber}`, shipOpts);
     console.log("[basecourier] created", id, JSON.stringify(created.raw).slice(0, 2000));
 
     await prisma.order.update({

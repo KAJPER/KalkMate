@@ -39,6 +39,31 @@ function latestEvent(events: BcTrackingEvent[]): BcTrackingEvent | null {
   return [...events].sort((a, b) => (b.eventTime || "").localeCompare(a.eventTime || ""))[0];
 }
 
+// Ranga sygnalow wg tego, jak duzo mowia o postepie przesylki — NIE wg
+// chronologii. Na zywo (2026-09-23) zdarzenie NAJNOWSZE mialo kod
+// STATUS_OMIT ("Powiadomienie mail" — czysta notyfikacja, zero tresci
+// logistycznej), a 3 minuty wczesniej bylo juz STATUS_COLLECTED ("Nadanie
+// przesylki w punkcie Pickup"). Patrzenie tylko na najnowsze zdarzenie
+// (jak wczesniej) gubilo ten sygnal i zamowienie nigdy nie przechodzilo
+// na "shipped". Trzeba przejrzec WSZYSTKIE zdarzenia i wziac najlepszy
+// (najdalej posunięty) rozpoznany status.
+const STATUS_RANK: Record<string, number> = { fulfilled: 3, return: 2, shipped: 1 };
+
+function bestBaseCourierStatus(events: BcTrackingEvent[]): FulfillmentStatus | "return" | null {
+  let best: FulfillmentStatus | "return" | null = null;
+  let bestRank = 0;
+  for (const ev of events) {
+    const mapped = mapBaseCourierStatus(ev);
+    if (mapped === null) continue;
+    const rank = STATUS_RANK[mapped] ?? 0;
+    if (rank > bestRank) {
+      best = mapped;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
 export interface BcSyncResult {
   orderId: string;
   blpaczkaOrderId: string;
@@ -76,7 +101,7 @@ export async function syncBaseCourierOrder(orderId: string): Promise<BcSyncResul
   if (!latest) return { ...base, note: "no_tracking_yet" };
   base.status = latest.blStatusMapped || latest.status;
 
-  const mapped = mapBaseCourierStatus(latest);
+  const mapped = bestBaseCourierStatus(details.events);
   if (mapped === null) return { ...base, note: "no_change" };
 
   if (mapped === "return") {

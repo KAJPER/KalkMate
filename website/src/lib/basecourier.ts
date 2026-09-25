@@ -66,6 +66,21 @@ export function bcErrorMessage(env: BaseCourierEnvelope<unknown>): string {
   if (typeof d.message === "string" && d.message.trim()) return d.message;
   const errs = d.errors ?? d.validationErrors;
   if (errs) {
+    // validationErrors to zagniezdzone {Cart:[{Order:{"Etykieta pola":["komunikat"]}}]}
+    // — splaszczamy do czytelnego "Etykieta pola: komunikat; ...".
+    const parts: string[] = [];
+    const walk = (node: unknown, label = "") => {
+      if (Array.isArray(node)) {
+        if (node.every((x) => typeof x === "string")) parts.push(label ? `${label}: ${node.join(", ")}` : node.join(", "));
+        else node.forEach((x) => walk(x, label));
+      } else if (node && typeof node === "object") {
+        for (const [k, v] of Object.entries(node)) walk(v, k);
+      } else if (typeof node === "string") {
+        parts.push(label ? `${label}: ${node}` : node);
+      }
+    };
+    walk(errs);
+    if (parts.length) return parts.join("; ").slice(0, 500);
     try {
       return JSON.stringify(errs).slice(0, 500);
     } catch {
@@ -139,7 +154,109 @@ export function splitStreet(full: string | null | undefined): { street: string; 
   return { street: s || "-", house_no: "1" };
 }
 
-function courierSearch(courierCode = "paczkomaty", countryCode = "PL") {
+// === Podjazd kuriera ("zamawianie podjazdu") ===
+// Adres nadawcy w zleceniu = adres, z ktorego kurier odbierze paczke. Bez
+// podjazdu idzie adres z profilu konta Base Courier (Zastawie I 37,
+// Choroszcz) — jest tez jednym z dwoch adresow do wyboru w panelu.
+export const PICKUP_ADDRESSES = {
+  choroszcz: {
+    label: "ul. Zastawie I 37, 16-070 Choroszcz",
+    street: "ul. Zastawie I",
+    house_no: "37",
+    locum_no: "",
+    postal: "16-070",
+    city: "Choroszcz",
+  },
+  bialystok: {
+    label: "ul. Piaskowa 19A, 15-561 Białystok",
+    street: "ul. Piaskowa",
+    house_no: "19A",
+    locum_no: "",
+    postal: "15-561",
+    city: "Białystok",
+  },
+} as const;
+export type PickupAddressKey = keyof typeof PICKUP_ADDRESSES;
+
+export interface BcPickup {
+  addressKey: PickupAddressKey;
+  date: string; // YYYY-MM-DD
+  from: string; // HH:MM
+  to: string;   // HH:MM
+}
+
+export interface BcShipOptions {
+  pickup?: BcPickup | null;
+  // Dokumenty celne w wersji papierowej (przesylki poza UE) — patrz courierSearch().
+  customsPaper?: boolean;
+}
+
+function warsawToday(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw" }).format(new Date());
+}
+
+// Najblizszy dzien roboczy po dzisiejszym (Pn-Pt) — domyslna data podjazdu.
+function nextWorkingDay(): string {
+  const d = new Date(`${warsawToday()}T12:00:00Z`);
+  do {
+    d.setUTCDate(d.getUTCDate() + 1);
+  } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+export function pickupOptions() {
+  return {
+    addresses: (Object.keys(PICKUP_ADDRESSES) as PickupAddressKey[]).map((key) => ({
+      key,
+      label: PICKUP_ADDRESSES[key].label,
+    })),
+    minDate: warsawToday(),
+    defaultDate: nextWorkingDay(),
+  };
+}
+
+// Walidacja tego, co przyszlo z przegladarki. Reguly podjazdu potwierdzone
+// odpowiedziami samego API (2026-09-25): data wymagana, godziny "od"/"do"
+// wymagane, okno co najmniej 2 godziny.
+export function parsePickup(raw: unknown): { ok: true; pickup: BcPickup } | { ok: false; error: string } {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const addressKey = String(p.addressKey ?? "");
+  if (!(addressKey in PICKUP_ADDRESSES)) return { ok: false, error: "Wybierz adres, z którego kurier ma odebrać paczkę." };
+
+  const date = String(p.date ?? "");
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T12:00:00Z`) : null;
+  if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    return { ok: false, error: "Podaj poprawny dzień odbioru przesyłki." };
+  }
+  if (date < warsawToday()) return { ok: false, error: "Dzień odbioru nie może być w przeszłości." };
+
+  const timeRe = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  const from = String(p.from ?? "");
+  const to = String(p.to ?? "");
+  if (!timeRe.test(from) || !timeRe.test(to)) return { ok: false, error: "Podaj godziny podjazdu (od – do)." };
+  const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  if (mins(to) - mins(from) < 120) return { ok: false, error: "Okno podjazdu musi trwać co najmniej 2 godziny." };
+
+  return { ok: true, pickup: { addressKey: addressKey as PickupAddressKey, date, from, to } };
+}
+
+// Przesylki poza UE wymagaja dokumentow celnych (faktura handlowa). API
+// Base Courier odrzuca nadanie bez nich: "Dla tej przesylki wymagane jest
+// dodanie elektronicznych dokumentow celnych lub zaznaczenie opcji wersji
+// papierowej." Wersje papierowa wlacza CourierSearch.paper_customs_docs=true
+// (pole ustalone empirycznie 2026-09-25 — nie ma go w wtyczce WooCommerce ani
+// w publicznej dokumentacji; boolean true/1 przechodzi, false/0 nie). Papier =
+// wydrukowac fakture w 3 egzemplarzach i dolaczyc do paczki.
+const EU_COUNTRIES = new Set([
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
+  "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
+]);
+
+export function needsCustomsDocs(countryCode: string): boolean {
+  return !EU_COUNTRIES.has(normalizeCountryForShipping(countryCode));
+}
+
+function courierSearch(courierCode = "paczkomaty", countryCode = "PL", opts: BcShipOptions = {}) {
   return {
     courier_code: courierCode,
     type: "package",
@@ -150,9 +267,10 @@ function courierSearch(courierCode = "paczkomaty", countryCode = "PL") {
     side_y: KALKMATE_PARCEL.side_y,
     side_z: KALKMATE_PARCEL.side_z,
     // "Nie zamawiaj podjazdu" (nazwa z oficjalnej wtyczki WooCommerce):
-    // wlasciciel sam wrzuca paczke do Paczkomatu — bez tego API wymaga
-    // daty i godzin przyjazdu kuriera ("Dzien odbioru paczki przez kuriera").
-    no_pickup: true,
+    // domyslnie wlasciciel sam wrzuca paczke do Paczkomatu/punktu. Przy
+    // no_pickup=false API wymaga daty i godzin (Order.pickup_date + godziny).
+    no_pickup: !opts.pickup,
+    ...(opts.customsPaper ? { paper_customs_docs: true } : {}),
   };
 }
 
@@ -267,23 +385,43 @@ function findTracking(obj: unknown, depth = 0): string | null {
 //     wymagany i zawsze wysylany.
 //   - Kraj odbiorcy idzie do "CourierSearch.country_code" (NIE Order.taker_country
 //     — takiego pola w ogole nie ma).
-// W calym formularzu NIE MA zadnego pola celnego/deklaracji wartosci dla
-// eksportu (np. do USA) — Base Courier/kurier generuje dokumenty celne sam na
-// podstawie package_content, tak jak dla Polski. Stad wysylka do USA dziala
-// przez ten sam createOrderV2.json bez dodatkowych danych.
-function buildOrderPayload(receiver: BcReceiver, sender: BcProfile, orderRef: string): Record<string, unknown> {
+// UWAGA: wtyczka WooCommerce NIE ma pol celnych, ale API dla przesylek poza UE
+// (np. USA) i tak wymaga dokumentow celnych — patrz needsCustomsDocs() /
+// courierSearch() (CourierSearch.paper_customs_docs). Podjazd kuriera: pola
+// Order.pickup_date + pickup_ready_time(_minute) + pickup_close_time(_minute)
+// (nazwy z CreateOrderRestApiService.php wtyczki, potwierdzone walidacja API).
+function buildOrderPayload(
+  receiver: BcReceiver,
+  sender: BcProfile,
+  orderRef: string,
+  opts: BcShipOptions = {}
+): Record<string, unknown> {
   const recvAddr = splitStreet(receiver.street);
+  // Przy podjezdzie adres nadawcy = wybrany adres odbioru paczki.
+  const from = opts.pickup ? PICKUP_ADDRESSES[opts.pickup.addressKey] : null;
+  const [readyH, readyM] = (opts.pickup?.from ?? "").split(":");
+  const [closeH, closeM] = (opts.pickup?.to ?? "").split(":");
   return {
     // nadawca
     name: sender.name,
     vat_company: sender.vat_company ?? "",
     email: sender.email,
     phone: sender.phone,
-    street: sender.street,
-    house_no: sender.house_no,
-    locum_no: sender.locum_no ?? "",
-    postal: sender.postal,
-    city: sender.city,
+    street: from ? from.street : sender.street,
+    house_no: from ? from.house_no : sender.house_no,
+    locum_no: from ? from.locum_no : sender.locum_no ?? "",
+    postal: from ? from.postal : sender.postal,
+    city: from ? from.city : sender.city,
+    // podjazd kuriera
+    ...(opts.pickup
+      ? {
+          pickup_date: opts.pickup.date,
+          pickup_ready_time: readyH,
+          pickup_ready_time_minute: readyM,
+          pickup_close_time: closeH,
+          pickup_close_time_minute: closeM,
+        }
+      : {}),
     // odbiorca
     taker_name: receiver.name,
     taker_email: receiver.email,
@@ -330,13 +468,17 @@ function paymentMethod(): string {
   return process.env.BASECOURIER_PAYMENT || "bank";
 }
 
-export async function bcCreateLockerShipment(receiver: BcReceiver, orderRef: string): Promise<BcCreatedShipment> {
+export async function bcCreateLockerShipment(
+  receiver: BcReceiver,
+  orderRef: string,
+  opts: BcShipOptions = {}
+): Promise<BcCreatedShipment> {
   const sender = await bcGetProfile();
-  const order = buildOrderPayload(receiver, sender, orderRef);
+  const order = buildOrderPayload(receiver, sender, orderRef, opts);
 
   const env = await bcCall<Record<string, unknown>>("createOrderV2.json", {
     CartOrder: { payment: paymentMethod() },
-    CourierSearch: courierSearch(),
+    CourierSearch: courierSearch("paczkomaty", "PL", opts),
     Cart: [{ Order: order }],
   }, 40000);
 
@@ -351,17 +493,18 @@ export async function bcCreateInternationalShipment(
   receiver: BcReceiver,
   orderRef: string,
   courierCode: string,
-  countryCode: string
+  countryCode: string,
+  opts: BcShipOptions = {}
 ): Promise<BcCreatedShipment> {
   if (!INTL_COURIER_CANDIDATES.some((c) => c.code === courierCode)) {
     throw new Error(`Nieznany kurier: ${courierCode}`);
   }
   const sender = await bcGetProfile();
-  const order = buildOrderPayload(receiver, sender, orderRef);
+  const order = buildOrderPayload(receiver, sender, orderRef, opts);
 
   const env = await bcCall<Record<string, unknown>>("createOrderV2.json", {
     CartOrder: { payment: paymentMethod() },
-    CourierSearch: courierSearch(courierCode, normalizeCountryForShipping(countryCode)),
+    CourierSearch: courierSearch(courierCode, normalizeCountryForShipping(countryCode), opts),
     Cart: [{ Order: order }],
   }, 40000);
 

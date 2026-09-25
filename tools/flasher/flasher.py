@@ -44,6 +44,16 @@ if len(sys.argv) > 1 and sys.argv[1] in ("--run-esptool", "--run-espefuse", "--r
     sys.argv = [_tool + ".py"] + sys.argv[2:]
     import importlib
     _mod = importlib.import_module(_tool)
+    if _tool == "esptool":
+        # esptool.write_flash "zgaduje" Intel HEX po pierwszym bajcie pliku
+        # (":" / 0x3A) i probuje sparsowac go jako tekst hex — dla naszych
+        # zaszyfrowanych (AES-XTS) binarek to czysto losowe dane, wiec raz
+        # na ~256 flashy pierwszy bajt trafia na 0x3A i loadhex() pada z
+        # UnicodeDecodeError (system Windows-owy codepage np. cp1250 nie
+        # dekoduje dowolnych bajtow). My NIGDY nie flashujemy prawdziwych
+        # plikow .hex, wiec to wykrywanie jest tu zawsze falszywym alarmem —
+        # wylaczamy je calkowicie.
+        _mod.intel_hex_to_bin = lambda f, start_addr=None: f
     try:
         _mod.main()
     except SystemExit as _e:
@@ -561,7 +571,7 @@ class FlasherApp:
                 ]:
                     dst = os.path.join(enc_dir, os.path.basename(src).replace(".bin", "_enc.bin"))
                     cmd = _tool_cmd(espsecure) + ["encrypt_flash_data",
-                           "--aes-xts", "--keyfile", key_file,
+                           "--aes_xts", "--keyfile", key_file,
                            "--address", addr, "--output", dst, src]
                     self._run_subprocess(cmd, prefix="espsecure")
                     enc_bins.append((addr, dst))
@@ -595,18 +605,29 @@ class FlasherApp:
             # (--force-write-always) ryzykuje uszkodzeniem juz zaszyfrowanej
             # flashy jesli cokolwiek sie nie zgra co do bitu.
             if mode == "PROD_DEV":
-                self.log("[2/3] Wypalanie Flash Encryption eFuse...")
-                # Wypal klucz w BLOCK_KEY0
-                cmd = _tool_cmd(self.cfg["espefuse"]) + ["--chip", self.cfg["chip"],
-                       "--port", port,
-                       "burn_key", "BLOCK_KEY0",
-                       key_file, "XTS_AES_256_KEY"]
-                self._run_subprocess(cmd, prefix="espefuse-key", stdin_input="BURN\n")
-                # Wlacz Flash Encryption
-                cmd = _tool_cmd(self.cfg["espefuse"]) + ["--chip", self.cfg["chip"],
-                       "--port", port,
-                       "burn_efuse", "SPI_BOOT_CRYPT_CNT", "1"]
-                self._run_subprocess(cmd, prefix="espefuse-en", stdin_input="BURN\n")
+                self.log("[2/3] Sprawdzanie stanu Flash Encryption eFuse...")
+                key_burned, crypt_enabled = self._efuse_burn_state(port)
+                # Wypal klucz w BLOCK_KEY0 (chyba ze juz spalony — np. re-run
+                # na tym samym urzadzeniu, albo przerwany flash miedzy tym a
+                # nastepnym krokiem. Zakladamy ze pasuje do lokalnego pliku
+                # klucza — nie da sie tego zweryfikowac, blok jest
+                # read-protected z definicji).
+                if key_burned:
+                    self.log("  BLOCK_KEY0 juz spalony — pomijam burn_key (zakladam ten sam klucz FE)", "#FA0")
+                else:
+                    cmd = _tool_cmd(self.cfg["espefuse"]) + ["--chip", self.cfg["chip"],
+                           "--port", port,
+                           "burn_key", "BLOCK_KEY0",
+                           key_file, "XTS_AES_256_KEY"]
+                    self._run_subprocess(cmd, prefix="espefuse-key", stdin_input="BURN\n")
+                # Wlacz Flash Encryption (chyba ze juz wlaczone)
+                if crypt_enabled:
+                    self.log("  SPI_BOOT_CRYPT_CNT juz wlaczony — pomijam")
+                else:
+                    cmd = _tool_cmd(self.cfg["espefuse"]) + ["--chip", self.cfg["chip"],
+                           "--port", port,
+                           "burn_efuse", "SPI_BOOT_CRYPT_CNT", "1"]
+                    self._run_subprocess(cmd, prefix="espefuse-en", stdin_input="BURN\n")
             elif mode == "PROD_REL":
                 self.log("[2/3] Pomijam wypalanie klucza (juz zrobione w PROD_DEV)")
 
@@ -699,6 +720,30 @@ class FlasherApp:
                              "(port CDC wolniej sie zenumerowal niz oczekiwano)", "#F88")
         except Exception as e:
             self.log(f"  [!] Blad portu szeregowego: {e}", "#F88")
+
+    def _efuse_burn_state(self, port):
+        """Sprawdza CZY klucz FE juz jest spalony i CZY szyfrowanie juz
+        wlaczone, zeby PROD_DEV bylo bezpiecznie powtarzalne. Bez tego
+        ponowna proba na urzadzeniu, ktore juz ma spalony BLOCK_KEY0 (np.
+        przerwany wczesniejszy flash miedzy burn_key a burn_efuse, albo po
+        prostu re-run na juz-gotowym urzadzeniu), zawsze pada twardym
+        bledem "BLOCK_KEY0 is read-protected" zamiast dokonczyc/pominac
+        krok. Zwraca (key_burned, crypt_enabled).
+        """
+        cmd = _tool_cmd(self.cfg["espefuse"]) + ["--chip", self.cfg["chip"],
+               "--port", port, "summary", "--format", "json"]
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                               creationflags=_SUBPROCESS_FLAGS)
+        text = proc.stdout
+        try:
+            data = json.loads(text[text.index("{"):])
+        except (ValueError, json.JSONDecodeError):
+            raise RuntimeError(
+                f"Nie udalo sie odczytac stanu eFuse (summary):\n{text}\n{proc.stderr}")
+        key_burned = data.get("BLOCK_KEY0", {}).get("readable", True) is False
+        crypt_val = str(data.get("SPI_BOOT_CRYPT_CNT", {}).get("value", "")).strip().lower()
+        crypt_enabled = crypt_val not in ("disable", "0", "")
+        return key_burned, crypt_enabled
 
     def _run_subprocess(self, cmd, prefix="", stdin_input=None):
         """Odpal subprocess i streamuj jego stdout/stderr do console."""

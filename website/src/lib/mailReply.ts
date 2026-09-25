@@ -92,34 +92,8 @@ function describeOrder(o: OrderContext): string {
   return `- Zamówienie ${o.orderNumber} (złożone ${o.createdAt.slice(0, 10)}): płatność ${payment}, realizacja ${fulfillment}${tracking}`;
 }
 
-export async function generateReplyDraft(params: {
-  customerEmailText: string;
-  customerName?: string | null;
-  orders: OrderContext[];
-}): Promise<string> {
+async function callOpenRouter(system: string, user: string): Promise<string> {
   if (!OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured");
-
-  const ordersBlock = params.orders.length
-    ? params.orders.map(describeOrder).join("\n")
-    : "Brak zamówień powiązanych z tym adresem e-mail w bazie KalkMate.";
-
-  const system = `Jestes pomocnym, uprzejmym asystentem obslugi klienta sklepu KalkMate (kalkulator edukacyjny z AI dla maturzystow, kalkmate.pl).
-Dostajesz mail od klienta, dane o jego zamowieniach z naszej bazy oraz baze wiedzy o produkcie. Napisz zwiezla, uprzejma odpowiedz.
-
-${KALKMATE_KNOWLEDGE}
-
-Zasady (waznie przestrzegaj):
-- JEZYK: napisz odpowiedz W TYM SAMYM JEZYKU, w ktorym napisany jest mail klienta (np. mail po niemiecku -> odpowiedz po niemiecku, mail po angielsku -> po angielsku). Jesli jezyka nie da sie jednoznacznie rozpoznac, uzyj polskiego.
-- Pytania techniczne/o produkt (bateria, WiFi, kod AI, notatki, aktualizacje, zwrot, gwarancja itp.) odpowiadaj na podstawie bazy wiedzy powyzej — nie zmyslaj specyfikacji ani procedur.
-- Uzywaj WYLACZNIE podanych danych o zamowieniu — nie wymyslaj statusow, dat, numerow przesylek ani kwot, ktorych nie masz w danych.
-- Jesli klient prosi o cos, czego nie mozesz sam zalatwic z tego miejsca (np. anulowanie zamowienia, zwrot pieniedzy, wymiana, reklamacja sprzetowa) — NIE pisz ze to juz zrobiles/zalatwiles. Napisz ze zespol zajmie sie sprawa i wroci z odpowiedzia/potwierdzeniem.
-- Jesli w bazie nie ma zadnego pasujacego zamowienia, a klient pyta o konkretne zamowienie — napisz ze nie mozesz go znalezc po tym adresie e-mail i popros o numer zamowienia.
-- Ton: cieply, konkretny, rzeczowy, bez sztucznego entuzjazmu, bez emoji.
-- Podpis na koncu, przetlumaczony na jezyk odpowiedzi (np. "Zespół KalkMate" / "KalkMate Team" / "Ihr KalkMate-Team").
-- To jest SZKIC do przejrzenia przez czlowieka przed wyslaniem, wiec mozesz w tresci wprost zaznaczyc niepewnosc, jesli czegos w danych brakuje.
-- Wypisz WYLACZNIE tresc odpowiedzi (bez tematu maila, bez komentarzy w stylu "Oto szkic odpowiedzi:", bez nazwy jezyka).`;
-
-  const user = `[DANE O ZAMOWIENIACH KLIENTA]\n${ordersBlock}\n\n[MAIL OD KLIENTA${params.customerName ? ` (${params.customerName})` : ""}]\n${params.customerEmailText.slice(0, 8000)}`;
 
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -151,4 +125,71 @@ Zasady (waznie przestrzegaj):
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) throw new Error("Pusta odpowiedz modelu");
   return content.trim();
+}
+
+export async function generateReplyDraft(params: {
+  customerEmailText: string;
+  customerName?: string | null;
+  orders: OrderContext[];
+}): Promise<string> {
+  const ordersBlock = params.orders.length
+    ? params.orders.map(describeOrder).join("\n")
+    : "Brak zamówień powiązanych z tym adresem e-mail w bazie KalkMate.";
+
+  const system = `Jestes pomocnym, uprzejmym asystentem obslugi klienta sklepu KalkMate (kalkulator edukacyjny z AI dla maturzystow, kalkmate.pl).
+Dostajesz mail od klienta, dane o jego zamowieniach z naszej bazy oraz baze wiedzy o produkcie. Napisz zwiezla, uprzejma odpowiedz.
+
+${KALKMATE_KNOWLEDGE}
+
+Zasady (waznie przestrzegaj):
+- JEZYK: napisz odpowiedz W TYM SAMYM JEZYKU, w ktorym napisany jest mail klienta (np. mail po niemiecku -> odpowiedz po niemiecku, mail po angielsku -> po angielsku). Jesli jezyka nie da sie jednoznacznie rozpoznac, uzyj polskiego.
+- Pytania techniczne/o produkt (bateria, WiFi, kod AI, notatki, aktualizacje, zwrot, gwarancja itp.) odpowiadaj na podstawie bazy wiedzy powyzej — nie zmyslaj specyfikacji ani procedur.
+- Uzywaj WYLACZNIE podanych danych o zamowieniu — nie wymyslaj statusow, dat, numerow przesylek ani kwot, ktorych nie masz w danych.
+- Jesli klient prosi o cos, czego nie mozesz sam zalatwic z tego miejsca (np. anulowanie zamowienia, zwrot pieniedzy, wymiana, reklamacja sprzetowa) — NIE pisz ze to juz zrobiles/zalatwiles. Napisz ze zespol zajmie sie sprawa i wroci z odpowiedzia/potwierdzeniem.
+- Jesli w bazie nie ma zadnego pasujacego zamowienia, a klient pyta o konkretne zamowienie — napisz ze nie mozesz go znalezc po tym adresie e-mail i popros o numer zamowienia.
+- Ton: cieply, konkretny, rzeczowy, bez sztucznego entuzjazmu, bez emoji.
+- Podpis na koncu, przetlumaczony na jezyk odpowiedzi (np. "Zespół KalkMate" / "KalkMate Team" / "Ihr KalkMate-Team").
+- To jest SZKIC do przejrzenia przez czlowieka przed wyslaniem, wiec mozesz w tresci wprost zaznaczyc niepewnosc, jesli czegos w danych brakuje.
+- Wypisz WYLACZNIE tresc odpowiedzi (bez tematu maila, bez komentarzy w stylu "Oto szkic odpowiedzi:", bez nazwy jezyka).`;
+
+  const user = `[DANE O ZAMOWIENIACH KLIENTA]\n${ordersBlock}\n\n[MAIL OD KLIENTA${params.customerName ? ` (${params.customerName})` : ""}]\n${params.customerEmailText.slice(0, 8000)}`;
+
+  return callOpenRouter(system, user);
+}
+
+// Szkic NOWEGO maila do klienta wysylanego z inicjatywy admina ze strony
+// zamowienia (nie jest to odpowiedz na wiadomosc od klienta) — patrz
+// /admin/orders/[id]. Admin moze podac krotka instrukcje/temat (np.
+// "poinformuj o opoznieniu wysylki"); bez niej model pisze ogolny status.
+export async function generateOrderEmailDraft(params: {
+  customerName?: string | null;
+  orders: OrderContext[];
+  focusOrderNumber: string;
+  instruction?: string;
+}): Promise<string> {
+  const ordersBlock = params.orders.length
+    ? params.orders.map(describeOrder).join("\n")
+    : "Brak zamówień powiązanych z tym adresem e-mail w bazie KalkMate.";
+
+  const system = `Jestes pomocnym, uprzejmym asystentem obslugi klienta sklepu KalkMate (kalkulator edukacyjny z AI dla maturzystow, kalkmate.pl).
+Piszesz NOWEGO maila DO klienta z inicjatywy zespolu — to NIE jest odpowiedz na wiadomosc od klienta. Dotyczy zamowienia ${params.focusOrderNumber}. Dostajesz dane o zamowieniach tego klienta z naszej bazy oraz baze wiedzy o produkcie.
+
+${KALKMATE_KNOWLEDGE}
+
+Zasady (waznie przestrzegaj):
+- JEZYK: pisz po polsku, chyba ze instrukcja ponizej jest w innym jezyku — wtedy uzyj tego jezyka.
+- Skup sie GLOWNIE na zamowieniu ${params.focusOrderNumber}, chyba ze instrukcja mowi inaczej.
+- Uzywaj WYLACZNIE podanych danych o zamowieniach — nie wymyslaj statusow, dat, numerow przesylek ani kwot, ktorych nie masz w danych.
+- Jesli nie dostales konkretnej instrukcji, napisz krotka, uprzejma wiadomosc z aktualnym statusem tego zamowienia.
+- Nie obiecuj dzialan/terminow, ktorych nie mozesz stad realnie zagwarantowac (np. konkretnej daty dostawy, zwrotu pieniedzy) — pisz ze zespol sie tym zajmie.
+- Ton: cieply, konkretny, rzeczowy, bez sztucznego entuzjazmu, bez emoji.
+- Podpis na koncu, przetlumaczony na jezyk odpowiedzi (np. "Zespół KalkMate" / "KalkMate Team").
+- To jest SZKIC do przejrzenia przez czlowieka przed wyslaniem.
+- Wypisz WYLACZNIE tresc maila (bez tematu, bez komentarzy w stylu "Oto szkic:", bez nazwy jezyka).`;
+
+  const user = `[DANE O ZAMOWIENIACH KLIENTA]\n${ordersBlock}\n\n[TEMAT/INSTRUKCJA OD ADMINA]\n${
+    params.instruction?.trim() || `(brak — napisz ogolna wiadomosc o statusie zamowienia ${params.focusOrderNumber})`
+  }`;
+
+  return callOpenRouter(system, user);
 }

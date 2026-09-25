@@ -34,6 +34,7 @@ export async function GET(
   return NextResponse.json({
     order: {
       id: order.id,
+      order_number: order.orderNumber,
       amount: order.amount,
       currency: order.currency,
       status: PAYMENT_STATUS[order.status] || order.status,
