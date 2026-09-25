@@ -47,6 +47,66 @@ function receiverFromOrder(o: {
   };
 }
 
+type ReceiverBase = ReturnType<typeof receiverFromOrder>;
+type EditableKey = "name" | "email" | "phone" | "street" | "postal" | "city";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Regula API Base Courier (odpowiedz walidacji 2026-09-25): "min. 9 cyfr,
+// opcjonalny + na poczatku". Klient potrafi wpisac ucięty numer albo "+" w
+// zlym miejscu — admin poprawia dane w panelu przed nadaniem.
+const PHONE_RE = /^\+?\d{9,15}$/;
+
+// Poprawki danych odbiorcy z panelu. patch = tylko pola, ktore faktycznie sie
+// zmienily wzgledem zamowienia (uzywane do opcjonalnego zapisu w zamowieniu).
+function applyReceiverEdits(
+  base: ReceiverBase,
+  raw: unknown,
+  international: boolean
+): { ok: true; receiver: ReceiverBase; patch: Partial<Record<EditableKey, string>> } | { ok: false; error: string } {
+  if (!raw || typeof raw !== "object") return { ok: true, receiver: base, patch: {} };
+  const r = raw as Record<string, unknown>;
+  const next: ReceiverBase = { ...base };
+  const patch: Partial<Record<EditableKey, string>> = {};
+  const errors: string[] = [];
+
+  const take = (key: EditableKey, label: string, max: number, validate?: (s: string) => string | null) => {
+    const v = r[key];
+    if (typeof v !== "string") return;
+    let s = v.trim().replace(/\s+/g, " ");
+    if (key === "phone") s = s.replace(/[\s\-().]/g, "");
+    if (!s) return void errors.push(`${label}: pole nie może być puste.`);
+    if (s.length > max) return void errors.push(`${label}: za długie.`);
+    const problem = validate?.(s);
+    if (problem) return void errors.push(`${label}: ${problem}`);
+    if (s !== (base[key] ?? "")) {
+      next[key] = s;
+      patch[key] = s;
+    }
+  };
+
+  take("name", "Imię i nazwisko", 100);
+  take("email", "E-mail", 120, (s) => (EMAIL_RE.test(s) ? null : "nieprawidłowy adres."));
+  take("phone", "Telefon", 20, (s) => (PHONE_RE.test(s) ? null : "min. 9 cyfr, opcjonalny + na początku, bez innych znaków."));
+  if (international) {
+    take("street", "Ulica", 150);
+    take("postal", "Kod pocztowy", 20);
+    take("city", "Miasto", 80);
+  }
+  if (errors.length) return { ok: false, error: errors.join(" ") };
+  return { ok: true, receiver: next, patch };
+}
+
+function orderPatchFromReceiver(patch: Partial<Record<EditableKey, string>>) {
+  return {
+    ...(patch.name !== undefined ? { customerName: patch.name } : {}),
+    ...(patch.email !== undefined ? { customerEmail: patch.email } : {}),
+    ...(patch.phone !== undefined ? { customerPhone: patch.phone } : {}),
+    ...(patch.street !== undefined ? { customerAddressStreet: patch.street } : {}),
+    ...(patch.postal !== undefined ? { customerAddressPostcode: patch.postal } : {}),
+    ...(patch.city !== undefined ? { customerAddressCity: patch.city } : {}),
+  };
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -124,11 +184,18 @@ export async function POST(
 
   const country = (order.customerCountry || "PL").toUpperCase();
   const isDomestic = country === "PL" || country === "";
-  const receiver = receiverFromOrder(order);
 
-  // Body jest opcjonalny (krajowe nadanie dawniej go nie wysylalo): { courierCode?, pickup? }.
+  // Body jest opcjonalny (krajowe nadanie dawniej go nie wysylalo):
+  // { courierCode?, pickup?, receiver?, saveToOrder? }.
   // pickup = zamowienie podjazdu kuriera; bez niego admin sam nadaje paczke.
+  // receiver = poprawki danych odbiorcy; saveToOrder = zapisz je tez w zamowieniu
+  // (dopiero po udanym nadaniu).
   const body = await request.json().catch(() => ({} as Record<string, unknown>));
+  const edited = applyReceiverEdits(receiverFromOrder(order), body?.receiver, !isDomestic);
+  if (!edited.ok) return NextResponse.json({ ok: false, error: edited.error }, { status: 400 });
+  const receiver = edited.receiver;
+  const savedPatch = body?.saveToOrder === true ? edited.patch : {};
+  const orderPatch = orderPatchFromReceiver(savedPatch);
   const shipOpts: BcShipOptions = {};
   if (body?.pickup) {
     const pk = parsePickup(body.pickup);
@@ -166,6 +233,7 @@ export async function POST(
           furgonetkaPackageId: created.orderId ?? undefined,
           furgonetkaStatus: "basecourier",
           ...(created.trackingNumber ? { trackingNumber: created.trackingNumber } : {}),
+          ...orderPatch,
         },
       });
 
@@ -180,6 +248,7 @@ export async function POST(
         trackingNumber: created.trackingNumber,
         waybillLink: created.waybillLink,
         trackingSync,
+        saved: savedPatch,
         raw: created.raw,
       });
     } catch (e) {
@@ -202,6 +271,7 @@ export async function POST(
         furgonetkaPackageId: created.orderId ?? undefined,
         furgonetkaStatus: "basecourier",
         ...(created.trackingNumber ? { trackingNumber: created.trackingNumber } : {}),
+        ...orderPatch,
       },
     });
 
@@ -215,6 +285,7 @@ export async function POST(
       basecourierOrderId: created.orderId,
       trackingNumber: created.trackingNumber,
       waybillLink: created.waybillLink,
+      saved: savedPatch,
       trackingSync,
       raw: created.raw,
     });

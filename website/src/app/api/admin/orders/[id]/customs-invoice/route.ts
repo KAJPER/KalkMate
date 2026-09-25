@@ -41,6 +41,11 @@ export async function GET(
   }
 
   const country = normalizeCountryForShipping(order.customerCountry || "");
+  // Poprawki odbiorcy wpisane w panelu przed nadaniem (jeszcze nie zapisane w zamowieniu).
+  const pick = (key: string, fallback: string, max: number) => {
+    const v = (q.get(key) || "").trim().replace(/\s+/g, " ");
+    return v && v.length <= max ? v : fallback;
+  };
 
   try {
     const pdf = await buildCustomsInvoicePdf({
@@ -57,13 +62,13 @@ export async function GET(
         email: profile.email,
       },
       consignee: {
-        name: order.customerName,
-        street: order.customerAddressStreet || "",
-        postal: order.customerAddressPostcode || "",
-        city: order.customerAddressCity || "",
+        name: pick("name", order.customerName, 100),
+        street: pick("street", order.customerAddressStreet || "", 150),
+        postal: pick("postal", order.customerAddressPostcode || "", 20),
+        city: pick("city", order.customerAddressCity || "", 80),
         country,
-        phone: order.customerPhone,
-        email: order.customerEmail,
+        phone: pick("phone", order.customerPhone, 20),
+        email: pick("email", order.customerEmail, 120),
       },
       goods: {
         description: "Electronic calculator KalkMate v3.0",

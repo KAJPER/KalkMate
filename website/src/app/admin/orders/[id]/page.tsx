@@ -181,6 +181,53 @@ export default function OrderDetailPage({
   const [customsHs, setCustomsHs] = useState("8470.10");
   const [customsOrigin, setCustomsOrigin] = useState("PL");
 
+  // Dane odbiorcy do poprawy przed nadaniem (np. klient podal ucięty numer telefonu).
+  // Inicjalizowane raz z wyceny, potem edytowalne; opcjonalnie zapisywane tez w zamowieniu.
+  type BcRecvEdit = { name: string; phone: string; email: string; street: string; postal: string; city: string };
+  const [bcRecv, setBcRecv] = useState<BcRecvEdit | null>(null);
+  const [bcSaveToOrder, setBcSaveToOrder] = useState(true);
+
+  // Te same reguly co w API Base Courier: telefon min. 9 cyfr, opcjonalny + na poczatku.
+  const recvPhoneClean = (bcRecv?.phone || "").replace(/[\s\-().]/g, "");
+  const recvError = (() => {
+    if (!bcRecv || !bcPreview) return "";
+    if (!bcRecv.name.trim()) return "Podaj imię i nazwisko odbiorcy.";
+    if (!/^\+?\d{9,15}$/.test(recvPhoneClean)) return "Telefon odbiorcy: min. 9 cyfr, opcjonalny + tylko na początku (bez innych znaków).";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bcRecv.email.trim())) return "Nieprawidłowy e-mail odbiorcy.";
+    if (bcPreview.international && (!bcRecv.street.trim() || !bcRecv.postal.trim() || !bcRecv.city.trim()))
+      return "Uzupełnij adres odbiorcy (ulica, kod pocztowy, miasto).";
+    return "";
+  })();
+  const recvChanged = (() => {
+    if (!bcRecv || !bcPreview) return false;
+    const o = bcPreview.receiver;
+    const same = (a: string, b: string | undefined) => a.trim().replace(/\s+/g, " ") === (b || "").trim().replace(/\s+/g, " ");
+    return (
+      !same(bcRecv.name, o.name) ||
+      recvPhoneClean !== (o.phone || "").replace(/[\s\-().]/g, "") ||
+      !same(bcRecv.email, o.email) ||
+      (bcPreview.international && (!same(bcRecv.street, o.street) || !same(bcRecv.postal, o.postal) || !same(bcRecv.city, o.city)))
+    );
+  })();
+  const receiverPayload = () => ({ receiver: bcRecv, saveToOrder: bcSaveToOrder && recvChanged });
+  // Po udanym nadaniu z zapisem — odswiez dane klienta widoczne na stronie zamowienia.
+  const applySavedReceiver = (saved?: Partial<Record<"name" | "email" | "phone" | "street" | "postal" | "city", string>>) => {
+    if (!saved || Object.keys(saved).length === 0) return;
+    setOrder((o) =>
+      o
+        ? {
+            ...o,
+            ...(saved.name !== undefined ? { customer_name: saved.name } : {}),
+            ...(saved.email !== undefined ? { customer_email: saved.email } : {}),
+            ...(saved.phone !== undefined ? { customer_phone: saved.phone } : {}),
+            ...(saved.street !== undefined ? { customer_address_street: saved.street } : {}),
+            ...(saved.postal !== undefined ? { customer_address_postcode: saved.postal } : {}),
+            ...(saved.city !== undefined ? { customer_address_city: saved.city } : {}),
+          }
+        : o
+    );
+  };
+
   const pickupError = (() => {
     if (bcPickupMode !== "courier") return "";
     if (!bcPickupDate) return "Wybierz dzień odbioru.";
@@ -267,7 +314,68 @@ export default function OrderDetailPage({
     </div>
   ) : null;
 
-  const customsHref = `/api/admin/orders/${id}/customs-invoice?value=${encodeURIComponent(customsValue)}&hs=${encodeURIComponent(customsHs)}&origin=${encodeURIComponent(customsOrigin)}&from=${bcPickupMode === "courier" && bcPickupAddr ? bcPickupAddr : "choroszcz"}`;
+  // Faktura celna bierze tez poprawione dane odbiorcy (jeszcze niezapisane w zamowieniu).
+  const customsRecvQuery = bcRecv
+    ? (Object.entries(bcRecv) as [string, string][]).map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join("")
+    : "";
+  const customsHref = `/api/admin/orders/${id}/customs-invoice?value=${encodeURIComponent(customsValue)}&hs=${encodeURIComponent(customsHs)}&origin=${encodeURIComponent(customsOrigin)}&from=${bcPickupMode === "courier" && bcPickupAddr ? bcPickupAddr : "choroszcz"}${customsRecvQuery}`;
+
+  const receiverEditor =
+    bcPreview && bcRecv ? (
+      <div className="space-y-2">
+        <p className="text-[#E0E0E0]/50">Odbiorca — możesz poprawić dane przed nadaniem:</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <label className="flex flex-col gap-1">
+            Imię i nazwisko
+            <input type="text" value={bcRecv.name} onChange={(e) => setBcRecv({ ...bcRecv, name: e.target.value })} className={smallInput} />
+          </label>
+          <label className="flex flex-col gap-1">
+            Telefon
+            <input
+              type="tel"
+              value={bcRecv.phone}
+              onChange={(e) => setBcRecv({ ...bcRecv, phone: e.target.value })}
+              placeholder={bcPreview.international ? "+36 30 123 4567" : "600 123 456"}
+              className={smallInput}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            E-mail
+            <input type="email" value={bcRecv.email} onChange={(e) => setBcRecv({ ...bcRecv, email: e.target.value })} className={smallInput} />
+          </label>
+        </div>
+        {bcPreview.international && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <label className="flex flex-col gap-1">
+              Ulica i numer
+              <input type="text" value={bcRecv.street} onChange={(e) => setBcRecv({ ...bcRecv, street: e.target.value })} className={smallInput} />
+            </label>
+            <label className="flex flex-col gap-1">
+              Kod pocztowy
+              <input type="text" value={bcRecv.postal} onChange={(e) => setBcRecv({ ...bcRecv, postal: e.target.value })} className={smallInput} />
+            </label>
+            <label className="flex flex-col gap-1">
+              Miasto
+              <input type="text" value={bcRecv.city} onChange={(e) => setBcRecv({ ...bcRecv, city: e.target.value })} className={smallInput} />
+            </label>
+          </div>
+        )}
+        {recvError ? (
+          <p className="text-red-400">{recvError}</p>
+        ) : (
+          bcPreview.international &&
+          !recvPhoneClean.startsWith("+") && (
+            <p className="text-amber-400">Do zagranicy numer najlepiej z kodem kraju, np. +36 30 123 4567.</p>
+          )
+        )}
+        {recvChanged && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={bcSaveToOrder} onChange={(e) => setBcSaveToOrder(e.target.checked)} />
+            Zapisz poprawione dane także w zamówieniu (po udanym nadaniu)
+          </label>
+        )}
+      </div>
+    ) : null;
 
   const customsSection = bcPreview?.needsCustomsDocs ? (
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-[#E0E0E0]/80 space-y-2">
@@ -324,6 +432,17 @@ export default function OrderDetailPage({
         needsCustomsDocs: data.needsCustomsDocs,
         customsDefaults: data.customsDefaults,
       });
+      setBcRecv(
+        (prev) =>
+          prev ?? {
+            name: data.receiver.name || "",
+            phone: data.receiver.phone || "",
+            email: data.receiver.email || "",
+            street: data.receiver.street || "",
+            postal: data.receiver.postal || "",
+            city: data.receiver.city || "",
+          }
+      );
       if (data.pickup) {
         setBcPickupAddr((prev) => prev || data.pickup.addresses[0]?.key || "");
         setBcPickupDate((prev) => prev || data.pickup.defaultDate);
@@ -343,14 +462,14 @@ export default function OrderDetailPage({
 
   const handleBcCreate = async () => {
     const price = bcPreview?.valuation?.price?.value;
-    if (pickupError) {
-      setBcMsg(pickupError);
+    if (recvError || pickupError) {
+      setBcMsg(recvError || pickupError);
       return;
     }
     if (
       !confirm(
         `Nadać przesyłkę InPost Paczkomat przez Base Courier?\n\n` +
-          `Odbiorca: ${bcPreview?.receiver.name || order?.customer_name}\n` +
+          `Odbiorca: ${bcRecv?.name || bcPreview?.receiver.name || order?.customer_name} · ${bcRecv?.phone || ""}\n` +
           `Paczkomat: ${bcPreview?.receiver.lockerCode || order?.pickup_point}\n` +
           pickupConfirmLine() +
           `Koszt: ${price ? price + " zł brutto" : "wg cennika"} — pobierany z Twojego konta Base Courier.\n\n` +
@@ -364,13 +483,14 @@ export default function OrderDetailPage({
       const res = await fetch(`/api/admin/orders/${id}/basecourier`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pickupPayload()),
+        body: JSON.stringify({ ...pickupPayload(), ...receiverPayload() }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setBcMsg(data.error || "Błąd nadania");
         return;
       }
+      applySavedReceiver(data.saved);
       setFurgonetkaStatus("basecourier");
       if (data.basecourierOrderId) setFurgonetkaPackageId(String(data.basecourierOrderId));
       if (data.trackingNumber) setTracking(data.trackingNumber);
@@ -390,8 +510,8 @@ export default function OrderDetailPage({
   const handleBcCreateIntl = async () => {
     if (!selectedCourier || !bcPreview?.quotes) return;
     const q = bcPreview.quotes.find((x) => x.courierCode === selectedCourier);
-    if (pickupError) {
-      setBcMsg(pickupError);
+    if (recvError || pickupError) {
+      setBcMsg(recvError || pickupError);
       return;
     }
     if (
@@ -399,7 +519,7 @@ export default function OrderDetailPage({
         `Nadać przesyłkę zagraniczną przez Base Courier?\n\n` +
           `Kurier: ${q?.courierName || selectedCourier}\n` +
           `Kraj: ${bcPreview.country}\n` +
-          `Odbiorca: ${bcPreview.receiver.name}\n` +
+          `Odbiorca: ${bcRecv?.name || bcPreview.receiver.name} · ${bcRecv?.phone || ""}\n` +
           pickupConfirmLine() +
           (bcPreview.needsCustomsDocs
             ? `Dokumenty celne: wersja papierowa — wydrukuj fakturę celną w 3 egz. i dołącz do paczki.\n`
@@ -415,13 +535,14 @@ export default function OrderDetailPage({
       const res = await fetch(`/api/admin/orders/${id}/basecourier`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courierCode: selectedCourier, ...pickupPayload() }),
+        body: JSON.stringify({ courierCode: selectedCourier, ...pickupPayload(), ...receiverPayload() }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setBcMsg(data.error || "Błąd nadania");
         return;
       }
+      applySavedReceiver(data.saved);
       setFurgonetkaStatus("basecourier");
       if (data.basecourierOrderId) setFurgonetkaPackageId(String(data.basecourierOrderId));
       if (data.trackingNumber) setTracking(data.trackingNumber);
@@ -1055,7 +1176,7 @@ export default function OrderDetailPage({
               ) : bcPreview?.international ? (
                 <>
                   <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs text-[#E0E0E0]/80 space-y-2">
-                    <p><span className="text-[#E0E0E0]/50">Odbiorca:</span> {bcPreview.receiver.name} · {bcPreview.receiver.phone} · {bcPreview.receiver.email}</p>
+                    {receiverEditor}
                     <p><span className="text-[#E0E0E0]/50">Kraj:</span> <span className="font-mono text-amber-300">{bcPreview.country}</span> — poza Polską, bez Paczkomatów</p>
                     {bcPreview.quotes && bcPreview.quotes.length > 0 ? (
                       <div className="space-y-1 pt-1">
@@ -1098,8 +1219,8 @@ export default function OrderDetailPage({
                     </button>
                     <button
                       onClick={handleBcCreateIntl}
-                      disabled={bcLoading || !selectedCourier || !!pickupError}
-                      title={!selectedCourier ? "Najpierw wybierz kuriera" : pickupError}
+                      disabled={bcLoading || !selectedCourier || !!pickupError || !!recvError}
+                      title={!selectedCourier ? "Najpierw wybierz kuriera" : recvError || pickupError}
                       className="px-5 py-2 rounded-lg font-medium text-sm text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {bcLoading ? "Nadaję…" : "Nadaj przesyłkę (płatne)"}
@@ -1112,8 +1233,8 @@ export default function OrderDetailPage({
               ) : (
                 <>
                   {bcPreview && (
-                    <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs text-[#E0E0E0]/80 space-y-1">
-                      <p><span className="text-[#E0E0E0]/50">Odbiorca:</span> {bcPreview.receiver.name} · {bcPreview.receiver.phone} · {bcPreview.receiver.email}</p>
+                    <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs text-[#E0E0E0]/80 space-y-2">
+                      {receiverEditor}
                       <p><span className="text-[#E0E0E0]/50">Paczkomat:</span> <span className="font-mono text-amber-300">{bcPreview.receiver.lockerCode || "— BRAK —"}</span></p>
                       <p>
                         <span className="text-[#E0E0E0]/50">Koszt nadania:</span>{" "}
@@ -1134,8 +1255,8 @@ export default function OrderDetailPage({
                     </button>
                     <button
                       onClick={handleBcCreate}
-                      disabled={bcLoading || !bcPreview || !bcPreview.receiver.lockerCode || !!pickupError}
-                      title={!bcPreview ? "Najpierw sprawdź dane i wycenę" : pickupError}
+                      disabled={bcLoading || !bcPreview || !bcPreview.receiver.lockerCode || !!pickupError || !!recvError}
+                      title={!bcPreview ? "Najpierw sprawdź dane i wycenę" : recvError || pickupError}
                       className="px-5 py-2 rounded-lg font-medium text-sm text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 shadow-lg shadow-amber-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {bcLoading && bcPreview ? "Nadaję…" : "Nadaj przesyłkę (płatne)"}
