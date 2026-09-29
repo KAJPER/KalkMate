@@ -8,6 +8,9 @@ import {
   bcValuationInternational,
   INTL_COURIER_CANDIDATES,
   needsCustomsDocs,
+  needsStateCode,
+  isValidStateCode,
+  splitCityState,
   parsePickup,
   pickupOptions,
   type BcShipOptions,
@@ -36,6 +39,8 @@ function receiverFromOrder(o: {
   customerAddressCity: string | null;
   customerCountry: string | null;
 }) {
+  // US/CA: klient wpisuje stan w polu miasta ("New York, new york") — rozdzielamy.
+  const cs = splitCityState(o.customerAddressCity, o.customerCountry);
   return {
     name: o.customerName,
     email: o.customerEmail,
@@ -43,12 +48,13 @@ function receiverFromOrder(o: {
     lockerCode: (o.pickupPoint || "").trim().toUpperCase(),
     street: o.customerAddressStreet || undefined,
     postal: o.customerAddressPostcode || undefined,
-    city: o.customerAddressCity || undefined,
+    city: cs.city || undefined,
+    state: cs.state,
   };
 }
 
 type ReceiverBase = ReturnType<typeof receiverFromOrder>;
-type EditableKey = "name" | "email" | "phone" | "street" | "postal" | "city";
+type EditableKey = "name" | "email" | "phone" | "street" | "postal" | "city" | "state";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Regula API Base Courier (odpowiedz walidacji 2026-09-25): "min. 9 cyfr,
@@ -61,7 +67,8 @@ const PHONE_RE = /^\+?\d{9,15}$/;
 function applyReceiverEdits(
   base: ReceiverBase,
   raw: unknown,
-  international: boolean
+  international: boolean,
+  country: string
 ): { ok: true; receiver: ReceiverBase; patch: Partial<Record<EditableKey, string>> } | { ok: false; error: string } {
   if (!raw || typeof raw !== "object") return { ok: true, receiver: base, patch: {} };
   const r = raw as Record<string, unknown>;
@@ -74,6 +81,7 @@ function applyReceiverEdits(
     if (typeof v !== "string") return;
     let s = v.trim().replace(/\s+/g, " ");
     if (key === "phone") s = s.replace(/[\s\-().]/g, "");
+    if (key === "state") s = s.toUpperCase();
     if (!s) return void errors.push(`${label}: pole nie może być puste.`);
     if (s.length > max) return void errors.push(`${label}: za długie.`);
     const problem = validate?.(s);
@@ -91,20 +99,38 @@ function applyReceiverEdits(
     take("street", "Ulica", 150);
     take("postal", "Kod pocztowy", 20);
     take("city", "Miasto", 80);
+    if (needsStateCode(country)) {
+      take("state", "Stan/prowincja", 3, (s) =>
+        isValidStateCode(country, s) ? null : "podaj 2-literowy kod (USA: NY, CA, TX…; Kanada: ON, QC…)."
+      );
+    }
   }
   if (errors.length) return { ok: false, error: errors.join(" ") };
   return { ok: true, receiver: next, patch };
 }
 
-function orderPatchFromReceiver(patch: Partial<Record<EditableKey, string>>) {
+// Zamowienie nie ma kolumny na stan — przy zapisie poprawek dopisujemy go do miasta ("Austin, TX").
+function cityWithState(receiver: ReceiverBase) {
+  return receiver.state ? `${receiver.city ?? ""}, ${receiver.state}` : receiver.city ?? "";
+}
+
+function orderPatchFromReceiver(patch: Partial<Record<EditableKey, string>>, receiver: ReceiverBase) {
+  const cityTouched = patch.city !== undefined || patch.state !== undefined;
   return {
     ...(patch.name !== undefined ? { customerName: patch.name } : {}),
     ...(patch.email !== undefined ? { customerEmail: patch.email } : {}),
     ...(patch.phone !== undefined ? { customerPhone: patch.phone } : {}),
     ...(patch.street !== undefined ? { customerAddressStreet: patch.street } : {}),
     ...(patch.postal !== undefined ? { customerAddressPostcode: patch.postal } : {}),
-    ...(patch.city !== undefined ? { customerAddressCity: patch.city } : {}),
+    ...(cityTouched ? { customerAddressCity: cityWithState(receiver) } : {}),
   };
+}
+
+// To samo w nazwach pol panelu (order.customer_*) — odpowiedz "saved" dla klienta.
+function savedForClient(patch: Partial<Record<EditableKey, string>>, receiver: ReceiverBase) {
+  const { state: _state, ...rest } = patch;
+  void _state;
+  return patch.city !== undefined || patch.state !== undefined ? { ...rest, city: cityWithState(receiver) } : rest;
 }
 
 export async function GET(
@@ -132,6 +158,7 @@ export async function GET(
         country,
         receiver: receiverFromOrder(order),
         quotes,
+        needsState: needsStateCode(country),
         pickup: pickupOptions(),
         // Poza UE: nadanie wymaga dokumentow celnych — wysylamy opcje "wersja
         // papierowa", a panel daje fakture do wydruku (customs-invoice/route.ts).
@@ -191,11 +218,11 @@ export async function POST(
   // receiver = poprawki danych odbiorcy; saveToOrder = zapisz je tez w zamowieniu
   // (dopiero po udanym nadaniu).
   const body = await request.json().catch(() => ({} as Record<string, unknown>));
-  const edited = applyReceiverEdits(receiverFromOrder(order), body?.receiver, !isDomestic);
+  const edited = applyReceiverEdits(receiverFromOrder(order), body?.receiver, !isDomestic, country);
   if (!edited.ok) return NextResponse.json({ ok: false, error: edited.error }, { status: 400 });
   const receiver = edited.receiver;
   const savedPatch = body?.saveToOrder === true ? edited.patch : {};
-  const orderPatch = orderPatchFromReceiver(savedPatch);
+  const orderPatch = orderPatchFromReceiver(savedPatch, receiver);
   const shipOpts: BcShipOptions = {};
   if (body?.pickup) {
     const pk = parsePickup(body.pickup);
@@ -213,6 +240,12 @@ export async function POST(
     if (!INTL_COURIER_CANDIDATES.some((c) => c.code === courierCode)) {
       return NextResponse.json(
         { ok: false, error: "Wybierz kuriera z listy wycen (courierCode) — nieznany lub brakujący kod." },
+        { status: 400 }
+      );
+    }
+    if (needsStateCode(country) && !isValidStateCode(country, receiver.state || "")) {
+      return NextResponse.json(
+        { ok: false, error: "Podaj kod stanu odbiorcy (np. NY, CA, TX) — UPS wymaga go dla USA i Kanady." },
         { status: 400 }
       );
     }
@@ -248,7 +281,7 @@ export async function POST(
         trackingNumber: created.trackingNumber,
         waybillLink: created.waybillLink,
         trackingSync,
-        saved: savedPatch,
+        saved: savedForClient(savedPatch, receiver),
         raw: created.raw,
       });
     } catch (e) {
@@ -285,7 +318,7 @@ export async function POST(
       basecourierOrderId: created.orderId,
       trackingNumber: created.trackingNumber,
       waybillLink: created.waybillLink,
-      saved: savedPatch,
+      saved: savedForClient(savedPatch, receiver),
       trackingSync,
       raw: created.raw,
     });

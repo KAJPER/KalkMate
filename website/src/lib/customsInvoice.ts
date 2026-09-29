@@ -43,6 +43,10 @@ function countryName(code: string): string {
   return COUNTRY_NAMES[c.toUpperCase()] || c;
 }
 
+export function asciiText(s: string): string {
+  return ascii(s);
+}
+
 function ascii(s: string): string {
   return (s || "")
     .replace(/ł/g, "l")

@@ -4,6 +4,7 @@ import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
+import { splitAddress, splitCityState, needsStateCode } from "@/lib/address";
 
 interface OrderDetail {
   id: string;
@@ -156,7 +157,9 @@ export default function OrderDetailPage({
   const [bcPreview, setBcPreview] = useState<{
     international: boolean;
     country?: string;
-    receiver: { name: string; email: string; phone: string; lockerCode: string; street?: string; postal?: string; city?: string };
+    receiver: { name: string; email: string; phone: string; lockerCode: string; street?: string; postal?: string; city?: string; state?: string };
+    // USA/Kanada: UPS wymaga kodu stanu/prowincji (np. NY).
+    needsState?: boolean;
     // Krajowe (Paczkomat) — jedna cena.
     valuation?: { price: { value: string; netto: string; vat: string } | null };
     // Zagraniczne (DE, US, ...) — kilku kurierow prubowanych na raz, tylko
@@ -183,9 +186,42 @@ export default function OrderDetailPage({
 
   // Dane odbiorcy do poprawy przed nadaniem (np. klient podal ucięty numer telefonu).
   // Inicjalizowane raz z wyceny, potem edytowalne; opcjonalnie zapisywane tez w zamowieniu.
-  type BcRecvEdit = { name: string; phone: string; email: string; street: string; postal: string; city: string };
+  type BcRecvEdit = { name: string; phone: string; email: string; street: string; postal: string; city: string; state: string };
   const [bcRecv, setBcRecv] = useState<BcRecvEdit | null>(null);
   const [bcSaveToOrder, setBcSaveToOrder] = useState(true);
+
+  // Powiazanie przesylki nadanej recznie w panelu Base Courier (np. do USA — API nie przyjmuje stanu dla UPS).
+  const [linkId, setLinkId] = useState("");
+  const [linking, setLinking] = useState(false);
+  const [linkMsg, setLinkMsg] = useState("");
+  const handleLinkBc = async () => {
+    setLinking(true);
+    setLinkMsg("");
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/basecourier/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ basecourierOrderId: linkId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setLinkMsg(data.error || "Błąd powiązania");
+        return;
+      }
+      setFurgonetkaStatus("basecourier");
+      setFurgonetkaPackageId(String(data.basecourierOrderId));
+      if (data.trackingNumber) setTracking(data.trackingNumber);
+      setBcMsg(
+        `Nadano — powiązano zlecenie ${data.basecourierOrderId}${data.courierName ? ` (${data.courierName})` : ""}` +
+          `${data.trackingNumber ? `, numer przesyłki: ${data.trackingNumber}` : ". API nie podaje numeru przesyłki — wpisz go ręcznie w polu „Numer przesyłki” (np. 1Z…) i zapisz"}.` +
+          `${data.warning ? ` ${data.warning}` : ""}`
+      );
+    } catch {
+      setLinkMsg("Błąd sieci");
+    } finally {
+      setLinking(false);
+    }
+  };
 
   // Te same reguly co w API Base Courier: telefon min. 9 cyfr, opcjonalny + na poczatku.
   const recvPhoneClean = (bcRecv?.phone || "").replace(/[\s\-().]/g, "");
@@ -196,6 +232,8 @@ export default function OrderDetailPage({
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bcRecv.email.trim())) return "Nieprawidłowy e-mail odbiorcy.";
     if (bcPreview.international && (!bcRecv.street.trim() || !bcRecv.postal.trim() || !bcRecv.city.trim()))
       return "Uzupełnij adres odbiorcy (ulica, kod pocztowy, miasto).";
+    if (bcPreview.international && bcPreview.needsState && !/^[A-Za-z]{2}$/.test(bcRecv.state.trim()))
+      return "Podaj 2-literowy kod stanu (USA: np. NY, CA, TX; Kanada: ON, QC…) — UPS go wymaga.";
     return "";
   })();
   const recvChanged = (() => {
@@ -206,7 +244,7 @@ export default function OrderDetailPage({
       !same(bcRecv.name, o.name) ||
       recvPhoneClean !== (o.phone || "").replace(/[\s\-().]/g, "") ||
       !same(bcRecv.email, o.email) ||
-      (bcPreview.international && (!same(bcRecv.street, o.street) || !same(bcRecv.postal, o.postal) || !same(bcRecv.city, o.city)))
+      (bcPreview.international && (!same(bcRecv.street, o.street) || !same(bcRecv.postal, o.postal) || !same(bcRecv.city, o.city) || !same(bcRecv.state, o.state)))
     );
   })();
   const receiverPayload = () => ({ receiver: bcRecv, saveToOrder: bcSaveToOrder && recvChanged });
@@ -320,6 +358,11 @@ export default function OrderDetailPage({
     : "";
   const customsHref = `/api/admin/orders/${id}/customs-invoice?value=${encodeURIComponent(customsValue)}&hs=${encodeURIComponent(customsHs)}&origin=${encodeURIComponent(customsOrigin)}&from=${bcPickupMode === "courier" && bcPickupAddr ? bcPickupAddr : "choroszcz"}${customsRecvQuery}`;
 
+  // Karta odprawy celnej UPS (formularz z Base Courier) — wypelniona danymi zamowienia.
+  const customsCardHref = `/api/admin/orders/${id}/customs-card?value=${encodeURIComponent(customsValue)}`;
+  // Prog z Karty: do 1000 EUR i 1000 kg nie trzeba upowaznienia celnego (przyblizone przeliczenie na EUR).
+  const customsValueEur = (parseFloat(customsValue.replace(",", ".")) || 0) * (({ EUR: 1, PLN: 1 / 4.3, USD: 1 / 1.1 } as Record<string, number>)[bcPreview?.customsDefaults?.currency || "EUR"] ?? 1);
+
   const receiverEditor =
     bcPreview && bcRecv ? (
       <div className="space-y-2">
@@ -345,7 +388,7 @@ export default function OrderDetailPage({
           </label>
         </div>
         {bcPreview.international && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className={`grid grid-cols-1 gap-2 ${bcPreview.needsState ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
             <label className="flex flex-col gap-1">
               Ulica i numer
               <input type="text" value={bcRecv.street} onChange={(e) => setBcRecv({ ...bcRecv, street: e.target.value })} className={smallInput} />
@@ -358,6 +401,20 @@ export default function OrderDetailPage({
               Miasto
               <input type="text" value={bcRecv.city} onChange={(e) => setBcRecv({ ...bcRecv, city: e.target.value })} className={smallInput} />
             </label>
+            {bcPreview.needsState && (
+              <label className="flex flex-col gap-1">
+                Stan / prowincja (kod)
+                <input
+                  type="text"
+                  value={bcRecv.state}
+                  maxLength={2}
+                  autoCapitalize="characters"
+                  placeholder="np. NY"
+                  onChange={(e) => setBcRecv({ ...bcRecv, state: e.target.value.toUpperCase() })}
+                  className={`${smallInput} w-24`}
+                />
+              </label>
+            )}
           </div>
         )}
         {recvError ? (
@@ -405,10 +462,29 @@ export default function OrderDetailPage({
         >
           Pobierz fakturę celną (PDF)
         </a>
+        <a
+          href={customsCardHref}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400"
+        >
+          Pobierz kartę odprawy celnej UPS (PDF)
+        </a>
       </div>
       <p className="text-[11px] text-[#E0E0E0]/40">
         Kod HS, kraj pochodzenia i wartość to Twoja deklaracja celna — sprawdź je przed wydrukiem (podpowiedzi: kalkulator 8470.10, kraj PL, kwota zamówienia).
+        Do paczki: faktura celna w 3 egz. + podpisana Karta odprawy celnej UPS (data i podpis do wpisania ręcznie).
       </p>
+      {customsValueEur > 1000 ? (
+        <p className="text-amber-400">
+          Wartość przekracza 1000 EUR — Karta nie zaznacza wtedy „IE599 nie jest wymagane”, a UPS wymaga upoważnienia celnego dla agencji celnej
+          (formularze „Upoważnienie celne pośrednie” w panelu Base Courier). Skonsultuj to z UPS/Base Courier.
+        </p>
+      ) : (
+        <p className="text-[11px] text-[#E0E0E0]/40">
+          Do 1000 EUR i 1000 kg upoważnienie celne dla agencji UPS nie jest wymagane (warunek z samej Karty).
+        </p>
+      )}
     </div>
   ) : null;
 
@@ -431,6 +507,7 @@ export default function OrderDetailPage({
         pickup: data.pickup,
         needsCustomsDocs: data.needsCustomsDocs,
         customsDefaults: data.customsDefaults,
+        needsState: data.needsState,
       });
       setBcRecv(
         (prev) =>
@@ -441,6 +518,7 @@ export default function OrderDetailPage({
             street: data.receiver.street || "",
             postal: data.receiver.postal || "",
             city: data.receiver.city || "",
+            state: data.receiver.state || "",
           }
       );
       if (data.pickup) {
@@ -719,15 +797,6 @@ export default function OrderDetailPage({
     nadawcaTelefon: "600580888",
   };
 
-  // Rozdziela "Marszalkowska 1/2" -> { street: "Marszalkowska", number: "1/2" }.
-  // Furgonetka chce numer budynku w osobnej kolumnie, a u nas to jedno pole.
-  function splitStreetAndNumber(full: string): { street: string; number: string } {
-    const trimmed = (full || "").trim();
-    const m = trimmed.match(/^(.*?)[\s,]+(\d+[a-zA-Z]?(?:\/\d+[a-zA-Z]?)?)$/);
-    if (m) return { street: m[1].trim(), number: m[2].trim() };
-    return { street: trimmed, number: "" };
-  }
-
   // CSV-escapuje pole: cudzyslowia jesli zawiera srednik/cudzyslow/nowa linie.
   function csvField(v: string): string {
     const s = v ?? "";
@@ -737,7 +806,22 @@ export default function OrderDetailPage({
 
   const handleExportFurgonetkaCsv = () => {
     if (!order) return;
-    const { street: recvStreet, number: recvNumber } = splitStreetAndNumber(order.customer_address_street);
+    const country = order.customer_country || "PL";
+    // Dane odbiorcy: poprawione w edytorze Base Courier (jesli otwarty), inaczej z zamowienia.
+    const r = bcRecv ?? {
+      name: order.customer_name,
+      phone: order.customer_phone,
+      email: order.customer_email,
+      street: order.customer_address_street,
+      postal: order.customer_address_postcode,
+      city: order.customer_address_city,
+      state: "",
+    };
+    // Furgonetka chce ulice / numer budynku / numer mieszkania w osobnych kolumnach
+    // ("217 Manhattan Avenue, unit 5B-3" -> Manhattan Avenue | 217 | 5B-3), a u nas to jedno pole.
+    const addr = splitAddress(r.street, country);
+    // Miasto bez dopisanego stanu ("New York, new york" -> "New York"); stanu w szablonie CSV nie ma.
+    const recvCity = splitCityState(r.city, country).city;
     const isPaczkomat = !!order.pickup_point;
 
     // Kolejnosc/liczba kolumn (40) zweryfikowana 1:1 z przyklad-import-zamowien-v2.csv
@@ -766,16 +850,16 @@ export default function OrderDetailPage({
       FURGONETKA_CSV.zawartosc,                                    // zawartosc przesylki *
       FURGONETKA_CSV.sposobNadania,                                // sposob nadania *
       isPaczkomat ? "punkt odbioru" : "kurier",                    // sposob doreczenia *
-      order.customer_name,                                         // imie i nazwisko odbiorcy *
+      r.name,                                                      // imie i nazwisko odbiorcy *
       "",                                                          // nazwa firmy odbiorcy
-      recvStreet,                                                  // ulica odbiorcy *
-      recvNumber,                                                  // numer budynku odbiorcy *
-      "",                                                          // numer mieszkania odbiorcy
-      order.customer_country || "PL",                              // kraj odbiorcy *
-      order.customer_address_postcode,                             // kod pocztowy odbiorcy *
-      order.customer_address_city,                                 // miasto odbiorcy *
-      order.customer_email,                                        // adres e-mail odbiorcy *
-      order.customer_phone,                                        // numer telefonu odbiorcy *
+      addr.street,                                                 // ulica odbiorcy *
+      addr.building,                                               // numer budynku odbiorcy *
+      addr.apartment,                                              // numer mieszkania odbiorcy
+      country,                                                     // kraj odbiorcy *
+      r.postal,                                                    // kod pocztowy odbiorcy *
+      recvCity,                                                    // miasto odbiorcy *
+      r.email,                                                     // adres e-mail odbiorcy *
+      r.phone.replace(/[\s\-().]/g, ""),                           // numer telefonu odbiorcy * (bez spacji/myslnikow)
       isPaczkomat ? "paczkomaty" : "",                             // kurier
       FURGONETKA_CSV.nadawcaImie,                                  // imie i nazwisko nadawcy
       FURGONETKA_CSV.nadawcaFirma,                                 // nazwa firmy nadawcy
@@ -1267,6 +1351,35 @@ export default function OrderDetailPage({
                   </p>
                 </>
               )}
+              {furgonetkaStatus !== "basecourier" && (
+                <details className="rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs text-[#E0E0E0]/80">
+                  <summary className="cursor-pointer text-[#E0E0E0]/70">Nadałeś paczkę ręcznie w panelu Base Courier? Powiąż ją z tym zamówieniem</summary>
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[#E0E0E0]/50">
+                      Podaj ID zlecenia z panelu Base Courier. Potem działają tu: etykieta, śledzenie i automatyczne statusy (bez ponownego nadawania i bez kosztów).
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={linkId}
+                        onChange={(e) => setLinkId(e.target.value.replace(/\D/g, ""))}
+                        placeholder="np. 23675005"
+                        className={`${smallInput} sm:w-48 text-base sm:text-xs`}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleLinkBc}
+                        disabled={linking || linkId.length < 4}
+                        className="px-4 py-2 rounded-lg bg-[#3F4147] hover:bg-[#4a4d55] text-[#E0E0E0] text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {linking ? "Łączę…" : "Powiąż zlecenie"}
+                      </button>
+                    </div>
+                    {linkMsg && <p className="text-red-400">{linkMsg}</p>}
+                  </div>
+                </details>
+              )}
               {bcMsg && (
                 <p className={`text-xs ${bcMsg.startsWith("Nadano") ? "text-green-400" : "text-red-400"}`}>{bcMsg}</p>
               )}
@@ -1295,6 +1408,21 @@ export default function OrderDetailPage({
                   wymiary, dane nadawcy) zweryfikowane z formularzem importu.
                 </p>
               </div>
+
+              {needsStateCode(order.customer_country || "PL") && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
+                  <p className="text-xs text-amber-300 leading-relaxed">
+                    Szablon CSV nie ma kolumny na stan/prowincję — po imporcie wybierz w formularzu Furgonetki pole
+                    „Stan/Prowincja”:{" "}
+                    <strong>
+                      {bcRecv?.state ||
+                        splitCityState(order.customer_address_city, order.customer_country || "").state ||
+                        "(nie wykryto w adresie — sprawdź kod stanu odbiorcy)"}
+                    </strong>
+                    . Miasto, ulica, numer budynku i mieszkania są rozdzielone automatycznie.
+                  </p>
+                </div>
+              )}
 
               <button
                 onClick={handleExportFurgonetkaCsv}

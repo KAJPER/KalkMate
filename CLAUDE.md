@@ -4,7 +4,7 @@
 
 Komercyjny produkt edukacyjny dla polskich uczniów — kalkulator wspomagany AI do rozwiązywania zadań maturalnych (matematyka, fizyka, chemia, biologia). Urządzenie robi zdjęcie zadania kamerą, wysyła je do serwera AI i wyświetla rozwiązanie na ekranie OLED. Alternatywa dla drogich korepetycji.
 
-**Status projektu:** Pierwsza płytka zlutowana, trwa bring-up i debugowanie.
+**Status projektu:** Produkt gotowy i w sprzedaży.
 
 ---
 

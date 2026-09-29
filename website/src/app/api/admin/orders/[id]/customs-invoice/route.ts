@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
-import { PICKUP_ADDRESSES, bcGetProfile, normalizeCountryForShipping, type PickupAddressKey } from "@/lib/basecourier";
+import { PICKUP_ADDRESSES, bcGetProfile, normalizeCountryForShipping, splitCityState, type PickupAddressKey } from "@/lib/basecourier";
 import { buildCustomsInvoicePdf } from "@/lib/customsInvoice";
 
 // GET /api/admin/orders/[id]/customs-invoice?value=&hs=&origin=&from=
@@ -47,6 +47,12 @@ export async function GET(
     return v && v.length <= max ? v : fallback;
   };
 
+  // Stan (US/CA) — z formularza panelu albo wykryty z pola miasta zamowienia; na fakturze "Miasto, ST".
+  const guessed = splitCityState(order.customerAddressCity, order.customerCountry);
+  const consigneeState = pick("state", guessed.state, 3);
+  const consigneeCityBase = pick("city", guessed.city, 80);
+  const consigneeCity = consigneeState ? `${consigneeCityBase}, ${consigneeState}` : consigneeCityBase;
+
   try {
     const pdf = await buildCustomsInvoicePdf({
       invoiceNo: order.orderNumber,
@@ -65,7 +71,7 @@ export async function GET(
         name: pick("name", order.customerName, 100),
         street: pick("street", order.customerAddressStreet || "", 150),
         postal: pick("postal", order.customerAddressPostcode || "", 20),
-        city: pick("city", order.customerAddressCity || "", 80),
+        city: consigneeCity,
         country,
         phone: pick("phone", order.customerPhone, 20),
         email: pick("email", order.customerEmail, 120),

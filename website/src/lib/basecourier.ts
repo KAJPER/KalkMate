@@ -143,7 +143,15 @@ export interface BcReceiver {
   houseNo?: string;
   postal?: string;
   city?: string;
+  state?: string; // kod stanu/prowincji (US, CA) — np. "NY"
+  country?: string; // kod kraju odbiorcy (zagranica) — decyduje o sposobie rozbicia adresu
 }
+
+// Stan / prowincja (US, CA) — logika w address.ts (czysta, uzywana tez w panelu).
+// UPS wymaga StateProvinceCode dla USA i Kanady (blad 120206), a formularz zamowienia
+// ma tylko pole "miasto" — stan wykrywamy z niego (splitCityState).
+export { needsStateCode, isValidStateCode, splitCityState } from "./address";
+import { splitAddress } from "./address";
 
 // Rozbija "ul. Zastawie I 37" -> { street:"ul. Zastawie I", house_no:"37" };
 // gdy brak numeru, zwraca house_no "1" (API wymaga niepustego numeru).
@@ -396,7 +404,12 @@ function buildOrderPayload(
   orderRef: string,
   opts: BcShipOptions = {}
 ): Record<string, unknown> {
-  const recvAddr = splitStreet(receiver.street);
+  // Zagranica: "217 Manhattan Avenue, unit 5B-3" -> ulica / numer 217 / mieszkanie 5B-3 (USA pisze numer przed ulica).
+  // Kraj: bez zmian (splitStreet, mieszkanie puste).
+  const foreign = receiver.country && receiver.country.toUpperCase() !== "PL" ? splitAddress(receiver.street, receiver.country) : null;
+  const recvAddr = foreign
+    ? { street: foreign.street || "-", house_no: foreign.building || "1", locum_no: foreign.apartment }
+    : { ...splitStreet(receiver.street), locum_no: "" };
   // Przy podjezdzie adres nadawcy = wybrany adres odbioru paczki.
   const from = opts.pickup ? PICKUP_ADDRESSES[opts.pickup.addressKey] : null;
   const [readyH, readyM] = (opts.pickup?.from ?? "").split(":");
@@ -429,8 +442,16 @@ function buildOrderPayload(
     ...(receiver.lockerCode ? { taker_point: receiver.lockerCode } : {}),
     taker_street: receiver.street ? recvAddr.street : "",
     taker_house_no: receiver.street ? recvAddr.house_no : "",
+    taker_locum_no: receiver.street ? recvAddr.locum_no : "",
     taker_postal: receiver.postal ?? "",
     taker_city: receiver.city ?? "",
+    // Stan (US/CA): UWAGA — model zlecenia Base Courier (getOrderDetails, 2026-09-28) nie ma
+    // zadnej kolumny na stan/prowincje (tylko taker_city/taker_postal/...), a UPS mimo to
+    // wymaga StateProvinceCode (blad 120206). Wysylanie taker_state / dopisanie stanu do
+    // miasta ("New York, NY") NIE pomoglo. Zostawiamy taker_state jako tani strzal, ale
+    // pewna droga dla USA to nadanie recznie w panelu Base Courier i powiazanie zlecenia
+    // (POST .../basecourier/link).
+    ...(receiver.state ? { taker_state: receiver.state } : {}),
     // paczka
     package_content: KALKMATE_PARCEL.content,
     // referencja do naszego zamowienia (widoczna w panelu Base Courier)
@@ -500,7 +521,7 @@ export async function bcCreateInternationalShipment(
     throw new Error(`Nieznany kurier: ${courierCode}`);
   }
   const sender = await bcGetProfile();
-  const order = buildOrderPayload(receiver, sender, orderRef, opts);
+  const order = buildOrderPayload({ ...receiver, country: normalizeCountryForShipping(countryCode) }, sender, orderRef, opts);
 
   const env = await bcCall<Record<string, unknown>>("createOrderV2.json", {
     CartOrder: { payment: paymentMethod() },
