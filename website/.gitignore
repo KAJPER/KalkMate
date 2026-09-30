@@ -1,5 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Obraz podpisu do dokumentow celnych (dane osobowe) — NIGDY w repo, publiczne.
+/assets/signature.png
+/assets/signature.jpg
+
 # dependencies
 /node_modules
 /.pnp

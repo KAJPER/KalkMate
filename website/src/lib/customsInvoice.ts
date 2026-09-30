@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { loadSignatureImage, drawSignature } from "./signature";
 
 // Faktura handlowa (Commercial Invoice) do przesylek poza UE — wersja
 // papierowa dokumentow celnych (Base Courier: CourierSearch.paper_customs_docs).
@@ -165,11 +166,21 @@ export async function buildCustomsInvoicePdf(input: CustomsInvoiceInput): Promis
     text(l, M, y, 10);
     y -= 13;
   }
-  y -= 40;
+  // 60pt (zamiast 40) — miejsce na obraz podpisu I duza date nad prawa linia,
+  // jedno nad drugim bez zachodzenia na siebie (patrz ponizej).
+  y -= 60;
+  const sig = await loadSignatureImage(doc);
+  if (sig) drawSignature(page, sig, M, y + 4, 190, 30);
   hline(y, M, M + 220);
   text("Signature", M, y - 12, 9, false, grey);
+
+  // Prawa strona: ten sam obraz podpisu (dol) + duza, czytelna data (gora) nad
+  // linia — na wyrazne zyczenie wlasciciela, zeby obie strony wygladaly rownie
+  // "wypelnione" na pierwszy rzut oka, nie tylko drobny podpis tekstowy.
+  if (sig) drawSignature(page, sig, 320, y + 4, 190, 30);
+  text(input.date, 320, y + 38, 14, true);
   hline(y, 320, 320 + 200);
-  text(`Name / Date: ${input.shipper.name} / ${input.date}`, 320, y - 12, 9, false, grey);
+  text(`Name: ${input.shipper.name}`, 320, y - 12, 9, false, grey);
 
   return doc.save();
 }

@@ -533,15 +533,23 @@ export async function bcCreateInternationalShipment(
   return parseCreatedShipment(env.data ?? {});
 }
 
-// Etykieta PDF. Kontrakt zweryfikowany na produkcji (2026-09-18):
-//   POST getWaybill.json  { Order: { id: <int>, printer_type: "A4" } }
-//   -> { success: true, data: { "0": { type:"label", filename, mime:"application/pdf", file:<base64> },
-//                               labels: [ { name:"ZPL_...", extension:"zpl", file }, { ... "epl" } ] } }
-// UWAGA: printer_type "A6" dla InPost Paczkomat zwraca "Wystapil blad podczas
-// pobierania dokumentow" — dziala tylko A4 (etykieta i tak jest 100x150 na
-// stronie A4). Id to Order[0].id z odpowiedzi createOrderV2 (NIE CartOrder.id_prefix).
+// Etykieta PDF. Kontrakt zweryfikowany na produkcji (2026-09-18, printer_type
+// przewalidowany 2026-09-30):
+//   POST getWaybill.json  { Order: { id: <int>, printer_type: "LBL" } }
+//   -> { success: true, data: { "0": { type:"label", filename:"LBL_<tracking>.pdf",
+//                                       mime:"application/pdf", file:<base64> }, labels: [...] } }
+// "LBL" to nieudokumentowana, ale dzialajaca wartosc printer_type — zwraca gotowa,
+// pojedyncza etykiete ok. A6 (105x148mm, pasuje na VEVOR 100x150mm), BEZ potrzeby
+// przycinania. Wczesniej uzywalismy "A4" + reczne przyciecie do gornego-lewego rogu
+// strony (patrz historia tego pliku) — dzialalo to przypadkiem dla domyslnych
+// przesylek InPost, ale dla UPS/international etykieta w wersji A4 jest OBROCONA
+// o 90° i umieszczona w LEWYM-DOLNYM rogu (czasem tez poprzedzona strona z "Your
+// closest UPS Access Points"), wiec przyciecie top-left lapalo pusta/zla tresc —
+// admin drukowal nieprawidlowy plik. "A6" (bez "L") dla obu typow przesylek zwraca
+// blad "Wystapil blad podczas pobierania dokumentow" — nie mylic z "LBL".
+// Id to Order[0].id z odpowiedzi createOrderV2 (NIE CartOrder.id_prefix) — patrz bcFindOrder().
 export async function bcGetWaybillPdf(blpaczkaOrderId: string): Promise<{ pdf: Buffer | null; link: string | null; raw: unknown }> {
-  const printerType = process.env.BASECOURIER_PRINTER || "A4";
+  const printerType = process.env.BASECOURIER_PRINTER || "LBL";
   const env = await bcCall<unknown>("getWaybill.json", {
     Order: { id: Number(blpaczkaOrderId), printer_type: printerType },
   });
@@ -618,4 +626,45 @@ export async function bcGetOrderDetails(blpaczkaOrderId: string): Promise<BcOrde
     events,
     raw: d,
   };
+}
+
+// Panel Base Courier pokazuje odbiorcy/nadawcy "Numer zamowienia" (CartOrder.id_prefix,
+// np. 23729913) — TO NIE JEST to samo co "Order.id" (np. 23780392), ktorego wymaga
+// getOrderDetails.json/getWaybill.json. Admin naturalnie kopiuje ten pierwszy (jest
+// najbardziej widoczny w ich UI), wiec "Powiaz zlecenie" szuka po OBU: sprawdza liste
+// getOrders.json (do 5 stron, max 500 zlecen — konto ma ich dzis kilkanascie) i dopasowuje
+// po id_prefix ALBO po Order.id. Przy okazji: getOrders.json (w przeciwienstwie do
+// getOrderDetails.json, ktore dla tego zlecenia zwrocilo waybill_no=null mimo ze etykieta
+// juz istnieje) ma numer listu przewozowego w tym samym wpisie — jesli sie znajdzie,
+// nie trzeba go juz wpisywac recznie.
+export interface BcOrderLookup {
+  orderId: string;
+  waybillNo: string | null;
+  takerName: string | null;
+}
+
+type BcOrderRow = { Order?: Record<string, unknown>; CartOrder?: Record<string, unknown> };
+
+export async function bcFindOrder(idOrPrefix: string): Promise<BcOrderLookup | null> {
+  const needle = idOrPrefix.trim();
+  for (let page = 1; page <= 5; page++) {
+    const env = await bcCall<BcOrderRow[]>("getOrders.json", { Pagination: { page } });
+    if (!env.success) throw new Error(bcErrorMessage(env));
+    const rows = env.data ?? [];
+    for (const row of rows) {
+      const orderId = row.Order?.id;
+      const idPrefix = row.CartOrder?.id_prefix;
+      if (String(orderId ?? "") === needle || String(idPrefix ?? "") === needle) {
+        return {
+          orderId: String(orderId),
+          waybillNo: typeof row.Order?.waybill_no === "string" && row.Order.waybill_no.trim() ? row.Order.waybill_no.trim() : null,
+          takerName: typeof row.Order?.taker_name === "string" ? row.Order.taker_name : null,
+        };
+      }
+    }
+    // "pagination" jest polem odpowiedzi obok "data" — nie ma go w BaseCourierEnvelope<T>, doczytujemy osobno.
+    const pagination = (env as unknown as { pagination?: { next?: boolean } }).pagination;
+    if (!pagination?.next) break;
+  }
+  return null;
 }

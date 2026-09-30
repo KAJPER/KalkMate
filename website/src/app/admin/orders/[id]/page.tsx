@@ -473,13 +473,26 @@ export default function OrderDetailPage({
       </div>
       <p className="text-[11px] text-[#E0E0E0]/40">
         Kod HS, kraj pochodzenia i wartość to Twoja deklaracja celna — sprawdź je przed wydrukiem (podpowiedzi: kalkulator 8470.10, kraj PL, kwota zamówienia).
-        Do paczki: faktura celna w 3 egz. + podpisana Karta odprawy celnej UPS (data i podpis do wpisania ręcznie).
+        Do paczki: faktura celna w 3 egz. + Karta odprawy celnej UPS (data i podpis wklejane automatycznie, jeśli zapisałeś podpis w ustawieniach panelu).
       </p>
       {customsValueEur > 1000 ? (
-        <p className="text-amber-400">
-          Wartość przekracza 1000 EUR — Karta nie zaznacza wtedy „IE599 nie jest wymagane”, a UPS wymaga upoważnienia celnego dla agencji celnej
-          (formularze „Upoważnienie celne pośrednie” w panelu Base Courier). Skonsultuj to z UPS/Base Courier.
-        </p>
+        <div className="space-y-2">
+          <p className="text-amber-400">
+            Wartość przekracza 1000 EUR — Karta nie zaznacza wtedy „IE599 nie jest wymagane”, a UPS wymaga upoważnienia celnego dla agencji celnej.
+            Pobierz i dołącz podpisane upoważnienie (jednorazowe, tylko do tej przesyłki):
+          </p>
+          <a
+            href={`/api/admin/orders/${id}/customs-authorization`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-[#1a1a1a] bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400"
+          >
+            Pobierz upoważnienie celne UPS (PDF)
+          </a>
+          <p className="text-[11px] text-[#E0E0E0]/40">
+            Wypełnia PESEL (z konfiguracji serwera, nigdy w repo) i zaznacza „WYRAŻAM zgodę na dalsze upoważnienie” — jeśli to się zmieni, popraw ręcznie przed podpisem.
+          </p>
+        </div>
       ) : (
         <p className="text-[11px] text-[#E0E0E0]/40">
           Do 1000 EUR i 1000 kg upoważnienie celne dla agencji UPS nie jest wymagane (warunek z samej Karty).
@@ -1356,7 +1369,7 @@ export default function OrderDetailPage({
                   <summary className="cursor-pointer text-[#E0E0E0]/70">Nadałeś paczkę ręcznie w panelu Base Courier? Powiąż ją z tym zamówieniem</summary>
                   <div className="mt-3 space-y-2">
                     <p className="text-[#E0E0E0]/50">
-                      Podaj ID zlecenia z panelu Base Courier. Potem działają tu: etykieta, śledzenie i automatyczne statusy (bez ponownego nadawania i bez kosztów).
+                      Podaj „Numer zamówienia” z panelu Base Courier (ten widoczny na górze strony zamówienia, np. 23729913). Potem działają tu: etykieta, śledzenie i automatyczne statusy (bez ponownego nadawania i bez kosztów).
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
@@ -1364,7 +1377,7 @@ export default function OrderDetailPage({
                         inputMode="numeric"
                         value={linkId}
                         onChange={(e) => setLinkId(e.target.value.replace(/\D/g, ""))}
-                        placeholder="np. 23675005"
+                        placeholder="np. 23729913"
                         className={`${smallInput} sm:w-48 text-base sm:text-xs`}
                       />
                       <button

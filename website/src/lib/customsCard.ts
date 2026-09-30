@@ -1,5 +1,6 @@
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { asciiText } from "./customsInvoice";
+import { loadSignatureImage, drawSignature, todayPl } from "./signature";
 
 // Wypelnianie "Karty odprawy celnej eksportowej" UPS Polska (v.4 z 09.07.2021) —
 // formularz PDF z Base Courier (basecourier.com/panel/export/docs). Wymagana przy
@@ -52,5 +53,15 @@ export async function fillCustomsCard(template: Uint8Array, input: CustomsCardIn
   form.getRadioGroup("Group5").select("Wybór16"); // towary o znaczeniu strategicznym: NIE
 
   form.updateFieldAppearances(font);
+
+  // Kolumna "DATA I CZYTELNY PODPIS" nie ma pola formularza w szablonie (tylko
+  // pierwsze dwie kolumny go maja) — wspolrzedne wziete z linii/tekstu w PDF
+  // (kolumna: x 351-529.5, wiersz: y 47-88, uklad wspolrzednych PDF, lewy-dolny rog strony).
+  const page = doc.getPage(0);
+  page.drawText(todayPl(), { x: 361, y: 77, size: 9 });
+  const sig = await loadSignatureImage(doc);
+  if (sig) drawSignature(page, sig, 361, 50, 155, 24);
+  else page.drawText("(brak zapisanego podpisu)", { x: 361, y: 56, size: 7, color: rgb(0.6, 0.6, 0.6) });
+
   return doc.save();
 }

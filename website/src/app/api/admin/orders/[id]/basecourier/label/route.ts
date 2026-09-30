@@ -4,10 +4,12 @@ import { prisma } from "@/lib/db";
 import { bcGetWaybillPdf } from "@/lib/basecourier";
 import { PDFDocument } from "pdf-lib";
 
-// Base Courier zwraca etykiete InPost jako strone A4 (595x842 pt) z etykieta
-// 4x6 cala (288x432 pt) w lewym gornym rogu (printer_type "A6" nie dziala dla
-// InPost). Do druku na drukarce etykiet 100x150 mm przycinamy strone do samej
-// etykiety — bez tego drukarka skaluje cala kartke A4 i etykieta wychodzi malutka.
+// bcGetWaybillPdf uzywa printer_type "LBL" (patrz basecourier.ts) — zwraca juz
+// gotowa, pojedyncza etykiete ok. A6, wiec ponizsze przyciecie jest dzis tylko
+// zabezpieczeniem (np. gdyby BASECOURIER_PRINTER w .env wymusil kiedys "A4",
+// gdzie etykieta InPost siedzi w lewym-gornym rogu strony — dla A4 z UPS/
+// international ten mediabox-crop NIE jest poprawny, bo tam etykieta bywa
+// obrocona i w innym rogu; "A4" nie powinno juz byc uzywane, patrz basecourier.ts).
 const LABEL_W_PT = 300; // 4 cale + margines bezpieczenstwa
 const LABEL_H_PT = 432; // 6 cali
 
