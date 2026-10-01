@@ -131,6 +131,9 @@ export async function generateReplyDraft(params: {
   customerEmailText: string;
   customerName?: string | null;
   orders: OrderContext[];
+  // Tekst wpisany przez admina w pole odpowiedzi przed kliknieciem "AI" —
+  // notatki / co ma byc w odpowiedzi / wlasny brudnopis do rozwiniecia.
+  instruction?: string;
 }): Promise<string> {
   const ordersBlock = params.orders.length
     ? params.orders.map(describeOrder).join("\n")
@@ -150,9 +153,13 @@ Zasady (waznie przestrzegaj):
 - Ton: cieply, konkretny, rzeczowy, bez sztucznego entuzjazmu, bez emoji.
 - Podpis na koncu, przetlumaczony na jezyk odpowiedzi (np. "Zespół KalkMate" / "KalkMate Team" / "Ihr KalkMate-Team").
 - To jest SZKIC do przejrzenia przez czlowieka przed wyslaniem, wiec mozesz w tresci wprost zaznaczyc niepewnosc, jesli czegos w danych brakuje.
+- Jesli dostajesz [WSKAZOWKI OD ADMINA] — to jest NAJWAZNIEJSZE: tresc odpowiedzi ma przekazac dokladnie to, co tam jest (fakty, decyzje, ton), nawet jesli to tylko luzne notatki, brudnopis albo inny jezyk niz mail klienta. Nie dodawaj obietnic, ktorych tam nie ma. Wskazowki maja pierwszenstwo przed baza wiedzy.
 - Wypisz WYLACZNIE tresc odpowiedzi (bez tematu maila, bez komentarzy w stylu "Oto szkic odpowiedzi:", bez nazwy jezyka).`;
 
-  const user = `[DANE O ZAMOWIENIACH KLIENTA]\n${ordersBlock}\n\n[MAIL OD KLIENTA${params.customerName ? ` (${params.customerName})` : ""}]\n${params.customerEmailText.slice(0, 8000)}`;
+  const instruction = params.instruction?.trim();
+  const user = `[DANE O ZAMOWIENIACH KLIENTA]\n${ordersBlock}\n\n[MAIL OD KLIENTA${params.customerName ? ` (${params.customerName})` : ""}]\n${params.customerEmailText.slice(0, 8000)}${
+    instruction ? `\n\n[WSKAZOWKI OD ADMINA — co ma byc w odpowiedzi]\n${instruction.slice(0, 4000)}` : ""
+  }`;
 
   return callOpenRouter(system, user);
 }
@@ -189,6 +196,40 @@ Zasady (waznie przestrzegaj):
 
   const user = `[DANE O ZAMOWIENIACH KLIENTA]\n${ordersBlock}\n\n[TEMAT/INSTRUKCJA OD ADMINA]\n${
     params.instruction?.trim() || `(brak — napisz ogolna wiadomosc o statusie zamowienia ${params.focusOrderNumber})`
+  }`;
+
+  return callOpenRouter(system, user);
+}
+
+// Szkic NOWEJ wiadomosci z /admin/mailbox ("Nowa wiadomosc") — do dowolnego
+// adresu, nie musi dotyczyc zamowienia. Kontekstem jest to, co admin wpisal
+// w tresc (notatki/brudnopis) i temat; jesli adres odbiorcy ma zamowienia
+// w bazie, model je dostaje, zeby nie zmyslal statusow.
+export async function generateNewMailDraft(params: {
+  subject?: string;
+  instruction?: string;
+  orders: OrderContext[];
+}): Promise<string> {
+  const ordersBlock = params.orders.length
+    ? params.orders.map(describeOrder).join("\n")
+    : "Brak zamówień powiązanych z adresem odbiorcy w bazie KalkMate.";
+
+  const system = `Jestes pomocnym, uprzejmym asystentem sklepu KalkMate (kalkulator edukacyjny z AI dla maturzystow, kalkmate.pl).
+Piszesz NOWEGO maila z adresu kontakt@kalkmate.pl z inicjatywy zespolu — to NIE jest odpowiedz na wiadomosc. Odbiorca moze byc klientem, szkola, firma, dostawca itp.
+
+${KALKMATE_KNOWLEDGE}
+
+Zasady (waznie przestrzegaj):
+- Tresc maila buduj na podstawie [NOTATKI OD ADMINA] i [TEMAT] — przekaz dokladnie to, co tam jest, rozwin luzne notatki w porzadny mail. Nie dodawaj obietnic ani faktow, ktorych tam nie ma.
+- JEZYK: pisz w jezyku notatek/tematu (notatki po angielsku -> mail po angielsku). Jesli nie da sie rozpoznac, pisz po polsku.
+- Dane o zamowieniach wykorzystaj TYLKO jesli mail ich dotyczy. Nie wymyslaj statusow, dat, numerow przesylek ani kwot.
+- Ton: cieply, konkretny, rzeczowy, bez sztucznego entuzjazmu, bez emoji.
+- Podpis na koncu, w jezyku maila (np. "Zespół KalkMate" / "KalkMate Team").
+- To jest SZKIC do przejrzenia przez czlowieka przed wyslaniem.
+- Wypisz WYLACZNIE tresc maila (bez tematu, bez komentarzy w stylu "Oto szkic:", bez nazwy jezyka).`;
+
+  const user = `[DANE O ZAMOWIENIACH ODBIORCY]\n${ordersBlock}\n\n[TEMAT]\n${params.subject?.trim() || "(brak)"}\n\n[NOTATKI OD ADMINA]\n${
+    params.instruction?.trim().slice(0, 6000) || "(brak — napisz krotki mail na podstawie tematu)"
   }`;
 
   return callOpenRouter(system, user);

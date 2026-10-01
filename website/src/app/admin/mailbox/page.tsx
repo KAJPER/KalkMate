@@ -92,6 +92,185 @@ function fmtSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// Zalacznik dodany w formularzu (jeszcze niewyslany). data = base64 bez prefiksu.
+interface PendingAttachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  data: string;
+  size: number;
+  previewUrl: string | null;
+}
+
+const MAX_ATTACH_TOTAL = 15 * 1024 * 1024;
+// nginx odrzuca za duze zapytanie (413) zanim dotrze do Next — HTML zamiast JSON.
+const TOO_LARGE_MSG = "Serwer odrzucił załączniki jako za duże (nginx client_max_body_size). Usuń część zdjęć.";
+const MAX_IMAGE_SIDE = 1920;
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ""));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+// Zdjecia z telefonu maja po 4-12 MB — zmniejszamy do 1920 px (JPEG), zeby
+// mail nie wazyl kilkudziesieciu MB i nie odbil sie od limitu serwera.
+// GIF zostaje bez zmian (animacja), a czego przegladarka nie umie zdekodowac
+// (np. HEIC w Chrome) — idzie jak jest.
+async function shrinkImage(file: File): Promise<{ blob: Blob; filename: string; contentType: string }> {
+  const original = { blob: file as Blob, filename: file.name, contentType: file.type };
+  if (file.type === "image/gif" || !file.type.startsWith("image/")) return original;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 1024 * 1024 && file.type !== "image/heic" && file.type !== "image/heif") {
+      bitmap.close();
+      return original;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return original;
+    ctx.fillStyle = "#fff"; // PNG z przezroczystoscia -> biale tlo zamiast czarnego w JPEG
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", 0.85));
+    if (!blob || blob.size >= file.size) return original;
+    const base = (file.name || "zdjecie").replace(/\.[^.]+$/, "");
+    return { blob, filename: `${base}.jpg`, contentType: "image/jpeg" };
+  } catch {
+    return original;
+  }
+}
+
+async function fileToAttachment(file: File): Promise<PendingAttachment> {
+  const { blob, filename, contentType } = await shrinkImage(file);
+  const data = await blobToBase64(blob);
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    filename: filename || "zalacznik",
+    contentType: contentType || "application/octet-stream",
+    data,
+    size: blob.size,
+    previewUrl: contentType.startsWith("image/") ? URL.createObjectURL(blob) : null,
+  };
+}
+
+function AttachmentPicker({
+  items,
+  onChange,
+  disabled,
+}: {
+  items: PendingAttachment[];
+  onChange: (next: PendingAttachment[]) => void;
+  disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const remove = (id: string) => {
+    const a = items.find((x) => x.id === id);
+    if (a?.previewUrl) URL.revokeObjectURL(a.previewUrl);
+    onChange(items.filter((x) => x.id !== id));
+  };
+
+  return (
+    <div className="space-y-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        multiple
+        className="hidden"
+        onChange={async (e) => {
+          const files = Array.from(e.target.files || []);
+          e.target.value = "";
+          if (!files.length) return;
+          setBusy(true);
+          setErr("");
+          try {
+            const added = await addFiles(items, files);
+            if (typeof added === "string") setErr(added);
+            else onChange(added);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={disabled || busy}
+          onClick={() => inputRef.current?.click()}
+          className="px-3 py-2 rounded-lg text-sm text-[#E0E0E0]/80 bg-[#2B2D31] border border-[#3F4147] hover:bg-[#3F4147] transition-colors disabled:opacity-50"
+        >
+          {busy ? "Dodaję…" : "📎 Dodaj zdjęcie / plik"}
+        </button>
+        <span className="text-[11px] text-[#E0E0E0]/40">Zdjęcia możesz też wkleić (Ctrl+V) w treść.</span>
+      </div>
+      {err && <p className="text-xs text-red-400">{err}</p>}
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {items.map((a) => (
+            <div key={a.id} className="relative group rounded-lg border border-[#3F4147] bg-[#2B2D31] overflow-hidden">
+              {a.previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.previewUrl} alt={a.filename} className="h-20 w-20 object-cover" />
+              ) : (
+                <div className="h-20 w-20 flex flex-col items-center justify-center p-1 text-center">
+                  <span className="text-lg">📄</span>
+                  <span className="text-[9px] text-[#E0E0E0]/60 break-all line-clamp-2">{a.filename}</span>
+                </div>
+              )}
+              <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-white/80 px-1 truncate">{fmtSize(a.size)}</span>
+              <button
+                type="button"
+                onClick={() => remove(a.id)}
+                aria-label={`Usuń ${a.filename}`}
+                className="absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-black/70 text-white text-xs leading-none hover:bg-red-500"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Zwraca nowa liste albo komunikat bledu (za duzo / za ciezko).
+async function addFiles(current: PendingAttachment[], files: File[]): Promise<PendingAttachment[] | string> {
+  const accepted = files.filter((f) => f.type.startsWith("image/") || f.type === "application/pdf");
+  if (!accepted.length) return "Można dodać tylko zdjęcia i PDF.";
+  if (current.length + accepted.length > 10) return "Maksymalnie 10 załączników.";
+  const added = await Promise.all(accepted.map(fileToAttachment));
+  const next = [...current, ...added];
+  if (next.reduce((n, a) => n + a.size, 0) > MAX_ATTACH_TOTAL) {
+    added.forEach((a) => a.previewUrl && URL.revokeObjectURL(a.previewUrl));
+    return "Załączniki są za duże (max 15 MB łącznie).";
+  }
+  return next;
+}
+
+// Obrazki wklejone ze schowka (zrzut ekranu) w pole tresci.
+function pastedImages(e: React.ClipboardEvent): File[] {
+  return Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith("image/"));
+}
+
+const attachmentsPayload = (list: PendingAttachment[]) =>
+  list.map((a) => ({ filename: a.filename, contentType: a.contentType, data: a.data }));
+
+function revokeAll(list: PendingAttachment[]) {
+  list.forEach((a) => a.previewUrl && URL.revokeObjectURL(a.previewUrl));
+}
+
 export default function MailboxPage() {
   const [folder, setFolder] = useState("INBOX");
   const [messages, setMessages] = useState<MessageSummary[]>([]);
@@ -119,6 +298,10 @@ export default function MailboxPage() {
   const [composeText, setComposeText] = useState("");
   const [composeSending, setComposeSending] = useState(false);
   const [composeMsg, setComposeMsg] = useState("");
+  const [composeAttachments, setComposeAttachments] = useState<PendingAttachment[]>([]);
+  const [composeGenerating, setComposeGenerating] = useState(false);
+  const [composeDraftErr, setComposeDraftErr] = useState("");
+  const [replyAttachments, setReplyAttachments] = useState<PendingAttachment[]>([]);
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [replyTo, setReplyTo] = useState("");
@@ -218,12 +401,15 @@ export default function MailboxPage() {
     setComposeSubject("");
     setComposeText("");
     setComposeMsg("");
+    setComposeDraftErr("");
+    revokeAll(composeAttachments);
+    setComposeAttachments([]);
     setComposeOpen(true);
     window.scrollTo({ top: 0 });
   };
 
   const sendCompose = async () => {
-    if (!composeTo.trim() || !composeSubject.trim() || !composeText.trim()) return;
+    if (!composeTo.trim() || !composeSubject.trim() || (!composeText.trim() && !composeAttachments.length)) return;
     setComposeSending(true);
     setComposeMsg("");
     try {
@@ -234,14 +420,26 @@ export default function MailboxPage() {
       const res = await fetch("/api/admin/mailbox/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: composeTo, cc: composeCc, subject: composeSubject, html }),
+        body: JSON.stringify({
+          to: composeTo,
+          cc: composeCc,
+          subject: composeSubject,
+          html,
+          attachments: attachmentsPayload(composeAttachments),
+        }),
       });
+      if (res.status === 413) {
+        setComposeMsg(TOO_LARGE_MSG);
+        return;
+      }
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setComposeMsg(data.error || "Błąd wysyłki");
         return;
       }
       setComposeMsg("Wysłano.");
+      revokeAll(composeAttachments);
+      setComposeAttachments([]);
       setTimeout(() => {
         setComposeOpen(false);
         if (folder === "Sent") loadList("Sent");
@@ -250,6 +448,35 @@ export default function MailboxPage() {
       setComposeMsg("Błąd sieci");
     } finally {
       setComposeSending(false);
+    }
+  };
+
+  // AI pisze nowa wiadomosc: to, co jest wpisane w tresc (i temat), to
+  // kontekst/notatki, z ktorych powstaje mail. Wynik zastepuje tresc —
+  // wysylka dalej reczna.
+  const handleGenerateCompose = async () => {
+    if (!composeSubject.trim() && !composeText.trim()) {
+      setComposeDraftErr("Wpisz temat albo kilka słów w treści — AI zrobi z tego maila.");
+      return;
+    }
+    setComposeGenerating(true);
+    setComposeDraftErr("");
+    try {
+      const res = await fetch("/api/admin/mailbox/draft-new", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: composeTo, subject: composeSubject, instruction: composeText }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setComposeDraftErr(data.error || "Błąd generowania");
+        return;
+      }
+      setComposeText(data.draft);
+    } catch {
+      setComposeDraftErr("Błąd sieci");
+    } finally {
+      setComposeGenerating(false);
     }
   };
 
@@ -291,6 +518,8 @@ export default function MailboxPage() {
     setReplySubject(message.subject.toLowerCase().startsWith("re:") ? message.subject : `Re: ${message.subject}`);
     setReplyText("");
     setSendMsg("");
+    revokeAll(replyAttachments);
+    setReplyAttachments([]);
     setReplyTranslateErr("");
     setDraftErr("");
     setDraftOrdersFound(null);
@@ -298,7 +527,7 @@ export default function MailboxPage() {
   };
 
   const sendReply = async () => {
-    if (!message || !replyText.trim()) return;
+    if (!message || (!replyText.trim() && !replyAttachments.length)) return;
     setSending(true);
     setSendMsg("");
     try {
@@ -309,8 +538,18 @@ export default function MailboxPage() {
       const res = await fetch(`/api/admin/mailbox/${message.uid}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder, toAddress: replyTo, subject: replySubject, html }),
+        body: JSON.stringify({
+          folder,
+          toAddress: replyTo,
+          subject: replySubject,
+          html,
+          attachments: attachmentsPayload(replyAttachments),
+        }),
       });
+      if (res.status === 413) {
+        setSendMsg(TOO_LARGE_MSG);
+        return;
+      }
       const data = await res.json();
       if (!res.ok || !data.ok) {
         setSendMsg(data.error || "Błąd wysyłki");
@@ -318,6 +557,8 @@ export default function MailboxPage() {
       }
       setSendMsg("Wysłano.");
       setReplyText("");
+      revokeAll(replyAttachments);
+      setReplyAttachments([]);
       const uid = message.uid;
       setMessages((prev) => prev.map((m) => (m.uid === uid ? { ...m, answered: true } : m)));
       setTimeout(() => {
@@ -389,11 +630,13 @@ export default function MailboxPage() {
   // klienta z bazy). Zawsze tylko wypelnia pole tekstowe — wysylka to nadal
   // osobny, reczny krok ("Wyslij"), zeby czlowiek zawsze widzial i mogl
   // poprawic tresc zanim poleci realny mail do klienta.
+  // Jesli w polu cos jest wpisane, to idzie do AI jako kontekst/notatki
+  // ("napisz ze wysylka w piatek, przeproś za opoznienie") i AI robi z tego
+  // pelna odpowiedz; puste pole = zwykla odpowiedz na podstawie maila.
   const handleGenerateDraft = async () => {
     if (!message) return;
-    const wasOpen = replyOpen;
-    if (wasOpen && replyText.trim() && !confirm("Zastąpić obecną treść odpowiedzi wygenerowaną przez AI?")) return;
-    if (!wasOpen) startReply();
+    const instruction = replyOpen ? replyText.trim() : "";
+    if (!replyOpen) startReply();
     setGeneratingDraft(true);
     setDraftErr("");
     setDraftOrdersFound(null);
@@ -401,7 +644,7 @@ export default function MailboxPage() {
       const res = await fetch(`/api/admin/mailbox/${message.uid}/draft-reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder }),
+        body: JSON.stringify({ folder, instruction }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -569,14 +812,28 @@ export default function MailboxPage() {
                 aria-label="Treść wiadomości"
                 value={composeText}
                 onChange={(e) => setComposeText(e.target.value)}
-                placeholder="Treść wiadomości…"
+                onPaste={async (e) => {
+                  const imgs = pastedImages(e);
+                  if (!imgs.length) return;
+                  e.preventDefault();
+                  const next = await addFiles(composeAttachments, imgs);
+                  if (typeof next === "string") setComposeMsg(next);
+                  else setComposeAttachments(next);
+                }}
+                placeholder="Treść wiadomości… (albo luźne notatki — „✨ Napisz z AI” zrobi z nich maila)"
                 rows={10}
                 className={`${fieldClass} min-h-[240px] resize-y leading-relaxed`}
               />
-              <div className="flex items-center gap-2">
+              <AttachmentPicker items={composeAttachments} onChange={setComposeAttachments} disabled={composeSending} />
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={sendCompose}
-                  disabled={composeSending || !composeTo.trim() || !composeSubject.trim() || !composeText.trim()}
+                  disabled={
+                    composeSending ||
+                    !composeTo.trim() ||
+                    !composeSubject.trim() ||
+                    (!composeText.trim() && !composeAttachments.length)
+                  }
                   className={`${btnBase} flex-1 sm:flex-none bg-[#3B82F6] hover:bg-[#2f6fd6] text-white`}
                 >
                   {composeSending ? "Wysyłam…" : "Wyślij"}
@@ -587,7 +844,16 @@ export default function MailboxPage() {
                 >
                   Anuluj
                 </button>
+                <button
+                  onClick={handleGenerateCompose}
+                  disabled={composeGenerating || composeSending}
+                  title="AI napisze maila na podstawie tematu i tego, co wpisałeś w treść (notatki/brudnopis). Wynik zastępuje treść — przejrzyj przed wysłaniem."
+                  className={`${btnSecondary} w-full sm:w-auto`}
+                >
+                  {composeGenerating ? "Generuję…" : composeText.trim() ? "✨ Napisz z AI (z moich notatek)" : "✨ Napisz z AI"}
+                </button>
               </div>
+              {composeDraftErr && <p className="text-xs text-red-400">{composeDraftErr}</p>}
               {composeMsg && (
                 <p className={`text-xs ${composeMsg === "Wysłano." ? "text-green-400" : "text-red-400"}`}>{composeMsg}</p>
               )}
@@ -759,15 +1025,24 @@ export default function MailboxPage() {
                       aria-label="Treść odpowiedzi"
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="Treść odpowiedzi…"
+                      onPaste={async (e) => {
+                        const imgs = pastedImages(e);
+                        if (!imgs.length) return;
+                        e.preventDefault();
+                        const next = await addFiles(replyAttachments, imgs);
+                        if (typeof next === "string") setSendMsg(next);
+                        else setReplyAttachments(next);
+                      }}
+                      placeholder="Treść odpowiedzi… (albo notatki dla AI, np. „wysyłka w piątek, przeproś za opóźnienie”)"
                       rows={6}
                       className={`${fieldClass} min-h-[200px] lg:min-h-[120px] resize-y leading-relaxed`}
                     />
+                    <AttachmentPicker items={replyAttachments} onChange={setReplyAttachments} disabled={sending} />
                     <div className="space-y-3 lg:space-y-0 lg:flex lg:flex-wrap lg:items-center lg:gap-2">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={sendReply}
-                        disabled={sending || !replyText.trim() || !replyTo}
+                        disabled={sending || (!replyText.trim() && !replyAttachments.length) || !replyTo}
                         className={`${btnBase} flex-1 sm:flex-none bg-[#3B82F6] hover:bg-[#2f6fd6] text-white`}
                       >
                         {sending ? "Wysyłam…" : "Wyślij"}
@@ -783,10 +1058,14 @@ export default function MailboxPage() {
                       <button
                         onClick={handleGenerateDraft}
                         disabled={generatingDraft}
-                        title="AI napisze/przepisze szkic na podstawie tresci maila i danych zamowien klienta z bazy"
+                        title={
+                          replyText.trim()
+                            ? "AI napisze odpowiedź według tego, co wpisałeś w polu (notatki/brudnopis) + treści maila i zamówień klienta. Wynik zastępuje pole."
+                            : "AI napisze szkic na podstawie treści maila i danych zamówień klienta z bazy"
+                        }
                         className={btnSecondary}
                       >
-                        {generatingDraft ? "Generuję…" : "✨ Wygeneruj odpowiedź AI"}
+                        {generatingDraft ? "Generuję…" : replyText.trim() ? "✨ AI z moich notatek" : "✨ Wygeneruj odpowiedź AI"}
                       </button>
                       <button
                         onClick={handleTranslateReply}

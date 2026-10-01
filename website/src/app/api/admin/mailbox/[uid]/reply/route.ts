@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { getMessage, sendReply, markAnswered } from "@/lib/contactMailbox";
+import { parseAttachments, appendInlineImages } from "@/lib/mailAttachments";
 
 // POST /api/admin/mailbox/[uid]/reply
-// Body: { folder?, toAddress?, toName?, subject?, html }
+// Body: { folder?, toAddress?, toName?, subject?, html, attachments? }
 // Bez toAddress/subject — dociaga je z oryginalnej wiadomosci (odpowiedz "Re:").
 export async function POST(
   request: NextRequest,
@@ -27,6 +28,8 @@ export async function POST(
   const folder = typeof body?.folder === "string" ? body.folder : "INBOX";
   const html = typeof body?.html === "string" ? body.html.trim() : "";
   if (!html) return NextResponse.json({ ok: false, error: "Brak tresci odpowiedzi" }, { status: 400 });
+  const att = parseAttachments(body?.attachments);
+  if (!att.ok) return NextResponse.json({ ok: false, error: att.error }, { status: 400 });
 
   try {
     const original = await getMessage(uidNum, folder);
@@ -46,7 +49,8 @@ export async function POST(
       toAddress,
       toName,
       subject,
-      html,
+      html: appendInlineImages(html, att.list),
+      attachments: att.list,
       inReplyToMessageId: original.messageId,
       priorReferences: original.references,
     });

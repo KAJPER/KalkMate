@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { sendNewMail } from "@/lib/contactMailbox";
+import { parseAttachments, appendInlineImages } from "@/lib/mailAttachments";
 
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
 const MAX_RECIPIENTS = 20;
@@ -21,7 +22,7 @@ function parseAddresses(raw: unknown): { ok: true; list: string[] } | { ok: fals
   return { ok: true, list: Array.from(new Set(list)) };
 }
 
-// POST /api/admin/mailbox/send — { to, cc?, subject, html }
+// POST /api/admin/mailbox/send — { to, cc?, subject, html, attachments? }
 // Nowa wiadomosc do dowolnych adresow z kontakt@kalkmate.pl (jak "Nowa
 // wiadomosc" w zwyklej poczcie); trafia tez do folderu "Sent".
 export async function POST(request: NextRequest) {
@@ -50,9 +51,17 @@ export async function POST(request: NextRequest) {
   if (subject.length > 250) return NextResponse.json({ ok: false, error: "Temat jest za długi." }, { status: 400 });
   if (!html) return NextResponse.json({ ok: false, error: "Wpisz treść wiadomości." }, { status: 400 });
   if (html.length > 200_000) return NextResponse.json({ ok: false, error: "Wiadomość jest za długa." }, { status: 400 });
+  const att = parseAttachments(body?.attachments);
+  if (!att.ok) return NextResponse.json({ ok: false, error: att.error }, { status: 400 });
 
   try {
-    const result = await sendNewMail({ to: to.list, cc: cc.list, subject, html });
+    const result = await sendNewMail({
+      to: to.list,
+      cc: cc.list,
+      subject,
+      html: appendInlineImages(html, att.list),
+      attachments: att.list,
+    });
     if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
     return NextResponse.json({ ok: true });
   } catch (e) {

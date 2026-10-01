@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Elements, PaymentMethodMessagingElement } from "@stripe/react-stripe-js";
 import type { StripeElementsOptions } from "@stripe/stripe-js";
@@ -13,6 +13,9 @@ import getStripe from "@/lib/getStripe";
 import type { InPostPoint } from "@/components/InPostGeowidget";
 import { useCart } from "@/components/CartContext";
 import { type Locale } from "@/lib/i18n";
+import {
+  ALL_COUNTRY_CODES, countryName, flagEmoji, dialCode, regionsFor, showsOptionalRegion, cityWithRegion, postcodeHint,
+} from "@/lib/countries";
 
 const InPostGeowidget = lazy(() => import("@/components/InPostGeowidget"));
 
@@ -49,8 +52,16 @@ const COUNTRIES = [
   { code: "AU", name: "🇦🇺 Australia" },
   { code: "CH", name: "🇨🇭 Schweiz / Suisse" },
   { code: "NO", name: "🇳🇴 Norge" },
-  { code: "OTHER", name: "🌍 Other country" },
+  { code: "IL", name: "🇮🇱 Israel" },
 ];
+const FEATURED_CODES = new Set(COUNTRIES.map((c) => c.code));
+
+// Reszta swiata pod wyroznionymi krajami — nazwy w jezyku strony, alfabetycznie.
+function otherCountries(lang: Locale) {
+  return ALL_COUNTRY_CODES.filter((c) => !FEATURED_CODES.has(c))
+    .map((code) => ({ code, name: `${flagEmoji(code)} ${countryName(code, lang)}` }))
+    .sort((a, b) => a.name.slice(a.name.indexOf(" ") + 1).localeCompare(b.name.slice(b.name.indexOf(" ") + 1), lang));
+}
 
 type Stage = "form" | "map" | "payment" | "error" | "success" | "p24_processing" | "p24_pending";
 
@@ -80,6 +91,9 @@ const content: Record<Locale, {
   street: string; streetPlaceholder: string;
   postcode: string; postcodePlaceholder: string;
   city: string; cityPlaceholder: string;
+  region: string; regionUS: string; regionCA: string; regionAU: string; regionOptional: string; regionChoose: string;
+  popularCountries: string; allCountries: string;
+  phoneHint: string;
   pickupPoint: string;
   changePoint: string;
   selectParcel: string;
@@ -90,7 +104,7 @@ const content: Record<Locale, {
   personalizeNameLabel: string; personalizeNamePlaceholder: string; personalizeNameHint: string;
   personalizeNotice: string;
   personalizeConsent: string;
-  errPickupPoint: string; errFullAddress: string; errDeliveryAddress: string;
+  errPickupPoint: string; errFullAddress: string; errDeliveryAddress: string; errRegion: string;
   errPersonalizeCode: string; errPersonalizeName: string; errPersonalizeConsent: string;
   serverError: string; unexpectedError: string;
   loading: string; continueToPayment: string;
@@ -130,6 +144,9 @@ const content: Record<Locale, {
     street: "Ulica i numer domu", streetPlaceholder: "np. Marszałkowska 1/2",
     postcode: "Kod pocztowy", postcodePlaceholder: "00-000",
     city: "Miasto", cityPlaceholder: "Warszawa",
+    region: "Region", regionUS: "Stan", regionCA: "Prowincja", regionAU: "Stan / terytorium", regionOptional: "Województwo / region (opcjonalnie)", regionChoose: "— wybierz —",
+    popularCountries: "Najczęściej wybierane", allCountries: "Wszystkie kraje",
+    phoneHint: "Z numerem kierunkowym kraju — kurier zagraniczny dzwoni lub wysyła SMS.",
     pickupPoint: "Punkt odbioru",
     changePoint: "Zmień",
     selectParcel: "Wybierz Paczkomat InPost →",
@@ -142,7 +159,7 @@ const content: Record<Locale, {
     personalizeNameHint: "Wydrukujemy je na etykiecie Twojej sztuki.",
     personalizeNotice: "Każdy KalkMate jest personalizowany indywidualnie pod zamówienie (wybrany przez Ciebie kod AI wgrywany do tej konkretnej sztuki + imię na etykiecie). Zgodnie z art. 38 pkt 3 ustawy o prawach konsumenta, produkty personalizowane nie podlegają zwrotowi w ramach 14-dniowego prawa odstąpienia od umowy. Gwarancja 24 miesiące na wady nadal obowiązuje na standardowych zasadach.",
     personalizeConsent: "Rozumiem, że ten egzemplarz będzie personalizowany na moje życzenie i w związku z tym nie przysługuje mi prawo odstąpienia od umowy (zwrotu w ciągu 14 dni). Prawo do reklamacji z tytułu gwarancji i rękojmi pozostaje bez zmian.",
-    errPickupPoint: "Wybierz punkt odbioru.", errFullAddress: "Podaj pełny adres (ulica, kod pocztowy, miasto) — wymagany do wystawienia faktury.", errDeliveryAddress: "Podaj pełny adres dostawy.",
+    errPickupPoint: "Wybierz punkt odbioru.", errFullAddress: "Podaj pełny adres (ulica, kod pocztowy, miasto) — wymagany do wystawienia faktury.", errDeliveryAddress: "Podaj pełny adres dostawy.", errRegion: "Wybierz stan / prowincję — kurier wymaga go do nadania paczki.",
     errPersonalizeCode: "Podaj 4-cyfrowy kod odblokowania AI.", errPersonalizeName: "Podaj imię/nick do etykiety.", errPersonalizeConsent: "Musisz potwierdzić zgodę na personalizację (wpływa na prawo zwrotu).",
     serverError: "Błąd serwera", unexpectedError: "Nieoczekiwany błąd.",
     loading: "Ładowanie...", continueToPayment: "Przejdź do płatności →",
@@ -182,6 +199,9 @@ const content: Record<Locale, {
     street: "Street address", streetPlaceholder: "e.g. Berliner Str. 12",
     postcode: "Postcode / ZIP", postcodePlaceholder: "12345",
     city: "City", cityPlaceholder: "Berlin",
+    region: "Region", regionUS: "State", regionCA: "Province / territory", regionAU: "State / territory", regionOptional: "State / province / region (optional)", regionChoose: "— select —",
+    popularCountries: "Popular", allCountries: "All countries",
+    phoneHint: "Include the country code — the courier may call or text you.",
     pickupPoint: "Pickup point",
     changePoint: "Change",
     selectParcel: "Choose InPost Parcel Locker →",
@@ -194,7 +214,7 @@ const content: Record<Locale, {
     personalizeNameHint: "We'll print it on your unit's label.",
     personalizeNotice: "Each KalkMate is individually personalized for your order (the AI code you choose is flashed onto this specific unit + your name is printed on its label). Under EU consumer law (custom-made goods), personalized products are excluded from the standard 14-day right of withdrawal. The 24-month warranty for defects remains unaffected.",
     personalizeConsent: "I understand this unit will be personalized at my request and therefore I do not have the right to withdraw from the contract (14-day return). My statutory warranty rights remain unaffected.",
-    errPickupPoint: "Choose a pickup point.", errFullAddress: "Please provide your full address (street, postcode, city) — required for the invoice.", errDeliveryAddress: "Please provide your full delivery address.",
+    errPickupPoint: "Choose a pickup point.", errFullAddress: "Please provide your full address (street, postcode, city) — required for the invoice.", errDeliveryAddress: "Please provide your full delivery address.", errRegion: "Please select your state / province — the courier requires it.",
     errPersonalizeCode: "Please provide a 4-digit AI unlock code.", errPersonalizeName: "Please provide a name/nickname for the label.", errPersonalizeConsent: "You must confirm the personalization consent (it affects your return rights).",
     serverError: "Server error", unexpectedError: "Unexpected error.",
     loading: "Loading...", continueToPayment: "Continue to payment →",
@@ -234,6 +254,9 @@ const content: Record<Locale, {
     street: "Straße und Hausnummer", streetPlaceholder: "z. B. Berliner Str. 12",
     postcode: "Postleitzahl", postcodePlaceholder: "12345",
     city: "Stadt", cityPlaceholder: "Berlin",
+    region: "Region", regionUS: "Bundesstaat", regionCA: "Provinz / Territorium", regionAU: "Bundesstaat / Territorium", regionOptional: "Bundesland / Region (optional)", regionChoose: "— auswählen —",
+    popularCountries: "Häufig gewählt", allCountries: "Alle Länder",
+    phoneHint: "Mit Ländervorwahl — der Kurier ruft ggf. an oder schickt eine SMS.",
     pickupPoint: "Abholpunkt",
     changePoint: "Ändern",
     selectParcel: "InPost-Paketstation wählen →",
@@ -246,7 +269,7 @@ const content: Record<Locale, {
     personalizeNameHint: "Wir drucken ihn auf das Etikett deines Geräts.",
     personalizeNotice: "Jedes KalkMate wird individuell für deine Bestellung personalisiert (der von dir gewählte KI-Code wird auf dieses Gerät aufgespielt + dein Name wird auf dem Etikett gedruckt). Gemäß EU-Verbraucherrecht sind personalisierte/nach Kundenspezifikation angefertigte Waren vom 14-tägigen Widerrufsrecht ausgeschlossen. Die 24-monatige Gewährleistung für Mängel bleibt davon unberührt.",
     personalizeConsent: "Ich verstehe, dass dieses Gerät auf meinen Wunsch personalisiert wird und mir daher kein Widerrufsrecht (14-tägige Rückgabe) zusteht. Meine gesetzlichen Gewährleistungsrechte bleiben unberührt.",
-    errPickupPoint: "Bitte einen Abholpunkt wählen.", errFullAddress: "Bitte vollständige Adresse angeben (Straße, Postleitzahl, Stadt) — für die Rechnung erforderlich.", errDeliveryAddress: "Bitte geben Sie Ihre vollständige Lieferadresse an.",
+    errPickupPoint: "Bitte einen Abholpunkt wählen.", errFullAddress: "Bitte vollständige Adresse angeben (Straße, Postleitzahl, Stadt) — für die Rechnung erforderlich.", errDeliveryAddress: "Bitte geben Sie Ihre vollständige Lieferadresse an.", errRegion: "Bitte Bundesstaat / Provinz wählen — der Kurier benötigt sie.",
     errPersonalizeCode: "Bitte einen 4-stelligen KI-Freischaltcode angeben.", errPersonalizeName: "Bitte einen Namen/Spitznamen für das Etikett angeben.", errPersonalizeConsent: "Du musst der Personalisierung zustimmen (betrifft dein Rückgaberecht).",
     serverError: "Serverfehler", unexpectedError: "Unerwarteter Fehler.",
     loading: "Wird geladen...", continueToPayment: "Zur Zahlung →",
@@ -275,7 +298,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
   const [polandStripeError, setPolandStripeError] = useState("");
   const [formData, setFormData] = useState({
     name: "", email: "", phone: "",
-    street: "", postcode: "", city: "",
+    street: "", postcode: "", city: "", region: "",
     country: defaultCountry,
     consent: false,
     unlockCode: "", personalizeName: "",
@@ -294,6 +317,10 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
   // Derived pricing based on country
   const isPoland = formData.country === "PL";
   const isEU = EU_COUNTRIES.has(formData.country);
+  const regionOptions = regionsFor(formData.country);
+  const worldCountries = useMemo(() => otherCountries(lang), [lang]);
+  const regionLabel =
+    formData.country === "US" ? t.regionUS : formData.country === "CA" ? t.regionCA : formData.country === "AU" ? t.regionAU : t.region;
   const currency = isPoland ? "PLN" : "EUR";
   const productCents = isPoland ? 69900 : 16900;
   const shippingCents = isPoland ? 0 : isEU ? 2000 : 3500;
@@ -481,6 +508,10 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
       setErrorMessage(t.errDeliveryAddress);
       return;
     }
+    if (regionOptions && !regionOptions.some((r) => r.code === formData.region)) {
+      setErrorMessage(t.errRegion);
+      return;
+    }
     if (!/^\d{4}$/.test(formData.unlockCode)) {
       setErrorMessage(t.errPersonalizeCode);
       return;
@@ -509,6 +540,8 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          // Order nie ma kolumny na stan — "Austin, TX" (patrz lib/countries.ts).
+          city: cityWithRegion(formData.city, formData.region),
           currency,
           shippingCents,
           couponCode: appliedCoupon?.code || null,
@@ -536,6 +569,8 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          // Order nie ma kolumny na stan — "Austin, TX" (patrz lib/countries.ts).
+          city: cityWithRegion(formData.city, formData.region),
           currency,
           shippingCents,
           couponCode: appliedCoupon?.code || null,
@@ -827,7 +862,13 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                       <select
                         value={formData.country}
                         onChange={(e) => {
-                          setFormData({ ...formData, country: e.target.value });
+                          const country = e.target.value;
+                          // Prefiks telefonu podmieniamy tylko, gdy klient nie wpisal jeszcze numeru.
+                          const oldPrefix = dialCode(formData.country);
+                          const phone = !formData.phone.trim() || formData.phone.trim() === oldPrefix
+                            ? (dialCode(country) ? `${dialCode(country)} ` : "")
+                            : formData.phone;
+                          setFormData({ ...formData, country, region: "", phone });
                           setSelectedPoint(null);
                           // Zmiana waluty uniewaznia zastosowany kupon (np. kwotowy tylko PLN).
                           setAppliedCoupon(null);
@@ -835,9 +876,16 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                         }}
                         className={inputClass + " cursor-pointer"}
                       >
-                        {COUNTRIES.map((c) => (
-                          <option key={c.code} value={c.code}>{c.name}</option>
-                        ))}
+                        <optgroup label={t.popularCountries}>
+                          {COUNTRIES.map((c) => (
+                            <option key={c.code} value={c.code}>{c.name}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label={t.allCountries}>
+                          {worldCountries.map((c) => (
+                            <option key={c.code} value={c.code}>{c.name}</option>
+                          ))}
+                        </optgroup>
                       </select>
                     </div>
 
@@ -859,9 +907,16 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                       <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
                         {t.phone}
                       </label>
-                      <input type="tel" required value={formData.phone}
+                      <input type="tel" required autoComplete="tel" value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        onFocus={() => {
+                          if (!formData.phone.trim() && dialCode(formData.country)) {
+                            setFormData({ ...formData, phone: `${dialCode(formData.country)} ` });
+                          }
+                        }}
+                        placeholder={dialCode(formData.country) ? `${dialCode(formData.country)} …` : undefined}
                         className={inputClass} />
+                      {!isPoland && <p className="text-xs text-[#F2EDE3]/40 mt-1.5">{t.phoneHint}</p>}
                     </div>
 
                     {/* Address */}
@@ -886,7 +941,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                           <input type="text" required value={formData.postcode}
                             onChange={(e) => setFormData({ ...formData, postcode: e.target.value })}
                             className={inputClass}
-                            placeholder={t.postcodePlaceholder}
+                            placeholder={postcodeHint(formData.country) || t.postcodePlaceholder}
                             pattern={isPoland ? "\\d{2}-\\d{3}" : undefined} />
                         </div>
                         <div>
@@ -899,6 +954,26 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                             placeholder={t.cityPlaceholder} />
                         </div>
                       </div>
+                      {regionOptions ? (
+                        <div>
+                          <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">{regionLabel}</label>
+                          <select required value={formData.region}
+                            onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                            className={inputClass + " cursor-pointer"}>
+                            <option value="">{t.regionChoose}</option>
+                            {regionOptions.map((r) => (
+                              <option key={r.code} value={r.code}>{r.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : showsOptionalRegion(formData.country) ? (
+                        <div>
+                          <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">{t.regionOptional}</label>
+                          <input type="text" value={formData.region} maxLength={60}
+                            onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                            className={inputClass} />
+                        </div>
+                      ) : null}
                     </div>
 
                     {/* InPost picker — only Poland */}
@@ -1103,7 +1178,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                       </div>
                       {formData.city && (
                         <div className="text-xs text-[#F2EDE3]/45 pt-1">
-                          ↳ {formData.street}, {formData.city} · {formData.country}
+                          ↳ {formData.street}, {cityWithRegion(formData.city, formData.region)} · {formData.country}
                         </div>
                       )}
                       {appliedCoupon && (

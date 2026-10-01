@@ -4,10 +4,11 @@ import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { getMessage } from "@/lib/contactMailbox";
 import { findOrdersByEmail, generateReplyDraft } from "@/lib/mailReply";
 
-// POST /api/admin/mailbox/[uid]/draft-reply — { folder? }
+// POST /api/admin/mailbox/[uid]/draft-reply — { folder?, instruction? }
 // Zwraca SZKIC odpowiedzi (po polsku) do przejrzenia/edycji przed wyslaniem —
 // nie wysyla niczego samo. Model dostaje realne zamowienia klienta z bazy
-// (po adresie nadawcy), zeby nie zmyslal statusow.
+// (po adresie nadawcy), zeby nie zmyslal statusow. `instruction` = tekst,
+// ktory admin wpisal juz w pole odpowiedzi — AI robi z niego odpowiedz.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ uid: string }> }
@@ -25,6 +26,7 @@ export async function POST(
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>));
   const folder = typeof body?.folder === "string" ? body.folder : "INBOX";
+  const instruction = typeof body?.instruction === "string" ? body.instruction : "";
 
   try {
     const original = await getMessage(uidNum, folder);
@@ -36,7 +38,7 @@ export async function POST(
     if (!text) return NextResponse.json({ ok: false, error: "Pusta tresc oryginalnej wiadomosci" }, { status: 400 });
 
     const orders = original.from?.address ? await findOrdersByEmail(original.from.address) : [];
-    const draft = await generateReplyDraft({ customerEmailText: text, customerName: original.from?.name, orders });
+    const draft = await generateReplyDraft({ customerEmailText: text, customerName: original.from?.name, orders, instruction });
 
     return NextResponse.json({ ok: true, draft, ordersFound: orders.length });
   } catch (e) {
