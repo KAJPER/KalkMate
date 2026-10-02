@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { orderIdForPaymentSession } from "@/lib/paymentReminders";
 
 export async function GET(request: NextRequest) {
   const sessionId = request.nextUrl.searchParams.get("sessionId");
@@ -9,12 +10,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Powrot z platnosci wznowionej z maila — sesja jest w OrderPaymentSession.
+    const extraOrderId = await orderIdForPaymentSession(sessionId);
     const rows = await prisma.$queryRaw<
       Array<{ status: string; orderNumber: string }>
     >`
       SELECT status, "orderNumber"
       FROM "Order"
-      WHERE "p24SessionId" = ${sessionId}
+      WHERE "p24SessionId" = ${sessionId} OR id = ${extraOrderId ?? ""}
       LIMIT 1
     `;
 

@@ -48,5 +48,8 @@ export function parseFilter(raw: unknown): AudienceFilter {
     verifiedOnly: f.verifiedOnly === true || f.verifiedOnly === "1",
     buyers: f.buyers !== false && f.buyers !== "0",
     country,
+    // Domyslnie TYLKO ze zgoda — bez niej wolno wysylac wylacznie tresci
+    // informacyjne (wtedy admin swiadomie odznacza).
+    consentOnly: f.consentOnly !== false && f.consentOnly !== "0",
   };
 }

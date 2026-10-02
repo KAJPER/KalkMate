@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { giveConsent } from "@/lib/newsletter";
+import { clientIp } from "@/lib/rate-limit";
 import { prisma } from "@/lib/db";
 import { getCoupon, computeDiscount } from "@/lib/coupons";
 import { validatePersonalization } from "@/lib/orderPersonalization";
@@ -43,7 +45,13 @@ export async function POST(request: NextRequest) {
       country, currency, shippingCents,
       couponCode,
       unlockCode, personalizeName,
+      marketingConsent,
     } = body;
+    // Zgoda na newsletter z formularza zamowienia (checkbox, domyslnie
+    // odznaczony) — niezalezna od tego, czy klient potem zaplaci.
+    if (marketingConsent === true) {
+      await giveConsent(user.email!, "order", clientIp(request)).catch((e) => console.error("[checkout] consent save failed:", e));
+    }
     const email = user.email!;
     const resolvedCountry = (country || "PL") as string;
     const isPoland = resolvedCountry === "PL";

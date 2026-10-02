@@ -124,9 +124,15 @@ function eyebrowHtml(text: string, color: string = C.signal): string {
   return `<span style="font-family:${FONT_MONO};font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:${color};font-weight:700;">${text}</span>`;
 }
 
-function shell(inner: string, locale: EmailLocale = "en"): string {
+interface ShellOptions {
+  htmlLang?: string;        // gdy mail jest w innym jezyku niz de/en (np. "pl")
+  footerLabel?: string;     // zamiast "Automated message"
+  footerExtraHtml?: string; // np. link do wypisania z newslettera
+}
+
+function shell(inner: string, locale: EmailLocale = "en", opts: ShellOptions = {}): string {
   return `<!DOCTYPE html>
-<html lang="${locale}">
+<html lang="${opts.htmlLang || locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -158,8 +164,8 @@ function shell(inner: string, locale: EmailLocale = "en"): string {
       <tr><td bgcolor="${C.signal}" style="height:3px;background:${C.signal};line-height:3px;font-size:0;">&nbsp;</td></tr>
       <tr><td style="padding:24px 4px 0 4px;text-align:center;background:${C.ink};">
         <div style="font-family:${FONT_MONO};font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:${C.paperDim};">
-          KalkMate &middot; ${t(locale, "footerAuto")}
-        </div>
+          KalkMate &middot; ${opts.footerLabel || t(locale, "footerAuto")}
+        </div>${opts.footerExtraHtml || ""}
         <div style="font-family:${FONT_BODY};font-size:12.5px;color:${C.paperSub};margin-top:8px;">
           <a href="mailto:kontakt@kalkmate.pl" style="color:${C.paper};text-decoration:none;font-weight:600;">kontakt@kalkmate.pl</a>
           &nbsp;&middot;&nbsp;
@@ -612,15 +618,45 @@ export function newsletterEmail(c: NewsletterContent): string {
     ${newsletterBodyHtml(c.body)}
     ${cta}`;
 
-  // shell() ma stopke "wiadomosc automatyczna" — newsletter dostaje wlasna,
-  // z obowiazkowym linkiem do wypisania.
-  return shell(inner, lang === "de" ? "de" : "en")
-    .replace(`<html lang="${lang === "de" ? "de" : "en"}">`, `<html lang="${lang}">`)
-    .replace(
-      /KalkMate &middot; [^<]*<\/div>/,
-      `KalkMate &middot; Newsletter</div>
+  return shell(inner, lang === "de" ? "de" : "en", {
+    htmlLang: lang,
+    footerLabel: "Newsletter",
+    footerExtraHtml: `
         <div style="font-family:${FONT_BODY};font-size:11.5px;color:${C.paperDim};margin-top:8px;line-height:1.5;">${f.why}<br>
           <a href="${escHtml(c.unsubscribeUrl)}" style="color:${C.paperSub};text-decoration:underline;">${f.unsub}</a>
-        </div>`
-    );
+        </div>`,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Przypomnienie o niedokonczonej platnosci (P24, klienci z Polski)
+// ---------------------------------------------------------------------------
+export interface PaymentReminderData {
+  customerName: string;
+  orderNumber: string;
+  amount: string;        // sformatowana kwota, np. "699 zł"
+  pickupPoint?: string;  // paczkomat (PL)
+  resumeUrl: string;
+  cancelAfterDays: number;
+}
+
+export const PAYMENT_REMINDER_SUBJECT = (orderNumber: string) => `Dokończ płatność za zamówienie ${orderNumber} – KalkMate`;
+
+export function paymentReminderEmail(d: PaymentReminderData): string {
+  const first = escHtml((d.customerName || "").trim().split(/\s+/)[0] || "");
+  const rows =
+    infoRow("Zamówienie", escHtml(d.orderNumber)) +
+    infoRow("Produkt", "KalkMate v3.0") +
+    infoRow("Do zapłaty", escHtml(d.amount)) +
+    (d.pickupPoint ? infoRow("Paczkomat", escHtml(d.pickupPoint)) : "");
+  const inner = `
+    ${eyebrowBlock("Płatność niedokończona")}
+    ${headline("Twój KalkMate czeka.", "czeka")}
+    ${lead(`${first ? `Cześć <strong style="color:${C.paper};font-weight:700;">${first}</strong>! ` : ""}Zamówienie zostało złożone, ale płatność nie została dokończona — np. przerwana transakcja BLIK albo zamknięta strona banku. Zamówienie wciąż czeka, dane i personalizacja są zapisane.`)}
+    ${infoTable(rows)}
+    ${ctaButton("Dokończ płatność", escHtml(d.resumeUrl))}
+    ${body(`Link otwiera płatność Przelewy24 (BLIK, przelew, karta) dla tego samego zamówienia — nie trzeba niczego wypełniać od nowa.`)}
+    ${body(`Jeśli płatność jest już zrobiona, zignoruj tę wiadomość — potwierdzenie przyjdzie osobnym mailem. Jeśli rezygnujesz, nic nie musisz robić: nieopłacone zamówienie anulujemy automatycznie po ${d.cancelAfterDays} dniach. Problem z płatnością? Odpisz na tego maila.`)}
+  `;
+  return shell(inner, "en", { htmlLang: "pl", footerLabel: "Wiadomość automatyczna" });
 }

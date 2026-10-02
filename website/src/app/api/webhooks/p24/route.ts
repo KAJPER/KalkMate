@@ -4,6 +4,7 @@ import { verifyNotificationSign, verifyTransaction } from "@/lib/przelewy24";
 import { sendMail } from "@/lib/mailer";
 import { purchaseConfirmationEmail } from "@/lib/email-templates";
 import { findTokenPurchaseBySession, markTokenPurchasePaid } from "@/lib/tokenPurchases";
+import { orderIdForPaymentSession } from "@/lib/paymentReminders";
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
@@ -69,7 +70,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // Find pending order
+  // Find pending order — po p24SessionId albo po dodatkowej sesji z linku
+  // "Dokończ płatność" (lib/paymentReminders.ts, /api/p24/resume).
+  const extraOrderId = await orderIdForPaymentSession(String(sessionId));
   const rows = await prisma.$queryRaw<
     Array<{
       id: string;
@@ -87,7 +90,7 @@ export async function POST(request: NextRequest) {
     SELECT id, status, "orderNumber", "customerName", "customerEmail",
            "customerPhone", "pickupPoint", "pickupPointAddress", amount, "userId"
     FROM "Order"
-    WHERE "p24SessionId" = ${String(sessionId)}
+    WHERE "p24SessionId" = ${String(sessionId)} OR id = ${extraOrderId ?? ""}
     LIMIT 1
   `;
 

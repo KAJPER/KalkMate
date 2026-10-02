@@ -99,6 +99,7 @@ const content: Record<Locale, {
   selectParcel: string;
   intlDeliveryTitle: string; intlDeliveryNote1: string; intlDeliveryNote2: string;
   consent1: string; consentTerms: string; consent2: string;
+  newsletterConsent: string;
   personalizeTitle: string;
   personalizeCodeLabel: string; personalizeCodePlaceholder: string; personalizeCodeHint: string;
   personalizeNameLabel: string; personalizeNamePlaceholder: string; personalizeNameHint: string;
@@ -152,6 +153,7 @@ const content: Record<Locale, {
     selectParcel: "Wybierz Paczkomat InPost →",
     intlDeliveryTitle: "/ International delivery", intlDeliveryNote1: "Courier delivery to your address.", intlDeliveryNote2: "shipping fee · approx. 2–4 weeks",
     consent1: "Akceptuję ", consentTerms: "Regulamin Sklepu", consent2: " i wyrażam zgodę na przetwarzanie danych osobowych w celu realizacji zamówienia.",
+    newsletterConsent: "Chcę dostawać e-mailem informacje o nowościach, promocjach i kuponach KalkMate (newsletter). Zgodę mogę wycofać w każdej chwili. (opcjonalnie)",
     personalizeTitle: "/ Personalizacja Twojego egzemplarza",
     personalizeCodeLabel: "Twój kod odblokowania AI (4 cyfry)", personalizeCodePlaceholder: "np. 4271",
     personalizeCodeHint: "Wgramy ten kod do Twojego egzemplarza przed wysyłką.",
@@ -207,6 +209,7 @@ const content: Record<Locale, {
     selectParcel: "Choose InPost Parcel Locker →",
     intlDeliveryTitle: "/ International delivery", intlDeliveryNote1: "Courier delivery to your address.", intlDeliveryNote2: "shipping fee · approx. 2–4 weeks",
     consent1: "I accept the ", consentTerms: "Terms and Conditions", consent2: " and consent to the processing of my personal data for order fulfillment.",
+    newsletterConsent: "Send me KalkMate news, promotions and coupons by email (newsletter). I can withdraw this at any time. (optional)",
     personalizeTitle: "/ Personalize your unit",
     personalizeCodeLabel: "Your AI unlock code (4 digits)", personalizeCodePlaceholder: "e.g. 4271",
     personalizeCodeHint: "We'll flash this code onto your specific unit before shipping.",
@@ -262,6 +265,7 @@ const content: Record<Locale, {
     selectParcel: "InPost-Paketstation wählen →",
     intlDeliveryTitle: "/ Internationale Lieferung", intlDeliveryNote1: "Kurierlieferung an Ihre Adresse.", intlDeliveryNote2: "Versandkosten · ca. 2–4 Wochen",
     consent1: "Ich akzeptiere die ", consentTerms: "AGB", consent2: " und willige in die Verarbeitung meiner personenbezogenen Daten zur Auftragsabwicklung ein.",
+    newsletterConsent: "Ich möchte Neuigkeiten, Aktionen und Gutscheine von KalkMate per E-Mail erhalten (Newsletter). Widerruf jederzeit möglich. (optional)",
     personalizeTitle: "/ Personalisiere dein Gerät",
     personalizeCodeLabel: "Dein KI-Freischaltcode (4 Ziffern)", personalizeCodePlaceholder: "z. B. 4271",
     personalizeCodeHint: "Wir spielen diesen Code vor dem Versand auf dein Gerät auf.",
@@ -301,6 +305,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
     street: "", postcode: "", city: "", region: "",
     country: defaultCountry,
     consent: false,
+    marketingConsent: false,
     unlockCode: "", personalizeName: "",
   });
   const [personalizeConsent, setPersonalizeConsent] = useState(false);
@@ -1063,6 +1068,15 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
                       <span className="text-xs text-[#F2EDE3]/55 leading-relaxed">
                         {t.consent1}<a href="/regulamin" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#D8FF3D]">{t.consentTerms}</a>{t.consent2}
                       </span>
+                    </label>
+
+                    {/* Zgoda marketingowa — osobny, NIEobowiazkowy, domyslnie odznaczony
+                        checkbox (RODO: zgoda nie moze byc warunkiem zakupu). */}
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input type="checkbox" checked={formData.marketingConsent}
+                        onChange={(e) => setFormData({ ...formData, marketingConsent: e.target.checked })}
+                        className="mt-1 accent-[#D8FF3D]" />
+                      <span className="text-xs text-[#F2EDE3]/55 leading-relaxed">{t.newsletterConsent}</span>
                     </label>
 
                     {errorMessage && <p className="text-sm text-[#FF4D2E]">{errorMessage}</p>}

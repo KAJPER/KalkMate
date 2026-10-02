@@ -7,12 +7,16 @@
 //   NewsletterCampaign    — wyslane kampanie (tresc + postep)
 //   NewsletterDelivery    — kazdy odbiorca kampanii osobno (pending/sent/failed),
 //                           dzieki czemu po restarcie serwera mozna wznowic
+//   MarketingConsent      — zgody na mail marketingowy (art. 398 PKE / RODO
+//                           art. 6.1.a): kiedy, skad, jaka tresc zgody, IP —
+//                           dowod zgody. Wycofanie = withdrawnAt (wiersz zostaje).
 //
 // Wysylka idzie w tle w procesie Next (systemd, dlugo zyjacy), po jednym
 // mailu co NEWSLETTER_DELAY_MS — hosting SMTP ma limity godzinowe, a seria
 // setek maili naraz konczy sie blokada konta / spamem.
 
-import { createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { randomUUID } from "crypto";
+import { signLink, verifyLink } from "@/lib/linkTokens";
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 import { newsletterEmail, type NewsletterContent } from "@/lib/email-templates";
@@ -20,22 +24,14 @@ import { SITE_URL } from "@/lib/i18n";
 
 const DELAY_MS = Math.max(200, parseInt(process.env.NEWSLETTER_DELAY_MS || "2500", 10) || 2500);
 
-function secret(): string {
-  const s = process.env.NEWSLETTER_SECRET || process.env.NEXTAUTH_SECRET || process.env.ADMIN_SESSION_TOKEN;
-  if (!s) throw new Error("Brak NEWSLETTER_SECRET / NEXTAUTH_SECRET w konfiguracji serwera");
-  return s;
-}
-
 // === Wypisywanie ===
 
 export function unsubscribeToken(email: string): string {
-  return createHmac("sha256", secret()).update(`unsub:${email.toLowerCase()}`).digest("base64url").slice(0, 32);
+  return signLink("unsub", email.toLowerCase());
 }
 
 export function verifyUnsubscribeToken(email: string, token: string): boolean {
-  const a = Buffer.from(unsubscribeToken(email));
-  const b = Buffer.from(token || "");
-  return a.length === b.length && timingSafeEqual(a, b);
+  return verifyLink("unsub", email.toLowerCase(), token);
 }
 
 export function unsubscribeUrl(email: string): string {
@@ -71,14 +67,73 @@ async function ensureTables(): Promise<void> {
       "sentAt"     TEXT,
       PRIMARY KEY ("campaignId", "email")
     )`);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "MarketingConsent" (
+      "email"       TEXT PRIMARY KEY,
+      "consentedAt" TEXT NOT NULL,
+      "source"      TEXT NOT NULL,
+      "consentText" TEXT NOT NULL,
+      "ip"          TEXT,
+      "withdrawnAt" TEXT
+    )`);
   _ready = true;
 }
 
+// Wypisanie z newslettera = tez wycofanie zgody marketingowej.
 export async function addUnsubscribe(email: string): Promise<void> {
   await ensureTables();
+  const now = new Date().toISOString();
   await prisma.$executeRaw`
     INSERT OR IGNORE INTO "NewsletterUnsubscribe" ("email", "createdAt")
-    VALUES (${email.toLowerCase()}, ${new Date().toISOString()})`;
+    VALUES (${email.toLowerCase()}, ${now})`;
+  await prisma.$executeRaw`
+    UPDATE "MarketingConsent" SET "withdrawnAt" = ${now}
+    WHERE "email" = ${email.toLowerCase()} AND "withdrawnAt" IS NULL`;
+}
+
+// === Zgoda marketingowa ===
+
+// Tresc zgody zapisywana przy kazdym wierszu — jesli kiedys zmienisz brzmienie
+// checkboxa, zmien tez to (i podbij wersje), zeby dowod zgadzal sie z tym,
+// co klient faktycznie zaznaczyl.
+export const CONSENT_TEXT =
+  "v1: Chcę dostawać e-mailem informacje o nowościach, promocjach i kuponach KalkMate (newsletter). Zgodę mogę wycofać w każdej chwili.";
+
+export type ConsentSource = "register" | "order" | "panel";
+
+// Wyrazenie zgody. Zdejmuje tez adres z listy wypisanych — to swiezy,
+// wyrazny opt-in tej osoby.
+export async function giveConsent(email: string, source: ConsentSource, ip?: string | null): Promise<void> {
+  await ensureTables();
+  const e = email.trim().toLowerCase();
+  if (!EMAIL_RE.test(e)) return;
+  const now = new Date().toISOString();
+  await prisma.$executeRaw`
+    INSERT INTO "MarketingConsent" ("email", "consentedAt", "source", "consentText", "ip", "withdrawnAt")
+    VALUES (${e}, ${now}, ${source}, ${CONSENT_TEXT}, ${ip || null}, NULL)
+    ON CONFLICT("email") DO UPDATE SET
+      "consentedAt" = excluded."consentedAt", "source" = excluded."source",
+      "consentText" = excluded."consentText", "ip" = excluded."ip", "withdrawnAt" = NULL`;
+  await prisma.$executeRaw`DELETE FROM "NewsletterUnsubscribe" WHERE "email" = ${e}`;
+}
+
+export async function withdrawConsent(email: string): Promise<void> {
+  await addUnsubscribe(email);
+}
+
+export async function consentStatus(email: string): Promise<{ consent: boolean; consentedAt: string | null }> {
+  await ensureTables();
+  const rows = await prisma.$queryRaw<{ consentedAt: string }[]>`
+    SELECT "consentedAt" FROM "MarketingConsent"
+    WHERE "email" = ${email.trim().toLowerCase()} AND "withdrawnAt" IS NULL`;
+  return { consent: rows.length > 0, consentedAt: rows[0]?.consentedAt ?? null };
+}
+
+async function consentedSet(): Promise<Set<string>> {
+  await ensureTables();
+  const rows = await prisma.$queryRaw<{ email: string }[]>`
+    SELECT "email" FROM "MarketingConsent" WHERE "withdrawnAt" IS NULL`;
+  return new Set(rows.map((r) => r.email));
 }
 
 export async function removeUnsubscribe(email: string): Promise<void> {
@@ -99,6 +154,7 @@ export interface AudienceFilter {
   verifiedOnly: boolean; // ...tylko z potwierdzonym e-mailem
   buyers: boolean;       // oplacone zamowienia urzadzenia + zakupy tokenow
   country: "all" | "PL" | "foreign"; // wg kraju zamowienia (konta bez zamowien = brak kraju)
+  consentOnly: boolean;  // tylko osoby z aktywna zgoda marketingowa
 }
 
 export interface Recipient {
@@ -108,6 +164,7 @@ export interface Recipient {
   buyer: boolean;
   country: string | null;
   unsubscribed: boolean;
+  consent: boolean;
 }
 
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
@@ -116,12 +173,14 @@ const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
 // pokazuje tez wypisanych, wysylka ich pomija.
 export async function listRecipients(filter: AudienceFilter): Promise<Recipient[]> {
   const unsub = await unsubscribedSet();
+  const consented = await consentedSet();
   const map = new Map<string, Recipient>();
   const upsert = (email: string, patch: Partial<Recipient>) => {
     const key = email.trim().toLowerCase();
     if (!EMAIL_RE.test(key)) return;
     const cur = map.get(key) || {
-      email: key, name: null, registered: false, buyer: false, country: null, unsubscribed: unsub.has(key),
+      email: key, name: null, registered: false, buyer: false, country: null,
+      unsubscribed: unsub.has(key), consent: consented.has(key),
     };
     map.set(key, {
       ...cur,
@@ -168,6 +227,7 @@ export async function listRecipients(filter: AudienceFilter): Promise<Recipient[
   let list = Array.from(map.values());
   if (filter.country === "PL") list = list.filter((r) => r.country === "PL");
   if (filter.country === "foreign") list = list.filter((r) => r.country && r.country !== "PL");
+  if (filter.consentOnly) list = list.filter((r) => r.consent);
   return list.sort((a, b) => a.email.localeCompare(b.email));
 }
 

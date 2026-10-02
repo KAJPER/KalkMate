@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { sendMail } from "@/lib/mailer";
 import { verificationEmail, detectLocale, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { giveConsent } from "@/lib/newsletter";
 
 const VERIFY_EXPIRY_HOURS = 24;
 
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { email: rawEmail, password, name } = await req.json();
+    const { email: rawEmail, password, name, marketingConsent } = await req.json();
     const email = String(rawEmail || "").trim().toLowerCase();
 
     if (!email || !password) {
@@ -113,6 +114,12 @@ export async function POST(req: NextRequest) {
     }
 
     await prisma.$executeRaw`UPDATE "User" SET "tokenBalance" = 1000000 WHERE "id" = ${user.id}`;
+
+    // Checkbox "chce dostawac newsletter" (domyslnie odznaczony). Blad zapisu
+    // zgody nie moze blokowac rejestracji.
+    if (marketingConsent === true) {
+      await giveConsent(email, "register", clientIp(req)).catch((e) => console.error("[register] consent save failed:", e));
+    }
 
     // Wyslij mail weryfikacyjny
     await sendVerification(email, name || user.name, user.id, req.headers.get("accept-language"));

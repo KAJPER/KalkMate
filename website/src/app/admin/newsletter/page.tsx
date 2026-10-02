@@ -13,6 +13,7 @@ interface Recipient {
   buyer: boolean;
   country: string | null;
   unsubscribed: boolean;
+  consent: boolean;
 }
 
 interface Campaign {
@@ -69,6 +70,8 @@ export default function NewsletterPage() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [buyers, setBuyers] = useState(true);
   const [country, setCountry] = useState<"all" | "PL" | "foreign">("all");
+  // Domyslnie tylko osoby ze zgoda marketingowa — patrz ostrzezenie przy wysylce.
+  const [consentOnly, setConsentOnly] = useState(true);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recLoading, setRecLoading] = useState(true);
   const [recErr, setRecErr] = useState("");
@@ -107,6 +110,7 @@ export default function NewsletterPage() {
         verifiedOnly: verifiedOnly ? "1" : "0",
         buyers: buyers ? "1" : "0",
         country,
+        consentOnly: consentOnly ? "1" : "0",
       });
       const res = await fetch(`/api/admin/newsletter/recipients?${q}`);
       const data = await res.json();
@@ -118,7 +122,7 @@ export default function NewsletterPage() {
     } finally {
       setRecLoading(false);
     }
-  }, [registered, verifiedOnly, buyers, country]);
+  }, [registered, verifiedOnly, buyers, country, consentOnly]);
 
   useEffect(() => {
     loadRecipients();
@@ -246,7 +250,7 @@ export default function NewsletterPage() {
       const res = await fetch("/api/admin/newsletter/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: payloadContent(), filter: { registered, verifiedOnly, buyers, country } }),
+        body: JSON.stringify({ content: payloadContent(), filter: { registered, verifiedOnly, buyers, country, consentOnly } }),
       });
       const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
       if (!data.ok) {
@@ -469,6 +473,17 @@ export default function NewsletterPage() {
               <input type="checkbox" checked={buyers} onChange={(e) => setBuyers(e.target.checked)} /> Kupujący (urządzenie / tokeny)
             </label>
           </div>
+          <label className="flex items-start gap-2 text-sm text-[#E0E0E0]/90 rounded-lg border border-[#3F4147] bg-[#2B2D31] p-2.5">
+            <input type="checkbox" className="mt-0.5" checked={consentOnly} onChange={(e) => setConsentOnly(e.target.checked)} />
+            <span>
+              Tylko ze zgodą marketingową
+              <span className="block text-[11px] text-[#E0E0E0]/50">
+                {consentOnly
+                  ? "Bezpieczne dla promocji, rabatów i kuponów."
+                  : "Uwaga: wysyłasz też do osób bez zgody — wolno tylko z informacjami o produkcie, który mają (aktualizacje, zmiany w usłudze), bez reklamy."}
+              </span>
+            </span>
+          </label>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-[#E0E0E0]/60">Kraj zamówienia:</span>
             {([["all", "Wszyscy"], ["PL", "Polska"], ["foreign", "Zagranica"]] as const).map(([v, l]) => (
@@ -507,6 +522,7 @@ export default function NewsletterPage() {
                     </div>
                     {r.registered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#3B82F6]/20 text-[#3B82F6]">konto</span>}
                     {r.buyer && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">kupił</span>}
+                    {r.consent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#D8FF3D]/20 text-[#D8FF3D]">zgoda</span>}
                     {r.country && <span className="text-[10px] text-[#E0E0E0]/50">{r.country}</span>}
                     <button
                       type="button"
@@ -555,10 +571,12 @@ export default function NewsletterPage() {
             </p>
           </div>
           {msg && <p className={`text-sm ${msg.ok ? "text-green-400" : "text-red-400"}`}>{msg.text}</p>}
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-200/80 leading-relaxed">
-            Treści czysto reklamowe (promocje, rabaty) wolno wysyłać tylko osobom, które się na to zgodziły (art. 398 Prawa komunikacji elektronicznej, RODO).
-            Informacje o produkcie, który ktoś już ma (aktualizacje, zmiany w usłudze), są bezpieczniejsze.
-          </div>
+          {!consentOnly && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-200/80 leading-relaxed">
+              Wysyłasz też do osób bez zgody marketingowej. Promocji, rabatów i kuponów wolno wysyłać tylko osobom ze zgodą (art. 398 Prawa komunikacji elektronicznej, RODO) —
+              do pozostałych wyłącznie informacje o produkcie, który już mają (aktualizacje, zmiany w usłudze).
+            </div>
+          )}
         </div>
 
         {/* Historia */}
