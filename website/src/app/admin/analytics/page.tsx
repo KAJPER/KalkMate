@@ -23,6 +23,130 @@ interface VisitData {
   funnel: Array<{ page: string; views: number; unique: number }>;
   hourly: Array<{ hour: number; count: number }>;
   byDomain: Array<{ domain: string; views: number; unique: number }>;
+  sources?: SourcesData;
+}
+
+interface SourceAgg { sessions: number; orders: number; pln: number; eur: number }
+interface SourcesData {
+  channels: Array<SourceAgg & { channel: string; label: string }>;
+  top: Array<SourceAgg & { channel: string; label: string; source: string }>;
+  campaigns: Array<SourceAgg & { campaign: string; source: string }>;
+  totalOrders: number;
+  unattributed: number;
+  trackedSessions: number;
+}
+
+function fmtRevenue(a: SourceAgg) {
+  const parts = [];
+  if (a.pln) parts.push(`${Math.round(a.pln / 100).toLocaleString("pl-PL")} zł`);
+  if (a.eur) parts.push(`${Math.round(a.eur / 100).toLocaleString("pl-PL")} €`);
+  return parts.join(" + ") || "—";
+}
+
+function convRate(a: SourceAgg) {
+  if (!a.sessions) return a.orders ? "—" : "0%";
+  return `${((a.orders / a.sessions) * 100).toFixed(1)}%`;
+}
+
+function SourcesTable({ rows, first }: { rows: Array<SourceAgg & { key: string; name: string; sub?: string }>; first: string }) {
+  if (!rows.length) return <p className="text-sm text-[#E0E0E0]/30">Brak danych w tym okresie</p>;
+  return (
+    <div className="overflow-x-auto -mx-2">
+      <table className="w-full text-sm min-w-[520px]">
+        <thead>
+          <tr className="text-xs text-[#E0E0E0]/40 text-left">
+            <th className="font-medium px-2 pb-2">{first}</th>
+            <th className="font-medium px-2 pb-2 text-right">Wejścia</th>
+            <th className="font-medium px-2 pb-2 text-right">Zamówienia</th>
+            <th className="font-medium px-2 pb-2 text-right">Przychód</th>
+            <th className="font-medium px-2 pb-2 text-right">Konwersja</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key} className="border-t border-[#3F4147]/60">
+              <td className="px-2 py-2 text-[#E0E0E0]/90">
+                {r.name}
+                {r.sub && <span className="block text-[11px] text-[#E0E0E0]/40">{r.sub}</span>}
+              </td>
+              <td className="px-2 py-2 text-right text-[#E0E0E0]/80">{r.sessions}</td>
+              <td className={`px-2 py-2 text-right font-medium ${r.orders ? "text-[#D8FF3D]" : "text-[#E0E0E0]/40"}`}>{r.orders}</td>
+              <td className="px-2 py-2 text-right text-[#E0E0E0]/80 whitespace-nowrap">{fmtRevenue(r)}</td>
+              <td className="px-2 py-2 text-right text-[#E0E0E0]/60">{convRate(r)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Generator linkow z UTM — do bio TikToka/Instagrama, opisow filmow, postow,
+// reklam. Dzieki temu w tabeli wyzej widac, ktory kanal/kampania sprzedaje.
+const UTM_PRESETS: Array<{ label: string; source: string; medium: string }> = [
+  { label: "TikTok", source: "tiktok", medium: "social" },
+  { label: "Instagram", source: "instagram", medium: "social" },
+  { label: "YouTube", source: "youtube", medium: "video" },
+  { label: "Facebook", source: "facebook", medium: "social" },
+  { label: "Newsletter", source: "newsletter", medium: "email" },
+  { label: "Reklama Google", source: "google", medium: "cpc" },
+];
+
+function UtmBuilder() {
+  const [url, setUrl] = useState("https://kalkmate.pl/");
+  const [source, setSource] = useState("tiktok");
+  const [medium, setMedium] = useState("social");
+  const [campaign, setCampaign] = useState("");
+  const [copied, setCopied] = useState(false);
+  const slug = (v: string) => v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  let link = "";
+  try {
+    const u = new URL(url.trim());
+    if (slug(source)) u.searchParams.set("utm_source", slug(source));
+    if (slug(medium)) u.searchParams.set("utm_medium", slug(medium));
+    if (slug(campaign)) u.searchParams.set("utm_campaign", slug(campaign));
+    link = u.toString();
+  } catch {
+    link = "";
+  }
+  const field = "w-full min-w-0 bg-[#2B2D31] border border-[#3F4147] rounded-lg px-3 py-2 text-sm text-[#E0E0E0] focus:outline-none focus:border-[#3B82F6]";
+  return (
+    <div className="bg-[#313338] border border-[#3F4147] rounded-xl p-6">
+      <h2 className="text-sm font-semibold text-[#E0E0E0] mb-1">Generator linków z UTM</h2>
+      <p className="text-xs text-[#E0E0E0]/40 mb-4">Wklejaj taki link w bio, opisy filmów i posty — wtedy w tabeli wyżej zobaczysz, ile z niego było wejść i zamówień.</p>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {UTM_PRESETS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => { setSource(p.source); setMedium(p.medium); }}
+            className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+              source === p.source && medium === p.medium ? "bg-[#3B82F6] border-[#3B82F6] text-white" : "bg-[#2B2D31] border-[#3F4147] text-[#E0E0E0]/70 hover:bg-[#3F4147]"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="grid sm:grid-cols-2 gap-2">
+        <input className={field} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Adres strony" aria-label="Adres strony" />
+        <input className={field} value={campaign} onChange={(e) => setCampaign(e.target.value)} placeholder="Kampania, np. film-promo-pazdziernik" aria-label="Kampania" />
+        <input className={field} value={source} onChange={(e) => setSource(e.target.value)} placeholder="Źródło (utm_source)" aria-label="Źródło" />
+        <input className={field} value={medium} onChange={(e) => setMedium(e.target.value)} placeholder="Medium (utm_medium)" aria-label="Medium" />
+      </div>
+      <div className="mt-3 flex flex-col sm:flex-row gap-2">
+        <code className="flex-1 min-w-0 break-all text-xs bg-[#1E1F22] border border-[#3F4147] rounded-lg px-3 py-2 text-[#D8FF3D]">{link || "Nieprawidłowy adres"}</code>
+        <button
+          type="button"
+          disabled={!link}
+          onClick={() => { navigator.clipboard?.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-[#3B82F6] hover:bg-[#2f6fd6] text-white disabled:opacity-50"
+        >
+          {copied ? "Skopiowano ✓" : "Kopiuj"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ----------------------------------------------------------------
@@ -326,6 +450,31 @@ export default function AnalyticsPage() {
               }
             />
           </div>
+
+          {/* ---- Zrodla i sprzedaz (lib/attribution.ts) ---- */}
+          {data.sources && (
+            <div className="grid lg:grid-cols-2 gap-6">
+              <div className="bg-[#313338] border border-[#3F4147] rounded-xl p-6">
+                <h2 className="text-sm font-semibold text-[#E0E0E0] mb-1">Źródła i sprzedaż — kanały</h2>
+                <p className="text-xs text-[#E0E0E0]/40 mb-4">
+                  Wejścia na stronę i opłacone zamówienia wg ostatniego źródła przed zakupem.
+                  {data.sources.unattributed > 0 && ` ${data.sources.unattributed} z ${data.sources.totalOrders} zamówień bez źródła (sprzed włączenia śledzenia).`}
+                </p>
+                <SourcesTable first="Kanał" rows={data.sources.channels.map((c) => ({ ...c, key: c.channel, name: c.label }))} />
+              </div>
+              <div className="bg-[#313338] border border-[#3F4147] rounded-xl p-6">
+                <h2 className="text-sm font-semibold text-[#E0E0E0] mb-1">Źródła — szczegóły</h2>
+                <p className="text-xs text-[#E0E0E0]/40 mb-4">Konkretne serwisy (google, tiktok, chatgpt…) i strony polecające.</p>
+                <SourcesTable first="Źródło" rows={data.sources.top.map((c) => ({ ...c, key: `${c.channel}|${c.source}`, name: c.source, sub: c.label }))} />
+              </div>
+              <div className="bg-[#313338] border border-[#3F4147] rounded-xl p-6">
+                <h2 className="text-sm font-semibold text-[#E0E0E0] mb-1">Kampanie (UTM)</h2>
+                <p className="text-xs text-[#E0E0E0]/40 mb-4">Linki z parametrem utm_campaign — newslettery, posty, reklamy.</p>
+                <SourcesTable first="Kampania" rows={data.sources.campaigns.map((c) => ({ ...c, key: `${c.campaign}|${c.source}`, name: c.campaign, sub: c.source }))} />
+              </div>
+              <UtmBuilder />
+            </div>
+          )}
 
           {/* ---- Wykres dzienny ---- */}
           <div className="bg-[#313338] border border-[#3F4147] rounded-xl p-6">

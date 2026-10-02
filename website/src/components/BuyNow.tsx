@@ -16,6 +16,7 @@ import { type Locale } from "@/lib/i18n";
 import {
   ALL_COUNTRY_CODES, countryName, flagEmoji, dialCode, regionsFor, showsOptionalRegion, cityWithRegion, postcodeHint,
 } from "@/lib/countries";
+import { readClientAttribution } from "@/lib/clientAttribution";
 
 const InPostGeowidget = lazy(() => import("@/components/InPostGeowidget"));
 
@@ -547,6 +548,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
           ...formData,
           // Order nie ma kolumny na stan — "Austin, TX" (patrz lib/countries.ts).
           city: cityWithRegion(formData.city, formData.region),
+          attribution: readClientAttribution(),
           currency,
           shippingCents,
           couponCode: appliedCoupon?.code || null,
@@ -576,6 +578,7 @@ export default function BuyNow({ defaultCountry = "PL", lang = "pl" }: { default
           ...formData,
           // Order nie ma kolumny na stan — "Austin, TX" (patrz lib/countries.ts).
           city: cityWithRegion(formData.city, formData.region),
+          attribution: readClientAttribution(),
           currency,
           shippingCents,
           couponCode: appliedCoupon?.code || null,

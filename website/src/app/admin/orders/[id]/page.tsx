@@ -36,6 +36,19 @@ interface OrderDetail {
   payment_provider: "stripe" | "p24";
   personalized_code: string | null;
   personalized_name: string | null;
+  attribution: {
+    method: string;
+    first: AttributionTouch | null;
+    last: AttributionTouch | null;
+  } | null;
+}
+
+interface AttributionTouch { channel: string; source: string | null; campaign: string | null; landing: string | null; at: string | null }
+
+// "Wyszukiwarka · google · kampania · /en"
+function describeTouch(t: AttributionTouch | null): string {
+  if (!t) return "—";
+  return [t.channel, t.source, t.campaign, t.landing].filter(Boolean).join(" · ");
 }
 
 
@@ -1176,6 +1189,27 @@ export default function OrderDetailPage({
                       })}
                     </ul>
                   </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3 text-xs space-y-1">
+                <p className="text-[#E0E0E0]/50 uppercase tracking-wide text-[10px]">Skąd przyszedł klient</p>
+                {order.attribution ? (
+                  <>
+                    <p className="text-[#E0E0E0]/90">
+                      <span className="text-[#E0E0E0]/50">Przed zakupem: </span>{describeTouch(order.attribution.last)}
+                    </p>
+                    {describeTouch(order.attribution.first) !== describeTouch(order.attribution.last) && (
+                      <p className="text-[#E0E0E0]/70">
+                        <span className="text-[#E0E0E0]/50">Pierwsze wejście: </span>{describeTouch(order.attribution.first)}
+                      </p>
+                    )}
+                    <p className="text-[#E0E0E0]/35">
+                      {order.attribution.method === "browser" ? "Dane z przeglądarki (zgoda na cookies)" : "Dopasowane po adresie IP — przybliżone"}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[#E0E0E0]/40">Brak danych (zamówienie sprzed śledzenia źródeł albo brak wizyty z tego IP).</p>
                 )}
               </div>
 

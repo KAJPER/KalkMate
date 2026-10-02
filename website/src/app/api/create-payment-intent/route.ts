@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { giveConsent } from "@/lib/newsletter";
 import { clientIp } from "@/lib/rate-limit";
+import { attributionToMetadata, ipHashFromHeaders, resolveAttribution } from "@/lib/attribution";
 import { prisma } from "@/lib/db";
 import { getCoupon, computeDiscount } from "@/lib/coupons";
 import { validatePersonalization } from "@/lib/orderPersonalization";
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
       country, currency, shippingCents,
       couponCode,
       unlockCode, personalizeName,
-      marketingConsent,
+      marketingConsent, attribution,
     } = body;
     // Zgoda na newsletter z formularza zamowienia (checkbox, domyslnie
     // odznaczony) — niezalezna od tego, czy klient potem zaplaci.
@@ -113,6 +114,11 @@ export async function POST(request: NextRequest) {
       ? { payment_method_types: ["klarna"] }
       : { automatic_payment_methods: { enabled: true } };
 
+    // Zrodlo klienta jedzie w metadata — Order powstaje dopiero w webhooku.
+    const attributionMeta = await resolveAttribution(attribution, ipHashFromHeaders(request.headers))
+      .then(attributionToMetadata)
+      .catch(() => "");
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: totalAmount,
       currency: resolvedCurrency,
@@ -135,6 +141,7 @@ export async function POST(request: NextRequest) {
         discount_amount: String(discountAmount),
         personalized_code: personalization.code,
         personalized_name: personalization.name,
+        attribution: attributionMeta,
       },
       receipt_email: email,
       description: "KalkMate v3.0 - AI Calculator",

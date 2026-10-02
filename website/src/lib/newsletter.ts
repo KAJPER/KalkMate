@@ -249,16 +249,33 @@ function personalize(text: string, name: string | null): string {
     .replace(/^ /gm, "");
 }
 
+// UTM do linkow na nasza strone — w /admin/analytics widac potem wejscia
+// i zamowienia z kazdej kampanii (lib/attribution.ts). Bez /api/ (wypis) i bez
+// linkow, ktore juz maja wlasne utm_.
+function campaignSlug(subject: string): string {
+  return subject.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "newsletter";
+}
+
+export function addUtm(html: string, campaign: string): string {
+  return html.replace(/href="(https:\/\/(?:www\.)?kalkmate\.(?:pl|eu)(?:\/[^"]*)?)"/g, (m, url: string) => {
+    if (/\/api\//.test(url) || /[?&]utm_/.test(url.replace(/&amp;/g, "&"))) return m;
+    const [base, hash = ""] = url.split("#");
+    const sep = base.includes("?") ? "&amp;" : "?";
+    return `href="${base}${sep}utm_source=newsletter&amp;utm_medium=email&amp;utm_campaign=${campaign}${hash ? "#" + hash : ""}"`;
+  });
+}
+
 function buildMail(content: CampaignContent, to: string, name: string | null) {
   const p = (s?: string) => (s ? personalize(s, name) : s);
-  const html = newsletterEmail({
+  const html = addUtm(newsletterEmail({
     ...content,
     title: p(content.title) || "",
     body: p(content.body) || "",
     preheader: p(content.preheader),
     imageSrc: content.image ? `cid:${IMAGE_CID}` : undefined,
     unsubscribeUrl: unsubscribeUrl(to),
-  });
+  }), campaignSlug(content.subject));
   const unsub = unsubscribeUrl(to);
   return {
     to,
