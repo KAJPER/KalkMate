@@ -21,6 +21,7 @@ import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 import { newsletterEmail, type NewsletterContent } from "@/lib/email-templates";
 import { SITE_URL } from "@/lib/i18n";
+import { translateNewsletter, type NewsletterTexts } from "@/lib/translate";
 
 const DELAY_MS = Math.max(200, parseInt(process.env.NEWSLETTER_DELAY_MS || "2500", 10) || 2500);
 
@@ -76,6 +77,16 @@ async function ensureTables(): Promise<void> {
       "ip"          TEXT,
       "withdrawnAt" TEXT
     )`);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "UserLanguage" (
+      "email"     TEXT PRIMARY KEY,
+      "lang"      TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL
+    )`);
+  const cols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("NewsletterDelivery")`);
+  if (!cols.some((c) => c.name === "lang")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "NewsletterDelivery" ADD COLUMN "lang" TEXT`);
+  }
   _ready = true;
 }
 
@@ -165,6 +176,48 @@ export interface Recipient {
   country: string | null;
   unsubscribed: boolean;
   consent: boolean;
+  lang: NlLang;
+}
+
+// === Jezyk odbiorcy ===
+// Admin pisze po polsku; Polska -> PL, kraje niemieckojezyczne -> DE, reszta
+// swiata -> EN. Kolejnosc zrodel: kraj z zamowienia, koncowka domeny e-mail,
+// jezyk przegladarki zapisany przy rejestracji (UserLanguage), domyslnie PL.
+export type NlLang = "pl" | "en" | "de";
+export const GERMAN_COUNTRIES = new Set(["DE", "AT", "CH", "LI", "LU"]);
+const GENERIC_TLDS = new Set(["com", "net", "org", "eu", "io", "info", "me", "co", "app", "dev", "edu", "biz", "xyz", "online"]);
+
+export function langForCountry(country: string | null | undefined): NlLang | null {
+  const c = (country || "").toUpperCase();
+  if (!c) return null;
+  if (c === "PL") return "pl";
+  return GERMAN_COUNTRIES.has(c) ? "de" : "en";
+}
+
+function langForEmail(email: string): NlLang | null {
+  const tld = email.split(".").pop()?.toLowerCase() || "";
+  if (tld === "pl") return "pl";
+  if (["de", "at", "ch", "li", "lu"].includes(tld)) return "de";
+  if (tld.length === 2 && !GENERIC_TLDS.has(tld)) return "en";
+  return null;
+}
+
+// Wolane przy rejestracji (naglowek Accept-Language) — dla kont bez zamowien
+// to jedyna wskazowka, w jakim jezyku pisac.
+export async function rememberUserLanguage(email: string, acceptLanguage: string | null | undefined): Promise<void> {
+  const primary = (acceptLanguage || "").split(",")[0]?.trim().toLowerCase() || "";
+  if (!primary) return;
+  const lang: NlLang = primary.startsWith("pl") ? "pl" : primary.startsWith("de") ? "de" : "en";
+  await ensureTables();
+  await prisma.$executeRaw`
+    INSERT INTO "UserLanguage" ("email", "lang", "updatedAt") VALUES (${email.toLowerCase()}, ${lang}, ${new Date().toISOString()})
+    ON CONFLICT("email") DO UPDATE SET "lang" = excluded."lang", "updatedAt" = excluded."updatedAt"`;
+}
+
+async function userLanguages(): Promise<Map<string, NlLang>> {
+  await ensureTables();
+  const rows = await prisma.$queryRaw<{ email: string; lang: NlLang }[]>`SELECT "email", "lang" FROM "UserLanguage"`;
+  return new Map(rows.map((r) => [r.email, r.lang]));
 }
 
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
@@ -174,13 +227,14 @@ const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
 export async function listRecipients(filter: AudienceFilter): Promise<Recipient[]> {
   const unsub = await unsubscribedSet();
   const consented = await consentedSet();
+  const regLangs = await userLanguages();
   const map = new Map<string, Recipient>();
   const upsert = (email: string, patch: Partial<Recipient>) => {
     const key = email.trim().toLowerCase();
     if (!EMAIL_RE.test(key)) return;
     const cur = map.get(key) || {
       email: key, name: null, registered: false, buyer: false, country: null,
-      unsubscribed: unsub.has(key), consent: consented.has(key),
+      unsubscribed: unsub.has(key), consent: consented.has(key), lang: "pl" as NlLang,
     };
     map.set(key, {
       ...cur,
@@ -224,7 +278,10 @@ export async function listRecipients(filter: AudienceFilter): Promise<Recipient[
     for (const u of users) upsert(u.email, { name: u.name, registered: true, buyer: buyerEmails.has(u.email.trim().toLowerCase()) });
   }
 
-  let list = Array.from(map.values());
+  let list = Array.from(map.values()).map((r) => ({
+    ...r,
+    lang: langForCountry(r.country) || langForEmail(r.email) || regLangs.get(r.email) || ("pl" as NlLang),
+  }));
   if (filter.country === "PL") list = list.filter((r) => r.country === "PL");
   if (filter.country === "foreign") list = list.filter((r) => r.country && r.country !== "PL");
   if (filter.consentOnly) list = list.filter((r) => r.consent);
@@ -236,6 +293,41 @@ export async function listRecipients(filter: AudienceFilter): Promise<Recipient[
 export interface CampaignContent extends Omit<NewsletterContent, "unsubscribeUrl" | "imageSrc"> {
   subject: string;
   image?: { filename: string; contentType: string; data: string } | null; // base64
+  // Tlumaczenia polskiej tresci (AI, poprawiane recznie w panelu).
+  translations?: Partial<Record<"en" | "de", NewsletterTexts>>;
+}
+
+export function sourceTexts(c: CampaignContent): NewsletterTexts {
+  return {
+    subject: c.subject || "", preheader: c.preheader || "", eyebrow: c.eyebrow || "",
+    title: c.title || "", body: c.body || "", ctaText: c.ctaText || "",
+  };
+}
+
+// Brakujace tlumaczenia (np. wysylka bez klikniecia "Przetlumacz") robi serwer.
+export async function ensureTranslations(c: CampaignContent, langs: NlLang[]): Promise<CampaignContent> {
+  const translations = { ...(c.translations || {}) };
+  for (const l of langs) {
+    if (l === "pl" || translations[l]?.body) continue;
+    translations[l] = await translateNewsletter(sourceTexts(c), l);
+  }
+  return { ...c, translations };
+}
+
+function contentFor(c: CampaignContent, lang: NlLang): CampaignContent {
+  const t = lang === "pl" ? null : c.translations?.[lang];
+  if (!t) return c;
+  return {
+    ...c, subject: t.subject || c.subject, preheader: t.preheader || undefined, eyebrow: t.eyebrow || undefined,
+    title: t.title || c.title, body: t.body || c.body, ctaText: t.ctaText || undefined,
+  };
+}
+
+// Link do strony glownej / pomocy -> wersja jezykowa (/en, /de).
+function localizeLinks(html: string, lang: NlLang): string {
+  if (lang === "pl") return html;
+  return html.replace(/href="https:\/\/(www\.)?kalkmate\.pl(\/pomoc)?\/?((?:\?|#)[^"]*)?"/g, (_m, www, pomoc, rest) =>
+    `href="https://${www || ""}kalkmate.pl/${lang}${pomoc || ""}${rest || ""}"`);
 }
 
 const IMAGE_CID = "newsletter-image@kalkmate.pl";
@@ -266,16 +358,18 @@ export function addUtm(html: string, campaign: string): string {
   });
 }
 
-function buildMail(content: CampaignContent, to: string, name: string | null) {
+export function buildMail(source: CampaignContent, to: string, name: string | null, lang: NlLang = "pl") {
+  const content = contentFor(source, lang);
   const p = (s?: string) => (s ? personalize(s, name) : s);
-  const html = addUtm(newsletterEmail({
+  const html = addUtm(localizeLinks(newsletterEmail({
     ...content,
+    lang,
     title: p(content.title) || "",
     body: p(content.body) || "",
     preheader: p(content.preheader),
     imageSrc: content.image ? `cid:${IMAGE_CID}` : undefined,
     unsubscribeUrl: unsubscribeUrl(to),
-  }), campaignSlug(content.subject));
+  }), lang), campaignSlug(source.subject));
   const unsub = unsubscribeUrl(to);
   return {
     to,
@@ -299,9 +393,17 @@ function buildMail(content: CampaignContent, to: string, name: string | null) {
   };
 }
 
-export async function sendTest(content: CampaignContent, to: string): Promise<{ ok: boolean; error?: string }> {
-  const mail = buildMail(content, to, "Jan Testowy");
-  return sendMail({ ...mail, subject: `[TEST] ${mail.subject}` });
+// Test w kazdym jezyku osobnym mailem ("[TEST PL] ...", "[TEST EN] ...").
+export async function sendTest(
+  content: CampaignContent, to: string, langs: NlLang[] = ["pl", "en", "de"]
+): Promise<{ ok: boolean; error?: string }> {
+  const c = await ensureTranslations(content, langs);
+  for (const lang of langs) {
+    const mail = buildMail(c, to, "Jan Testowy", lang);
+    const r = await sendMail({ ...mail, subject: `[TEST ${lang.toUpperCase()}] ${mail.subject}` });
+    if (!r.ok) return r;
+  }
+  return { ok: true };
 }
 
 // === Kampanie ===
@@ -341,6 +443,10 @@ export async function createCampaign(
   const recipients = (await listRecipients(filter)).filter((r) => !r.unsubscribed);
   if (!recipients.length) throw new Error("Brak odbiorców dla wybranych filtrów.");
 
+  // Tlumaczenia na jezyki, ktore faktycznie sa wsrod odbiorcow — raz, przed
+  // startem (zapisane w tresci kampanii, wiec wznowienie nie tlumaczy od nowa).
+  content = await ensureTranslations(content, Array.from(new Set(recipients.map((r) => r.lang))));
+
   const id = randomUUID();
   const now = new Date().toISOString();
   await prisma.$executeRaw`
@@ -349,7 +455,7 @@ export async function createCampaign(
   // SQLite: w transakcji, inaczej kilkaset osobnych INSERT-ow trwa sekundy.
   await prisma.$transaction(
     recipients.map((r) => prisma.$executeRaw`
-      INSERT OR IGNORE INTO "NewsletterDelivery" ("campaignId", "email", "name") VALUES (${id}, ${r.email}, ${r.name})`)
+      INSERT OR IGNORE INTO "NewsletterDelivery" ("campaignId", "email", "name", "lang") VALUES (${id}, ${r.email}, ${r.name}, ${r.lang})`)
   );
   startWorker(id);
   return { id, total: recipients.length };
@@ -391,18 +497,18 @@ async function runWorker(id: string): Promise<void> {
 
   for (;;) {
     if (stopRequested.has(id)) return;
-    const next = await prisma.$queryRaw<{ email: string; name: string | null }[]>`
-      SELECT "email", "name" FROM "NewsletterDelivery"
+    const next = await prisma.$queryRaw<{ email: string; name: string | null; lang: NlLang | null }[]>`
+      SELECT "email", "name", "lang" FROM "NewsletterDelivery"
       WHERE "campaignId" = ${id} AND "status" = 'pending' LIMIT 1`;
     if (!next[0]) break;
-    const { email, name } = next[0];
+    const { email, name, lang } = next[0];
 
     // Ktos mogl sie wypisac w trakcie wysylki (wysylka trwa nawet godzine).
     const unsub = await prisma.$queryRaw<{ email: string }[]>`
       SELECT "email" FROM "NewsletterUnsubscribe" WHERE "email" = ${email}`;
     const result = unsub.length
       ? { ok: false, error: "wypisany" }
-      : await sendMail(buildMail(content, email, name));
+      : await sendMail(buildMail(content, email, name, lang || "pl"));
 
     await prisma.$executeRaw`
       UPDATE "NewsletterDelivery"

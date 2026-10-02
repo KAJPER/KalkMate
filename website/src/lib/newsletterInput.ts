@@ -1,5 +1,6 @@
 // Walidacja danych z /admin/newsletter (wspolna dla testu i wysylki).
 import type { AudienceFilter, CampaignContent } from "@/lib/newsletter";
+import type { NewsletterTexts } from "@/lib/translate";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -24,6 +25,19 @@ export function parseContent(raw: unknown): { ok: true; content: CampaignContent
   }
 
   const lang = b.lang === "en" || b.lang === "de" ? b.lang : "pl";
+
+  // Tlumaczenia (EN/DE) z podgladu w panelu — po recznych poprawkach admina.
+  const translations: CampaignContent["translations"] = {};
+  const tr = (b.translations || {}) as Record<string, Record<string, unknown> | undefined>;
+  for (const l of ["en", "de"] as const) {
+    const t = tr[l];
+    if (!t || typeof t.body !== "string" || !t.body.trim()) continue;
+    const texts: NewsletterTexts = {
+      subject: str(t.subject, 200), preheader: str(t.preheader, 200), eyebrow: str(t.eyebrow, 60),
+      title: str(t.title, 200), body: str(t.body, 50_000), ctaText: str(t.ctaText, 60),
+    };
+    translations[l] = texts;
+  }
   return {
     ok: true,
     content: {
@@ -36,6 +50,7 @@ export function parseContent(raw: unknown): { ok: true; content: CampaignContent
       ctaUrl: ctaUrl || undefined,
       lang,
       image,
+      translations,
     },
   };
 }

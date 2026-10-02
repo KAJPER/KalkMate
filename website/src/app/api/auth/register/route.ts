@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { sendMail } from "@/lib/mailer";
 import { verificationEmail, detectLocale, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { giveConsent } from "@/lib/newsletter";
+import { giveConsent, rememberUserLanguage } from "@/lib/newsletter";
 
 const VERIFY_EXPIRY_HOURS = 24;
 
@@ -120,6 +120,8 @@ export async function POST(req: NextRequest) {
     if (marketingConsent === true) {
       await giveConsent(email, "register", clientIp(req)).catch((e) => console.error("[register] consent save failed:", e));
     }
+    // Jezyk newslettera dla kont bez zamowien (lib/newsletter.ts).
+    await rememberUserLanguage(email, req.headers.get("accept-language")).catch(() => {});
 
     // Wyslij mail weryfikacyjny
     await sendVerification(email, name || user.name, user.id, req.headers.get("accept-language"));
