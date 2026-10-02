@@ -23,3 +23,19 @@ node render.js                  # pełny film -> kalkmate-promo-1080x1920.mp4 (k
 ```
 
 Jeśli Chromium nie jest w domyślnym miejscu, zmień `executablePath` w `render.js` / `snap.js`.
+
+## Dźwięk: lektor, efekty, muzyka (ElevenLabs)
+
+`audio/soundtrack.json` to scenariusz dźwięku: kwestie lektora z czasami (zgrane ze scenami), efekty (klawisze, migawka, przejścia, „ding” przy rozwiązaniu, uderzenie na logo) i opis muzyki. `audio/make-audio.mjs` pobiera to z ElevenLabs i miksuje z filmem:
+
+```bash
+cd marketing/promo-video
+ELEVENLABS_API_KEY=... node audio/make-audio.mjs      # -> kalkmate-promo-1080x1920-dzwiek.mp4
+node audio/make-audio.mjs --placeholder               # test miksu bez API (sztuczne dźwięki)
+```
+
+- Lektor: model `eleven_multilingual_v2` (polski), głos `voice.voiceId` (zmień na inny z biblioteki ElevenLabs). Za długa kwestia jest lekko przyspieszana (max 1,2×), a skrypt ostrzega, gdy i tak się nie mieści.
+- Muzyka: `/v1/music` (wymaga płatnego planu ElevenLabs). Bez niej film dostaje lektora i efekty. Pod lektorem muzyka jest automatycznie ściszana.
+- Głośność końcowa −14 LUFS (standard TikTok/YouTube/Instagram). Obraz nie jest ponownie kodowany.
+- Wygenerowane pliki trafiają do `audio/cache/` — ponowne uruchomienie po zmianie jednej kwestii płaci tylko za nią.
+- Za proxy (np. kontener w chmurze) uruchom z `NODE_USE_ENV_PROXY=1`.
