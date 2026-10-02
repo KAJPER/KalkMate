@@ -13,7 +13,16 @@ interface Recipient {
   buyer: boolean;
   country: string | null;
   unsubscribed: boolean;
+  consent: boolean;
+  lang: Lang;
 }
+
+type Lang = "pl" | "en" | "de";
+// Teksty tlumaczone na EN/DE (lib/translate.ts translateNewsletter).
+interface Texts { subject: string; preheader: string; eyebrow: string; title: string; body: string; ctaText: string }
+type Translations = Partial<Record<"en" | "de", Texts>>;
+const LANG_LABEL: Record<Lang, string> = { pl: "PL", en: "EN", de: "DE" };
+const TR_KEY = "km-newsletter-tr";
 
 interface Campaign {
   id: string;
@@ -51,6 +60,9 @@ const EMPTY_DRAFT: Draft = {
 
 const DRAFT_KEY = "km-newsletter-draft";
 
+// Klucz tresci zrodlowej — gdy polski tekst sie zmieni, tlumaczenia sa nieaktualne.
+const sourceKey = (d: Draft) => JSON.stringify([d.subject, d.preheader, d.eyebrow, d.title, d.body, d.ctaText]);
+
 // Podglad: {{imie}} -> przykladowe imie (serwer robi to samo per odbiorca).
 function previewPersonalize(s: string): string {
   return s.replace(/\{\{\s*(imie|imię|name)\s*\}\}/gi, "Jan");
@@ -61,6 +73,11 @@ export default function NewsletterPage() {
   const [image, setImage] = useState<PendingAttachment | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
   const [previewMobile, setPreviewMobile] = useState(false);
+  const [previewLang, setPreviewLang] = useState<Lang>("pl");
+  const [translations, setTranslations] = useState<Translations>({});
+  const [translatedFrom, setTranslatedFrom] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [trErr, setTrErr] = useState("");
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +86,8 @@ export default function NewsletterPage() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [buyers, setBuyers] = useState(true);
   const [country, setCountry] = useState<"all" | "PL" | "foreign">("all");
+  // Domyslnie tylko osoby ze zgoda marketingowa — patrz ostrzezenie przy wysylce.
+  const [consentOnly, setConsentOnly] = useState(true);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recLoading, setRecLoading] = useState(true);
   const [recErr, setRecErr] = useState("");
@@ -96,6 +115,50 @@ export default function NewsletterPage() {
     } catch {}
   }, [draft]);
 
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(TR_KEY) || "null");
+      if (saved?.translations) { setTranslations(saved.translations); setTranslatedFrom(saved.from ?? null); }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TR_KEY, JSON.stringify({ translations, from: translatedFrom }));
+    } catch {}
+  }, [translations, translatedFrom]);
+
+  const trFresh = translatedFrom === sourceKey(draft) && !!translations.en?.body && !!translations.de?.body;
+
+  // Tlumaczy polska tresc na EN i DE. Zwraca tlumaczenia (albo null przy bledzie).
+  const translate = async (): Promise<Translations | null> => {
+    setTranslating(true);
+    setTrErr("");
+    try {
+      const res = await fetch("/api/admin/newsletter/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: { ...draft, image: null } }),
+      });
+      const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+      if (!data.ok) { setTrErr(data.error || "Błąd tłumaczenia"); return null; }
+      setTranslations(data.translations);
+      setTranslatedFrom(sourceKey(draft));
+      return data.translations;
+    } catch {
+      setTrErr("Błąd sieci");
+      return null;
+    } finally {
+      setTranslating(false);
+    }
+  };
+  // Przed testem/wysylka: aktualne tlumaczenia (reczne poprawki zostaja,
+  // jesli polski tekst sie od tego czasu nie zmienil).
+  const freshTranslations = async (): Promise<Translations | null> => (trFresh ? translations : translate());
+  const setTr = (k: keyof Texts, v: string) => {
+    if (previewLang === "pl") return;
+    setTranslations((t) => ({ ...t, [previewLang]: { ...(t[previewLang] as Texts), [k]: v } }));
+  };
+
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
   const loadRecipients = useCallback(async () => {
@@ -107,6 +170,7 @@ export default function NewsletterPage() {
         verifiedOnly: verifiedOnly ? "1" : "0",
         buyers: buyers ? "1" : "0",
         country,
+        consentOnly: consentOnly ? "1" : "0",
       });
       const res = await fetch(`/api/admin/newsletter/recipients?${q}`);
       const data = await res.json();
@@ -118,7 +182,7 @@ export default function NewsletterPage() {
     } finally {
       setRecLoading(false);
     }
-  }, [registered, verifiedOnly, buyers, country]);
+  }, [registered, verifiedOnly, buyers, country, consentOnly]);
 
   useEffect(() => {
     loadRecipients();
@@ -145,27 +209,36 @@ export default function NewsletterPage() {
   }, [anyRunning, loadCampaigns]);
 
   const activeCount = recipients.filter((r) => !r.unsubscribed).length;
+  const langCounts = recipients.reduce<Record<Lang, number>>((acc, r) => {
+    if (!r.unsubscribed) acc[r.lang] = (acc[r.lang] || 0) + 1;
+    return acc;
+  }, { pl: 0, en: 0, de: 0 });
   const unsubCount = recipients.length - activeCount;
   const filteredRecipients = useMemo(() => {
     const q = recSearch.trim().toLowerCase();
     return q ? recipients.filter((r) => r.email.includes(q) || (r.name || "").toLowerCase().includes(q)) : recipients;
   }, [recipients, recSearch]);
 
+  const previewTexts: Texts | null = previewLang === "pl" ? draft : translations[previewLang] || null;
   const previewHtml = useMemo(
     () =>
       newsletterEmail({
         ...draft,
-        title: previewPersonalize(draft.title),
-        body: previewPersonalize(draft.body),
+        ...(previewTexts || draft),
+        lang: previewLang,
+        title: previewPersonalize((previewTexts || draft).title),
+        body: previewPersonalize((previewTexts || draft).body),
         // data: zamiast blob: — iframe z sandbox="" ma inny origin i nie widzi blob-ow strony.
         imageSrc: image ? `data:${image.contentType};base64,${image.data}` : undefined,
         unsubscribeUrl: "#",
       }),
-    [draft, image]
+    [draft, image, previewTexts, previewLang]
   );
 
-  const payloadContent = () => ({
+  const payloadContent = (tr: Translations) => ({
     ...draft,
+    lang: "pl",
+    translations: tr,
     image: image ? { filename: image.filename, contentType: image.contentType, data: image.data } : null,
   });
 
@@ -223,13 +296,15 @@ export default function NewsletterPage() {
     setTesting(true);
     setMsg(null);
     try {
+      const tr = await freshTranslations();
+      if (!tr) { setMsg({ ok: false, text: "Nie udało się przetłumaczyć — spróbuj ponownie." }); return; }
       const res = await fetch("/api/admin/newsletter/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: payloadContent(), to: testTo }),
+        body: JSON.stringify({ content: payloadContent(tr), to: testTo }),
       });
       const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
-      setMsg(data.ok ? { ok: true, text: `Test wysłany na ${testTo}.` } : { ok: false, text: data.error || "Błąd" });
+      setMsg(data.ok ? { ok: true, text: `Wysłano 3 testy (PL, EN, DE) na ${testTo}.` } : { ok: false, text: data.error || "Błąd" });
     } catch {
       setMsg({ ok: false, text: "Błąd sieci" });
     } finally {
@@ -239,14 +314,16 @@ export default function NewsletterPage() {
 
   const sendAll = async () => {
     if (!activeCount) return;
-    if (!confirm(`Wysłać „${draft.subject}” do ${activeCount} odbiorców?\n\nTego nie da się cofnąć. Najpierw wyślij test do siebie.`)) return;
+    if (!confirm(`Wysłać „${draft.subject}” do ${activeCount} odbiorców (PL ${langCounts.pl} · EN ${langCounts.en} · DE ${langCounts.de})?\n\nTego nie da się cofnąć. Najpierw wyślij test do siebie i sprawdź tłumaczenia w podglądzie.`)) return;
     setSending(true);
     setMsg(null);
     try {
+      const tr = await freshTranslations();
+      if (!tr) { setMsg({ ok: false, text: "Nie udało się przetłumaczyć — spróbuj ponownie." }); return; }
       const res = await fetch("/api/admin/newsletter/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: payloadContent(), filter: { registered, verifiedOnly, buyers, country } }),
+        body: JSON.stringify({ content: payloadContent(tr), filter: { registered, verifiedOnly, buyers, country, consentOnly } }),
       });
       const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
       if (!data.ok) {
@@ -276,6 +353,12 @@ export default function NewsletterPage() {
     const data = await res.json();
     if (!data.ok) return;
     const c = data.content;
+    const loaded: Draft = {
+      subject: c.subject || "", preheader: c.preheader || "", eyebrow: c.eyebrow || "", title: c.title || "",
+      body: c.body || "", ctaText: c.ctaText || "", ctaUrl: c.ctaUrl || "", lang: "pl",
+    };
+    setTranslations(c.translations || {});
+    setTranslatedFrom(c.translations?.en && c.translations?.de ? sourceKey(loaded) : null);
     setDraft({
       subject: c.subject || "",
       preheader: c.preheader || "",
@@ -413,14 +496,10 @@ export default function NewsletterPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div>
-              <label className={label}>Język stopki</label>
-              <select value={draft.lang} onChange={(e) => set("lang", e.target.value as Draft["lang"])} className={field}>
-                <option value="pl">Polski</option>
-                <option value="en">English</option>
-                <option value="de">Deutsch</option>
-              </select>
-            </div>
+            <p className="text-[11px] text-[#E0E0E0]/50 leading-relaxed flex-1 min-w-[220px]">
+              Piszesz po polsku. Odbiorcy dostają mail w swoim języku: <b>PL</b> — Polska, <b>DE</b> — Niemcy, Austria, Szwajcaria,
+              Liechtenstein, Luksemburg, <b>EN</b> — reszta świata. Tłumaczenie robi AI; sprawdzisz i poprawisz je w podglądzie.
+            </p>
             <button
               type="button"
               onClick={() => { if (confirm("Wyczyścić cały szkic?")) { setDraft(EMPTY_DRAFT); setImage(null); } }}
@@ -440,9 +519,25 @@ export default function NewsletterPage() {
               <button type="button" onClick={() => setPreviewMobile(true)} className={`${tool} ${previewMobile ? "!bg-[#3B82F6] !text-white" : ""}`}>📱 Telefon</button>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            {(["pl", "en", "de"] as Lang[]).map((l) => (
+              <button key={l} type="button" onClick={() => setPreviewLang(l)} className={`${tool} ${previewLang === l ? "!bg-[#3B82F6] !text-white" : ""}`}>
+                {LANG_LABEL[l]}
+              </button>
+            ))}
+            <button type="button" onClick={translate} disabled={translating || !canSend} className={`${tool} ml-auto`}>
+              {translating ? "Tłumaczę…" : trFresh ? "🌐 Przetłumacz ponownie" : "🌐 Przetłumacz na EN i DE"}
+            </button>
+          </div>
+          {trErr && <p className="text-xs text-red-400 mb-2">{trErr}</p>}
+          {previewLang !== "pl" && !trFresh && !translating && (
+            <p className="text-xs text-amber-300/90 mb-2">
+              {previewTexts ? "Polski tekst zmienił się po tłumaczeniu — kliknij „Przetłumacz ponownie” (przed wysyłką zrobi się to samo)." : "Brak tłumaczenia — kliknij „Przetłumacz na EN i DE”."}
+            </p>
+          )}
           <div className="text-xs text-[#E0E0E0]/60 mb-2 break-words">
-            <span className="text-[#E0E0E0]/40">Temat:</span> {draft.subject || "—"}
-            {draft.preheader && <span className="text-[#E0E0E0]/40"> — {draft.preheader}</span>}
+            <span className="text-[#E0E0E0]/40">Temat:</span> {(previewTexts || draft).subject || "—"}
+            {(previewTexts || draft).preheader && <span className="text-[#E0E0E0]/40"> — {(previewTexts || draft).preheader}</span>}
           </div>
           <div className="flex-1 flex justify-center bg-[#0B0B0B] rounded-lg overflow-hidden min-h-[520px]">
             <iframe
@@ -453,6 +548,22 @@ export default function NewsletterPage() {
               style={{ width: previewMobile ? 380 : "100%" }}
             />
           </div>
+          {previewLang !== "pl" && previewTexts && (
+            <details className="mt-3 rounded-lg border border-[#3F4147] bg-[#2B2D31] p-3">
+              <summary className="text-sm text-[#E0E0E0]/80 cursor-pointer">✏ Popraw tłumaczenie {LANG_LABEL[previewLang]}</summary>
+              <div className="space-y-2 mt-3">
+                <input value={previewTexts.subject} onChange={(e) => setTr("subject", e.target.value)} className={field} placeholder="Temat" aria-label="Temat" />
+                <input value={previewTexts.preheader} onChange={(e) => setTr("preheader", e.target.value)} className={field} placeholder="Zajawka" aria-label="Zajawka" />
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_2fr] gap-2">
+                  <input value={previewTexts.eyebrow} onChange={(e) => setTr("eyebrow", e.target.value)} className={field} placeholder="Nadtytuł" aria-label="Nadtytuł" />
+                  <input value={previewTexts.title} onChange={(e) => setTr("title", e.target.value)} className={field} placeholder="Tytuł" aria-label="Tytuł" />
+                </div>
+                <textarea value={previewTexts.body} onChange={(e) => setTr("body", e.target.value)} rows={8} className={`${field} font-mono text-[13px] resize-y`} aria-label="Treść" />
+                <input value={previewTexts.ctaText} onChange={(e) => setTr("ctaText", e.target.value)} className={field} placeholder="Tekst przycisku" aria-label="Tekst przycisku" />
+                <p className="text-[11px] text-[#E0E0E0]/40">Poprawki zostają, dopóki nie zmienisz polskiego tekstu.</p>
+              </div>
+            </details>
+          )}
         </div>
 
         {/* Odbiorcy */}
@@ -469,6 +580,17 @@ export default function NewsletterPage() {
               <input type="checkbox" checked={buyers} onChange={(e) => setBuyers(e.target.checked)} /> Kupujący (urządzenie / tokeny)
             </label>
           </div>
+          <label className="flex items-start gap-2 text-sm text-[#E0E0E0]/90 rounded-lg border border-[#3F4147] bg-[#2B2D31] p-2.5">
+            <input type="checkbox" className="mt-0.5" checked={consentOnly} onChange={(e) => setConsentOnly(e.target.checked)} />
+            <span>
+              Tylko ze zgodą marketingową
+              <span className="block text-[11px] text-[#E0E0E0]/50">
+                {consentOnly
+                  ? "Bezpieczne dla promocji, rabatów i kuponów."
+                  : "Uwaga: wysyłasz też do osób bez zgody — wolno tylko z informacjami o produkcie, który mają (aktualizacje, zmiany w usłudze), bez reklamy."}
+              </span>
+            </span>
+          </label>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-[#E0E0E0]/60">Kraj zamówienia:</span>
             {([["all", "Wszyscy"], ["PL", "Polska"], ["foreign", "Zagranica"]] as const).map(([v, l]) => (
@@ -490,6 +612,11 @@ export default function NewsletterPage() {
                 {unsubCount > 0 && <span className="text-[#E0E0E0]/40"> · {unsubCount} wypisanych (pominięci)</span>}
               </p>
             )}
+            {!recLoading && !recErr && activeCount > 0 && (
+              <p className="text-xs text-[#E0E0E0]/60 mt-1">
+                Języki: PL {langCounts.pl} · EN {langCounts.en} · DE {langCounts.de}
+              </p>
+            )}
             <button type="button" onClick={() => setShowList((v) => !v)} className="text-xs text-[#3B82F6] mt-1">
               {showList ? "Ukryj listę" : "Pokaż listę"}
             </button>
@@ -507,6 +634,8 @@ export default function NewsletterPage() {
                     </div>
                     {r.registered && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#3B82F6]/20 text-[#3B82F6]">konto</span>}
                     {r.buyer && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">kupił</span>}
+                    {r.consent && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#D8FF3D]/20 text-[#D8FF3D]">zgoda</span>}
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E0E0E0]/10 text-[#E0E0E0]/70">{LANG_LABEL[r.lang]}</span>
                     {r.country && <span className="text-[10px] text-[#E0E0E0]/50">{r.country}</span>}
                     <button
                       type="button"
@@ -535,7 +664,7 @@ export default function NewsletterPage() {
             <div className="flex flex-col sm:flex-row gap-2">
               <input value={testTo} onChange={(e) => setTestTo(e.target.value)} className={field} inputMode="email" />
               <button type="button" onClick={sendTest} disabled={testing || !canSend} className={`${btnSecondary} whitespace-nowrap`}>
-                {testing ? "Wysyłam…" : "✉ Wyślij test"}
+                {testing ? "Wysyłam…" : "✉ Wyślij test (PL, EN, DE)"}
               </button>
             </div>
           </div>
@@ -555,10 +684,12 @@ export default function NewsletterPage() {
             </p>
           </div>
           {msg && <p className={`text-sm ${msg.ok ? "text-green-400" : "text-red-400"}`}>{msg.text}</p>}
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-200/80 leading-relaxed">
-            Treści czysto reklamowe (promocje, rabaty) wolno wysyłać tylko osobom, które się na to zgodziły (art. 398 Prawa komunikacji elektronicznej, RODO).
-            Informacje o produkcie, który ktoś już ma (aktualizacje, zmiany w usłudze), są bezpieczniejsze.
-          </div>
+          {!consentOnly && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-[11px] text-amber-200/80 leading-relaxed">
+              Wysyłasz też do osób bez zgody marketingowej. Promocji, rabatów i kuponów wolno wysyłać tylko osobom ze zgodą (art. 398 Prawa komunikacji elektronicznej, RODO) —
+              do pozostałych wyłącznie informacje o produkcie, który już mają (aktualizacje, zmiany w usłudze).
+            </div>
+          )}
         </div>
 
         {/* Historia */}

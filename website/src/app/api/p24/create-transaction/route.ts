@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { giveConsent } from "@/lib/newsletter";
+import { clientIp } from "@/lib/rate-limit";
+import { ipHashFromHeaders, resolveAttribution, saveOrderAttribution } from "@/lib/attribution";
 import { prisma } from "@/lib/db";
 import { getCoupon, computeDiscount } from "@/lib/coupons";
 import { registerTransaction, paymentUrl } from "@/lib/przelewy24";
@@ -42,7 +45,13 @@ export async function POST(request: NextRequest) {
       country, currency, shippingCents, couponCode,
       blikMode = false,
       unlockCode, personalizeName,
+      marketingConsent, attribution,
     } = body;
+    // Zgoda na newsletter z formularza zamowienia (checkbox, domyslnie
+    // odznaczony) — niezalezna od tego, czy klient potem zaplaci.
+    if (marketingConsent === true) {
+      await giveConsent(user.email!, "order", clientIp(request)).catch((e) => console.error("[checkout] consent save failed:", e));
+    }
 
     const email = user.email!;
     const resolvedCountry = (country || "PL") as string;
@@ -149,6 +158,13 @@ export async function POST(request: NextRequest) {
         ${now}, ${now}
       )
     `;
+
+    // Skad przyszedl klient (lib/attribution.ts) — blad nie blokuje platnosci.
+    try {
+      await saveOrderAttribution(orderId, await resolveAttribution(attribution, ipHashFromHeaders(request.headers)));
+    } catch (e) {
+      console.error("[P24] attribution save failed:", e);
+    }
 
     return NextResponse.json({
       token,

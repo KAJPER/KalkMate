@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
+import {
+  CHANNEL_LABELS, type Channel, internalVisitIdsSince, landingVisitsSince, paidOrdersWithAttribution,
+} from "@/lib/attribution";
 
 type VisitRow = {
+  id: string;
   ipHash: string;
   userAgent: string | null;
   referer: string | null;
@@ -64,7 +68,7 @@ export async function GET(request: NextRequest) {
     // ----------------------------------------------------------------
     const visits: VisitRow[] = await prisma.visit.findMany({
       where: { createdAt: { gte: since } },
-      select: { ipHash: true, userAgent: true, referer: true, page: true, host: true, createdAt: true },
+      select: { id: true, ipHash: true, userAgent: true, referer: true, page: true, host: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     });
 
@@ -125,8 +129,12 @@ export async function GET(request: NextRequest) {
     // ----------------------------------------------------------------
     // Źródła ruchu
     // ----------------------------------------------------------------
+    // Tylko wejscia na strone — przejscia wewnatrz (landing = 0) niosly ten sam
+    // document.referrer i zawyzaly zrodla. Stare wpisy (bez kolumny) liczone jak dawniej.
+    const internalIds = await internalVisitIdsSince(since.getTime());
     const refMap = new Map<string, number>();
     for (const v of visits) {
+      if (internalIds.has(v.id)) continue;
       const src = cleanReferer(v.referer);
       refMap.set(src, (refMap.get(src) ?? 0) + 1);
     }
@@ -185,7 +193,51 @@ export async function GET(request: NextRequest) {
       .map(([domain, d]) => ({ domain, views: d.views, unique: d.ips.size }))
       .sort((a, b) => b.views - a.views);
 
+    // ----------------------------------------------------------------
+    // Zrodla i sprzedaz (lib/attribution.ts): wejscia vs oplacone zamowienia
+    // przypisane do OSTATNIEGO zrodla przed zakupem (last non-direct).
+    // ----------------------------------------------------------------
+    const landings = await landingVisitsSince(since.getTime());
+    const orders = await paidOrdersWithAttribution(since.getTime());
+    type Agg = { sessions: number; orders: number; pln: number; eur: number };
+    const blank = (): Agg => ({ sessions: 0, orders: 0, pln: 0, eur: 0 });
+    const byChannel = new Map<string, Agg>();
+    const bySource = new Map<string, Agg & { channel: string; source: string }>();
+    const byCampaign = new Map<string, Agg & { campaign: string; source: string }>();
+    const bump = <T extends Agg>(m: Map<string, T>, key: string, init: () => T) => {
+      if (!m.has(key)) m.set(key, init());
+      return m.get(key)!;
+    };
+    for (const v of landings) {
+      const ch = v.channel || "direct";
+      bump(byChannel, ch, blank).sessions++;
+      bump(bySource, `${ch}|${v.source}`, () => ({ ...blank(), channel: ch, source: v.source || "" })).sessions++;
+      if (v.campaign) bump(byCampaign, `${v.campaign}|${v.source}`, () => ({ ...blank(), campaign: v.campaign!, source: v.source || "" })).sessions++;
+    }
+    let unattributed = 0;
+    for (const o of orders) {
+      if (!o.lastChannel) { unattributed++; continue; }
+      const add = (a: Agg) => {
+        a.orders++;
+        if ((o.currency || "").toLowerCase() === "eur") a.eur += Number(o.amount); else a.pln += Number(o.amount);
+      };
+      add(bump(byChannel, o.lastChannel, blank));
+      add(bump(bySource, `${o.lastChannel}|${o.lastSource}`, () => ({ ...blank(), channel: o.lastChannel!, source: o.lastSource || "" })));
+      if (o.lastCampaign) add(bump(byCampaign, `${o.lastCampaign}|${o.lastSource}`, () => ({ ...blank(), campaign: o.lastCampaign!, source: o.lastSource || "" })));
+    }
+    const label = (c: string) => CHANNEL_LABELS[c as Channel] || c;
+    const sortAgg = (a: Agg, b: Agg) => b.orders - a.orders || b.sessions - a.sessions;
+    const sources = {
+      channels: Array.from(byChannel.entries()).map(([channel, a]) => ({ channel, label: label(channel), ...a })).sort(sortAgg),
+      top: Array.from(bySource.values()).map((a) => ({ ...a, label: label(a.channel) })).sort(sortAgg).slice(0, 20),
+      campaigns: Array.from(byCampaign.values()).sort(sortAgg).slice(0, 20),
+      totalOrders: orders.length,
+      unattributed,
+      trackedSessions: landings.length,
+    };
+
     return NextResponse.json({
+      sources,
       period: { days, since: since.toISOString() },
       overview: {
         totalViews,

@@ -13,7 +13,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 // pojedynczym gigantycznym mailem zjadajacym cala odpowiedz/koszt.
 const MAX_CHARS = 12000;
 
-async function callTranslate(system: string, user: string): Promise<string> {
+async function callTranslate(system: string, user: string, maxTokens = 4000): Promise<string> {
   if (!OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured");
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -30,7 +30,7 @@ async function callTranslate(system: string, user: string): Promise<string> {
         { role: "user", content: user },
       ],
       temperature: 0.2,
-      max_tokens: 4000,
+      max_tokens: maxTokens,
       // gemini-3.8-flash ma OBOWIAZKOWY reasoning (OpenRouter odrzuca
       // "effort":"none" bledem 400 dla tego modelu) i przy dluzszych mailach
       // potrafilo zjesc caly max_tokens na wewnetrzne rozumowanie, zwracajac
@@ -72,4 +72,45 @@ export async function translateMatchingLanguage(draftText: string, referenceText
       "WYLACZNIE przetlumaczona odpowiedz — bez komentarzy, bez nazwy jezyka, bez cudzyslowow.",
     `[ORYGINALNY MAIL KLIENTA]\n${referenceText.slice(0, MAX_CHARS / 2)}\n\n[SZKIC ODPOWIEDZI PO POLSKU]\n${draftText.slice(0, MAX_CHARS / 2)}`
   );
+}
+
+// === Newsletter (/admin/newsletter) ===
+// Admin pisze po polsku, odbiorcy dostaja PL / DE (kraje niemieckojezyczne) /
+// EN (reszta swiata). Jedno wywolanie na jezyk, wszystkie pola naraz w JSON,
+// zeby temat, tytul i tresc byly spojne.
+
+export interface NewsletterTexts {
+  subject: string;
+  preheader: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  ctaText: string;
+}
+
+const LANG_NAMES = { en: "English", de: "German (Deutsch)" } as const;
+
+export async function translateNewsletter(src: NewsletterTexts, target: "en" | "de"): Promise<NewsletterTexts> {
+  const system =
+    `You translate marketing newsletters of KalkMate (an AI calculator for students, kalkmate.pl) from Polish to ${LANG_NAMES[target]}.\n` +
+    "Rules:\n" +
+    "- Natural, friendly, native-sounding copy for students and parents — not word-for-word." +
+    (target === "de" ? " Use informal \"du\" (as on the KalkMate website).\n" : "\n") +
+    "- Keep the lightweight formatting EXACTLY: lines starting with \"## \" (heading) and \"- \" (list), **bold**, *italic*, [link text](url), blank lines between paragraphs.\n" +
+    "- Keep the placeholder {{imie}} unchanged (it becomes the recipient's first name). Keep URLs, numbers, prices and the name KalkMate unchanged.\n" +
+    "- Polish exam names: \"matura\" -> in English \"final exams (Matura)\", in German \"Abitur/Matura\" only where it reads naturally.\n" +
+    "- Empty input fields stay empty strings.\n" +
+    "- Answer with ONLY a JSON object with the same keys: subject, preheader, eyebrow, title, body, ctaText. No comments, no code fences.";
+  const input = JSON.stringify(src);
+  // Bez obcinania — uciety JSON bylby bezsensowny dla modelu.
+  if (input.length > 20000) throw new Error("Newsletter jest za długi do automatycznego tłumaczenia (max ok. 20 000 znaków).");
+  const raw = await callTranslate(system, input, 12000);
+  const json = raw.match(/\{[\s\S]*\}/)?.[0];
+  if (!json) throw new Error("Tłumaczenie: model nie zwrócił JSON");
+  const out = JSON.parse(json) as Partial<NewsletterTexts>;
+  const pick = (k: keyof NewsletterTexts) => (src[k] ? (typeof out[k] === "string" ? out[k]!.trim() : src[k]) : "");
+  return {
+    subject: pick("subject"), preheader: pick("preheader"), eyebrow: pick("eyebrow"),
+    title: pick("title"), body: pick("body"), ctaText: pick("ctaText"),
+  };
 }

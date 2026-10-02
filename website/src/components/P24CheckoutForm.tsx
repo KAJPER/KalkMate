@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import type { InPostPoint } from "@/components/InPostGeowidget";
+import { readClientAttribution } from "@/lib/clientAttribution";
 
 interface FormData {
   name: string;
@@ -67,6 +68,7 @@ export default function P24CheckoutForm({
               ? `${selectedPoint.address.line1}, ${selectedPoint.address.line2}`
               : null,
           blikMode,
+          attribution: readClientAttribution(),
         }),
       });
       const data = await res.json();

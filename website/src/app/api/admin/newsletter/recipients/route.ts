@@ -3,7 +3,7 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 import { listRecipients } from "@/lib/newsletter";
 import { parseFilter } from "@/lib/newsletterInput";
 
-// GET /api/admin/newsletter/recipients?registered=1&verifiedOnly=0&buyers=1&country=all
+// GET /api/admin/newsletter/recipients?registered=1&verifiedOnly=0&buyers=1&country=all&consentOnly=1
 export async function GET(request: NextRequest) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   const q = request.nextUrl.searchParams;
@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     verifiedOnly: q.get("verifiedOnly") ?? "0",
     buyers: q.get("buyers") ?? "1",
     country: q.get("country") ?? "all",
+    consentOnly: q.get("consentOnly") ?? "1",
   });
   try {
     const recipients = await listRecipients(filter);

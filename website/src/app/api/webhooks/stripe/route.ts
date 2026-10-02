@@ -4,6 +4,7 @@ import { stripe } from "@/lib/stripe";
 import { sendMail } from "@/lib/mailer";
 import { purchaseConfirmationEmail, localeFromCountry, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { prisma } from "@/lib/db";
+import { attributionFromMetadata, saveOrderAttribution } from "@/lib/attribution";
 import { incrementCouponUsage } from "@/lib/coupons";
 import { createPaidTokenPurchase } from "@/lib/tokenPurchases";
 import { setOrderPersonalization } from "@/lib/orderPersonalization";
@@ -183,6 +184,12 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   // w Prisma schemie, wiec dopisujemy raw SQL zaraz po create().
   if (meta.personalized_code && meta.personalized_name) {
     await setOrderPersonalization(orderId, meta.personalized_code, meta.personalized_name);
+  }
+
+  // Zrodlo klienta (UTM/referer) z create-payment-intent — lib/attribution.ts.
+  const attribution = attributionFromMetadata(meta.attribution);
+  if (attribution) {
+    await saveOrderAttribution(orderId, attribution).catch((e) => console.error("[WEBHOOK] attribution save failed:", e));
   }
 
   // Jeśli użytkownik już ma konto, upgrade subskrypcji do 30 dni
