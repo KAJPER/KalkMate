@@ -203,6 +203,15 @@ export async function getAttachment(
   });
 }
 
+// Zalacznik dodany w panelu (zdjecie/PDF). Obrazki z `cid` sa osadzane w
+// tresci maila (<img src="cid:...">), reszta idzie jako zwykly zalacznik.
+export interface OutgoingAttachment {
+  filename: string;
+  contentType: string;
+  content: Buffer;
+  cid?: string;
+}
+
 export interface ReplyInput {
   toAddress: string;
   toName?: string;
@@ -210,6 +219,17 @@ export interface ReplyInput {
   html: string;
   inReplyToMessageId?: string | null;
   priorReferences?: string[];
+  attachments?: OutgoingAttachment[];
+}
+
+function toNodemailerAttachments(list: OutgoingAttachment[] | undefined) {
+  if (!list || !list.length) return undefined;
+  return list.map((a) => ({
+    filename: a.filename,
+    contentType: a.contentType,
+    content: a.content,
+    ...(a.cid ? { cid: a.cid, contentDisposition: "inline" as const } : {}),
+  }));
 }
 
 function buildMailOptions(input: ReplyInput) {
@@ -223,6 +243,7 @@ function buildMailOptions(input: ReplyInput) {
     messageId,
     inReplyTo: input.inReplyToMessageId || undefined,
     references: references.length ? references.join(" ") : undefined,
+    attachments: toNodemailerAttachments(input.attachments),
   };
 }
 
@@ -271,6 +292,7 @@ export interface ComposeInput {
   cc?: string[];
   subject: string;
   html: string;
+  attachments?: OutgoingAttachment[];
 }
 
 export async function sendNewMail(input: ComposeInput): Promise<{ ok: boolean; error?: string }> {
@@ -281,6 +303,7 @@ export async function sendNewMail(input: ComposeInput): Promise<{ ok: boolean; e
     subject: input.subject,
     html: input.html,
     messageId: `<${Date.now()}.${Math.random().toString(36).slice(2)}@kalkmate.pl>`,
+    attachments: toNodemailerAttachments(input.attachments),
   });
 }
 

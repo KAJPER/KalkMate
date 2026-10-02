@@ -48,6 +48,7 @@ export interface MailAttachment {
   filename: string;
   content: Buffer;
   contentType?: string;
+  cid?: string; // osadzony obrazek (<img src="cid:...">)
 }
 
 export interface MailOptions {
@@ -57,6 +58,7 @@ export interface MailOptions {
   text?: string;
   replyTo?: string;
   attachments?: MailAttachment[];
+  headers?: Record<string, string>;
 }
 
 export async function sendMail(opts: MailOptions): Promise<{ ok: boolean; error?: string }> {
@@ -70,6 +72,7 @@ export async function sendMail(opts: MailOptions): Promise<{ ok: boolean; error?
       text: opts.text,
       replyTo: opts.replyTo || CONTACT_EMAIL,
       attachments: opts.attachments,
+      headers: opts.headers,
     });
     return { ok: true };
   } catch (e) {

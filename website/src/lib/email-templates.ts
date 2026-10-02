@@ -532,3 +532,95 @@ export const EMAIL_SUBJECTS = {
     en: "Order confirmation – KalkMate",
   },
 } satisfies Record<string, Record<EmailLocale, string>>;
+
+// ---------------------------------------------------------------------------
+// Newsletter (/admin/newsletter)
+// ---------------------------------------------------------------------------
+// Tresc pisana w panelu prostym formatowaniem (jak w komunikatorze):
+//   pusta linia = nowy akapit, "## " = srodtytul, "- " = lista,
+//   **pogrubienie**, *kursywa*, [tekst](https://link), golé https://linki.
+// Wszystko jest najpierw escapowane — admin nie wkleja surowego HTML.
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function inlineFormat(escaped: string): string {
+  const link = `color:${C.signal};text-decoration:underline;font-weight:600;`;
+  return escaped
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, text, url) => `<a href="${url}" style="${link}">${text}</a>`)
+    .replace(/(^|[\s(])(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, (_m, pre, url) => `${pre}<a href="${url}" style="${link}">${url}</a>`)
+    .replace(/\*\*([^*]+)\*\*/g, `<strong style="color:${C.paper};font-weight:700;">$1</strong>`)
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, `$1<em>$2</em>`);
+}
+
+export function newsletterBodyHtml(text: string): string {
+  const blocks = text.replace(/\r\n/g, "\n").trim().split(/\n{2,}/);
+  return blocks
+    .map((block) => {
+      const lines = block.split("\n");
+      if (lines[0].startsWith("## ")) {
+        const rest = lines.slice(1).join("\n").trim();
+        const h = `<h2 style="margin:22px 0 10px 0;font-family:${FONT_BODY};font-weight:800;font-size:20px;line-height:1.25;color:${C.paper};letter-spacing:-0.3px;">${inlineFormat(escHtml(lines[0].slice(3).trim()))}</h2>`;
+        return rest ? h + newsletterBodyHtml(rest) : h;
+      }
+      if (lines.every((l) => /^\s*[-•]\s+/.test(l))) {
+        const items = lines
+          .map((l) => `<li style="margin:0 0 6px 0;">${inlineFormat(escHtml(l.replace(/^\s*[-•]\s+/, "")))}</li>`)
+          .join("");
+        return `<ul style="margin:0 0 14px 0;padding-left:20px;font-family:${FONT_BODY};font-size:15px;line-height:1.6;color:${C.paperSub};">${items}</ul>`;
+      }
+      return `<p style="margin:0 0 14px 0;font-family:${FONT_BODY};font-size:15px;line-height:1.65;color:${C.paperSub};">${lines
+        .map((l) => inlineFormat(escHtml(l)))
+        .join("<br>")}</p>`;
+    })
+    .join("");
+}
+
+export interface NewsletterContent {
+  eyebrow?: string;      // maly napis nad tytulem, np. "Nowosc"
+  title: string;         // duzy naglowek
+  preheader?: string;    // podglad w skrzynce (szary tekst obok tematu)
+  body: string;          // tresc w prostym formatowaniu (patrz wyzej)
+  imageSrc?: string;     // "cid:..." przy wysylce, data:/blob: URL w podgladzie
+  ctaText?: string;
+  ctaUrl?: string;
+  unsubscribeUrl: string;
+  lang?: "pl" | "en" | "de";
+}
+
+const NEWSLETTER_FOOTER: Record<"pl" | "en" | "de", { why: string; unsub: string }> = {
+  pl: { why: "Dostajesz tę wiadomość, bo masz konto lub zamówienie w KalkMate.", unsub: "Wypisz się z newslettera" },
+  en: { why: "You are receiving this because you have a KalkMate account or order.", unsub: "Unsubscribe" },
+  de: { why: "Sie erhalten diese Nachricht, weil Sie ein KalkMate-Konto oder eine Bestellung haben.", unsub: "Abmelden" },
+};
+
+export function newsletterEmail(c: NewsletterContent): string {
+  const lang = c.lang || "pl";
+  const f = NEWSLETTER_FOOTER[lang];
+  const preheader = c.preheader
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escHtml(c.preheader)}</div>`
+    : "";
+  const image = c.imageSrc
+    ? `<img src="${escHtml(c.imageSrc)}" alt="" width="536" style="display:block;width:100%;max-width:536px;height:auto;border:0;margin:0 0 22px 0;border-radius:4px;">`
+    : "";
+  const cta = c.ctaText && c.ctaUrl && /^https?:\/\//.test(c.ctaUrl) ? ctaButton(escHtml(c.ctaText), escHtml(c.ctaUrl)) : "";
+  const inner = `${preheader}
+    ${c.eyebrow ? eyebrowBlock(escHtml(c.eyebrow)) : ""}
+    ${image}
+    ${c.title ? headline(escHtml(c.title)) : ""}
+    ${newsletterBodyHtml(c.body)}
+    ${cta}`;
+
+  // shell() ma stopke "wiadomosc automatyczna" — newsletter dostaje wlasna,
+  // z obowiazkowym linkiem do wypisania.
+  return shell(inner, lang === "de" ? "de" : "en")
+    .replace(`<html lang="${lang === "de" ? "de" : "en"}">`, `<html lang="${lang}">`)
+    .replace(
+      /KalkMate &middot; [^<]*<\/div>/,
+      `KalkMate &middot; Newsletter</div>
+        <div style="font-family:${FONT_BODY};font-size:11.5px;color:${C.paperDim};margin-top:8px;line-height:1.5;">${f.why}<br>
+          <a href="${escHtml(c.unsubscribeUrl)}" style="color:${C.paperSub};text-decoration:underline;">${f.unsub}</a>
+        </div>`
+    );
+}
