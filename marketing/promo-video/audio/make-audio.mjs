@@ -62,34 +62,89 @@ async function fetchAudio(kind, path, body, placeholderArgs) {
 
 const V = cfg.voice;
 const lines = [];
-console.log("Lektor…");
-for (const [i, l] of cfg.lines.entries()) {
-  const body = {
-    text: l.text,
-    model_id: V.modelId,
-    voice_settings: V.settings,
-    // multilingual_v2 nie przyjmuje language_code (patrz OpenAPI ElevenLabs).
-    ...(V.languageCode && !V.modelId.includes("multilingual_v2") ? { language_code: V.languageCode } : {}),
-    previous_text: cfg.lines[i - 1]?.text,
-    next_text: cfg.lines[i + 1]?.text,
-  };
-  const est = Math.min(l.maxEnd - l.start, 0.075 * l.text.length);
-  const file = await fetchAudio(`voice${i}`, `/v1/text-to-speech/${V.voiceId}?output_format=mp3_44100_128`, body,
-    ["-f", "lavfi", "-i", `sine=frequency=${220 + i * 30}:duration=${est.toFixed(2)}`]);
-  // Cisza na poczatku/koncu z TTS (zwykle 0,2-0,4 s) zabiera miejsce w scenie.
-  const trimmed = file.replace(/\.mp3$/, "-trim.wav");
-  if (!existsSync(trimmed)) {
-    ff(["-i", file, "-af",
-      "silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,apad=pad_dur=0.05",
-      trimmed]);
-  }
-  const d = duration(trimmed);
+const voiceBody = (text, extra = {}) => ({
+  text,
+  model_id: V.modelId,
+  voice_settings: V.settings,
+  // multilingual_v2 nie przyjmuje language_code (patrz OpenAPI ElevenLabs).
+  ...(V.languageCode && !V.modelId.includes("multilingual_v2") ? { language_code: V.languageCode } : {}),
+  ...extra,
+});
+
+// Kwestia gotowa do wstawienia: miesci sie w scenie? (inaczej lekkie przyspieszenie, max 1.2x)
+function place(i, file) {
+  const l = cfg.lines[i];
+  const d = duration(file);
   const room = l.maxEnd - l.start;
-  // Za dluga kwestia: lekkie przyspieszenie (max 1.2x), zeby zmiescila sie w scenie.
   const tempo = d > room ? Math.min(1.2, d / room) : 1;
   if (d / tempo > room + 0.05) console.warn(`  UWAGA: kwestia ${i + 1} ma ${d.toFixed(2)} s, scena ${room.toFixed(2)} s — skróć tekst w soundtrack.json`);
-  lines.push({ file: trimmed, start: l.start, tempo });
+  lines.push({ file, start: l.start, tempo });
   console.log(`  kwestia ${i + 1}: ${d.toFixed(2)} s / ${room.toFixed(2)} s${tempo > 1 ? ` (przyspieszona ${tempo.toFixed(2)}x)` : ""}`);
+}
+
+// Slowa kwestii (bez samych znakow interpunkcyjnych, np. "—") — do podzialu nagrania.
+const wordsOf = (t) => t.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w));
+
+console.log("Lektor…");
+if (V.singleTake && !PLACEHOLDER) {
+  // Caly tekst czytany JEDNYM ciagiem — naturalna intonacja i wybrzmienie konca
+  // kazdego zdania (osobno generowane kwestie brzmia jak ucinane). Potem ciecie
+  // na zdania wg znacznikow czasu slow z rozpoznawania mowy (ElevenLabs Scribe).
+  const full = cfg.lines.map((l) => l.text).join(" ");
+  const take = await fetchAudio("voice-take", `/v1/text-to-speech/${V.voiceId}?output_format=mp3_44100_128`, voiceBody(full), []);
+  const sttFile = take.replace(/\.mp3$/, "-words.json");
+  if (!existsSync(sttFile)) {
+    const form = new FormData();
+    form.append("model_id", "scribe_v1");
+    form.append("language_code", "pol");
+    form.append("timestamps_granularity", "word");
+    form.append("file", new Blob([readFileSync(take)], { type: "audio/mpeg" }), "take.mp3");
+    const res = await fetch(`${API}/v1/speech-to-text`, { method: "POST", headers: { "xi-api-key": KEY }, body: form });
+    if (!res.ok) throw new Error(`speech-to-text: ElevenLabs ${res.status} ${(await res.text()).slice(0, 300)}`);
+    writeFileSync(sttFile, JSON.stringify(await res.json()));
+  }
+  const words = JSON.parse(readFileSync(sttFile, "utf8")).words.filter((w) => w.type === "word");
+  const counts = cfg.lines.map((l) => wordsOf(l.text).length);
+  if (counts.reduce((a, b) => a + b, 0) !== words.length) {
+    console.warn(`  UWAGA: rozpoznano ${words.length} słów, w tekście ${counts.reduce((a, b) => a + b, 0)} — podział może być niedokładny.`);
+  }
+  let w = 0;
+  for (const [i] of cfg.lines.entries()) {
+    const first = words[Math.min(w, words.length - 1)];
+    w += counts[i];
+    const last = words[Math.min(w, words.length) - 1];
+    const next = words[w];
+    // Od poczatku pierwszego slowa do konca ostatniego + naturalne wybrzmienie
+    // (do 0,35 s, ale nie dalej niz poczatek nastepnego zdania), z miekkim wygaszeniem.
+    const from = Math.max(0, first.start - 0.06);
+    const to = Math.min(last.end + 0.35, next ? next.start - 0.03 : last.end + 0.35);
+    const out = join(CACHE, `voice-take-${hash({ take, i, from, to, v: 2 })}.wav`);
+    if (!existsSync(out)) {
+      const len = to - from;
+      // -ss PRZED -i: znaczniki czasu wycinka zaczynaja sie od 0, wiec afade
+      // liczy od poczatku zdania (przy -ss po -i wygaszenie wyciszalo cale zdanie).
+      ff(["-ss", from.toFixed(3), "-t", len.toFixed(3), "-i", take, "-af",
+        `asetpts=PTS-STARTPTS,afade=t=in:d=0.02,afade=t=out:st=${Math.max(0, len - 0.12).toFixed(3)}:d=0.12`, out]);
+    }
+    place(i, out);
+  }
+} else {
+  for (const [i, l] of cfg.lines.entries()) {
+    const body = voiceBody(l.text, { previous_text: cfg.lines[i - 1]?.text, next_text: cfg.lines[i + 1]?.text });
+    const est = Math.min(l.maxEnd - l.start, 0.075 * l.text.length);
+    const file = await fetchAudio(`voice${i}`, `/v1/text-to-speech/${V.voiceId}?output_format=mp3_44100_128`, body,
+      ["-f", "lavfi", "-i", `sine=frequency=${220 + i * 30}:duration=${est.toFixed(2)}`]);
+    // Cisza z TTS na poczatku i koncu: z poczatku obcinamy, z konca tylko bardzo
+    // cicha (-60 dB) + zostawiamy 0,25 s wybrzmienia — mocniejsze ciecie ucinalo
+    // koncowki zdan.
+    const trimmed = file.replace(/\.mp3$/, "-trim2.wav");
+    if (!existsSync(trimmed)) {
+      ff(["-i", file, "-af",
+        "silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-60dB,areverse,apad=pad_dur=0.25,afade=t=out:st=0:d=0",
+        trimmed]);
+    }
+    place(i, trimmed);
+  }
 }
 
 console.log("Efekty…");

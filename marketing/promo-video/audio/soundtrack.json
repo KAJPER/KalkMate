@@ -2,14 +2,15 @@
   "_comment": "Scenariusz dzwieku do filmu (34 s). Czasy w sekundach — zgrane z index.html (CAPS, PRESS, CAM). Zmien tekst lektora albo efekty i uruchom: node audio/make-audio.mjs",
   "durationSec": 34,
   "voice": {
-    "voiceId": "CwhRBWXzGAHq8TQ4Fs17",
-    "modelId": "eleven_multilingual_v2",
+    "_comment": "Glosy z biblioteki ElevenLabs (np. rodzimi polscy lektorzy) wymagaja platnego planu; na darmowym tylko wbudowane. Zmien voiceId, zeby przetestowac inny glos.",
+    "voiceId": "iP95p4xoKVk53GoZ742B",
+    "voiceName": "Chris",
+    "modelId": "eleven_v3",
     "languageCode": "pl",
+    "singleTake": true,
     "settings": {
-      "stability": 0.45,
-      "similarity_boost": 0.8,
-      "style": 0.35,
-      "use_speaker_boost": true
+      "stability": 0.5,
+      "similarity_boost": 0.75
     },
     "volume": 1.0
   },
@@ -50,8 +51,8 @@
       "text": "Notatki offline i dwa lata gwarancji."
     },
     {
-      "start": 30.85,
-      "maxEnd": 34.0,
+      "start": 30.55,
+      "maxEnd": 34.2,
       "text": "Zrób zdjęcie, otrzymaj rozwiązanie. KalkMate."
     }
   ],
