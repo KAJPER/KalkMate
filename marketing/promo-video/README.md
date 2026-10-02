@@ -35,7 +35,10 @@ node audio/make-audio.mjs --placeholder               # test miksu bez API (sztu
 ```
 
 - Lektor: model `eleven_multilingual_v2` (polski), głos `voice.voiceId` (zmień na inny z biblioteki ElevenLabs). Za długa kwestia jest lekko przyspieszana (max 1,2×), a skrypt ostrzega, gdy i tak się nie mieści.
-- Muzyka: `/v1/music` (wymaga płatnego planu ElevenLabs). Bez niej film dostaje lektora i efekty. Pod lektorem muzyka jest automatycznie ściszana.
-- Głośność końcowa −14 LUFS (standard TikTok/YouTube/Instagram). Obraz nie jest ponownie kodowany.
-- Wygenerowane pliki trafiają do `audio/cache/` — ponowne uruchomienie po zmianie jednej kwestii płaci tylko za nią.
+- Muzyka: `/v1/music` (wymaga płatnego planu ElevenLabs). Na darmowym planie skrypt robi zapętlony podkład z generatora efektów (`music.fallbackLoopPrompt`). Pod lektorem muzyka jest automatycznie ściszana.
+- Głośność końcowa ok. −14…−16 LUFS, szczyt poniżej −1 dB (platformy same wyrównują głośność). Obraz nie jest ponownie kodowany.
+- Cisza na początku i końcu kwestii jest obcinana; za długa kwestia jest przyspieszana maks. 1,2× (skrypt wypisuje długość każdej kwestii vs. miejsce w scenie).
+- Wygenerowane pliki są w `audio/cache/` (w repo) — zmiana głośności, czasów czy efektów i ponowny miks działają bez klucza i bez kosztów; płaci się tylko za nowe/zmienione kwestie i efekty.
+
+Gotowy film z dźwiękiem: `kalkmate-promo-1080x1920-dzwiek.mp4`.
 - Za proxy (np. kontener w chmurze) uruchom z `NODE_USE_ENV_PROXY=1`.

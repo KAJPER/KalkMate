@@ -39,7 +39,11 @@ const hash = (o) => createHash("sha1").update(JSON.stringify(o)).digest("hex").s
 
 // POST do ElevenLabs -> plik mp3 w cache (pomijane, jesli juz jest).
 async function fetchAudio(kind, path, body, placeholderArgs) {
-  const file = join(CACHE, `${kind}-${hash({ path, body, ph: PLACEHOLDER })}.mp3`);
+  // previous_text/next_text (kontekst intonacji) nie wchodza do klucza cache —
+  // zmiana sasiedniej kwestii nie wymusza ponownego (platnego) generowania tej.
+  const { previous_text: _p, next_text: _n, ...keyBody } = body;
+  void _p; void _n;
+  const file = join(CACHE, `${kind}-${hash({ path, body: keyBody, ph: PLACEHOLDER })}.mp3`);
   if (existsSync(file)) return file;
   if (PLACEHOLDER) {
     ff([...placeholderArgs, "-ar", "44100", "-ac", "2", "-c:a", "libmp3lame", "-q:a", "4", file]);
@@ -72,12 +76,20 @@ for (const [i, l] of cfg.lines.entries()) {
   const est = Math.min(l.maxEnd - l.start, 0.075 * l.text.length);
   const file = await fetchAudio(`voice${i}`, `/v1/text-to-speech/${V.voiceId}?output_format=mp3_44100_128`, body,
     ["-f", "lavfi", "-i", `sine=frequency=${220 + i * 30}:duration=${est.toFixed(2)}`]);
-  const d = duration(file);
+  // Cisza na poczatku/koncu z TTS (zwykle 0,2-0,4 s) zabiera miejsce w scenie.
+  const trimmed = file.replace(/\.mp3$/, "-trim.wav");
+  if (!existsSync(trimmed)) {
+    ff(["-i", file, "-af",
+      "silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,apad=pad_dur=0.05",
+      trimmed]);
+  }
+  const d = duration(trimmed);
   const room = l.maxEnd - l.start;
   // Za dluga kwestia: lekkie przyspieszenie (max 1.2x), zeby zmiescila sie w scenie.
   const tempo = d > room ? Math.min(1.2, d / room) : 1;
   if (d / tempo > room + 0.05) console.warn(`  UWAGA: kwestia ${i + 1} ma ${d.toFixed(2)} s, scena ${room.toFixed(2)} s — skróć tekst w soundtrack.json`);
-  lines.push({ file, start: l.start, tempo });
+  lines.push({ file: trimmed, start: l.start, tempo });
+  console.log(`  kwestia ${i + 1}: ${d.toFixed(2)} s / ${room.toFixed(2)} s${tempo > 1 ? ` (przyspieszona ${tempo.toFixed(2)}x)` : ""}`);
 }
 
 console.log("Efekty…");
@@ -97,8 +109,21 @@ try {
     { prompt: cfg.music.prompt, music_length_ms: musicLen, force_instrumental: true, model_id: "music_v1" },
     ["-f", "lavfi", "-i", `sine=frequency=110:duration=${musicLen / 1000}`, "-af", "tremolo=f=3.7:d=0.6"]);
 } catch (e) {
-  // Muzyka wymaga platnego planu ElevenLabs — bez niej film i tak dostaje lektora i efekty.
-  console.warn(`  Muzyka niedostępna (${e.message}). Miksuję bez muzyki.`);
+  // Music API wymaga platnego planu ElevenLabs (402). Zapas: zapetlony podklad
+  // z generatora efektow (max 30 s, loop), przedluzany do dlugosci filmu.
+  console.warn(`  Music API niedostępne (${e.message.slice(0, 120)}).`);
+  if (cfg.music.fallbackLoopPrompt) {
+    try {
+      const loop = await fetchAudio("music-loop", "/v1/sound-generation?output_format=mp3_44100_128",
+        { text: cfg.music.fallbackLoopPrompt, duration_seconds: 30, loop: true, prompt_influence: 0.6, model_id: "eleven_text_to_sound_v2" },
+        ["-f", "lavfi", "-i", "sine=frequency=110:duration=30", "-af", "tremolo=f=3.7:d=0.6"]);
+      music = join(CACHE, "music-loop-extended.wav");
+      ff(["-stream_loop", "2", "-i", loop, "-t", String(musicLen / 1000), music]);
+      console.log("  Użyto zapętlonego podkładu z generatora efektów.");
+    } catch (e2) {
+      console.warn(`  Podkład też niedostępny (${e2.message.slice(0, 120)}). Miksuję bez muzyki.`);
+    }
+  }
 }
 
 // === Miks ===
