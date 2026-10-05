@@ -3,6 +3,7 @@ import { syncAllPendingOrders } from "@/lib/inpostTracking";
 import { syncAllPendingBaseCourierOrders } from "@/lib/basecourierTracking";
 import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
 import { sendPaymentReminders, type ReminderResult } from "@/lib/paymentReminders";
+import { ensureDailyBackup } from "@/lib/dbBackup";
 
 // GET /api/cron/tracking — wolane co godzine z crona na serwerze
 // (/home/ubuntu/kalkulator/tracking-cron.sh) z naglowkiem x-cron-secret.
@@ -28,6 +29,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Kopia bazy raz na dobe (lib/dbBackup.ts) — przed reszta, niezaleznie od jej bledow.
+    let backup: string | null = null;
+    try {
+      backup = (await ensureDailyBackup())?.name ?? null;
+    } catch (e) {
+      console.error("[cron/tracking] database backup failed:", e);
+      backup = `ERROR: ${(e as Error).message}`;
+    }
+
     let reminders: ReminderResult = { sent: [], skipped: [], failed: [] };
     try {
       reminders = await sendPaymentReminders();
@@ -84,6 +94,7 @@ export async function GET(req: NextRequest) {
         })),
       },
       paymentReminders: reminders,
+      backup,
       staleUnpaid: {
         olderThanDays: STALE_DAYS,
         cancelled: stale.cancelled.map((o) => o.orderNumber),

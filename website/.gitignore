@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# kopie zapasowe bazy (lib/dbBackup.ts) — dane klientow, nigdy w repo
+/backups/

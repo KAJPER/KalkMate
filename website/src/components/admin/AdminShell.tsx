@@ -86,6 +86,11 @@ const navItems = [
     icon: "M9.75 17L15 21.75V17h4a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h4.75z"
   },
   {
+    href: "/admin/backups",
+    label: "Kopie bazy",
+    icon: "M4 7c0-1.657 3.582-3 8-3s8 1.343 8 3M4 7v10c0 1.657 3.582 3 8 3s8-1.343 8-3V7M4 7c0 1.657 3.582 3 8 3s8-1.343 8-3M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3"
+  },
+  {
     href: "/admin/analytics",
     label: "Analityka",
     icon: "M3 3v18h18M9 17V9m4 8V5m4 12v-4"
