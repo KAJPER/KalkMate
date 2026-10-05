@@ -55,9 +55,11 @@ export async function GET(request: NextRequest) {
   const offset = Math.max(0, parseInt(searchParams.get("offset") || "0") || 0);
   const view = VIEWS[searchParams.get("view") || "all"] ? searchParams.get("view") || "all" : "all";
   const search = await searchWhere(searchParams.get("q") || "");
+  // ?ids=a,b,c — konkretne zamowienia (lista kompletacji z zaznaczonych).
+  const idsParam = (searchParams.get("ids") || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 200);
 
   try {
-    const where: Prisma.OrderWhereInput = { AND: [VIEWS[view], search] };
+    const where: Prisma.OrderWhereInput = idsParam.length ? { id: { in: idsParam } } : { AND: [VIEWS[view], search] };
     const counts = Object.fromEntries(
       await Promise.all(
         Object.entries(VIEWS).map(async ([k, w]) => [k, await prisma.order.count({ where: { AND: [w, search] } })] as const)
@@ -101,6 +103,9 @@ export async function GET(request: NextRequest) {
       customer_phone: o.customerPhone || "",
       pickup_point: o.pickupPoint || "",
       pickup_point_address: o.pickupPointAddress || "",
+      customer_country: o.customerCountry || "PL",
+      customer_address: [o.customerAddressStreet, o.customerAddressPostcode, o.customerAddressCity].filter(Boolean).join(", "),
+      has_shipment: o.furgonetkaStatus === "basecourier" && !!o.furgonetkaPackageId,
       product: "KalkMate v3.0",
       fulfillment_status: o.fulfillmentStatus || "unfulfilled",
       shipped_at: o.shippedAt ? o.shippedAt.toISOString() : null,
