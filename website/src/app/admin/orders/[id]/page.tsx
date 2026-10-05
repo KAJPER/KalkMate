@@ -34,6 +34,8 @@ interface OrderDetail {
   invoice_filename: string;
   metadata: Record<string, string>;
   payment_provider: "stripe" | "p24";
+  stripe_payment_intent_id: string | null;
+  p24_session_id: string | null;
   personalized_code: string | null;
   personalized_name: string | null;
   attribution: {
@@ -938,13 +940,21 @@ export default function OrderDetailPage({
 
   return (
     <AdminShell>
-      <div className="mb-6">
+      <div className="mb-6 space-y-2">
         <Link
           href="/admin/orders"
           className="text-sm text-[#3B82F6] hover:underline"
         >
           &larr; Zamówienia
         </Link>
+        {order && (
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-2xl font-bold text-[#E0E0E0] font-mono">{order.order_number}</h1>
+            <CopyButton text={order.order_number} />
+            <OrderStatusBadge status={order.status} type="payment" />
+            <OrderStatusBadge status={order.fulfillment_status} type="fulfillment" />
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -961,8 +971,14 @@ export default function OrderDetailPage({
 
             <div className="space-y-3 text-sm">
               <div className="flex justify-between gap-3">
+                <span className="text-[#E0E0E0]/50">Numer</span>
+                <span className="text-[#E0E0E0] font-mono font-semibold break-all text-right min-w-0">
+                  {order.order_number}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
                 <span className="text-[#E0E0E0]/50">ID</span>
-                <span className="text-[#E0E0E0] font-mono text-xs break-all text-right min-w-0">
+                <span className="text-[#E0E0E0]/60 font-mono text-xs break-all text-right min-w-0">
                   {order.id}
                 </span>
               </div>
@@ -1085,18 +1101,18 @@ export default function OrderDetailPage({
 
             {order.payment_provider === "p24" ? (
               <p className="text-center text-xs text-[#E0E0E0]/40 mt-4">
-                Płatność Przelewy24 (BLIK) — sprawdź w panelu p24.online, sesja: {order.id}
+                Płatność Przelewy24 (BLIK) — sprawdź w panelu p24.online, sesja: {order.p24_session_id || "—"}
               </p>
-            ) : (
+            ) : order.stripe_payment_intent_id ? (
               <a
-                href={`https://dashboard.stripe.com/payments/${order.id}`}
+                href={`https://dashboard.stripe.com/payments/${order.stripe_payment_intent_id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block text-center text-xs text-[#3B82F6] hover:underline mt-4"
               >
                 Otwórz w Stripe Dashboard &rarr;
               </a>
-            )}
+            ) : null}
           </div>
 
           {/* Right column: Fulfillment + Furgonetka */}
@@ -1673,5 +1689,19 @@ export default function OrderDetailPage({
         </div>
       )}
     </AdminShell>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
+      className="px-2.5 py-1 rounded-md text-xs bg-[#2B2D31] border border-[#3F4147] text-[#E0E0E0]/70 hover:bg-[#3F4147]"
+      title="Kopiuj numer zamówienia"
+    >
+      {copied ? "Skopiowano ✓" : "Kopiuj"}
+    </button>
   );
 }

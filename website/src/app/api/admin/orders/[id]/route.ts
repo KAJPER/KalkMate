@@ -64,6 +64,8 @@ export async function GET(
       invoice_sent_at: order.invoiceSentAt ? order.invoiceSentAt.toISOString() : null,
       invoice_filename: order.invoiceFilename || "",
       payment_provider: order.paymentProvider,
+      stripe_payment_intent_id: order.stripePaymentIntentId || null,
+      p24_session_id: order.p24SessionId || null,
       personalized_code: personalization.personalizedCode || null,
       personalized_name: personalization.personalizedName || null,
       attribution: attr
