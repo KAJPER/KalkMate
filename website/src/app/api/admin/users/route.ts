@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { sumTokensPurchasedByUser } from "@/lib/tokenPurchases";
+
 
 export async function GET(req: NextRequest) {
   const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
     // Get pagination parameters
     const { searchParams } = new URL(req.url);
-    const limit = parseInt(searchParams.get("limit") || "100");
-    const offset = parseInt(searchParams.get("offset") || "0");
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "100") || 100));
+    const offset = Math.max(0, parseInt(searchParams.get("offset") || "0") || 0);
+    // Szukanie po WSZYSTKICH kontach (wczesniej tylko na wczytanej stronie).
+    const q = (searchParams.get("q") || "").trim();
+    const where = q ? { OR: [{ email: { contains: q } }, { name: { contains: q } }] } : {};
 
     // Fetch users with their subscriptions
     const users = await prisma.user.findMany({
+      where,
       take: limit,
       skip: offset,
       orderBy: { createdAt: "desc" },
@@ -21,20 +25,34 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Get license usage + purchase summary for each user
-    const usersWithLicenses = await Promise.all(
-      users.map(async (user) => {
-        const licensesUsed = await prisma.license.count({
-          where: { usedBy: user.id },
-        });
-        const ordersCount = await prisma.order.count({
-          where: { userId: user.id, status: "paid" },
-        });
-        const tokenRow = await prisma.$queryRaw<{ tokenBalance: number | null }[]>`
-          SELECT "tokenBalance" FROM "User" WHERE "id" = ${user.id} LIMIT 1
-        `.catch(() => []);
-        const tokenBalance = Number(tokenRow[0]?.tokenBalance ?? 0);
-        const tokensPurchased = await sumTokensPurchasedByUser(user.id).catch(() => ({ tokens: 0, count: 0 }));
+    // Licencje / zamowienia / tokeny dla calej strony naraz (wczesniej 4 zapytania
+    // NA KAZDEGO uzytkownika — ~400 zapytan przy 100 kontach).
+    const ids = users.map((u) => u.id);
+    const [licenseRows, orderRows] = await Promise.all([
+      prisma.license.groupBy({ by: ["usedBy"], where: { usedBy: { in: ids } }, _count: { _all: true } }),
+      prisma.order.groupBy({ by: ["userId"], where: { userId: { in: ids }, status: "paid" }, _count: { _all: true } }),
+    ]);
+    const licenses = new Map(licenseRows.map((r) => [r.usedBy, r._count._all]));
+    const ordersBy = new Map(orderRows.map((r) => [r.userId, r._count._all]));
+    const placeholders = ids.map(() => "?").join(",") || "''";
+    const balances = new Map<string, number>();
+    const purchases = new Map<string, { tokens: number; count: number }>();
+    if (ids.length) {
+      const rows = await prisma.$queryRawUnsafe<{ id: string; tokenBalance: number | null }[]>(
+        `SELECT "id", "tokenBalance" FROM "User" WHERE "id" IN (${placeholders})`, ...ids
+      ).catch(() => []);
+      rows.forEach((r) => balances.set(r.id, Number(r.tokenBalance ?? 0)));
+      const tp = await prisma.$queryRawUnsafe<{ userId: string; tokens: number | null; count: number | bigint }[]>(
+        `SELECT userId, SUM(tokens) AS tokens, COUNT(*) AS count FROM TokenPurchase WHERE status = 'paid' AND userId IN (${placeholders}) GROUP BY userId`, ...ids
+      ).catch(() => []); // tabela TokenPurchase powstaje przy pierwszym zakupie tokenow
+      tp.forEach((r) => purchases.set(r.userId, { tokens: Number(r.tokens ?? 0), count: Number(r.count) }));
+    }
+
+    const usersWithLicenses = users.map((user) => {
+        const licensesUsed = licenses.get(user.id) ?? 0;
+        const ordersCount = ordersBy.get(user.id) ?? 0;
+        const tokenBalance = balances.get(user.id) ?? 0;
+        const tokensPurchased = purchases.get(user.id) ?? { tokens: 0, count: 0 };
 
         return {
           id: user.id,
@@ -62,11 +80,10 @@ export async function GET(req: NextRequest) {
           tokensPurchased: tokensPurchased.tokens,
           tokenPurchaseCount: tokensPurchased.count,
         };
-      })
-    );
+      });
 
     // Get total count for pagination
-    const totalUsers = await prisma.user.count();
+    const totalUsers = await prisma.user.count({ where });
 
     return NextResponse.json({
       users: usersWithLicenses,

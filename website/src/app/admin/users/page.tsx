@@ -48,6 +48,13 @@ export default function UsersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", email: "", subscriptionStatus: "" });
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState(""); // search z opoznieniem -> zapytanie do serwera
+  useEffect(() => {
+    const t = setTimeout(() => { setQuery(search.trim()); setOffset(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  const usersUrl = (lim: number, off: number) =>
+    `/api/admin/users?limit=${lim}&offset=${off}${query ? `&q=${encodeURIComponent(query)}` : ""}`;
   const [purchasesUser, setPurchasesUser] = useState<User | null>(null);
   const [purchasesData, setPurchasesData] = useState<PurchaseHistory | null>(null);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
@@ -70,7 +77,7 @@ export default function UsersPage() {
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/admin/users?limit=${limit}&offset=${offset}`);
+        const res = await fetch(usersUrl(limit, offset));
         if (res.ok) {
           const data = await res.json();
           setUsers(data.users);
@@ -84,7 +91,8 @@ export default function UsersPage() {
     };
 
     fetchUsers();
-  }, [limit, offset]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limit, offset, query]);
 
   const nextPage = () => setOffset(offset + limit);
   const prevPage = () => setOffset(Math.max(0, offset - limit));
@@ -129,7 +137,7 @@ export default function UsersPage() {
       setShowEditModal(false);
 
       // Refresh list
-      const res = await fetch(`/api/admin/users?limit=${limit}&offset=${offset}`);
+      const res = await fetch(usersUrl(limit, offset));
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users);
@@ -148,7 +156,7 @@ export default function UsersPage() {
       if (res.ok) {
         alert("Użytkownik usunięty");
         // Refresh list
-        const refreshRes = await fetch(`/api/admin/users?limit=${limit}&offset=${offset}`);
+        const refreshRes = await fetch(usersUrl(limit, offset));
         if (refreshRes.ok) {
           const data = await refreshRes.json();
           setUsers(data.users);
@@ -161,11 +169,8 @@ export default function UsersPage() {
     }
   };
 
-  const filteredUsers = users.filter((u) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return u.email.toLowerCase().includes(q) || (u.name || "").toLowerCase().includes(q);
-  });
+  // Filtrowanie robi serwer (wszystkie konta), tu juz tylko wynik.
+  const filteredUsers = users;
 
   return (
     <AdminShell>
@@ -178,7 +183,7 @@ export default function UsersPage() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Szukaj po email/imieniu (na tej stronie)..."
+          placeholder="Szukaj po e-mailu / imieniu…"
           className="px-4 py-2 rounded-lg text-sm bg-[#313338] border border-[#3F4147] text-[#E0E0E0] placeholder-[#E0E0E0]/30 focus:outline-none focus:border-[#3B82F6] w-72"
         />
       </div>
@@ -208,7 +213,7 @@ export default function UsersPage() {
 
             {search.trim() && (
               <p className="px-6 pt-4 text-xs text-[#E0E0E0]/40">
-                {filteredUsers.length} {filteredUsers.length === 1 ? "wynik" : "wyników"} dla &quot;{search}&quot; (spośród {users.length} na tej stronie)
+                {total} {total === 1 ? "wynik" : "wyników"} dla &quot;{search}&quot;
               </p>
             )}
 

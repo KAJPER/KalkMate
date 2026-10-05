@@ -7,6 +7,7 @@ import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
 
 interface Order {
   id: string;
+  order_number: string;
   amount: number;
   currency: string;
   status: string;
@@ -26,6 +27,14 @@ function formatAmount(amount: number, currency: string): string {
   return `${value} ${symbol}`;
 }
 
+type View = "to_ship" | "unpaid" | "shipped" | "all";
+const VIEWS: { id: View; label: string }[] = [
+  { id: "to_ship", label: "Do wysłania" },
+  { id: "unpaid", label: "Nieopłacone" },
+  { id: "shipped", label: "W drodze" },
+  { id: "all", label: "Wszystkie" },
+];
+
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -33,6 +42,15 @@ export default function OrdersPage() {
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
   const [search, setSearch] = useState("");
+  const [query, setQuery] = useState(""); // search z opoznieniem (zapytanie do serwera)
+  const [view, setView] = useState<View>("all");
+  // ?view=to_ship (np. z kafelka "Do wysylki" na dashboardzie) — po zamontowaniu,
+  // zeby render serwera i przegladarki sie zgadzal.
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get("view");
+    if (VIEWS.some((x) => x.id === v)) setView(v as View);
+  }, []);
+  const [counts, setCounts] = useState<Partial<Record<View, number>>>({});
 
   const fetchOrders = useCallback(async (offset = 0) => {
     setLoading(true);
@@ -40,6 +58,8 @@ export default function OrdersPage() {
       const url = new URL("/api/admin/orders", window.location.origin);
       url.searchParams.set("limit", "50");
       url.searchParams.set("offset", String(offset));
+      url.searchParams.set("view", view);
+      if (query.trim()) url.searchParams.set("q", query.trim());
 
       const res = await fetch(url);
       if (res.ok) {
@@ -50,6 +70,7 @@ export default function OrdersPage() {
           setOrders(data.orders);
         }
         setHasMore(data.has_more);
+        if (data.counts) setCounts(data.counts);
         setNextOffset(data.next_offset);
       }
     } catch (error) {
@@ -57,21 +78,19 @@ export default function OrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [view, query]);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
 
-  const filtered = search
-    ? orders.filter(
-        (o) =>
-          o.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-          o.customer_email.toLowerCase().includes(search.toLowerCase()) ||
-          o.customer_phone.replace(/[\s-]/g, "").includes(search.replace(/[\s-]/g, "")) ||
-          o.id.toLowerCase().includes(search.toLowerCase())
-      )
-    : orders;
+  // Szukanie po stronie serwera (wszystkie zamowienia), 300 ms po ostatnim znaku.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const filtered = orders;
 
   const formatDate = (ts: number) => {
     const d = new Date(ts * 1000);
@@ -90,11 +109,31 @@ export default function OrdersPage() {
         <h1 className="text-xl font-bold text-[#E0E0E0]">Zamówienia</h1>
         <input
           type="text"
-          placeholder="Szukaj po nazwisku, email, telefonie lub ID..."
+          placeholder="Szukaj: KM-…, nazwisko, e-mail, telefon, nr przesyłki"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:w-72 px-3 py-2 rounded-lg border border-[#3F4147] bg-[#2B2D31] text-[#E0E0E0] text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6] placeholder:text-[#E0E0E0]/30"
         />
+      </div>
+
+      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+        {VIEWS.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            onClick={() => setView(v.id)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              view === v.id ? "bg-[#3B82F6] text-white" : "bg-[#313338] border border-[#3F4147] text-[#E0E0E0]/70 hover:text-[#E0E0E0]"
+            }`}
+          >
+            {v.label}
+            {counts[v.id] !== undefined && (
+              <span className={`ml-1.5 ${view === v.id ? "text-white/80" : v.id === "to_ship" && counts[v.id] ? "text-[#D8FF3D]" : "text-[#E0E0E0]/40"}`}>
+                {counts[v.id]}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       <div className="bg-[#313338] rounded-lg border border-[#3F4147] overflow-hidden">
@@ -110,7 +149,7 @@ export default function OrdersPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[#E0E0E0] font-medium truncate">{order.customer_name || "—"}</p>
-                  <p className="text-xs text-[#E0E0E0]/40 truncate">{order.customer_email || "—"}</p>
+                  <p className="text-xs text-[#E0E0E0]/40 truncate">{order.order_number} · {order.customer_email || "—"}</p>
                 </div>
                 <p className="text-[#E0E0E0] font-semibold whitespace-nowrap">{formatAmount(order.amount, order.currency)}</p>
               </div>
@@ -169,6 +208,7 @@ export default function OrdersPage() {
                 >
                   <td className="px-4 py-3 text-[#E0E0E0]/70 whitespace-nowrap">
                     {formatDate(order.created)}
+                    <p className="text-xs font-mono text-[#E0E0E0]/40">{order.order_number}</p>
                   </td>
                   <td className="px-4 py-3">
                     <div>
