@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Toaster } from "@/components/admin/toast";
 
 // Osobny manifest PWA dla /admin (nie ten sam co publiczna strona w
 // src/app/layout.tsx) — zeby "Zainstaluj aplikacje" / "Dodaj do ekranu
@@ -30,5 +31,5 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <>{children}<Toaster /></>;
 }

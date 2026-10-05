@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import AdminShell from "@/components/admin/AdminShell";
+import { toast, toastError } from "@/components/admin/toast";
 
 interface Device {
   id: string;
@@ -87,12 +88,12 @@ export default function DevicesPage() {
       });
       const j = await r.json();
       if (!j.ok) {
-        alert(j.error || "Blad odpinania");
+        toast(j.error || "Blad odpinania", "error");
       } else {
         await load();
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Blad sieci");
+      toastError(e);
     } finally {
       setActionBusy(null);
     }
@@ -108,7 +109,7 @@ export default function DevicesPage() {
     if (input.trim()) {
       const d = new Date(input.trim() + "T23:59:59");
       if (isNaN(d.getTime())) {
-        alert("Nieprawidlowy format daty. Uzyj RRRR-MM-DD.");
+        toast("Nieprawidlowy format daty. Uzyj RRRR-MM-DD.", "error");
         return;
       }
       rentalUntil = d.toISOString();
@@ -125,12 +126,12 @@ export default function DevicesPage() {
       );
       const j = await r.json();
       if (!j.ok) {
-        alert(j.error || "Blad ustawiania najmu");
+        toast(j.error || "Blad ustawiania najmu", "error");
       } else {
         await load();
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Blad sieci");
+      toastError(e);
     } finally {
       setActionBusy(null);
     }
@@ -157,12 +158,12 @@ export default function DevicesPage() {
       );
       const j = await r.json();
       if (!j.ok) {
-        alert(j.error || "Blad blokady");
+        toast(j.error || "Blad blokady", "error");
       } else {
         await load();
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Blad sieci");
+      toastError(e);
     } finally {
       setActionBusy(null);
     }
@@ -173,7 +174,7 @@ export default function DevicesPage() {
     if (!confirm(`Na pewno? Wpisz potwierdzenie w nastepnym oknie.`)) return;
     const typed = prompt(`Aby potwierdzic, wpisz dokladnie: ${deviceId}`);
     if (typed?.trim().toUpperCase() !== deviceId.toUpperCase()) {
-      alert("Anulowano — wpisany tekst sie nie zgadza.");
+      toast("Anulowano — wpisany tekst sie nie zgadza.", "info");
       return;
     }
     setActionBusy(deviceId);
@@ -183,12 +184,12 @@ export default function DevicesPage() {
       });
       const j = await r.json();
       if (!j.ok) {
-        alert(j.error || "Blad usuwania");
+        toast(j.error || "Blad usuwania", "error");
       } else {
         await load();
       }
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Blad sieci");
+      toastError(e);
     } finally {
       setActionBusy(null);
     }

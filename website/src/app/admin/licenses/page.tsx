@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import { downloadLicenseSheetPdf, CARDS_PER_SHEET } from "@/lib/licensePdf";
+import { toast } from "@/components/admin/toast";
 
 interface License {
   id: string;
@@ -79,11 +80,11 @@ export default function LicensesPage() {
         setGeneratedCodes(data.codes);
         fetchLicenses(); // Refresh list
       } else {
-        alert("Nie udało się wygenerować licencji");
+        toast("Nie udało się wygenerować licencji", "error");
       }
     } catch (error) {
       console.error("Failed to generate licenses:", error);
-      alert("Wystąpił błąd");
+      toast("Wystąpił błąd", "error");
     } finally {
       setGeneratingCodes(false);
     }
@@ -107,11 +108,11 @@ export default function LicensesPage() {
         setGeneratedCodes(data.codes);
         fetchLicenses();
       } else {
-        alert("Nie udało się wygenerować licencji");
+        toast("Nie udało się wygenerować licencji", "error");
       }
     } catch (error) {
       console.error("Failed to generate license sheet PDF:", error);
-      alert("Wystąpił błąd");
+      toast("Wystąpił błąd", "error");
     } finally {
       setGeneratingPdf(false);
     }
@@ -309,7 +310,7 @@ export default function LicensesPage() {
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(generatedCodes.join("\n"));
-                  alert("Skopiowano wszystkie licencje!");
+                  toast("Skopiowano wszystkie licencje!");
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white text-sm font-medium rounded-lg transition-colors"
               >
@@ -330,7 +331,7 @@ export default function LicensesPage() {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(code);
-                      alert(`Skopiowano: ${code}`);
+                      toast(`Skopiowano: ${code}`);
                     }}
                     className="text-xs text-[#E0E0E0]/40 hover:text-[#3B82F6] transition-colors opacity-0 group-hover:opacity-100"
                   >
@@ -453,7 +454,7 @@ export default function LicensesPage() {
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(license.code);
-                        alert(`Skopiowano: ${license.code}`);
+                        toast(`Skopiowano: ${license.code}`);
                       }}
                       className="px-3 py-1.5 bg-[#2B2D31] hover:bg-[#3F4147] text-[#E0E0E0]/60 hover:text-[#3B82F6] text-xs rounded-lg transition-colors"
                     >

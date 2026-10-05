@@ -9,6 +9,7 @@ import RevenueChart from "@/components/admin/RevenueChart";
 import OrdersChart from "@/components/admin/OrdersChart";
 import GeminiUsageChart from "@/components/admin/GeminiUsageChart";
 import OrdersPieChart from "@/components/admin/OrdersPieChart";
+import { toast } from "@/components/admin/toast";
 
 interface Analytics {
   totalRevenue: number;
@@ -160,11 +161,11 @@ export default function AdminDashboard() {
         setGeneratedCodes(data.codes);
         fetchData(); // Refresh stats
       } else {
-        alert("Nie udało się wygenerować licencji");
+        toast("Nie udało się wygenerować licencji", "error");
       }
     } catch (error) {
       console.error("Failed to generate licenses:", error);
-      alert("Wystąpił błąd");
+      toast("Wystąpił błąd", "error");
     } finally {
       setGeneratingCodes(false);
     }
@@ -415,7 +416,7 @@ export default function AdminDashboard() {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(generatedCodes.join("\n"));
-                      alert("Skopiowano wszystkie licencje!");
+                      toast("Skopiowano wszystkie licencje!");
                     }}
                     className="text-xs text-[#3B82F6] hover:underline font-medium"
                   >
@@ -432,7 +433,7 @@ export default function AdminDashboard() {
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(code);
-                          alert(`Skopiowano: ${code}`);
+                          toast(`Skopiowano: ${code}`);
                         }}
                         className="text-xs text-[#E0E0E0]/60 hover:text-[#3B82F6] transition-colors"
                       >

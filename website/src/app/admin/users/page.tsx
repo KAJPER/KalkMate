@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
+import { toast } from "@/components/admin/toast";
 
 interface User {
   id: string;
@@ -133,7 +134,7 @@ export default function UsersPage() {
         });
       }
 
-      alert("Zapisano zmiany!");
+      toast("Zapisano zmiany!");
       setShowEditModal(false);
 
       // Refresh list
@@ -143,7 +144,7 @@ export default function UsersPage() {
         setUsers(data.users);
       }
     } catch (error) {
-      alert("Nie udało się zapisać zmian");
+      toast("Nie udało się zapisać zmian", "error");
       console.error(error);
     }
   };
@@ -154,7 +155,7 @@ export default function UsersPage() {
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
       if (res.ok) {
-        alert("Użytkownik usunięty");
+        toast("Użytkownik usunięty");
         // Refresh list
         const refreshRes = await fetch(usersUrl(limit, offset));
         if (refreshRes.ok) {
@@ -164,7 +165,7 @@ export default function UsersPage() {
         }
       }
     } catch (error) {
-      alert("Nie udało się usunąć użytkownika");
+      toast("Nie udało się usunąć użytkownika", "error");
       console.error(error);
     }
   };
