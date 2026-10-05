@@ -131,3 +131,33 @@ export async function incrementCouponUsage(code: string): Promise<void> {
       AND (maxUses IS NULL OR usedCount < maxUses)
   `;
 }
+
+// === Kupon przypisany do zamowienia P24 ===
+// Stripe niesie kod kuponu w metadata PaymentIntentu (webhook Stripe zlicza
+// uzycie). Zamowienie P24 powstaje przed platnoscia i nie mialo gdzie zapisac
+// kodu, wiec uzycia z BLIK/przelewu NIE byly zliczane — kupon z limitem dzialal
+// bez limitu. Teraz: kod zapisany przy zamowieniu, zliczany w webhooku P24.
+let _orderCouponReady = false;
+async function ensureOrderCouponTable(): Promise<void> {
+  if (_orderCouponReady) return;
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "OrderCoupon" (
+      "orderId"       TEXT PRIMARY KEY,
+      "code"          TEXT NOT NULL,
+      "discountCents" INTEGER NOT NULL DEFAULT 0
+    )`);
+  _orderCouponReady = true;
+}
+
+export async function setOrderCoupon(orderId: string, code: string, discountCents: number): Promise<void> {
+  await ensureOrderCouponTable();
+  await prisma.$executeRaw`
+    INSERT OR REPLACE INTO "OrderCoupon" ("orderId", "code", "discountCents") VALUES (${orderId}, ${code}, ${discountCents})`;
+}
+
+export async function getOrderCoupon(orderId: string): Promise<{ code: string; discountCents: number } | null> {
+  await ensureOrderCouponTable();
+  const rows = await prisma.$queryRaw<{ code: string; discountCents: number }[]>`
+    SELECT "code", "discountCents" FROM "OrderCoupon" WHERE "orderId" = ${orderId}`;
+  return rows[0] ?? null;
+}

@@ -5,7 +5,7 @@ import { giveConsent } from "@/lib/newsletter";
 import { clientIp } from "@/lib/rate-limit";
 import { ipHashFromHeaders, resolveAttribution, saveOrderAttribution } from "@/lib/attribution";
 import { prisma } from "@/lib/db";
-import { getCoupon, computeDiscount } from "@/lib/coupons";
+import { getCoupon, computeDiscount, setOrderCoupon } from "@/lib/coupons";
 import { registerTransaction, paymentUrl } from "@/lib/przelewy24";
 import { randomUUID } from "crypto";
 import { ensureOrderPersonalizationColumns, validatePersonalization } from "@/lib/orderPersonalization";
@@ -158,6 +158,11 @@ export async function POST(request: NextRequest) {
         ${now}, ${now}
       )
     `;
+
+    // Kupon zapisany przy zamowieniu — webhook P24 zliczy uzycie po oplaceniu.
+    if (appliedCoupon) {
+      await setOrderCoupon(orderId, appliedCoupon, discountAmount).catch((e) => console.error("[P24] order coupon save failed:", e));
+    }
 
     // Skad przyszedl klient (lib/attribution.ts) — blad nie blokuje platnosci.
     try {
