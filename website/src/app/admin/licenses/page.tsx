@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import { downloadLicenseSheetPdf, CARDS_PER_SHEET } from "@/lib/licensePdf";
@@ -33,32 +33,46 @@ export default function LicensesPage() {
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const MAX_SHEETS = 4; // API ogranicza count do 100 na zadanie (4 * 25)
 
-  useEffect(() => {
-    fetchLicenses();
-  }, [filter]);
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
 
-  const fetchLicenses = async () => {
+  const fetchLicenses = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/licenses/list?filter=${filter}&limit=100`);
+      const params = new URLSearchParams({ filter, limit: String(PAGE_SIZE), offset: String(page * PAGE_SIZE) });
+      if (query) params.set("q", query);
+      const res = await fetch(`/api/admin/licenses/list?${params}`);
       if (res.ok) {
         const data = await res.json();
         setLicenses(data.licenses);
-
-        // Calculate stats
-        const all = await fetch(`/api/admin/licenses/list?limit=1000`).then(r => r.json());
-        setStats({
-          total: all.total,
-          used: all.licenses.filter((l: License) => l.isUsed).length,
-          unused: all.licenses.filter((l: License) => !l.isUsed).length,
-        });
+        setTotal(data.total);
+        if (data.counts) setStats(data.counts);
+      } else {
+        toast("Nie udało się pobrać licencji", "error");
       }
     } catch (error) {
       console.error("Failed to fetch licenses:", error);
+      toast("Błąd sieci", "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, page, query]);
+
+  useEffect(() => {
+    fetchLicenses();
+  }, [fetchLicenses]);
+
+  // Szukanie z opoznieniem; nowa fraza = powrot na 1. strone.
+  useEffect(() => {
+    const t = setTimeout(() => { setQuery(search.trim()); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const changeFilter = (f: typeof filter) => { setFilter(f); setPage(0); };
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const generateLicenses = async (count: number) => {
     setGeneratingCodes(true);
@@ -357,7 +371,7 @@ export default function LicensesPage() {
           {/* Filter Tabs */}
           <div className="flex gap-2">
             <button
-              onClick={() => setFilter("all")}
+              onClick={() => changeFilter("all")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 filter === "all"
                   ? "bg-[#3B82F6] text-white"
@@ -367,7 +381,7 @@ export default function LicensesPage() {
               Wszystkie ({stats.total})
             </button>
             <button
-              onClick={() => setFilter("unused")}
+              onClick={() => changeFilter("unused")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 filter === "unused"
                   ? "bg-purple-500 text-white"
@@ -377,7 +391,7 @@ export default function LicensesPage() {
               Dostępne ({stats.unused})
             </button>
             <button
-              onClick={() => setFilter("used")}
+              onClick={() => changeFilter("used")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 filter === "used"
                   ? "bg-green-500 text-white"
@@ -387,6 +401,13 @@ export default function LicensesPage() {
               Użyte ({stats.used})
             </button>
           </div>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Szukaj: kod, opis albo e-mail użytkownika…"
+            className="mt-4 w-full max-w-md bg-[#2B2D31] border border-[#3F4147] rounded-lg px-3 py-2 text-sm text-[#E0E0E0] placeholder:text-[#E0E0E0]/30 focus:outline-none focus:border-[#3B82F6]"
+          />
         </div>
 
         {loading ? (
@@ -467,7 +488,32 @@ export default function LicensesPage() {
           </div>
         ) : (
           <div className="p-12 text-center text-[#E0E0E0]/40">
-            Brak licencji w tej kategorii
+            {query ? "Nic nie znaleziono" : "Brak licencji w tej kategorii"}
+          </div>
+        )}
+
+        {total > PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 p-4 border-t border-[#3F4147] text-sm">
+            <span className="text-[#E0E0E0]/60">
+              {page * PAGE_SIZE + 1}–{Math.min(total, (page + 1) * PAGE_SIZE)} z {total}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0 || loading}
+                className="px-3 py-1.5 bg-[#2B2D31] hover:bg-[#3F4147] rounded-lg text-[#E0E0E0] disabled:opacity-40"
+              >
+                ← Poprzednia
+              </button>
+              <span className="text-[#E0E0E0]/60">{page + 1} / {pages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
+                disabled={page >= pages - 1 || loading}
+                className="px-3 py-1.5 bg-[#2B2D31] hover:bg-[#3F4147] rounded-lg text-[#E0E0E0] disabled:opacity-40"
+              >
+                Następna →
+              </button>
+            </div>
           </div>
         )}
       </motion.div>
