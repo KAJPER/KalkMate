@@ -1,25 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { requireAdminAuth } from "@/lib/admin-auth";
 
 export async function GET(request: NextRequest) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "50");
-    const offset = parseInt(searchParams.get("offset") || "0");
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50") || 50));
+    const offset = Math.max(0, parseInt(searchParams.get("offset") || "0") || 0);
     const filter = searchParams.get("filter") || "all"; // all, used, unused
+    const q = (searchParams.get("q") || "").trim().slice(0, 100);
 
-    // Build filter condition
-    let whereCondition: any = {};
-    if (filter === "used") {
-      whereCondition.isUsed = true;
-    } else if (filter === "unused") {
-      whereCondition.isUsed = false;
+    // Szukanie: fragment kodu, opisu albo e-mail uzytkownika, ktory jej uzyl.
+    let search: Prisma.LicenseWhereInput = {};
+    if (q) {
+      const users = await prisma.user.findMany({
+        where: { email: { contains: q } },
+        select: { id: true },
+        take: 200,
+      });
+      search = {
+        OR: [
+          { code: { contains: q } },
+          { description: { contains: q } },
+          ...(users.length ? [{ usedBy: { in: users.map((u) => u.id) } }] : []),
+        ],
+      };
     }
+    const status: Prisma.LicenseWhereInput =
+      filter === "used" ? { isUsed: true } : filter === "unused" ? { isUsed: false } : {};
+    const whereCondition: Prisma.LicenseWhereInput = { AND: [status, search] };
 
-    // Fetch licenses
-    const [licenses, total] = await Promise.all([
+    const [licenses, total, used, all] = await Promise.all([
       prisma.license.findMany({
         where: whereCondition,
         orderBy: { createdAt: "desc" },
@@ -27,6 +40,8 @@ export async function GET(request: NextRequest) {
         skip: offset,
       }),
       prisma.license.count({ where: whereCondition }),
+      prisma.license.count({ where: { isUsed: true } }),
+      prisma.license.count(),
     ]);
 
     // Fetch user info for used licenses
@@ -53,6 +68,7 @@ export async function GET(request: NextRequest) {
       limit,
       offset,
       hasMore: offset + limit < total,
+      counts: { total: all, used, unused: all - used },
     });
   } catch (error) {
     console.error("Failed to fetch licenses:", error);

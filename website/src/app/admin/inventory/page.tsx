@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import AdminShell from "@/components/admin/AdminShell";
+import { toast } from "@/components/admin/toast";
 
 interface InventoryItem {
   id: string;
@@ -75,7 +76,7 @@ export default function InventoryPage() {
       });
       const j = await r.json();
       if (!j.ok) {
-        alert(j.error || "Blad dodawania");
+        toast(j.error || "Blad dodawania", "error");
       } else {
         setNewName("");
         setNewCount("");
@@ -96,7 +97,7 @@ export default function InventoryPage() {
         body: JSON.stringify({ delta }),
       });
       const j = await r.json();
-      if (!j.ok) alert(j.error || "Blad");
+      if (!j.ok) toast(j.error || "Blad", "error");
       await load();
     } finally {
       setBusy(null);
@@ -125,7 +126,7 @@ export default function InventoryPage() {
       });
       const j = await r.json();
       if (!j.ok) {
-        alert(j.error || "Blad zapisu");
+        toast(j.error || "Blad zapisu", "error");
       } else {
         setEditingId(null);
         await load();
@@ -143,7 +144,7 @@ export default function InventoryPage() {
         method: "DELETE",
       });
       const j = await r.json();
-      if (!j.ok) alert(j.error || "Blad usuwania");
+      if (!j.ok) toast(j.error || "Blad usuwania", "error");
       await load();
     } finally {
       setBusy(null);

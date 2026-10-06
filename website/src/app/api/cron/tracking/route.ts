@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { syncAllPendingOrders } from "@/lib/inpostTracking";
 import { syncAllPendingBaseCourierOrders } from "@/lib/basecourierTracking";
 import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
+import { sendPaymentReminders, type ReminderResult } from "@/lib/paymentReminders";
+import { ensureDailyBackup } from "@/lib/dbBackup";
 
 // GET /api/cron/tracking — wolane co godzine z crona na serwerze
 // (/home/ubuntu/kalkulator/tracking-cron.sh) z naglowkiem x-cron-secret.
 // Sledzi InPost (Paczkomat, w tym Paczkomat nadany przez Base Courier) ORAZ
 // przesylki zagraniczne nadane przez Base Courier innym kurierem (DPD, GLS,
-// UPS...) — src/lib/basecourierTracking.ts. Oprocz tego anuluje porzucone
+// UPS...) — src/lib/basecourierTracking.ts. Oprocz tego wysyla przypomnienia
+// "dokoncz platnosc" (src/lib/paymentReminders.ts) i anuluje porzucone
 // zamowienia (platnosc pending starsza niz STALE_DAYS) — src/lib/orderCleanup.ts.
 //
 // Historia: poprzednia wersja iterowala po Stripe PaymentIntents (zamowienia
@@ -26,6 +29,22 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // Kopia bazy raz na dobe (lib/dbBackup.ts) — przed reszta, niezaleznie od jej bledow.
+    let backup: string | null = null;
+    try {
+      backup = (await ensureDailyBackup())?.name ?? null;
+    } catch (e) {
+      console.error("[cron/tracking] database backup failed:", e);
+      backup = `ERROR: ${(e as Error).message}`;
+    }
+
+    let reminders: ReminderResult = { sent: [], skipped: [], failed: [] };
+    try {
+      reminders = await sendPaymentReminders();
+    } catch (e) {
+      console.error("[cron/tracking] payment reminders failed:", e);
+    }
+
     // Najpierw porzucone zamowienia — zeby sledzenie nie odpytywalo InPost
     // o numery, ktorych i tak nie bedzie.
     let stale: Awaited<ReturnType<typeof cancelStaleUnpaidOrders>> = { cancelled: [], skippedShipped: [] };
@@ -74,6 +93,8 @@ export async function GET(req: NextRequest) {
           to: r.newStatus,
         })),
       },
+      paymentReminders: reminders,
+      backup,
       staleUnpaid: {
         olderThanDays: STALE_DAYS,
         cancelled: stale.cancelled.map((o) => o.orderNumber),
@@ -82,7 +103,7 @@ export async function GET(req: NextRequest) {
     };
     console.log(
       `[cron/tracking] checked=${summary.checked} changed=${summary.changed} emails=${summary.emailsSent} unavailable=${summary.unavailable} ` +
-      `bcChecked=${summary.basecourier.checked} bcChanged=${summary.basecourier.changed} staleCancelled=${stale.cancelled.length}`
+      `bcChecked=${summary.basecourier.checked} bcChanged=${summary.basecourier.changed} staleCancelled=${stale.cancelled.length} reminders=${reminders.sent.length}`
     );
     return NextResponse.json(summary);
   } catch (e) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { ensureOrderPersonalizationColumns } from "@/lib/orderPersonalization";
 
 const PAYMENT_STATUS: Record<string, string> = {
@@ -10,14 +11,62 @@ const PAYMENT_STATUS: Record<string, string> = {
   refunded: "refunded",
 };
 
+// Zakladki listy zamowien (/admin/orders).
+const VIEWS: Record<string, Prisma.OrderWhereInput> = {
+  all: {},
+  to_ship: { status: "paid", fulfillmentStatus: { in: ["unfulfilled", "in_progress"] } },
+  unpaid: { status: "pending", fulfillmentStatus: { not: "cancelled" } },
+  shipped: { fulfillmentStatus: "shipped" },
+};
+
+// Szukanie po WSZYSTKICH zamowieniach (wczesniej filtr dzialal tylko na 50
+// wczytanych): numer KM-..., nazwisko, e-mail, telefon (tez bez spacji),
+// numer przesylki, id. SQLite LIKE = bez rozrozniania wielkosci liter (ASCII).
+async function searchWhere(q: string): Promise<Prisma.OrderWhereInput> {
+  const t = q.trim();
+  if (!t) return {};
+  // Telefon: porownanie samych cyfr ("600111222" znajduje "+48 600 111 222").
+  const digits = t.replace(/[\s+()-]/g, "");
+  let phoneIds: string[] = [];
+  if (digits.length >= 5 && /^\d+$/.test(digits)) {
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Order"
+      WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE("customerPhone", ' ', ''), '-', ''), '+', ''), '(', ''), ')', '')
+            LIKE ${"%" + digits.slice(-9) + "%"}`;
+    phoneIds = rows.map((r) => r.id);
+  }
+  return {
+    OR: [
+      { orderNumber: { contains: t } },
+      { customerName: { contains: t } },
+      { customerEmail: { contains: t } },
+      { customerPhone: { contains: t } },
+      ...(phoneIds.length ? [{ id: { in: phoneIds } }] : []),
+      { trackingNumber: { contains: t } },
+      { id: t },
+    ],
+  };
+}
+
 export async function GET(request: NextRequest) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   const searchParams = request.nextUrl.searchParams;
-  const limit = parseInt(searchParams.get("limit") || "50");
-  const offset = parseInt(searchParams.get("offset") || "0");
+  const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50") || 50));
+  const offset = Math.max(0, parseInt(searchParams.get("offset") || "0") || 0);
+  const view = VIEWS[searchParams.get("view") || "all"] ? searchParams.get("view") || "all" : "all";
+  const search = await searchWhere(searchParams.get("q") || "");
+  // ?ids=a,b,c — konkretne zamowienia (lista kompletacji z zaznaczonych).
+  const idsParam = (searchParams.get("ids") || "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 200);
 
   try {
+    const where: Prisma.OrderWhereInput = idsParam.length ? { id: { in: idsParam } } : { AND: [VIEWS[view], search] };
+    const counts = Object.fromEntries(
+      await Promise.all(
+        Object.entries(VIEWS).map(async ([k, w]) => [k, await prisma.order.count({ where: { AND: [w, search] } })] as const)
+      )
+    );
     const rows = await prisma.order.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       skip: offset,
       take: limit + 1,
@@ -44,6 +93,7 @@ export async function GET(request: NextRequest) {
 
     const orders = page.map((o) => ({
       id: o.id,
+      order_number: o.orderNumber,
       amount: o.amount,
       currency: o.currency,
       status: PAYMENT_STATUS[o.status] || o.status,
@@ -53,6 +103,9 @@ export async function GET(request: NextRequest) {
       customer_phone: o.customerPhone || "",
       pickup_point: o.pickupPoint || "",
       pickup_point_address: o.pickupPointAddress || "",
+      customer_country: o.customerCountry || "PL",
+      customer_address: [o.customerAddressStreet, o.customerAddressPostcode, o.customerAddressCity].filter(Boolean).join(", "),
+      has_shipment: o.furgonetkaStatus === "basecourier" && !!o.furgonetkaPackageId,
       product: "KalkMate v3.0",
       fulfillment_status: o.fulfillmentStatus || "unfulfilled",
       shipped_at: o.shippedAt ? o.shippedAt.toISOString() : null,
@@ -64,6 +117,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       orders,
+      counts,
       has_more,
       next_offset: offset + limit,
     });

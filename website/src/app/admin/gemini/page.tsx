@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import { AI_MODELS } from "@/lib/aiModels";
+import { toast } from "@/components/admin/toast";
 
 interface UserStat {
   id: string;
@@ -98,10 +99,10 @@ export default function OpenRouterPage() {
         );
         setAddTokensFor(null);
       } else {
-        alert("Nie udało się doładować tokenów");
+        toast("Nie udało się doładować tokenów", "error");
       }
     } catch {
-      alert("Błąd sieci");
+      toast("Błąd sieci", "error");
     } finally {
       setAddingTokens(false);
     }

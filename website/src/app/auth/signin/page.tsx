@@ -52,6 +52,7 @@ const DICT: Record<
     toggleToRegister: string;
     toggleToLogin: string;
     backHome: string;
+    newsletterConsent: string;
   }
 > = {
   pl: {
@@ -102,6 +103,7 @@ const DICT: Record<
     toggleToRegister: "Nie masz konta? → Załóż konto",
     toggleToLogin: "Masz już konto? → Zaloguj się",
     backHome: "← Powrót do strony głównej",
+    newsletterConsent: "Chcę dostawać e-mailem informacje o nowościach, promocjach i kuponach KalkMate (newsletter). Zgodę mogę wycofać w każdej chwili. (opcjonalnie)",
   },
   en: {
     oauthCallback: "Google sign-in failed. Please try again.",
@@ -151,6 +153,7 @@ const DICT: Record<
     toggleToRegister: "No account? → Create one",
     toggleToLogin: "Already have an account? → Sign in",
     backHome: "← Back to homepage",
+    newsletterConsent: "Send me KalkMate news, promotions and coupons by email (newsletter). I can withdraw this at any time. (optional)",
   },
   de: {
     oauthCallback: "Google-Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
@@ -200,6 +203,7 @@ const DICT: Record<
     toggleToRegister: "Kein Konto? → Konto erstellen",
     toggleToLogin: "Schon ein Konto? → Anmelden",
     backHome: "← Zurück zur Startseite",
+    newsletterConsent: "Ich möchte Neuigkeiten, Aktionen und Gutscheine von KalkMate per E-Mail erhalten (Newsletter). Widerruf jederzeit möglich. (optional)",
   },
 };
 
@@ -228,6 +232,7 @@ function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(urlErrorMsg);
   const [verificationSent, setVerificationSent] = useState(false);
@@ -255,7 +260,7 @@ function SignInForm() {
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
+          body: JSON.stringify({ email, password, name, marketingConsent }),
         });
         const data = await res.json();
         if (!res.ok) setError(data.error || t.registerError);
@@ -472,6 +477,17 @@ function SignInForm() {
                   <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-2">
                     {t.minChars}
                   </p>
+                )}
+                {!isLogin && (
+                  <label className="flex items-start gap-3 cursor-pointer mt-4">
+                    <input
+                      type="checkbox"
+                      checked={marketingConsent}
+                      onChange={(e) => setMarketingConsent(e.target.checked)}
+                      className="mt-1 accent-[#D8FF3D]"
+                    />
+                    <span className="text-xs text-[#F2EDE3]/55 leading-relaxed">{t.newsletterConsent}</span>
+                  </label>
                 )}
                 {isLogin && (
                   <div className="mt-2 text-right">

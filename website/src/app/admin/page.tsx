@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import StatCard from "@/components/admin/StatCard";
+import Link from "next/link";
 import RevenueChart from "@/components/admin/RevenueChart";
 import OrdersChart from "@/components/admin/OrdersChart";
 import GeminiUsageChart from "@/components/admin/GeminiUsageChart";
 import OrdersPieChart from "@/components/admin/OrdersPieChart";
+import { toast } from "@/components/admin/toast";
 
 interface Analytics {
   totalRevenue: number;
@@ -96,6 +98,8 @@ export default function AdminDashboard() {
   const [stockValue, setStockValue] = useState<number | "">("");
   const [stockSaving, setStockSaving] = useState(false);
   const [stockSaved, setStockSaved] = useState(false);
+  // Ostatnia kopia bazy (lib/dbBackup.ts) — ostrzezenie, gdy cron przestal je robic.
+  const [lastBackupAt, setLastBackupAt] = useState<string | null | undefined>(undefined);
 
   const fetchData = useCallback(async () => {
     try {
@@ -107,6 +111,7 @@ export default function AdminDashboard() {
         fetch("/api/admin/users?limit=10"),
         fetch("/api/admin/stock"),
       ]);
+      fetch("/api/admin/backups").then((r) => r.json()).then((d) => d.ok && setLastBackupAt(d.lastAt)).catch(() => {});
 
       if (analyticsRes.ok) {
         setAnalytics(await analyticsRes.json());
@@ -156,11 +161,11 @@ export default function AdminDashboard() {
         setGeneratedCodes(data.codes);
         fetchData(); // Refresh stats
       } else {
-        alert("Nie udało się wygenerować licencji");
+        toast("Nie udało się wygenerować licencji", "error");
       }
     } catch (error) {
       console.error("Failed to generate licenses:", error);
-      alert("Wystąpił błąd");
+      toast("Wystąpił błąd", "error");
     } finally {
       setGeneratingCodes(false);
     }
@@ -213,6 +218,12 @@ export default function AdminDashboard() {
         </div>
       ) : analytics ? (
         <div className="space-y-6">
+          {lastBackupAt !== undefined && (!lastBackupAt || Date.now() - Date.parse(lastBackupAt) > 30 * 3600_000) && (
+            <Link href="/admin/backups" className="block rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300 hover:bg-red-500/15">
+              ⚠ {lastBackupAt ? "Ostatnia kopia bazy ma ponad dobę" : "Nie ma jeszcze żadnej kopii bazy"} — kliknij, żeby sprawdzić / zrobić kopię teraz.
+            </Link>
+          )}
+
           {/* Quick Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <StatCard
@@ -233,12 +244,14 @@ export default function AdminDashboard() {
               subtitle={`${analytics.pendingOrders} oczekujących`}
               color="blue"
             />
-            <StatCard
-              title="Do wysyłki"
-              value={analytics.unfulfilledOrders}
-              subtitle={`${analytics.fulfilledOrders} wysłanych`}
-              color="yellow"
-            />
+            <Link href="/admin/orders?view=to_ship" className="block rounded-2xl hover:ring-2 hover:ring-[#D8FF3D]/40 transition">
+              <StatCard
+                title="Do wysyłki"
+                value={analytics.unfulfilledOrders}
+                subtitle={`${analytics.fulfilledOrders} wysłanych · kliknij`}
+                color="yellow"
+              />
+            </Link>
             <StatCard
               title="Wizyty"
               value={visits.toLocaleString("pl-PL")}
@@ -403,7 +416,7 @@ export default function AdminDashboard() {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(generatedCodes.join("\n"));
-                      alert("Skopiowano wszystkie licencje!");
+                      toast("Skopiowano wszystkie licencje!");
                     }}
                     className="text-xs text-[#3B82F6] hover:underline font-medium"
                   >
@@ -420,7 +433,7 @@ export default function AdminDashboard() {
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(code);
-                          alert(`Skopiowano: ${code}`);
+                          toast(`Skopiowano: ${code}`);
                         }}
                         className="text-xs text-[#E0E0E0]/60 hover:text-[#3B82F6] transition-colors"
                       >

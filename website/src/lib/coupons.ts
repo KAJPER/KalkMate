@@ -131,3 +131,70 @@ export async function incrementCouponUsage(code: string): Promise<void> {
       AND (maxUses IS NULL OR usedCount < maxUses)
   `;
 }
+
+// === Kupon przypisany do zamowienia P24 ===
+// Stripe niesie kod kuponu w metadata PaymentIntentu (webhook Stripe zlicza
+// uzycie). Zamowienie P24 powstaje przed platnoscia i nie mialo gdzie zapisac
+// kodu, wiec uzycia z BLIK/przelewu NIE byly zliczane — kupon z limitem dzialal
+// bez limitu. Teraz: kod zapisany przy zamowieniu, zliczany w webhooku P24.
+let _orderCouponReady = false;
+async function ensureOrderCouponTable(): Promise<void> {
+  if (_orderCouponReady) return;
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "OrderCoupon" (
+      "orderId"       TEXT PRIMARY KEY,
+      "code"          TEXT NOT NULL,
+      "discountCents" INTEGER NOT NULL DEFAULT 0
+    )`);
+  _orderCouponReady = true;
+}
+
+export async function setOrderCoupon(orderId: string, code: string, discountCents: number): Promise<void> {
+  await ensureOrderCouponTable();
+  await prisma.$executeRaw`
+    INSERT OR REPLACE INTO "OrderCoupon" ("orderId", "code", "discountCents") VALUES (${orderId}, ${code}, ${discountCents})`;
+}
+
+export async function getOrderCoupon(orderId: string): Promise<{ code: string; discountCents: number } | null> {
+  await ensureOrderCouponTable();
+  const rows = await prisma.$queryRaw<{ code: string; discountCents: number }[]>`
+    SELECT "code", "discountCents" FROM "OrderCoupon" WHERE "orderId" = ${orderId}`;
+  return rows[0] ?? null;
+}
+
+// Statystyki per kupon z OrderCoupon (Stripe + P24) — tylko oplacone zamowienia.
+// Przychod/rabat osobno per waluta (PLN i EUR sie nie sumuja).
+export interface CouponStats {
+  paidOrders: number;
+  unpaidOrders: number;
+  byCurrency: Record<string, { revenueCents: number; discountCents: number }>;
+  lastUsedAt: number | null;
+}
+
+export async function getCouponStats(): Promise<Record<string, CouponStats>> {
+  await ensureOrderCouponTable();
+  const rows = await prisma.$queryRaw<{
+    code: string; currency: string; paid: number; n: bigint | number;
+    revenue: bigint | number | null; discount: bigint | number | null; last: bigint | number | string | null;
+  }[]>`
+    SELECT oc."code" AS code, LOWER(o."currency") AS currency,
+           CASE WHEN o."status" = 'paid' THEN 1 ELSE 0 END AS paid,
+           COUNT(*) AS n, SUM(o."amount") AS revenue, SUM(oc."discountCents") AS discount,
+           MAX(CASE WHEN typeof(o."createdAt") = 'integer' THEN o."createdAt"
+                    ELSE CAST(strftime('%s', o."createdAt") AS INTEGER) * 1000 END) AS last
+    FROM "OrderCoupon" oc JOIN "Order" o ON o."id" = oc."orderId"
+    GROUP BY oc."code", LOWER(o."currency"), paid`;
+  const out: Record<string, CouponStats> = {};
+  for (const r of rows) {
+    const s = (out[r.code] ??= { paidOrders: 0, unpaidOrders: 0, byCurrency: {}, lastUsedAt: null });
+    const n = Number(r.n);
+    if (!r.paid) { s.unpaidOrders += n; continue; }
+    s.paidOrders += n;
+    const c = (s.byCurrency[r.currency] ??= { revenueCents: 0, discountCents: 0 });
+    c.revenueCents += Number(r.revenue ?? 0);
+    c.discountCents += Number(r.discount ?? 0);
+    const last = r.last == null ? null : Number(r.last);
+    if (last && (!s.lastUsedAt || last > s.lastUsedAt)) s.lastUsedAt = last;
+  }
+  return out;
+}

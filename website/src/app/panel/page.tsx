@@ -18,6 +18,10 @@ const PANEL_DICT: Record<Locale, {
   // header / heading
   logout: string;
   logoutLong: string;
+  newsletterTitle: string;
+  newsletterDesc: string;
+  newsletterOn: string;
+  newsletterOff: string;
   yourPanel: string;
   greeting: (name: React.ReactNode) => React.ReactNode;
   sessionActive: string;
@@ -245,6 +249,10 @@ const PANEL_DICT: Record<Locale, {
   pl: {
     logout: "Wyloguj ↗",
     logoutLong: "Wyloguj się ↗",
+    newsletterTitle: "/ Newsletter",
+    newsletterDesc: "Informacje o nowościach, promocjach i kuponach KalkMate e-mailem. Zgodę możesz wycofać w każdej chwili — maile o zamówieniach i koncie przychodzą niezależnie.",
+    newsletterOn: "Zapisany ✓ — kliknij, aby się wypisać",
+    newsletterOff: "Zapisz mnie na newsletter",
     yourPanel: "[ 00 ] · Twój panel",
     greeting: (n) => <>Witaj, {n}.</>,
     sessionActive: "Sesja aktywna",
@@ -462,6 +470,10 @@ const PANEL_DICT: Record<Locale, {
   en: {
     logout: "Log out ↗",
     logoutLong: "Log out ↗",
+    newsletterTitle: "/ Newsletter",
+    newsletterDesc: "KalkMate news, promotions and coupons by email. You can withdraw at any time — order and account emails are sent regardless.",
+    newsletterOn: "Subscribed ✓ — click to unsubscribe",
+    newsletterOff: "Subscribe to the newsletter",
     yourPanel: "[ 00 ] · Your panel",
     greeting: (n) => <>Welcome, {n}.</>,
     sessionActive: "Session active",
@@ -679,6 +691,10 @@ const PANEL_DICT: Record<Locale, {
   de: {
     logout: "Abmelden ↗",
     logoutLong: "Abmelden ↗",
+    newsletterTitle: "/ Newsletter",
+    newsletterDesc: "Neuigkeiten, Aktionen und Gutscheine von KalkMate per E-Mail. Widerruf jederzeit möglich — Bestell- und Kontomails kommen unabhängig davon.",
+    newsletterOn: "Abonniert ✓ — klicken zum Abmelden",
+    newsletterOff: "Newsletter abonnieren",
     yourPanel: "[ 00 ] · Dein Panel",
     greeting: (n) => <>Willkommen, {n}.</>,
     sessionActive: "Sitzung aktiv",
@@ -1033,6 +1049,30 @@ export default function PanelPage() {
   const [emNew, setEmNew] = useState("");
   const [emPassword, setEmPassword] = useState("");
   const [emSaving, setEmSaving] = useState(false);
+  // Zgoda marketingowa (newsletter) — /api/user/marketing-consent
+  const [nlConsent, setNlConsent] = useState<boolean | null>(null);
+  const [nlSaving, setNlSaving] = useState(false);
+  useEffect(() => {
+    if (!session || activeTab !== "settings" || nlConsent !== null) return;
+    fetch("/api/user/marketing-consent")
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setNlConsent(!!d.consent); })
+      .catch(() => {});
+  }, [session, activeTab, nlConsent]);
+  const toggleNewsletter = async () => {
+    setNlSaving(true);
+    try {
+      const r = await fetch("/api/user/marketing-consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consent: !nlConsent }),
+      });
+      const d = await r.json();
+      if (d.ok) setNlConsent(!!d.consent);
+    } finally {
+      setNlSaving(false);
+    }
+  };
   const [emMsg, setEmMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const changeEmail = async () => {
@@ -3180,6 +3220,23 @@ export default function PanelPage() {
                   {emMsg && <div className={`text-xs mt-2 ${emMsg.ok ? "text-[#D8FF3D]" : "text-[#FF4D2E]"}`}>{emMsg.text}</div>}
                   <button onClick={changeEmail} disabled={emSaving} className="mt-3 px-4 py-2 bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50 transition-colors">{emSaving ? t.saving : t.changeEmailBtn}</button>
                   <p className="text-xs text-[#F2EDE3]/40 mt-2">{t.emailChangeNote}</p>
+                </div>
+
+                {/* Newsletter / zgoda marketingowa */}
+                <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.newsletterTitle}</div>
+                  <p className="text-sm text-[#F2EDE3]/55 mb-4 leading-relaxed">{t.newsletterDesc}</p>
+                  <button
+                    onClick={toggleNewsletter}
+                    disabled={nlSaving || nlConsent === null}
+                    className={`px-4 py-2 km-mono-eyebrow transition-colors disabled:opacity-50 ${
+                      nlConsent
+                        ? "border border-[#D8FF3D]/50 text-[#D8FF3D] hover:border-[#FF4D2E] hover:text-[#FF4D2E]"
+                        : "bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B]"
+                    }`}
+                  >
+                    {nlConsent === null ? "…" : nlConsent ? t.newsletterOn : t.newsletterOff}
+                  </button>
                 </div>
 
                 {/* Wyloguj */}

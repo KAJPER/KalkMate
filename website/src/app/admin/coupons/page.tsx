@@ -16,6 +16,16 @@ interface Coupon {
   createdAt: string;
 }
 
+interface CouponStats {
+  paidOrders: number;
+  unpaidOrders: number;
+  byCurrency: Record<string, { revenueCents: number; discountCents: number }>;
+  lastUsedAt: number | null;
+}
+
+const money = (cents: number, cur: string) =>
+  `${(cents / 100).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur === "pln" ? "zł" : cur.toUpperCase()}`;
+
 function describe(c: Coupon): string {
   return c.type === "percent"
     ? `-${c.value}%`
@@ -24,6 +34,7 @@ function describe(c: Coupon): string {
 
 export default function CouponsPage() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [stats, setStats] = useState<Record<string, CouponStats>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -42,6 +53,7 @@ export default function CouponsPage() {
       if (res.ok) {
         const d = await res.json();
         setCoupons(d.coupons || []);
+        setStats(d.stats || {});
       }
     } catch (e) {
       console.error(e);
@@ -236,6 +248,7 @@ export default function CouponsPage() {
                 const expired = c.expiresAt && Date.now() > new Date(c.expiresAt + "T23:59:59").getTime();
                 const usedUp = c.maxUses != null && c.usedCount >= c.maxUses;
                 const live = !!c.active && !expired && !usedUp;
+                const st = stats[c.code];
                 return (
                   <motion.div
                     key={c.id}
@@ -263,6 +276,23 @@ export default function CouponsPage() {
                         {c.expiresAt && <span>• Wygasa: {c.expiresAt}</span>}
                         <span>• Utworzono: {new Date(c.createdAt).toLocaleDateString("pl-PL")}</span>
                       </div>
+                      {st && (st.paidOrders > 0 || st.unpaidOrders > 0) && (
+                        <div className="mt-2 flex items-center gap-x-4 gap-y-1 text-xs flex-wrap">
+                          <span className="text-[#E0E0E0]/80">
+                            Opłacone zamówienia: <b className="text-[#E0E0E0]">{st.paidOrders}</b>
+                            {st.unpaidOrders > 0 && <span className="text-[#E0E0E0]/40"> (+{st.unpaidOrders} nieopłac.)</span>}
+                          </span>
+                          {Object.entries(st.byCurrency).map(([cur, v]) => (
+                            <span key={cur} className="text-[#E0E0E0]/80">
+                              • Przychód: <b className="text-green-400">{money(v.revenueCents, cur)}</b>
+                              {" "}• Rabaty: <b className="text-[#D8FF3D]">{money(v.discountCents, cur)}</b>
+                            </span>
+                          ))}
+                          {st.lastUsedAt && (
+                            <span className="text-[#E0E0E0]/50">• Ostatnio: {new Date(st.lastUsedAt).toLocaleDateString("pl-PL")}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <button

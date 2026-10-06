@@ -4,6 +4,8 @@ import { verifyNotificationSign, verifyTransaction } from "@/lib/przelewy24";
 import { sendMail } from "@/lib/mailer";
 import { purchaseConfirmationEmail } from "@/lib/email-templates";
 import { findTokenPurchaseBySession, markTokenPurchasePaid } from "@/lib/tokenPurchases";
+import { orderIdForPaymentSession } from "@/lib/paymentReminders";
+import { getOrderCoupon, incrementCouponUsage } from "@/lib/coupons";
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
@@ -69,7 +71,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  // Find pending order
+  // Find pending order — po p24SessionId albo po dodatkowej sesji z linku
+  // "Dokończ płatność" (lib/paymentReminders.ts, /api/p24/resume).
+  const extraOrderId = await orderIdForPaymentSession(String(sessionId));
   const rows = await prisma.$queryRaw<
     Array<{
       id: string;
@@ -87,7 +91,7 @@ export async function POST(request: NextRequest) {
     SELECT id, status, "orderNumber", "customerName", "customerEmail",
            "customerPhone", "pickupPoint", "pickupPointAddress", amount, "userId"
     FROM "Order"
-    WHERE "p24SessionId" = ${String(sessionId)}
+    WHERE "p24SessionId" = ${String(sessionId)} OR id = ${extraOrderId ?? ""}
     LIMIT 1
   `;
 
@@ -129,6 +133,14 @@ export async function POST(request: NextRequest) {
     SET status = 'paid', "paidAt" = ${nowMs}, "updatedAt" = ${nowMs}
     WHERE id = ${order.id}
   `;
+
+  // Uzycie kuponu (wczesniej zliczane tylko dla Stripe — lib/coupons.ts).
+  try {
+    const coupon = await getOrderCoupon(order.id);
+    if (coupon) await incrementCouponUsage(coupon.code);
+  } catch (err) {
+    console.error("[P24 WEBHOOK] Coupon usage increment failed:", err);
+  }
 
   // Upgrade user subscription to 30 days trial if they have a subscription
   if (order.userId) {

@@ -4,7 +4,8 @@ import { stripe } from "@/lib/stripe";
 import { sendMail } from "@/lib/mailer";
 import { purchaseConfirmationEmail, localeFromCountry, EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { prisma } from "@/lib/db";
-import { incrementCouponUsage } from "@/lib/coupons";
+import { attributionFromMetadata, saveOrderAttribution } from "@/lib/attribution";
+import { incrementCouponUsage, setOrderCoupon } from "@/lib/coupons";
 import { createPaidTokenPurchase } from "@/lib/tokenPurchases";
 import { setOrderPersonalization } from "@/lib/orderPersonalization";
 import { randomUUID } from "crypto";
@@ -185,6 +186,12 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     await setOrderPersonalization(orderId, meta.personalized_code, meta.personalized_name);
   }
 
+  // Zrodlo klienta (UTM/referer) z create-payment-intent — lib/attribution.ts.
+  const attribution = attributionFromMetadata(meta.attribution);
+  if (attribution) {
+    await saveOrderAttribution(orderId, attribution).catch((e) => console.error("[WEBHOOK] attribution save failed:", e));
+  }
+
   // Jeśli użytkownik już ma konto, upgrade subskrypcji do 30 dni
   if (existingUser) {
     const subscription = await prisma.subscription.findUnique({
@@ -211,6 +218,9 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   // Zlicz uzycie kuponu (dopiero po oplaceniu, zeby porzucone platnosci nie liczyly).
   if (meta.coupon_code) {
     try {
+      // Do statystyk kuponow w panelu (lib/coupons.ts getCouponStats).
+      await setOrderCoupon(orderId, meta.coupon_code, parseInt(meta.discount_amount || "0", 10) || 0)
+        .catch((e) => console.error("[WEBHOOK] order coupon save failed:", e));
       await incrementCouponUsage(meta.coupon_code);
       console.log(`[WEBHOOK] ✅ Coupon usage incremented: ${meta.coupon_code} (-${meta.discount_amount || 0})`);
     } catch (e) {

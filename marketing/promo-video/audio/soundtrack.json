@@ -1,0 +1,159 @@
+{
+  "_comment": "Scenariusz dzwieku do filmu (34 s). Czasy w sekundach — zgrane z index.html (CAPS, PRESS, CAM). Zmien tekst lektora albo efekty i uruchom: node audio/make-audio.mjs",
+  "durationSec": 34,
+  "voice": {
+    "_comment": "Glosy z biblioteki ElevenLabs (np. rodzimi polscy lektorzy) wymagaja platnego planu; na darmowym tylko wbudowane. Zmien voiceId, zeby przetestowac inny glos.",
+    "voiceId": "iP95p4xoKVk53GoZ742B",
+    "voiceName": "Chris",
+    "modelId": "eleven_v3",
+    "languageCode": "pl",
+    "singleTake": true,
+    "settings": {
+      "stability": 0.5,
+      "similarity_boost": 0.75
+    },
+    "volume": 1.0
+  },
+  "lines": [
+    {
+      "start": 0.3,
+      "maxEnd": 3.5,
+      "text": "Kalkulator, który rozumie zadania."
+    },
+    {
+      "start": 3.7,
+      "maxEnd": 7.3,
+      "text": "Na co dzień liczy jak zwykły kalkulator."
+    },
+    {
+      "start": 7.45,
+      "maxEnd": 11.4,
+      "text": "Wpisujesz swój kod i do akcji wchodzi sztuczna inteligencja."
+    },
+    {
+      "start": 11.6,
+      "maxEnd": 15.5,
+      "text": "Robisz zdjęcie zadania wbudowaną kamerą."
+    },
+    {
+      "start": 16.0,
+      "maxEnd": 22.6,
+      "text": "A rozwiązanie pojawia się na ekranie — krok po kroku, z wyjaśnieniem każdego przejścia."
+    },
+    {
+      "start": 22.95,
+      "maxEnd": 26.9,
+      "text": "Matematyka, fizyka, chemia, biologia."
+    },
+    {
+      "start": 27.0,
+      "maxEnd": 30.7,
+      "text": "Notatki offline i dwa lata gwarancji."
+    },
+    {
+      "start": 30.55,
+      "maxEnd": 34.2,
+      "text": "Zrób zdjęcie, otrzymaj rozwiązanie. KalkMate."
+    }
+  ],
+  "music": {
+    "prompt": "Upbeat modern minimal electronic music for a 34-second tech product ad. Clean plucks, soft punchy drums, warm synth bass, optimistic and focused, 112 BPM, builds slightly toward the end with a clear final hit. Instrumental only, no vocals.",
+    "volume": 0.32,
+    "duckUnderVoice": true,
+    "fallbackLoopPrompt": "Upbeat modern minimal electronic music loop, clean plucks, soft punchy drums, warm synth bass, optimistic tech product ad, 112 BPM, instrumental, seamless loop"
+  },
+  "sfx": [
+    {
+      "id": "whoosh",
+      "prompt": "Short smooth cinematic whoosh transition, airy, modern UI",
+      "duration": 0.8,
+      "volume": 0.5,
+      "at": [
+        3.05,
+        11.25,
+        15.55,
+        22.85,
+        26.75,
+        30.55
+      ]
+    },
+    {
+      "id": "key",
+      "prompt": "Single soft click of a plastic calculator button, close-up, dry",
+      "duration": 0.5,
+      "volume": 0.7,
+      "at": [
+        3.85,
+        4.15,
+        4.5,
+        4.9,
+        5.2,
+        5.7,
+        7.75,
+        8.05,
+        8.35,
+        8.65,
+        10.25
+      ]
+    },
+    {
+      "id": "result",
+      "prompt": "Tiny bright digital confirmation blip, single short tone",
+      "duration": 0.5,
+      "volume": 0.45,
+      "at": [
+        5.75,
+        9.1
+      ]
+    },
+    {
+      "id": "shutter",
+      "prompt": "Crisp digital camera shutter click with a soft flash pop",
+      "duration": 0.6,
+      "volume": 0.8,
+      "at": [
+        14.5
+      ]
+    },
+    {
+      "id": "upload",
+      "prompt": "Soft futuristic data upload processing sound, gentle rising digital blips",
+      "duration": 2.0,
+      "volume": 0.35,
+      "at": [
+        15.9
+      ]
+    },
+    {
+      "id": "success",
+      "prompt": "Pleasant short success chime, two ascending soft bell notes, modern app",
+      "duration": 1.0,
+      "volume": 0.5,
+      "at": [
+        18.2
+      ]
+    },
+    {
+      "id": "tick",
+      "prompt": "Very subtle soft UI tick, text line appearing on a screen",
+      "duration": 0.5,
+      "volume": 0.3,
+      "at": [
+        18.82,
+        19.44,
+        20.06,
+        20.68,
+        21.3
+      ]
+    },
+    {
+      "id": "impact",
+      "prompt": "Deep soft cinematic logo hit with a short shimmering tail",
+      "duration": 1.5,
+      "volume": 0.6,
+      "at": [
+        30.9
+      ]
+    }
+  ]
+}

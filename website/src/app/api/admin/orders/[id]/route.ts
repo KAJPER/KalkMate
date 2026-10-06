@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { ensureOrderPersonalizationColumns } from "@/lib/orderPersonalization";
 import { applyFulfillmentStatus } from "@/lib/orderFulfillment";
 import { syncOrderTracking, looksLikeInPostNumber } from "@/lib/inpostTracking";
+import { CHANNEL_LABELS, type Channel, getOrderAttribution } from "@/lib/attribution";
 
 const PAYMENT_STATUS: Record<string, string> = {
   pending: "requires_payment_method",
@@ -30,6 +31,9 @@ export async function GET(
     { personalizedCode: string | null; personalizedName: string | null }[]
   >`SELECT "personalizedCode", "personalizedName" FROM "Order" WHERE id = ${id} LIMIT 1`;
   const personalization = persRows[0] || { personalizedCode: null, personalizedName: null };
+  const attr = await getOrderAttribution(id).catch(() => null);
+  const touch = (channel: string | null, source: string | null, campaign: string | null, landing: string | null, at: string | null) =>
+    channel ? { channel: CHANNEL_LABELS[channel as Channel] || channel, source, campaign, landing, at } : null;
 
   return NextResponse.json({
     order: {
@@ -60,8 +64,17 @@ export async function GET(
       invoice_sent_at: order.invoiceSentAt ? order.invoiceSentAt.toISOString() : null,
       invoice_filename: order.invoiceFilename || "",
       payment_provider: order.paymentProvider,
+      stripe_payment_intent_id: order.stripePaymentIntentId || null,
+      p24_session_id: order.p24SessionId || null,
       personalized_code: personalization.personalizedCode || null,
       personalized_name: personalization.personalizedName || null,
+      attribution: attr
+        ? {
+            method: attr.method,
+            first: touch(attr.firstChannel, attr.firstSource, attr.firstCampaign, attr.firstLanding, attr.firstAt),
+            last: touch(attr.lastChannel, attr.lastSource, attr.lastCampaign, attr.lastLanding, attr.lastAt),
+          }
+        : null,
     },
   });
 }

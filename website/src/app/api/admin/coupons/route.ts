@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import {
   ensureCouponTable,
+  getCouponStats,
   normalizeCode,
   type CouponRow,
 } from "@/lib/coupons";
@@ -17,7 +18,8 @@ export async function GET(req: NextRequest) {
       SELECT id, code, type, value, active, maxUses, usedCount, expiresAt, createdAt
       FROM Coupon ORDER BY createdAt DESC
     `;
-    return NextResponse.json({ ok: true, coupons: rows });
+    const stats = await getCouponStats().catch((e) => { console.error("[admin/coupons stats]", e); return {}; });
+    return NextResponse.json({ ok: true, coupons: rows, stats });
   } catch (e) {
     console.error("[admin/coupons GET]", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
