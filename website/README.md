@@ -1,36 +1,119 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# KalkMate — strona, sklep i backend
 
-## Getting Started
+Aplikacja Next.js pod [kalkmate.pl](https://kalkmate.pl). Zawiera:
 
-First, run the development server:
+- sklep i stronę produktu (PL `/`, EN `/en`, DE `/de`);
+- panel klienta (`/panel`) i przypisywanie licencji (`/claim`);
+- panel admina (`/admin`);
+- API kalkulatorów (`/api/device/*`) i dystrybucję OTA.
+
+Opis całego projektu: [README w katalogu głównym](../README.md).
+
+**Stack:** Next.js 16 (App Router) · React 19 · Prisma 6 + SQLite · Tailwind CSS 4 · NextAuth 4 · Stripe · Przelewy24 · OpenRouter · nodemailer (SMTP/IMAP)
+
+## Uruchomienie lokalne
+
+Wymagany Node.js 20+.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+# utwórz .env według tabeli „Zmienne środowiskowe” niżej
+npx prisma generate
+npx prisma db push              # tworzy lokalną bazę SQLite ze schematu
+npm run dev                     # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Do samego uruchomienia strony wystarczą `DATABASE_URL`, `NEXTAUTH_SECRET` i `NEXTAUTH_URL`. Płatności, AI, poczta i wysyłka działają dopiero z kluczami do tych usług.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Panel admina wymaga `ADMIN_SESSION_TOKEN` i `ADMIN_2FA_SECRET`. Sekret TOTP wygeneruje skrypt `tools/generate_2fa.js` (wymaga pakietów `otpauth` i `qrcode`); kod QR dodajesz do Google Authenticator.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build
+```
 
-## Learn More
+## Baza danych
 
-To learn more about Next.js, take a look at the following resources:
+SQLite przez Prisma (`prisma/schema.prisma`). Część nowszych tabel i kolumn nie jest w schemacie Prismy — dotyczy to m.in. kuponów, zgód marketingowych, atrybucji, sesji admina i kopii zapasowych. Tworzy je przy pierwszym użyciu kod w `src/lib/*` (`CREATE TABLE IF NOT EXISTS` / `ALTER TABLE`) i obsługuje surowym SQL. Dzięki temu wdrożenie nie wymaga migracji. Daty w SQLite są przechowywane jako INTEGER (ms); starsze wiersze mogą mieć tekst ISO.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Kopie zapasowe: codziennie z crona oraz ręcznie w `/admin/backups` (`src/lib/dbBackup.ts`).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Struktura
 
-## Deploy on Vercel
+```
+src/
+├── app/
+│   ├── page.tsx, en/, de/          # strona produktu i sklep
+│   ├── koszyk/                     # koszyk i checkout
+│   ├── panel/, claim/              # panel klienta, przypisanie licencji
+│   ├── admin/                      # panel admina (zamówienia, poczta, newsletter, kupony, licencje, …)
+│   ├── pomoc/, regulamin/, polityka-prywatnosci/, reklamacja/
+│   └── api/
+│       ├── device/                 # API kalkulatora: register, account-status, solve, notes, tests, conversations, firmware, remote
+│       ├── admin/                  # API panelu admina (każda trasa: requireAdminAuth)
+│       ├── create-payment-intent/, p24/, webhooks/   # Stripe i Przelewy24
+│       ├── cron/tracking/          # zadania cykliczne (co godzinę)
+│       └── auth/, user/, tokens/, subscription/, chat/, track/, newsletter/, …
+├── components/                     # komponenty strony i panelu admina
+└── lib/                            # logika: płatności, wysyłka, maile, AI, kupony, atrybucja, kopie, …
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Zadania cykliczne
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Jeden endpoint, wołany co godzinę (np. z crona systemowego):
+
+```bash
+curl -fsS -H "x-cron-secret: $CRON_SECRET" https://kalkmate.pl/api/cron/tracking
+```
+
+Zadania:
+- statusy przesyłek InPost i Base Courier;
+- przypomnienia o nieopłaconych zamówieniach P24;
+- anulowanie porzuconych zamówień;
+- codzienna kopia bazy.
+
+## Zmienne środowiskowe
+
+| Obszar | Zmienne |
+|---|---|
+| **Podstawowe** | `DATABASE_URL`, `NEXTAUTH_URL`, `NEXTAUTH_SECRET`, `NEXT_PUBLIC_APP_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
+| **Admin** | `ADMIN_SESSION_TOKEN`, `ADMIN_2FA_SECRET` |
+| **Kalkulatory / OTA** | `CALCULATOR_API_KEY`, `CALCULATOR_FIRMWARE_DIR`, `CALCULATOR_CAPTURES_DIR`, `FIRMWARE_LATEST_VERSION`, `FIRMWARE_LATEST_NOTES` |
+| **AI** | `OPENROUTER_API_KEY`, `OPENROUTER_DEFAULT_MODEL` (domyślnie `google/gemini-2.5-pro`), `MAILBOX_REPLY_MODEL`, `MAILBOX_TRANSLATE_MODEL` |
+| **Stripe** | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` |
+| **Przelewy24** | `P24_MERCHANT_ID`, `P24_POS_ID`, `P24_CRC`, `P24_API_KEY`, `P24_SANDBOX` |
+| **Waluty** | `EUR_PLN_RATE`, `USD_PLN_RATE` |
+| **Poczta wychodząca** | `MAIL_HOST`, `MAIL_PORT`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASS`, `MAIL_FROM_NAME`, `MAIL_FROM_ADDRESS` |
+| **Skrzynka w panelu** | `MAILBOX_USER`, `MAILBOX_PASS`, `MAILBOX_IMAP_HOST`, `MAILBOX_IMAP_PORT`, `MAILBOX_SMTP_HOST`, `MAILBOX_SMTP_PORT` |
+| **Newsletter** | `NEWSLETTER_SECRET`, `NEWSLETTER_DELAY_MS` |
+| **Wysyłka — Base Courier** | `BASECOURIER_LOGIN`, `BASECOURIER_API_KEY`, `BASECOURIER_PAYMENT`, `BASECOURIER_PRINTER` |
+| **Wysyłka — Furgonetka** | `FURGONETKA_API_URL`, `FURGONETKA_CLIENT_ID`, `FURGONETKA_CLIENT_SECRET`, `FURGONETKA_USERNAME`, `FURGONETKA_PASSWORD`, `FURGONETKA_INPOST_SERVICE_ID`, `FURGONETKA_SENDER_*` |
+| **Wysyłka — InPost** | `NEXT_PUBLIC_INPOST_GEOWIDGET_TOKEN` |
+| **Cło** | `OWNER_PESEL` (upoważnienie celne) |
+| **Cron i automaty** | `CRON_SECRET`, `PAYMENT_REMINDER_AFTER_HOURS` |
+| **Kopie zapasowe** | `BACKUP_DIR`, `BACKUP_KEEP_DAYS`, `BACKUP_RCLONE_REMOTE` |
+| **Analityka / SEO** | `ANALYTICS_SALT`, `GOOGLE_SITE_VERIFICATION` |
+| **Pozostałe** | `RESEND_API_KEY` (stara wysyłka maili, zastąpiona przez SMTP) |
+
+Pełną listę zawsze aktualnie pokaże:
+
+```bash
+grep -rhoE "process\.env\.[A-Z0-9_]+" src | sort -u
+```
+
+## Wdrożenie
+
+Serwer: Ubuntu VPS, nginx jako reverse proxy, `next start` jako usługa systemowa.
+
+```bash
+git pull
+npm ci
+npx prisma generate
+npm run build
+# restart usługi Node (systemd / pm2 — zależnie od konfiguracji serwera)
+```
+
+Po wdrożeniu zmian w API urządzeń sprawdź, czy kalkulator wciąż łączy się z serwerem: wejdź w Ustawienia → Status konta albo rozwiąż zadanie testowe.
+
+Starsze pliki `SETUP.md`, `READY_TO_DEPLOY.md`, `FINAL_STATUS.md` i `INSTALLATION_COMPLETE.md` opisują pierwszą wersję projektu (Gemini bezpośrednio, Resend) i są nieaktualne. To README jest aktualne.
