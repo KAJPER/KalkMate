@@ -84,7 +84,7 @@ export default function OrderFiscalCard({ orderId, paid }: { orderId: string; pa
         <div>
           <h2 className="text-lg font-bold text-[#E0E0E0]">Paragon fiskalny</h2>
           <p className="text-xs text-[#E0E0E0]/50">
-            Drukuje lokalny agent na drukarce POSNET · <Link href="/admin/fiscal" className="text-[#3B82F6] hover:underline">Fiskalizacja</Link>
+            Drukuje aplikacja KalkMate Admin / agent na drukarce POSNET · <Link href="/admin/fiscal" className="text-[#3B82F6] hover:underline">Fiskalizacja</Link>
           </p>
         </div>
       </div>
@@ -118,9 +118,6 @@ export default function OrderFiscalCard({ orderId, paid }: { orderId: string; pa
         </div>
       )}
       {data?.previewError && !active && <p className="text-xs text-yellow-300">{data.previewError}</p>}
-      {data && !data.configured && (
-        <p className="text-xs text-yellow-300">Agent fiskalny nie jest skonfigurowany (brak FISCAL_AGENT_TOKEN).</p>
-      )}
 
       {!active && (
         <button

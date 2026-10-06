@@ -131,6 +131,23 @@ class Simulator(socketserver.ThreadingTCPServer):
         def err(code: int) -> bytes:
             return _cmd_err(cmd, code, token)
 
+        if cmd == "simset":
+            # Komenda TYLKO symulatora (nie ma jej w drukarce): wstrzykiwanie stanu
+            # i awarii z testów w innym procesie (np. testy agenta w aplikacji Electron).
+            if "pr" in f:
+                s.mechanism = int(f["pr"])
+            if "ds" in f:
+                s.device_state = int(f["ds"])
+            if "fs" in f:
+                s.fiscal = f["fs"] in {"1", "T"}
+            if "da" in f:
+                s.drop_after.add(f["da"])
+            if "db" in f:
+                s.drop_before.add(f["db"])
+            if "er" in f:
+                name, code = f["er"].split(":")
+                s.errors[name] = int(code)
+            return ok([("bn", str(s.receipt_no)), ("np", str(len(s.printed))), ("nc", str(s.cancelled))])
         if cmd == "sid":
             return ok([("nm", "POSNET Simulator"), ("vr", "0.1")])
         if cmd == "sdev":
@@ -224,7 +241,7 @@ def main() -> None:
     ap.add_argument("--fiscal", action="store_true", help="udawaj tryb fiskalny")
     args = ap.parse_args()
     sim = Simulator(args.host, args.port, SimState(fiscal=args.fiscal))
-    print(f"Symulator POSNET na {args.host}:{sim.port} (tryb {'fiskalny' if args.fiscal else 'niefiskalny'})")
+    print(f"Symulator POSNET na {args.host}:{sim.port} (tryb {'fiskalny' if args.fiscal else 'niefiskalny'})", flush=True)
     sim.serve_forever()
 
 

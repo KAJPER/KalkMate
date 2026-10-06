@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { agentReport, agentTokenValid, type AgentReport } from "@/lib/fiscal";
+import { agentReport, agentAuthorized, type AgentReport } from "@/lib/fiscal";
 
 const STATES = new Set(["queued", "printing", "printed", "failed", "uncertain"]);
 
@@ -9,7 +9,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!agentTokenValid(request.headers.get("x-fiscal-agent-token"))) {
+  if (!(await agentAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;

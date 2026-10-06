@@ -8,6 +8,22 @@ import { usePathname, useRouter } from "next/navigation";
 // window.kalkmateDesktop istnieje TYLKO wewnatrz Electrona. W przegladarce
 // przycisk "Programator" sie nie pokazuje — flashowanie wymaga USB na tym
 // komputerze, wiec nie ma sensu poza aplikacja.
+export interface DesktopFiscalConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  encoding: "cp1250" | "iso-8859-2";
+  allowFiscal: boolean;
+}
+export interface DesktopFiscalInfo {
+  ok: boolean;
+  error?: string;
+  config?: DesktopFiscalConfig;
+  printer?: { online: boolean; ready: boolean; fiscal?: boolean; description?: string; last_receipt?: number | null } | null;
+  queue?: Record<string, number>;
+  platformError?: string | null;
+}
+
 declare global {
   interface Window {
     kalkmateDesktop?: {
@@ -15,6 +31,11 @@ declare global {
       openFlasher: () => void;
       // Cichy druk etykiety PDF na zapamietanej drukarce etykiet (VEVOR).
       printLabel?: (url: string) => Promise<{ ok: boolean; printer?: string; error?: string }>;
+      // Agent fiskalny wbudowany w aplikację (od 1.3.0) — DesktopFiscalCard.
+      fiscal?: {
+        info: (refresh?: boolean) => Promise<DesktopFiscalInfo>;
+        configure: (patch: Partial<DesktopFiscalConfig>) => Promise<DesktopFiscalInfo>;
+      };
     };
   }
 }
