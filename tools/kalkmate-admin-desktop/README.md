@@ -73,6 +73,35 @@ osobny program GUI do wgrywania firmware na płytki KalkMate.
   komunikat „Programator jest już uruchomiony" zamiast otwierać drugą
   instancję.
 
+## Drukarka fiskalna (paragony)
+
+Od wersji 1.3.0 aplikacja ma wbudowanego agenta fiskalnego (`fiscal/`). Jest to port
+[`fiscal-agent/`](../../fiscal-agent/) do Node, więc nie trzeba instalować Pythona.
+Agent pobiera z kalkmate.pl paragony dodane w panelu („Wystaw paragon” w
+zamówieniu) i drukuje je na drukarce fiskalnej **POSNET Online** w sieci lokalnej
+(TCP/WiFi). Kasa Posnet Ergo się do tego nie nadaje — wyjaśnienie w
+[`docs/fiskalizacja/README.md`](../../docs/fiskalizacja/README.md).
+
+**Konfiguracja:** w aplikacji otwórz **Fiskalizacja** w panelu. Karta „Ten komputer”
+pojawia się tylko w aplikacji. Wpisz IP i port drukarki, kliknij **Sprawdź drukarkę**,
+a potem zaznacz **Drukuj paragony z tego komputera**. Ustawienia zapisują się w
+`%APPDATA%\kalkmate-admin\settings.json`.
+
+**Logowanie:** agent łączy się z serwerem sesją admina z aplikacji (bez osobnego
+tokenu). Po wylogowaniu przestaje pobierać paragony, dopóki się nie zalogujesz.
+
+**Kolejka:** zapisywana w `%APPDATA%\kalkmate-admin\fiscal-jobs.json`, więc
+przetrwa zamknięcie aplikacji. Aplikacja drukuje tylko wtedy, gdy jest włączona.
+Paragony dodane przy wyłączonej aplikacji czekają na serwerze. Zamknięcie okna w
+trakcie druku czeka na koniec paragonu (maks. 30 s).
+
+**Bezpiecznik:** domyślnie aplikacja odmawia druku na drukarce w trybie
+**fiskalnym**. Przełącznik „Druk na drukarce w trybie FISKALNYM” odblokowujesz
+dopiero po testach na drukarce niefiskalnej.
+
+**Testy logiki:** `npm install` i `npm run test:fiscal`. Testy używają symulatora
+drukarki z `fiscal-agent/` i wymagają `python3`.
+
 ## Uwaga o linkach
 
 Linki do `kalkmate.pl` oraz do kurierów (`basecourier.com`, `inpost.pl`, w

@@ -11,7 +11,9 @@
 // tworzy NOWE zlecenie (nowe id), bo agent pamięta id i nigdy nie drukuje
 // drugi raz tego samego (idempotencja po jego stronie).
 
+import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdminAuth } from "@/lib/admin-auth";
 import { getOrderCoupon } from "@/lib/coupons";
 import { randomUUID, timingSafeEqual } from "crypto";
 
@@ -112,6 +114,12 @@ const toJob = (r: JobRow): FiscalJob => ({
   claimedAt: r.claimedAt == null ? null : Number(r.claimedAt),
   printedAt: r.printedAt == null ? null : Number(r.printedAt),
 });
+
+/** Agent = token FISCAL_AGENT_TOKEN (agent Python) albo sesja admina (agent w aplikacji KalkMate Admin). */
+export async function agentAuthorized(request: NextRequest): Promise<boolean> {
+  if (agentTokenValid(request.headers.get("x-fiscal-agent-token"))) return true;
+  return (await requireAdminAuth(request)) === null;
+}
 
 export function agentTokenValid(header: string | null): boolean {
   const expected = process.env.FISCAL_AGENT_TOKEN || "";

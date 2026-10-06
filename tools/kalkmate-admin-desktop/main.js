@@ -72,7 +72,11 @@ ipcMain.on('kalkmate:open-flasher', () => launchFlasher());
 
 // === Ustawienia aplikacji (drukarka etykiet) — userData/settings.json ===
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
-const DEFAULT_SETTINGS = { labelPrinter: 'VEVOR Y486' };
+const DEFAULT_SETTINGS = {
+  labelPrinter: 'VEVOR Y486',
+  // Druk fiskalny domyślnie wyłączony; allowFiscal = bezpiecznik trybu fiskalnego.
+  fiscal: { enabled: false, host: '', port: 6666, encoding: 'cp1250', allowFiscal: false },
+};
 
 function loadSettings() {
   try {
@@ -136,6 +140,81 @@ ipcMain.handle('kalkmate:print-label', async (_event, urlPath) => {
   } finally {
     if (tmpFile) setTimeout(() => { try { fs.unlinkSync(tmpFile); } catch (_) { /* juz usuniete */ } }, 60_000);
   }
+});
+
+// === Agent fiskalny (drukarka fiskalna POSNET w sieci lokalnej) ===
+// Logika w fiscal/ (port fiscal-agent/ z Pythona). Agent pobiera zlecenia
+// paragonów z kalkmate.pl SESJĄ ADMINA tej aplikacji (bez osobnego tokenu)
+// i drukuje je po TCP. Konfiguracja (IP, port, włączenie) z panelu WWW:
+// /admin/fiscal -> window.kalkmateDesktop.fiscal. Opis: docs/fiskalizacja/README.md.
+const { FiscalAgent } = require('./fiscal/agent');
+const ORIGIN = new URL(ADMIN_URL).origin;
+let fiscalAgent = null;
+
+async function platformPost(urlPath, body) {
+  const res = await session.fromPartition(PARTITION).fetch(ORIGIN + urlPath, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+  if (res.status === 401) throw new Error('Zaloguj się do panelu w aplikacji (brak sesji admina)');
+  if (!res.ok) throw new Error(`Serwer odpowiedział HTTP ${res.status}`);
+  return res.json();
+}
+
+function startFiscalAgent() {
+  fiscalAgent = new FiscalAgent({
+    dataDir: app.getPath('userData'),
+    config: loadSettings().fiscal,
+    log: (...a) => console.log(...a),
+    platform: {
+      claim: async (printer) => (await platformPost('/api/fiscal/agent/claim', { version: `desktop-${app.getVersion()}`, printer })).job,
+      report: (result) => platformPost(`/api/fiscal/agent/jobs/${encodeURIComponent(result.id)}`, result),
+    },
+  });
+  fiscalAgent.start();
+}
+
+// Mostek fiskalny wolno wołać tylko ze strony kalkmate.pl (okno może pokazywać też kurierów).
+function fromKalkmate(event) {
+  try {
+    const host = new URL(event.senderFrame ? event.senderFrame.url : '').hostname;
+    return hostMatchesDomain(host, 'kalkmate.pl');
+  } catch (_) {
+    return false;
+  }
+}
+
+ipcMain.handle('kalkmate:fiscal-info', async (event, refresh) => {
+  if (!fromKalkmate(event) || !fiscalAgent) return { ok: false, error: 'Niedostępne' };
+  return { ok: true, ...(await fiscalAgent.info(!!refresh)) };
+});
+
+ipcMain.handle('kalkmate:fiscal-config', async (event, patch) => {
+  if (!fromKalkmate(event) || !fiscalAgent) return { ok: false, error: 'Niedostępne' };
+  const p = patch || {};
+  const next = { ...fiscalAgent.config };
+  if ('enabled' in p) next.enabled = !!p.enabled;
+  if ('allowFiscal' in p) next.allowFiscal = !!p.allowFiscal;
+  if ('host' in p) {
+    const host = String(p.host).trim();
+    if (host && !/^[a-zA-Z0-9.-]{1,253}$/.test(host)) return { ok: false, error: 'Nieprawidłowy adres drukarki' };
+    next.host = host;
+  }
+  if ('port' in p) {
+    const port = Number(p.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return { ok: false, error: 'Nieprawidłowy port' };
+    next.port = port;
+  }
+  if ('encoding' in p) {
+    if (!['cp1250', 'iso-8859-2'].includes(p.encoding)) return { ok: false, error: 'Nieobsługiwana strona kodowa' };
+    next.encoding = p.encoding;
+  }
+  saveSettings({ fiscal: next });
+  fiscalAgent.setConfig(next);
+  fiscalAgent.wake();
+  return { ok: true, ...(await fiscalAgent.info(true)) };
 });
 
 // Wybor drukarki etykiet z listy drukarek systemowych (menu Narzedzia).
@@ -377,6 +456,7 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    startFiscalAgent();
     mainWindow = createWindow();
     Menu.setApplicationMenu(buildMenu(mainWindow));
 
@@ -399,6 +479,27 @@ if (!gotSingleInstanceLock) {
         Menu.setApplicationMenu(buildMenu(mainWindow));
       }
     });
+  });
+
+  // Nie zamykamy aplikacji w trakcie drukowania paragonu (max 30 s czekania) —
+  // przerwany druk kończy się stanem „niepewny” do ręcznego sprawdzenia.
+  let quitWaitStarted = false;
+  app.on('before-quit', (event) => {
+    if (!fiscalAgent) return;
+    if (fiscalAgent.running && !quitWaitStarted) {
+      quitWaitStarted = true;
+      event.preventDefault();
+      const until = Date.now() + 30_000;
+      const wait = setInterval(() => {
+        if (!fiscalAgent.running || Date.now() > until) {
+          clearInterval(wait);
+          fiscalAgent.stop();
+          app.quit();
+        }
+      }, 200);
+      return;
+    }
+    fiscalAgent.stop();
   });
 
   app.on('window-all-closed', () => {

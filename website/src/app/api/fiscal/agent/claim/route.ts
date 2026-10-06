@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { agentClaim, agentTokenValid } from "@/lib/fiscal";
+import { agentClaim, agentAuthorized } from "@/lib/fiscal";
 
 // POST /api/fiscal/agent/claim — lokalny agent fiskalny (fiscal-agent/) pyta
 // o następny paragon i przy okazji melduje stan drukarki (heartbeat).
-// Auth: nagłówek x-fiscal-agent-token == FISCAL_AGENT_TOKEN.
+// Auth: nagłówek x-fiscal-agent-token == FISCAL_AGENT_TOKEN albo sesja admina
+// (agent wbudowany w aplikację KalkMate Admin).
 export async function POST(request: NextRequest) {
-  if (!agentTokenValid(request.headers.get("x-fiscal-agent-token"))) {
+  if (!(await agentAuthorized(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const body = await request.json().catch(() => ({}));

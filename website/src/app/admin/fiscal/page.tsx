@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
+import DesktopFiscalCard from "@/components/admin/DesktopFiscalCard";
 import { toast } from "@/components/admin/toast";
 
 interface PrinterInfo {
@@ -102,15 +103,11 @@ export default function FiscalPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[#E0E0E0] mb-1">Fiskalizacja</h1>
         <p className="text-sm text-[#E0E0E0]/60">
-          Paragony drukuje lokalny agent obok drukarki fiskalnej POSNET. Instrukcja: <code className="text-xs">docs/fiskalizacja/README.md</code>
+          Paragony drukuje aplikacja KalkMate Admin (albo osobny agent) na komputerze w sieci drukarki fiskalnej POSNET. Instrukcja: <code className="text-xs">docs/fiskalizacja/README.md</code>
         </p>
       </div>
 
-      {data && !data.configured && (
-        <div className="mb-4 rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm text-yellow-200">
-          Brak <code>FISCAL_AGENT_TOKEN</code> na serwerze — agent nie może się połączyć. Ustaw zmienną i zrestartuj stronę.
-        </div>
-      )}
+      <DesktopFiscalCard />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="rounded-xl border border-[#3F4147] bg-[#2B2D31] p-5">
