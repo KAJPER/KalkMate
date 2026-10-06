@@ -1,7 +1,7 @@
 {
   "name": "kalkmate-admin",
   "productName": "KalkMate Admin",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "description": "Panel administracyjny KalkMate (kalkmate.pl/admin) jako aplikacja Windows",
   "main": "main.js",
   "private": true,
