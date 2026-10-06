@@ -6,6 +6,7 @@ import { purchaseConfirmationEmail } from "@/lib/email-templates";
 import { findTokenPurchaseBySession, markTokenPurchasePaid } from "@/lib/tokenPurchases";
 import { orderIdForPaymentSession } from "@/lib/paymentReminders";
 import { getOrderCoupon, incrementCouponUsage } from "@/lib/coupons";
+import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
@@ -162,6 +163,9 @@ export async function POST(request: NextRequest) {
   }
 
   console.log(`[P24 WEBHOOK] ✅ Order paid: ${order.orderNumber} for ${order.customerEmail}`);
+
+  // Paragon do kolejki agenta fiskalnego (tylko gdy FISCAL_AUTO_ENQUEUE=1) — lib/fiscal.ts.
+  await autoEnqueueOrderReceipt(order.id);
 
   // Send confirmation email
   try {

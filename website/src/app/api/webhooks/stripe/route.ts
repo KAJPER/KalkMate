@@ -6,6 +6,7 @@ import { purchaseConfirmationEmail, localeFromCountry, EMAIL_SUBJECTS } from "@/
 import { prisma } from "@/lib/db";
 import { attributionFromMetadata, saveOrderAttribution } from "@/lib/attribution";
 import { incrementCouponUsage, setOrderCoupon } from "@/lib/coupons";
+import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
 import { createPaidTokenPurchase } from "@/lib/tokenPurchases";
 import { setOrderPersonalization } from "@/lib/orderPersonalization";
 import { randomUUID } from "crypto";
@@ -228,6 +229,9 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     }
   }
 
+  // Paragon do kolejki agenta fiskalnego (tylko gdy FISCAL_AUTO_ENQUEUE=1) — lib/fiscal.ts.
+  await autoEnqueueOrderReceipt(orderId);
+
   // Send confirmation email
   try {
     const locale = localeFromCountry(meta.customer_country);
@@ -319,6 +323,8 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
     }
   }
   // Jeśli użytkownik NIE ma konta, zamówienie zostanie połączone przy rejestracji
+
+  await autoEnqueueOrderReceipt(orderId);
 
   console.log(`[WEBHOOK] ✅ Order created successfully: ${orderNumber} for email ${email}${existingUser ? ` (user ID: ${existingUser.id})` : " (no account yet)"}`);
 

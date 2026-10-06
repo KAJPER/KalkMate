@@ -1,251 +1,186 @@
 <p align="center">
-  <img src="website/public/kalkmate_logo.svg" alt="KalkMate logo" width="220">
+  <img src="website/public/kalkmate_logo.svg" alt="KalkMate" width="220">
 </p>
 
-<h1 align="center">KalkMate</h1>
+<h3 align="center">A calculator with a camera and AI for exam prep</h3>
 
 <p align="center">
-  🌐 <b>Language:</b> <a href="README.md">Polski</a> · English
-</p>
-
-<p align="center">
-  <b>An AI-assisted calculator for Polish high-school exam prep.</b><br>
-  Snap a photo of a problem — get a fully worked-out solution on screen, no phone, no distractions.
+  Take a photo of a problem — a step-by-step solution appears on the calculator's screen.<br>
+  No phone, no browser, no distractions.
 </p>
 
 <p align="center">
-  <img src="website/public/galeria/kalkulator-naukowy-kalkmate-ukryta-kamera.jpg" alt="KalkMate on a school cafeteria table, OLED screen showing the device name" width="640">
+  <a href="https://kalkmate.pl/en"><img src="https://img.shields.io/badge/shop-kalkmate.pl-2563EB?style=flat-square" alt="kalkmate.pl"></a>
+  <img src="https://img.shields.io/badge/status-on%20sale-22C55E?style=flat-square" alt="Status: on sale">
+  <img src="https://img.shields.io/badge/firmware-1.9.6-111827?style=flat-square" alt="Firmware 1.9.6">
+  <img src="https://img.shields.io/badge/MCU-ESP32--S3-E7352C?style=flat-square" alt="ESP32-S3">
+  <img src="https://img.shields.io/badge/web-Next.js%2016-000000?style=flat-square" alt="Next.js 16">
 </p>
 
-> **Project status:** the first PCB (v4, ESP32-S3) has been soldered and is going through bring-up/debugging. Firmware, AI backend, and the online store are being developed in parallel. The prototype enclosure is an adapted off-the-shelf calculator case — a dedicated enclosure is being designed (see `docs/dol obudowy kalkulator.stl`).
+<p align="center">
+  <a href="README.md">Polski</a> · <b>English</b>
+</p>
+
+<p align="center">
+  <img src="website/public/galeria/kalkulator-kalkmate-ekran-rozwiaz-zadanie.webp" alt="KalkMate — the “Solve a problem” menu on the OLED screen" width="460">
+</p>
 
 ---
 
-## Table of contents
+## At a glance
 
-- [What is KalkMate](#what-is-kalkmate)
-- [How it works](#how-it-works)
-- [Gallery](#gallery)
-- [Hardware](#hardware)
-- [Firmware](#firmware-esp32-carduino)
-- [Backend & website](#backend--website-website)
-- [Production tools](#production-tools-tools)
-- [Tech stack](#tech-stack)
-- [Repository structure](#repository-structure)
-- [Security](#security)
-- [Project history](#project-history)
-- [Roadmap](#roadmap)
-- [FAQ](#faq)
-- [License](#license)
-- [Author](#author)
+- **Looks and works like a regular calculator.** AI mode only opens after entering your own code.
+- **Photo or text → solution.** Built-in OV2640 camera; the answer, with the full reasoning, is shown on a 256×64 OLED.
+- **Maths, physics, chemistry, biology** — the prompt is based on Polish matura (CKE) exam papers and marking rules.
+- **Still useful offline** — simple problems (equations, systems, percentages, derivatives) are solved locally; the rest is queued until WiFi is back.
+- **Notes and tests** synced from the customer panel on kalkmate.pl.
+- **Panic key** — one button and the screen shows a plain calculator.
+- **Over-the-air updates** — signed OTA (ECDSA P-256).
+- **Device UI in Polish, English and German**; the shop and customer panel come in the same three languages.
 
----
-
-## What is KalkMate
-
-A commercial educational product built for Polish high-school students preparing for their final exam ("matura") — a scientific calculator for at-home studying, with a compactly integrated camera (no protruding lens) and WiFi connectivity. When a student gets stuck on a homework problem, they photograph it and the device returns a full, explained solution within seconds — no phone, no browser, none of the notifications and distractions that come with using an AI app on a smartphone.
-
-The goal is a cheap, convenient alternative to expensive private tutoring and scattershot searching for answers online — a self-study tool that helps a student **understand** a problem (full reasoning, step by step), not just get a bare answer. This is not a device meant for use during supervised tests or exams — its place is at a desk, at home.
-
-Supported subjects: **math, physics, chemistry, biology** — the AI system prompt is built around official CKE (Polish exam board) papers and grading standards.
-
-### Who it's for
-
-- High-school students preparing for the matura who get stuck on specific problems during independent study.
-- Parents looking for a cheaper, 24/7-available alternative to subject-specific private tutoring.
-- Anyone who'd rather understand the solution method than get a bare answer from a calculator or search engine.
+> 699 PLN / 169 EUR, first month of AI included, 2-year warranty. Shipping to InPost lockers in Poland and by courier abroad.
 
 ## How it works
 
-```
-  ┌──────────────┐      photo (JPEG)        ┌──────────────────┐     image + prompt        ┌─────────────┐
-  │   KalkMate   │ ───────────────────────▶ │  Next.js backend │ ───────────────────────▶ │ Gemini API  │
-  │ (ESP32-S3 +  │        HTTPS             │  (kalkmate.pl)    │   gemini-2.5-pro          │  (Google)   │
-  │  OV2640 cam) │ ◀─────────────────────── │                   │ ◀─────────────────────── │             │
-  └──────────────┘   solution (text)        └──────────────────┘   fallback: 2.5-flash      └─────────────┘
-        │
-        ▼
-  ┌──────────────┐
-  │  OLED SSD1322 │  renders the full reasoning
-  └──────────────┘
+```mermaid
+flowchart LR
+    A["📷 KalkMate<br/>ESP32-S3 + OV2640"] -- "JPEG / text · HTTPS" --> B["kalkmate.pl<br/>Next.js API"]
+    B -- "image + exam prompt" --> C["OpenRouter<br/>default: Gemini 2.5 Pro"]
+    C --> B
+    B -- "solution" --> A
+    A --> D["🖥️ OLED 256×64<br/>step-by-step reasoning"]
+    B <--> E["Customer panel<br/>history · notes · tests"]
 ```
 
-1. **Photo** — the OV2640 camera, compactly built into the enclosure, photographs the problem.
-2. **Upload** — the device connects over WiFi and sends the photo (Base64 JPEG, ≤8MB) to its own backend over HTTPS, authenticating with `x-api-key` / `x-device-id` / `x-license-key` headers.
-3. **AI** — the backend forwards the problem to **Google Gemini** (`gemini-2.5-pro`, with automatic fallback to `gemini-2.5-flash` under load) along with a system prompt tuned for the Polish matura.
-4. **Display** — the solution renders on the 256×64 OLED screen — the full reasoning, not just the final answer.
-5. **Offline** — no WiFi? The request lands in a local queue (NVS/SPIFFS) and sends automatically once connectivity is back.
-6. **Privacy** — a single "panic" key instantly returns to plain-calculator mode, e.g. if someone walks up to the desk and the student would rather not explain what they're using.
+1. The student picks **Camera photo** (with a live viewfinder and focus bar) or **Type text**.
+2. The camera is powered down **before** WiFi starts — its clock interferes with 2.4 GHz.
+3. The device sends the problem to its own backend, authenticating with a per-device identity and a license code.
+4. The backend calls **OpenRouter**. The default model is Gemini 2.5 Pro; users can pick another model in the panel (Claude, GPT, Grok, DeepSeek, Qwen…). Usage is billed in tokens.
+5. The answer (LaTeX turned into readable text) is shown on screen and saved to history.
 
 ## Gallery
 
 <table>
 <tr>
-<td width="50%">
-<img src="website/public/galeria/kalkulator-kalkmate-platforma-pcb-elektronika.png" alt="OLED screen showing the KalkMate splash on an Esperanza calculator body">
-<p align="center"><sub>Splash screen on the SSD1322 OLED display</sub></p>
+<td width="50%" align="center">
+<img src="website/public/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp" alt="A finished KalkMate unit in plain calculator mode"><br>
+<sub>A finished unit — a plain calculator day to day</sub>
 </td>
-<td width="50%">
-<img src="website/public/galeria/kalkulator-graficzny-ai-ekran-lcd.png" alt="KalkMate used for evening studying, next to a laptop and notes">
-<p align="center"><sub>Studying in practice — notes, textbook, KalkMate</sub></p>
+<td width="50%" align="center">
+<img src="website/public/galeria/kalkulator-kalkmate-ekran-menu-glowne.webp" alt="AI mode main menu on the OLED screen"><br>
+<sub>AI mode menu: problems, notes, tests</sub>
 </td>
 </tr>
 <tr>
-<td width="50%">
-<img src="website/public/kalkulator-kalkmate-ukryta-kamera-zamknieta.png" alt="Back of the calculator enclosure, camera discreetly integrated">
-<p align="center"><sub>Enclosure back — camera discreetly integrated, no protruding lens</sub></p>
+<td width="50%" align="center">
+<img src="website/public/galeria/kalkulator-kalkmate-opakowanie-pudelko.webp" alt="KalkMate v3 box"><br>
+<sub>KalkMate v3 packaging</sub>
 </td>
-<td width="50%">
-<img src="website/public/galeria/kalkulator-ai-interfejs-uzytkownika.png" alt="Client panel interface on the website">
-<p align="center"><sub>Client panel at kalkmate.pl</sub></p>
+<td width="50%" align="center">
+<img src="website/public/kalkulator-kalkmate-ukryta-kamera-zamknieta.png" alt="Back of the case with the camera built into the enclosure"><br>
+<sub>Camera built into the case, no protruding lens</sub>
 </td>
 </tr>
 </table>
 
+Promo video (34 s, Polish voice-over): [`marketing/promo-video/`](marketing/promo-video/).
+
+## Repository
+
+| Directory | Contents |
+|---|---|
+| [`src/`](src/), [`include/`](include/) | ESP32 firmware (C++ / Arduino, PlatformIO) |
+| [`website/`](website/) | Shop, customer panel, admin panel and device API (Next.js) — [README](website/README.md) |
+| [`fiscal-agent/`](fiscal-agent/) | Local fiscal agent (Python): prints receipts from the platform on a POSNET fiscal printer over TCP/WiFi — [docs (PL)](docs/fiskalizacja/README.md) |
+| [`tools/flasher/`](tools/flasher/) | Production flasher (GUI + CLI): firmware, Flash Encryption, customer code, shipping checklist |
+| [`tools/kalkmate-admin-desktop/`](tools/kalkmate-admin-desktop/) | Admin panel as a Windows app (Electron) |
+| `tools/i2c_scan`, `keymap_scan`, `greek_font_test` | Board bring-up and display test tools |
+| `tools/etykieta-produktowa/` | Product label with compliance marks |
+| [`certyfikacja/`](certyfikacja/) | BOM, component certificates, CE declaration of conformity |
+| [`docs/`](docs/) | User manuals (PL/EN/DE/FR), complaint forms, security audit, enclosure model |
+| [`marketing/`](marketing/) | Promo video and its sources |
+
 ## Hardware
 
-The first board revision (v3) was based on the ESP32-WROVER-E; the current one (v4) migrates to the ESP32-S3. Full pinout/schematic documentation: [`CLAUDE.md`](CLAUDE.md).
-
-| Component | Description |
+| | |
 |---|---|
-| **MCU** | ESP32-S3-WROOM-1-N16R8 (16MB flash, 8MB PSRAM) · older boards: ESP32-WROVER-E |
-| **Display** | SSD1322 OLED, 256×64, bare glass (COF on FFC tape), 4-wire SPI |
-| **Camera** | OV2640, 8-bit parallel + I2C/SCCB interface, compactly integrated into the enclosure |
-| **Keypad** | 5×5 matrix (25 keys), driven by an MCP23017 I2C expander |
-| **Power** | 3.7V LiPo battery, MCP73831 charger + DW01A/FS8205A protection, 12V boost (OLED), 2.8V/1.3V LDOs (camera) |
-| **Programming** | USB-C (USB4110GFA controller) + CH340C (USB-UART) |
-| **Compliance** | CE self-declaration prepared (RED / RoHS II / LVD) — certification process ongoing; the ESP32-S3-WROOM-1 radio module carries its own RED certificate from Espressif |
+| **MCU** | ESP32-S3-WROOM-1-N16R8 (16 MB flash, 8 MB PSRAM), native USB-C — board v4 |
+| **Display** | SSD1322 OLED 256×64, 4-wire SPI, 12 V from an MT3608 boost |
+| **Camera** | OV2640, 8-bit parallel + SCCB, 2.8 V / 1.3 V LDOs |
+| **Keypad** | 5×5 matrix via an MCP23017 I2C expander (which also switches camera and boost power) |
+| **Power** | 3.7 V LiPo, MCP73831 charger, DW01A + FS8205A protection |
+| **Compliance** | CE declaration (RED / RoHS / LVD); radio module carries the manufacturer's RED certificate |
 
-### Power management
+Peripherals are switched off when idle: OLED boost (~140 mA), camera (~50 mA), WiFi (~80 mA).
+Older v3 boards (ESP32-WROVER-E) are still supported by a separate build environment; their pinout and hardware pitfalls are documented in [`CLAUDE.md`](CLAUDE.md).
 
-The device aggressively powers down unused peripherals to squeeze as much runtime as possible out of a small LiPo cell:
-
-```
-12V boost (OLED) OFF   → ~140 mA saved
-Camera PWDN (power-down) → ~50 mA saved
-WiFi OFF                → ~80 mA saved
-
-Sequence: camera ON → capture → camera OFF → WiFi ON → upload → WiFi OFF
-(the camera's XCLK interferes with 2.4GHz WiFi, so they never run at the same time)
-```
-
-## Firmware (ESP32, C/Arduino)
-
-Modules in [`src/`](src/):
-
-| File | Purpose |
-|---|---|
-| `main.cpp` | entry point, main loop, menu dispatch |
-| `camera.h` | OV2640 init, JPEG capture |
-| `solve_screen.h` | on-screen keyboard, photo capture, AI request, response rendering |
-| `calculator.h` | plain 8-digit calculator mode (M+/M-/MR/MC) with a PIN gate on AI mode |
-| `wifi_settings.h` / `wifi_persist.h` | WiFi network configuration and persistence |
-| `offline_queue.h` | queues requests (text/image) when WiFi is unavailable, sends on reconnect |
-| `ota_update.h` | OTA updates with signature verification (ECDSA P-256 + SHA-256) |
-| `device_account.h` | device pairing and license sync with the server |
-| `history.h` | last 5 question/answer pairs (NVS) |
-| `notes.h` / `tests.h` | notes and practice tests synced from the server |
-| `battery.h` / `power.h` | battery measurement, light-sleep, peripheral power-down |
-| `panic.h` | privacy key — instantly returns to plain-calculator mode |
-| `settings_screen.h` / `about_screen.h` / `info_screen.h` / `screen_test.h` | settings, "about" screen, help, display test screen |
-
-**Build:** PlatformIO, `esp32s3` environment (current PCB v4) or `esp32wrover_legacy` (older boards), Arduino framework. Dependencies: `U8g2` (SSD1322), `Adafruit MCP23017`, `esp32-camera`, `QRCode`.
+## Firmware
 
 ```bash
-pio run -e esp32s3 -t upload
+pio run -e esp32s3 -t upload             # board v4 (ESP32-S3)
+pio run -e esp32wrover_legacy -t upload  # older v3 boards
+pio device monitor -b 115200
 ```
 
-## Backend & website (`website/`)
+> Bump `FW_VERSION` in `src/main.cpp` before every release — OTA compares versions.
 
-Next.js (App Router) + Prisma + Tailwind CSS, deployed on a VPS behind `kalkmate.pl`:
-
-- **Device API** (`/api/device/*`) — registration, license status, `/solve` (text or image → Gemini), notes, practice tests, OTA distribution (`/firmware/check`, `/firmware/download/[version]`).
-- **Client panel** (`/panel`) — NextAuth login, solve/notes history synced from the device, subscription management.
-- **Admin panel** (`/admin`) — 2FA login (TOTP/Google Authenticator), user/device/license management, inventory, Gemini usage dashboard.
-- **Store** — landing page, cart, InPost Paczkomat pickup selection (Geowidget), **Stripe** and **Przelewy24** (BLIK) payments, transactional email via Resend.
-
-## Production tools (`tools/`)
-
-- `flasher/` — production flashing tool for finished devices (GUI + CLI), with a shipping checklist.
-- `i2c_scan/` — I2C bus scanner for board bring-up.
-- `keymap_scan/` — tool for mapping and verifying the keypad matrix.
-
-## Tech stack
-
-| Layer | Technologies |
+| Module | Purpose |
 |---|---|
-| Firmware | C++ / Arduino (ESP32 core), PlatformIO, U8g2, esp32-camera |
-| Backend | Next.js 16 (App Router), React 19, Prisma + SQLite, NextAuth |
-| Payments | Stripe, Przelewy24 (BLIK) |
-| AI | Google Gemini (`gemini-2.5-pro` / `gemini-2.5-flash`) |
-| Infrastructure | Ubuntu VPS, nginx, PM2, self-hosted (pull-based OTA) |
-| Other | KaTeX (formula rendering), Resend (email), TOTP 2FA |
+| `main.cpp` | startup, main loop, menus |
+| `calculator.h` | calculator mode, code-gated entry to AI mode, factory reset (hold C/CE for 5 s) |
+| `solve_screen.h`, `camera.h` | live viewfinder, capture, AI request, answer rendering |
+| `offline_solver.h`, `offline_queue.h` | offline solving and the outgoing request queue |
+| `notes.h`, `tests.h`, `history.h` | notes, tests, history |
+| `device_account.h`, `account_screen.h` | account pairing, license status, Device ID + QR code |
+| `ota_update.h`, `kalkmate_certs.h` | signed OTA, server TLS certificate verification |
+| `remote_session.h` | “Remote help” — screen view for support, only after the user explicitly turns it on |
+| `wifi_settings.h`, `wifi_persist.h`, `settings_screen.h` | WiFi, settings, language |
+| `battery.h`, `power.h`, `panic.h`, `input.h` | battery and power saving, panic key, keypad |
 
-## Repository structure
+### Version history
 
-```
-├── src/                 # ESP32 firmware (C++/Arduino)
-├── include/             # config.h, shared headers
-├── website/             # Next.js — backend, client/admin panels, store
-├── tools/                # production flasher, i2c_scan, keymap_scan
-├── certyfikacja/        # BOM, component certificates, EU declaration of conformity
-├── docs/                 # technical documentation, enclosure 3D model
-└── CLAUDE.md             # full pinout/schematic guide for this board
-```
+| Version | Highlights |
+|---|---|
+| 0.1 – 0.6 | calculator + WiFi, OTA, AI mode, notes and tests, device pairing, LaTeX |
+| 1.0 | board v4 on ESP32-S3 with native USB-C |
+| 1.1 – 1.3 | battery and brownout handling, camera tuning (exposure, white balance, orientation) |
+| 1.4 | signed OTA (ECDSA P-256), authenticated firmware downloads |
+| 1.5 | live viewfinder with a focus bar |
+| 1.7 | offline solving, time sync, PL/EN/DE UI, emergency factory reset |
+| 1.8 | better formulas in answers (powers, subscripts, symbols) |
+| 1.9 | remote help, customer code provisioned at production; **1.9.6 — current** |
+
+## Website, shop and panels (`website/`)
+
+Next.js 16 (App Router), React 19, Prisma + SQLite, Tailwind CSS 4. Self-hosted on a VPS (Ubuntu + nginx) at [kalkmate.pl](https://kalkmate.pl).
+
+- **Shop (PL / EN / DE):** cart with InPost locker and international shipping (country + region), coupons, personalisation (AI code and name on the label). Payments via **Przelewy24** (BLIK, bank transfer, cards) and **Stripe** (cards, Klarna).
+- **Customer panel:** solution history from the device, notes and tests sent to the device, AI model choice, token balance and top-ups, marketing consent.
+- **Admin panel** (2FA login; also available as a desktop app and PWA):
+  - **orders:** search, tabs, bulk actions (InPost shipping, merged label PDF, packing list, CSV), customs documents;
+  - **sales and marketing:** mailbox with AI-drafted replies, newsletter auto-translated to EN/DE, coupons with stats, source and UTM analytics;
+  - **devices:** licenses, devices, remote help, AI usage, inventory;
+  - **maintenance:** daily database backups.
+- **Device API** (`/api/device/*`): registration, status, `solve`, notes, tests, conversations, OTA.
+- **Scheduled jobs (cron):** shipment tracking, unpaid-order reminders, cancelling abandoned orders, backups.
+
+Local setup and environment variables: [`website/README.md`](website/README.md).
 
 ## Security
 
-OTA updates are signed (ECDSA P-256 + SHA-256) and verified before installation — the device rejects unsigned or incorrectly signed firmware. Known hardening areas (a shared device API key, no Flash Encryption/Secure Boot on older boards) are deliberately documented in `docs/security/SECURITY_AUDIT.md` and `docs/security/security-repairs.md` — treat them as a roadmap, not a finished production state.
+- OTA accepts signed images only (ECDSA P-256 + SHA-256). All HTTPS connections verify the server certificate (bundled root CA, no `setInsecure()`).
+- Per-device identity instead of one shared key; device endpoints check that the device may access the requested resource (IDOR protection).
+- Production units get Flash Encryption in Release mode, burned by the flasher (`PROD_REL`).
+- Admin panel: individually revocable sessions + TOTP; rate limits on login and AI endpoints.
 
-## Project history
-
-Firmware has been developed iteratively since the first working prototype — selected milestones below (full list in `tools/firmware-releases.seed.json`):
-
-| Version | What changed |
-|---|---|
-| `0.1.0` | First working version: calculator + WiFi |
-| `0.2.0` | OTA updates over HTTPS |
-| `0.3.0` | AI mode: photo / text / query history |
-| `0.4.0` | Notes and practice tests synced over WiFi |
-| `0.5.0` | Device pairing (deviceId + unlockCode) and account status |
-| `0.6.x` | LaTeX support in AI responses (formulas, math functions, matrices) |
-| `1.0.0` | Migration to PCB v4 (ESP32-S3-WROOM-1-N16R8, native USB-C) |
-| `1.1.x` | LiPo battery measurement and management, brownout protection |
-| `1.3.x` | OV2640 camera stabilization (exposure, white balance, orientation) |
-| `1.4.x` | Signed OTA (ECDSA P-256) + API key obfuscation in the binary |
-| `1.5.0` | Live viewfinder with a focus bar before capture |
-| `1.6.9` | Current production version |
-
-## Roadmap
-
-Firmware directions currently in progress or planned:
-
-- **Deep sleep** while idle, waking on a keypress — a significant boost to battery runtime.
-- **LiPo battery curve calibration** — a more accurate charge percentage indicator.
-- **Faster WiFi reconnect** — caching the last network's BSSID/channel to skip a full scan.
-- **Multipart photo upload** instead of Base64-in-JSON — less PSRAM usage, faster transfer on weak WiFi.
-- **Auto-capture** — automatically snapping a photo once the live preview detects a stable, sharp frame.
-- **OLED grayscale (4-bit)** — a smoother, anti-aliased UI instead of 1-bit mode.
-- **Custom enclosure** — a dedicated enclosure design instead of adapting an off-the-shelf calculator body (base model: `docs/dol obudowy kalkulator.stl`).
-
-## FAQ
-
-**Does KalkMate replace studying?**
-No — the point is to show the full solution method so a student understands it, not just copies an answer. It's a tool for studying at home, not for use during tests or exams.
-
-**What happens without internet?**
-Requests (text or photo) go into a local queue and send automatically once the device regains WiFi.
-
-**Which subjects are supported?**
-Math, physics, chemistry, and biology — scope and difficulty tuned to the Polish matura (CKE papers, official grading standards).
-
-**Can I build my own device from this repository?**
-The code and schematics are shared for viewing (portfolio/education), but the repo is under a proprietary license — commercial use or building your own devices from it requires the author's permission. See [License](#license).
+Audit and fix log: [`docs/security/`](docs/security/).
 
 ## License
 
-The code and materials in this repository are made publicly available **for viewing only** (portfolio, educational purposes, security transparency). All rights reserved — see [`LICENSE`](LICENSE) for details. Copying, modifying, or commercial use (including manufacturing devices based on this project) requires the author's written permission.
+The code is public **for viewing only**. All rights reserved — copying, modifying, commercial use and manufacturing devices based on this project require the author's written permission. See [`LICENSE`](LICENSE).
 
-## Author
+---
 
-**KAJPA Kacper Popko** — [kalkmate.pl](https://kalkmate.pl)
+<p align="center">
+  <b>KAJPA Kacper Popko</b> · <a href="https://kalkmate.pl">kalkmate.pl</a>
+</p>

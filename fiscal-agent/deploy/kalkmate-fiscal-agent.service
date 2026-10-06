@@ -1,0 +1,20 @@
+# /etc/systemd/system/kalkmate-fiscal-agent.service
+# Agent fiskalny KalkMate (Raspberry Pi / Linux w tej samej sieci co drukarka).
+[Unit]
+Description=KalkMate fiscal agent (POSNET)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fiscal
+WorkingDirectory=/opt/kalkmate-fiscal-agent
+EnvironmentFile=/opt/kalkmate-fiscal-agent/.env
+StateDirectory=kalkmate-fiscal-agent
+ExecStart=/opt/kalkmate-fiscal-agent/.venv/bin/uvicorn fiscal_agent.app:create_app --factory --host 127.0.0.1 --port 8765
+Restart=on-failure
+RestartSec=5
+# Stop daje workerowi czas na dokończenie bieżącego paragonu.
+TimeoutStopSec=40
+
+[Install]
+WantedBy=multi-user.target
