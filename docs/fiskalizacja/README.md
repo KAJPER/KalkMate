@@ -2,7 +2,8 @@
 
 Platforma: KalkMate (`website/`): Next.js 16 + Prisma/SQLite na VPS (Ubuntu + nginx), sprzedaż przez internet (Przelewy24, Stripe). Kod modułu:
 
-- agent lokalny: [`fiscal-agent/`](../../fiscal-agent/) (Python, FastAPI);
+- agent w aplikacji **KalkMate Admin** (Electron, od 1.3.0): [`tools/kalkmate-admin-desktop/fiscal/`](../../tools/kalkmate-admin-desktop/fiscal/) — zalecany, bez instalowania niczego dodatkowego;
+- agent samodzielny: [`fiscal-agent/`](../../fiscal-agent/) (Python, FastAPI), np. na Raspberry Pi — ten sam protokół i te same zasady;
 - część serwerowa: `website/src/lib/fiscal.ts`, `/api/fiscal/agent/*`, `/admin/fiscal`.
 
 Oznaczenia w tym dokumencie:
@@ -115,6 +116,7 @@ Wniosek: nie ma dojrzałej biblioteki Python z TCP i obsługą błędów. Protok
 └─────────────────────────────┘                       └────────────────────────────┘
 ```
 
+- **Gdzie działa agent:** w aplikacji KalkMate Admin na komputerze w sieci drukarki (konfiguracja w panelu: Fiskalizacja → „Ten komputer”) albo jako osobny serwis `fiscal-agent` (Raspberry Pi, Linux). Oba używają tego samego API serwera; w aplikacji uwierzytelnienie to sesja admina, w serwisie token `FISCAL_AGENT_TOKEN`.
 - **Kierunek połączenia:** agent pyta platformę (wychodzące HTTPS). Nie trzeba otwierać portów, a drukarka nie jest widoczna z internetu.
 - **Uwierzytelnianie:**
   - agent → platforma: nagłówek `x-fiscal-agent-token` (= `FISCAL_AGENT_TOKEN`), porównanie w stałym czasie, tylko HTTPS;
@@ -180,9 +182,9 @@ To nie jest porada prawna — potwierdź z księgowym lub doradcą podatkowym.
    ```
 2. Weź drukarkę POSNET Online **niefiskalną** (nowa przed fiskalizacją albo demo z serwisu). Na kasie Ergo moduł nie zadziała — patrz sekcja 1.
 3. W menu drukarki ustaw połączenie: Konfiguracja → Konfig. połączeń → Usługi PC → Interfejs PC → **TCP/IP**, a także port, WiFi i statyczny IP (albo rezerwację DHCP w routerze). Zapisz IP, port i stronę kodową.
-4. Na Raspberry Pi lub PC w tej samej sieci zainstaluj agenta (`fiscal-agent/README.md`). W `.env` ustaw `PRINTER_HOST`, `PRINTER_PORT`, `PRINTER_ENCODING` i **`FISCAL_ALLOW_REAL=0`**.
-5. `curl -H "Authorization: Bearer …" "http://127.0.0.1:8765/status?refresh=true"` powinno pokazać: model z `sid`, `fiscal: false`, `ready: true`, numer ostatniego paragonu.
-6. Paragon testowy przez lokalny endpoint (przykład w `fiscal-agent/README.md`). Sprawdź na wydruku:
+4. Zainstaluj aplikację KalkMate Admin 1.3+ na komputerze w tej samej sieci. W panelu otwórz Fiskalizacja → „Ten komputer”, wpisz IP, port i stronę kodową, kliknij „Sprawdź drukarkę” i zostaw bezpiecznik trybu fiskalnego zablokowany. Zamiast aplikacji możesz uruchomić `fiscal-agent` z `FISCAL_ALLOW_REAL=0` (`fiscal-agent/README.md`).
+5. „Sprawdź drukarkę” (albo w agencie Python `curl -H "Authorization: Bearer …" "http://127.0.0.1:8765/status?refresh=true"`) powinno pokazać: model z `sid`, tryb niefiskalny, gotowość, numer ostatniego paragonu.
+6. Paragon testowy: w aplikacji dodaj go z opłaconego zamówienia testowego („Wystaw paragon”), a w agencie Python przez lokalny endpoint (przykład w `fiscal-agent/README.md`). Sprawdź na wydruku:
    - nazwy z polskimi znakami;
    - stawki VAT (A = 23%?);
    - rabat;
@@ -195,7 +197,7 @@ To nie jest porada prawna — potwierdź z księgowym lub doradcą podatkowym.
    - wyłącz drukarkę → `connection`, po włączeniu się drukuje;
    - **wyłącz router w trakcie** dużego paragonu (np. 50 pozycji) → sprawdź, że nie ma dwóch paragonów, a stan jest `printed` albo `uncertain` z prawidłowym opisem;
    - zabij agenta (`kill -9`) w trakcie druku → po starcie zlecenie ma stan `uncertain`.
-8. Połącz z platformą: na serwerze `FISCAL_AGENT_TOKEN`, w agencie `PLATFORM_URL` i `PLATFORM_AGENT_TOKEN`. W `/admin/fiscal` agent powinien być „Połączony”, a drukarka „Gotowa”. Z zamówienia testowego (w PLN, opłaconego) kliknij „Wystaw paragon” → numer pojawi się w zamówieniu.
+8. Połącz z platformą. W aplikacji wystarczy zaznaczyć „Drukuj paragony z tego komputera”. Agent Python potrzebuje na serwerze `FISCAL_AGENT_TOKEN`, a w agencie `PLATFORM_URL` i `PLATFORM_AGENT_TOKEN`. W `/admin/fiscal` agent powinien być „Połączony”, a drukarka „Gotowa”. Z zamówienia testowego (w PLN, opłaconego) kliknij „Wystaw paragon” → numer pojawi się w zamówieniu.
 9. Dopiero po tym: fiskalizacja drukarki przez serwisanta, `FISCAL_ALLOW_REAL=1`, jeden prawdziwy paragon, sprawdzenie raportu dobowego i statusu wysyłki do CRK w menu drukarki. Na końcu ewentualnie `FISCAL_AUTO_ENQUEUE=1`.
 
 ## 6. Do sprawdzenia z serwisantem lub Posnet

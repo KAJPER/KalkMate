@@ -13,4 +13,11 @@ contextBridge.exposeInMainWorld('kalkmateDesktop', {
   // etykiet. url = sciezka na kalkmate.pl (np. /api/admin/orders/<id>/basecourier/label).
   // Zwraca { ok, printer, error? }.
   printLabel: (url) => ipcRenderer.invoke('kalkmate:print-label', String(url)),
+  // Agent fiskalny wbudowany w aplikację (drukarka POSNET w sieci lokalnej).
+  // info(refresh) -> { ok, config, printer, queue, platformError, recent }
+  // configure({ enabled?, host?, port?, encoding?, allowFiscal? }) -> to samo co info
+  fiscal: {
+    info: (refresh) => ipcRenderer.invoke('kalkmate:fiscal-info', !!refresh),
+    configure: (patch) => ipcRenderer.invoke('kalkmate:fiscal-config', patch && typeof patch === 'object' ? { ...patch } : {}),
+  },
 });
