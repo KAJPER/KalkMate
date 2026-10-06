@@ -91,6 +91,7 @@ Film promocyjny (34 s, z lektorem): [`marketing/promo-video/`](marketing/promo-v
 |---|---|
 | [`src/`](src/), [`include/`](include/) | Firmware ESP32 (C++ / Arduino, PlatformIO) |
 | [`website/`](website/) | Sklep, panel klienta, panel admina i API urządzeń (Next.js) — [README](website/README.md) |
+| [`fiscal-agent/`](fiscal-agent/) | Lokalny agent fiskalny (Python): paragony z platformy na drukarce POSNET po TCP/WiFi — [fiskalizacja](docs/fiskalizacja/README.md) |
 | [`tools/flasher/`](tools/flasher/) | Flasher produkcyjny (GUI + CLI): firmware, Flash Encryption, kod klienta, checklista wysyłki |
 | [`tools/kalkmate-admin-desktop/`](tools/kalkmate-admin-desktop/) | Panel admina jako aplikacja Windows (Electron) |
 | `tools/i2c_scan`, `keymap_scan`, `greek_font_test` | Narzędzia do uruchamiania płytek i testów wyświetlacza |

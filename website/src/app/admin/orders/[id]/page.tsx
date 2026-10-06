@@ -4,6 +4,7 @@ import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
+import OrderFiscalCard from "@/components/admin/OrderFiscalCard";
 import { splitAddress, splitCityState, needsStateCode } from "@/lib/address";
 
 interface OrderDetail {
@@ -1499,6 +1500,9 @@ export default function OrderDetailPage({
                 Pobierz CSV
               </button>
             </div>
+
+            {/* Paragon fiskalny — lib/fiscal.ts + fiscal-agent/ */}
+            <OrderFiscalCard orderId={order.id} paid={order.status === "succeeded"} />
 
             {/* Invoice section */}
             <div className="bg-[#313338] rounded-lg border border-[#3F4147] p-4 sm:p-6 space-y-4">

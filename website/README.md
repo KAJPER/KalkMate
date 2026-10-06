@@ -92,6 +92,7 @@ Zadania:
 | **Wysyłka — InPost** | `NEXT_PUBLIC_INPOST_GEOWIDGET_TOKEN` |
 | **Cło** | `OWNER_PESEL` (upoważnienie celne) |
 | **Cron i automaty** | `CRON_SECRET`, `PAYMENT_REMINDER_AFTER_HOURS` |
+| **Fiskalizacja** | `FISCAL_AGENT_TOKEN` (token agenta w sieci drukarki), `FISCAL_AUTO_ENQUEUE` (`1` = paragon do kolejki po opłaceniu), `FISCAL_PRODUCT_NAME`, `FISCAL_VAT_RATE` — patrz [docs/fiskalizacja](../docs/fiskalizacja/README.md) |
 | **Kopie zapasowe** | `BACKUP_DIR`, `BACKUP_KEEP_DAYS`, `BACKUP_RCLONE_REMOTE` |
 | **Analityka / SEO** | `ANALYTICS_SALT`, `GOOGLE_SITE_VERIFICATION` |
 | **Pozostałe** | `RESEND_API_KEY` (stara wysyłka maili, zastąpiona przez SMTP) |

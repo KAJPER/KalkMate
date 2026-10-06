@@ -91,6 +91,7 @@ Promo video (34 s, Polish voice-over): [`marketing/promo-video/`](marketing/prom
 |---|---|
 | [`src/`](src/), [`include/`](include/) | ESP32 firmware (C++ / Arduino, PlatformIO) |
 | [`website/`](website/) | Shop, customer panel, admin panel and device API (Next.js) — [README](website/README.md) |
+| [`fiscal-agent/`](fiscal-agent/) | Local fiscal agent (Python): prints receipts from the platform on a POSNET fiscal printer over TCP/WiFi — [docs (PL)](docs/fiskalizacja/README.md) |
 | [`tools/flasher/`](tools/flasher/) | Production flasher (GUI + CLI): firmware, Flash Encryption, customer code, shipping checklist |
 | [`tools/kalkmate-admin-desktop/`](tools/kalkmate-admin-desktop/) | Admin panel as a Windows app (Electron) |
 | `tools/i2c_scan`, `keymap_scan`, `greek_font_test` | Board bring-up and display test tools |
