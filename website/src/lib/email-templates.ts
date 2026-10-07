@@ -26,9 +26,11 @@ interface OrderData {
   customerName: string;
   customerEmail: string;
   product: string;
-  amount: number;
+  amount: number;           // w groszach / centach waluty `currency`
+  currency?: string;        // waluta płatności (pln, eur…) — NIE wynika z języka maila
   pickupPoint: string;
   pickupPointAddress: string;
+  deliveryAddress?: string; // adres dla kuriera, gdy nie ma paczkomatu (zamówienia zagraniczne)
   orderId: string;
 }
 interface FulfillmentData {
@@ -79,6 +81,7 @@ const TX: Record<EmailLocale, Record<string, string>> = {
     rowAmount:        "Betrag",
     rowLocker:        "Paketfach",
     rowAddress:       "Adresse",
+    rowDelivery:      "Lieferadresse",
     rowStatus:        "Status",
     rowTracking:      "Sendungsnummer",
     btnPanel:         "Panel öffnen",
@@ -99,6 +102,7 @@ const TX: Record<EmailLocale, Record<string, string>> = {
     rowAmount:        "Amount",
     rowLocker:        "Parcel locker",
     rowAddress:       "Address",
+    rowDelivery:      "Delivery address",
     rowStatus:        "Status",
     rowTracking:      "Tracking number",
     btnPanel:         "Open panel",
@@ -112,6 +116,18 @@ const TX: Record<EmailLocale, Record<string, string>> = {
 
 const t = (locale: EmailLocale, key: string): string =>
   TX[locale]?.[key] ?? TX.en[key] ?? key;
+
+// Kwota w walucie PŁATNOŚCI (klient z UK płaci w EUR, a mail jest po angielsku —
+// waluty nie wolno zgadywać z języka). PLN zostaje w polskim zapisie "699.00 zł".
+export function formatMoney(cents: number, currency: string | null | undefined, locale: EmailLocale): string {
+  const cur = (currency || "pln").toUpperCase();
+  if (cur === "PLN") return `${(cents / 100).toFixed(2)} zł`;
+  try {
+    return new Intl.NumberFormat(locale === "de" ? "de-DE" : "en-IE", { style: "currency", currency: cur }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${cur}`;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Bloki pomocnicze HTML (locale-aware tam gdzie potrzeba)
@@ -262,9 +278,13 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
 
     ${infoTable([
       infoRow(t(locale, "rowProduct"), `<strong style="color:${C.paper};font-weight:600;">${data.product}</strong>`),
-      infoRow(t(locale, "rowAmount"),  `<strong style="color:${C.signal};font-family:${FONT_MONO};font-size:15px;">${(data.amount / 100).toFixed(2)} ${locale === "de" ? "€" : "zł"}</strong>`),
-      infoRow(t(locale, "rowLocker"),  data.pickupPoint),
-      infoRow(t(locale, "rowAddress"), `<span style="font-size:13px;color:${C.paperSub};">${data.pickupPointAddress}</span>`),
+      infoRow(t(locale, "rowAmount"),  `<strong style="color:${C.signal};font-family:${FONT_MONO};font-size:15px;">${formatMoney(data.amount, data.currency, locale)}</strong>`),
+      ...(data.pickupPoint
+        ? [infoRow(t(locale, "rowLocker"),  data.pickupPoint),
+           infoRow(t(locale, "rowAddress"), `<span style="font-size:13px;color:${C.paperSub};">${data.pickupPointAddress}</span>`)]
+        : data.deliveryAddress
+          ? [infoRow(t(locale, "rowDelivery"), `<span style="font-size:13px;color:${C.paperSub};">${escHtml(data.deliveryAddress)}</span>`)]
+          : []),
       infoRow(t(locale, "rowStatus"),  statusBadge(t(locale, "badgePaid"))),
     ].join(""))}
 
