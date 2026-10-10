@@ -14,6 +14,9 @@ tools/flasher/Klucze kalkmate/
 tools/flasher/production_log.csv
 tools/flasher/config.json
 
+# Code-signing cert (self-signed, private key) dla KalkMate Admin — NIE NA GIT
+tools/kalkmate-admin-desktop/certs/
+
 # Obfuskowany API key (zawiera XOR-encoded bytes — wciaz secret)
 src/key_obfuscate.h
 
