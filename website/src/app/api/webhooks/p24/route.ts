@@ -86,11 +86,17 @@ export async function POST(request: NextRequest) {
       pickupPoint: string;
       pickupPointAddress: string;
       amount: number;
+      currency: string | null;
+      customerAddressStreet: string | null;
+      customerAddressPostcode: string | null;
+      customerAddressCity: string | null;
+      customerCountry: string | null;
       userId: string | null;
     }>
   >`
     SELECT id, status, "orderNumber", "customerName", "customerEmail",
-           "customerPhone", "pickupPoint", "pickupPointAddress", amount, "userId"
+           "customerPhone", "pickupPoint", "pickupPointAddress", amount, currency,
+           "customerAddressStreet", "customerAddressPostcode", "customerAddressCity", "customerCountry", "userId"
     FROM "Order"
     WHERE "p24SessionId" = ${String(sessionId)} OR id = ${extraOrderId ?? ""}
     LIMIT 1
@@ -177,8 +183,11 @@ export async function POST(request: NextRequest) {
         customerEmail: order.customerEmail,
         product: "KalkMate v3.0",
         amount: order.amount,
+        currency: order.currency || "pln",
         pickupPoint: order.pickupPoint || "",
         pickupPointAddress: order.pickupPointAddress || "",
+        deliveryAddress: [order.customerAddressStreet, [order.customerAddressPostcode, order.customerAddressCity].filter(Boolean).join(" "), order.customerCountry]
+          .filter(Boolean).join(", "),
         orderId: order.orderNumber,
       }),
     });

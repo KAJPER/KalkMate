@@ -246,8 +246,10 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         customerEmail: email,
         product: meta.product || "KalkMate v3.0",
         amount: pi.amount,
+        currency: pi.currency,
         pickupPoint: pickupPoint,
         pickupPointAddress: pickupPointAddress,
+        deliveryAddress: [addressStreet, [addressPostcode, addressCity].filter(Boolean).join(" "), country].filter(Boolean).join(", "),
         orderId: orderNumber,
       }, locale),
     });
@@ -342,6 +344,7 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
         customerEmail: email,
         product: "KalkMate v3.0",
         amount: session.amount_total || 0,
+        currency: session.currency || "pln",
         pickupPoint: pickupPoint || "",
         pickupPointAddress: pickupPointAddress || "",
         orderId: orderNumber,
