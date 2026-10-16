@@ -452,9 +452,13 @@ function buildOrderPayload(
     // pewna droga dla USA to nadanie recznie w panelu Base Courier i powiazanie zlecenia
     // (POST .../basecourier/link).
     ...(receiver.state ? { taker_state: receiver.state } : {}),
-    // paczka
-    package_content: KALKMATE_PARCEL.content,
-    // referencja do naszego zamowienia (widoczna w panelu Base Courier)
+    // paczka — package_content jest JEDYNYM polem, ktore faktycznie trafia na
+    // etykiete: dla UPS pokazuje sie jako "Reference No.1" / "DESC:" (zweryfikowane
+    // 2026-10-16 na realnej etykiecie zamowienia #23780392 — "reference"/"description"
+    // ponizej NIE wystepuja nigdzie w getOrderDetails.json ani na etykiecie, mimo
+    // wczesniejszego zalozenia ze sa "widoczne w panelu" — zostawione na wszelki
+    // wypadek, gdyby jednak cos z nich czytalo, ale package_content to realne zrodlo).
+    package_content: `${KALKMATE_PARCEL.content} ${orderRef}`,
     reference: orderRef,
     description: orderRef,
   };
