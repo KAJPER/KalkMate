@@ -224,27 +224,36 @@ static void wifiSaveBssidChannel() {
     prefs.begin(_WP_NS, false);
     prefs.putBytes("bssid", bssid, 6);
     prefs.putInt ("chan",  ch);
+    prefs.putString("bssid_ssid", WiFi.SSID());  // do ktorej sieci ten hint nalezy
     prefs.end();
 }
 
-// Laduje BSSID i kanal z NVS. Zwraca true gdy dane sa wazne.
-static bool wifiLoadBssidChannel(uint8_t* bssidOut, int32_t& channelOut) {
+// Laduje BSSID i kanal z NVS, TYLKO jesli zostaly zapisane dla TEJ SAME sieci
+// (ssidWanted) — inaczej hint jest z innej sieci (np. user przelaczyl WiFi w
+// Ustawieniach) i wskazywalby na zupelnie zly AP, co gwarantowanie failuje
+// polaczenie mimo poprawnego hasla i NIE naprawia sie samo (hint nigdy nie
+// jest odswiezany poza udanym fast-begin — patrz wifiFastBegin). Zwraca true
+// gdy dane sa wazne i naleza do ssidWanted.
+static bool wifiLoadBssidChannel(const char* ssidWanted, uint8_t* bssidOut, int32_t& channelOut) {
     Preferences prefs;
     prefs.begin(_WP_NS, true);
     size_t n   = prefs.getBytes("bssid", bssidOut, 6);
     channelOut = prefs.getInt ("chan",  0);
+    String savedSsid = prefs.getString("bssid_ssid", "");
     prefs.end();
     if (n != 6 || channelOut <= 0) return false;
+    if (!ssidWanted || savedSsid != String(ssidWanted)) return false;
     // Sprawdz czy BSSID nie jest zerowy (brak danych)
     for (int i = 0; i < 6; i++) if (bssidOut[i]) return true;
     return false;
 }
 
-// WiFi.begin z hint BSSID+kanal gdy dostepny — pomija skan, szybszy o 1-3s.
+// WiFi.begin z hint BSSID+kanal gdy dostepny dla TEJ sieci — pomija skan,
+// szybszy o 1-3s. Gdy hint jest z innej sieci (albo go brak), zwykly begin.
 static void wifiFastBegin(const char* ssid, const char* pass) {
     uint8_t bssid[6];
     int32_t ch;
-    if (wifiLoadBssidChannel(bssid, ch)) {
+    if (wifiLoadBssidChannel(ssid, bssid, ch)) {
         Serial.printf("[WiFi] fast begin ch=%d bssid=%02X:%02X:%02X:%02X:%02X:%02X\n",
                       ch, bssid[0],bssid[1],bssid[2],bssid[3],bssid[4],bssid[5]);
         WiFi.begin(ssid, pass, ch, bssid);

@@ -1653,14 +1653,20 @@ static void _editBattery(U8G2 &d) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, T("=== Bateria ===", "=== Battery ===", "=== Akku ==="));
+        if (batteryIsAvailable()) {
+            // Zrodlo pomiaru: "MAX17048" (fuel gauge) albo "ADC" (dzielnik).
+            const char* src = batterySourceName();
+            d.drawStr(254 - d.getStrWidth(src), 10, src);
+        }
         d.drawHLine(0, 12, 256);
 
         if (!batteryIsAvailable()) {
             d.drawStr(2, 30, T("Brak czujnika (legacy HW)", "No sensor (legacy HW)", "Kein Sensor (alte HW)"));
         } else {
-            uint16_t mv  = batteryReadMillivolts();
-            uint8_t  pct = batteryReadPercent();
-            bool     chg = batteryIsCharging();
+            uint16_t mv   = batteryReadMillivolts();
+            uint8_t  pct  = batteryReadPercent();
+            bool     chg  = batteryIsCharging();
+            bool     full = batteryIsChargeComplete();
 
             char buf[48];
             snprintf(buf, sizeof(buf), "%s %u.%03u V", T("Napiecie:", "Voltage: ", "Spannung:"),
@@ -1671,8 +1677,9 @@ static void _editBattery(U8G2 &d) {
             d.drawStr(2, 38, buf);
 
             snprintf(buf, sizeof(buf), "%s %s", T("Status:  ", "Status:  ", "Status:  "),
-                     chg ? T("LADOWANIE", "CHARGING", "LADEN")
-                         : (batteryIsLow() ? T("NISKI", "LOW", "NIEDRIG") : T("OK", "OK", "OK")));
+                     chg  ? T("LADOWANIE", "CHARGING", "LADEN")
+                   : full ? T("NALADOWANA", "FULL", "VOLL")
+                          : (batteryIsLow() ? T("NISKI", "LOW", "NIEDRIG") : T("OK", "OK", "OK")));
             d.drawStr(2, 50, buf);
 
             // Duza ikonka baterii po prawej (32x14)

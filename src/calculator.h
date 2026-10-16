@@ -24,6 +24,8 @@
 #include "settings_screen.h"
 #include "power.h"
 #include "battery.h"
+#include <WiFi.h>
+#include <esp_wifi.h>
 
 // Stan kalkulatora
 struct _CalcState {
@@ -281,6 +283,21 @@ static void _calcFactoryResetFlow(U8G2& u8g2) {
         }
         if (p.begin("kalkhist", false)) { p.clear(); p.end(); }
         if (p.begin("kalkmap",  false)) { p.clear(); p.end(); }
+
+        // esp_wifi_restore() czysci WEWNETRZNA partycje NVS esp-idf gdzie
+        // WiFi.begin() (persistent=true, przed fw, ktore wprowadzilo
+        // WiFi.persistent(false) w setup()) zapisywal SSID+haslo przy KAZDYM
+        // polaczeniu — osobna od naszej "kalkmate" wyzej. Na starszych
+        // urzadzeniach ta partycja mogla sie "zapchac"/skorumpowac po wielu
+        // cyklach connect/disconnect, co dawalo "zle haslo" mimo poprawnych
+        // danych i NIE naprawialo sie przez (stary) reset fabryczny, bo ten
+        // nigdy nie czyscil tej partycji. WiFi.mode(WIFI_STA) wymusza init
+        // drivera esp-idf na wypadek gdyby reset byl wywolany z ekranu
+        // kalkulatora przed wejsciem w tryb AI (gdzie normalnie pada
+        // pierwszy WiFi.mode).
+        WiFi.mode(WIFI_STA);
+        esp_wifi_restore();
+        WiFi.mode(WIFI_OFF);  // nie zostawiaj radia wlaczonego po resecie
     }
     if (SPIFFS.begin(true)) {
         if (SPIFFS.exists("/notes.json")) SPIFFS.remove("/notes.json");

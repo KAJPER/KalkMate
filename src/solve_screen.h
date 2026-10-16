@@ -612,8 +612,21 @@ static bool _solEnsureWifi(U8G2 &d) {
 
     unsigned long start = millis();
     int frame = 0;
+    bool fellBack = false;
     while (WiFi.status() != WL_CONNECTED) {
-        if (millis() - start > 15000) {
+        unsigned long elapsed = millis() - start;
+        // Hint (BSSID+kanal) moze byc nieaktualny nawet dla tej samej sieci
+        // (AP zmienil kanal, restart routera). Jesli po 6s wciaz nic — raz
+        // sprobuj zwyklego begin bez hinta, zamiast czekac caly timeout i
+        // oddawac "zle haslo" mimo poprawnych danych.
+        if (!fellBack && elapsed > 6000) {
+            fellBack = true;
+            Serial.println("[WiFi] fast begin nie polaczyl w 6s, fallback bez hinta");
+            WiFi.disconnect(false, false);
+            delay(50);
+            WiFi.begin(ssid, pass);
+        }
+        if (elapsed > 15000) {
             _solDrawError(d,
                 _solT("Blad WiFi!", "WiFi failed!", "WLAN Fehler!"),
                 _solT("Sprawdz haslo.", "Check password.", "Passwort pruefen."));
@@ -1850,7 +1863,16 @@ static void _solProcessQueue(U8G2 &d) {
         WiFi.mode(WIFI_STA);
         wifiFastBegin(ssid, pass);
         unsigned long t = millis();
-        while (WiFi.status() != WL_CONNECTED && millis() - t < 8000) delay(200);
+        bool fellBack = false;
+        while (WiFi.status() != WL_CONNECTED && millis() - t < 8000) {
+            if (!fellBack && millis() - t > 4000) {
+                fellBack = true;
+                WiFi.disconnect(false, false);
+                delay(50);
+                WiFi.begin(ssid, pass);
+            }
+            delay(200);
+        }
         if (WiFi.status() != WL_CONNECTED) return;
         wifiSaveBssidChannel();
         accountRegisterOnce();

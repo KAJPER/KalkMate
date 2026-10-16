@@ -35,7 +35,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.9.6"
+#define FW_VERSION "1.9.7"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -250,6 +250,18 @@ void setup() {
         Serial.flush();
     }
 
+    // WiFi.begin() domyslnie (persistent=true) zapisuje SSID+haslo do
+    // WEWNETRZNEJ partycji NVS esp-idf (osobnej od naszej "kalkmate") przy
+    // KAZDYM wywolaniu. To urzadzenie laczy sie (i rozlacza/reconnectuje)
+    // bardzo czesto — co solve, co wejscie w menu AI (patrz _wifiAutoConnectLazy)
+    // — wiec po dluzszym czasie ta partycja zuzywa sie/koruptuje, co objawia
+    // sie jako "zle haslo"/blad polaczenia mimo poprawnych danych, i NIE jest
+    // naprawiane przez nasz wlasny factory reset (ten czysci tylko namespace
+    // "kalkmate", nie wewnetrzna partycje wifi esp-idf). persistent(false)
+    // trzyma config WiFi tylko w RAM — my i tak mamy wlasny, solidniejszy
+    // cache w wifi_persist.h (NVS "kalkmate").
+    WiFi.persistent(false);
+
 #if KALK_BOOST_EN_PIN >= 0
     // === EARLY BATTERY CHECK — przed włączeniem boost (12V/~150mA) ===
     // Boost ssie spory pradu i razem z reszta moze przyciagnac LiPo
@@ -262,12 +274,12 @@ void setup() {
     //   < 3300 mV  -> LiPo zbyt nisko zeby bezpiecznie odpalic boost+WiFi
     //   >= 3300 mV -> OK, normalny boot
     {
-        uint32_t adcSum = 0;
-        for (int i = 0; i < 8; i++) {
-            adcSum += analogReadMilliVolts(3);
-        }
-        uint16_t vbatMv = (uint16_t)((adcSum / 8) * 2);  // *2 = dzielnik 1:2
-        Serial.printf("[EARLY] VBAT = %u mV\n", vbatMv);
+        // battery.h wybiera zrodlo pomiaru: MAX17048 (nowe PCB, I2C) albo
+        // dzielnik ADC na GPIO3 (starsze PCB). GPIO3 znaczy w nich co innego,
+        // wiec nie czytamy go tu bezposrednio.
+        batteryInit();
+        uint16_t vbatMv = batteryReadMillivolts();
+        Serial.printf("[EARLY] VBAT = %u mV (%s)\n", vbatMv, batterySourceName());
         Serial.flush();
 
         if (vbatMv >= 500 && vbatMv < 3300) {
@@ -368,6 +380,10 @@ void setup() {
     if (!inputBegin()) {
         Serial.println("[FATAL] MCP23017 brak — klawiatura nie dziala");
     }
+
+    // Druga proba wykrycia MAX17048 — na wypadek gdyby wczesna (przed boost
+    // i inputBegin) trafila na niegotowa magistrale. No-op gdy juz wykryty.
+    batteryInit();
 
     // === Prowizjonowanie fabryczne (flasher.py) ===
     // Jednorazowe okno nasluchu na porcie USB tuz po zaflashowaniu, zeby
