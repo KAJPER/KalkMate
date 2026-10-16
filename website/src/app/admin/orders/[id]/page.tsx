@@ -282,6 +282,39 @@ export default function OrderDetailPage({
     );
   };
 
+  // Zapisz poprawki odbiorcy od razu, bez nadawania przesylki (np. zeby nie
+  // stracic poprawek przy przerwie w pracy — nadanie i tak kosztuje realne
+  // pieniadze, wiec admin moze chciec to zrobic pozniej).
+  const [savingRecv, setSavingRecv] = useState(false);
+  const [savingRecvMsg, setSavingRecvMsg] = useState("");
+  const handleSaveReceiver = async () => {
+    if (recvError) {
+      setSavingRecvMsg(recvError);
+      return;
+    }
+    setSavingRecv(true);
+    setSavingRecvMsg("");
+    try {
+      const res = await fetch(`/api/admin/orders/${id}/basecourier/save-receiver`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receiver: bcRecv }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setSavingRecvMsg(data.error || "Błąd zapisu");
+        return;
+      }
+      applySavedReceiver(data.saved);
+      setBcPreview((p) => (p ? { ...p, receiver: { ...p.receiver, ...bcRecv } } : p));
+      setSavingRecvMsg("Zapisano.");
+    } catch {
+      setSavingRecvMsg("Błąd sieci");
+    } finally {
+      setSavingRecv(false);
+    }
+  };
+
   const pickupError = (() => {
     if (bcPickupMode !== "courier") return "";
     if (!bcPickupDate) return "Wybierz dzień odbioru.";
@@ -442,10 +475,23 @@ export default function OrderDetailPage({
           )
         )}
         {recvChanged && (
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={bcSaveToOrder} onChange={(e) => setBcSaveToOrder(e.target.checked)} />
-            Zapisz poprawione dane także w zamówieniu (po udanym nadaniu)
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={bcSaveToOrder} onChange={(e) => setBcSaveToOrder(e.target.checked)} />
+              Zapisz poprawione dane także w zamówieniu (po udanym nadaniu)
+            </label>
+            <button
+              type="button"
+              onClick={handleSaveReceiver}
+              disabled={savingRecv || !!recvError}
+              className="px-4 py-2 rounded-lg bg-[#3F4147] hover:bg-[#4a4d55] text-[#E0E0E0] text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              {savingRecv ? "Zapisuję…" : "Zapisz teraz (bez nadawania)"}
+            </button>
+          </div>
+        )}
+        {savingRecvMsg && (
+          <p className={`text-xs ${savingRecvMsg === "Zapisano." ? "text-green-400" : "text-red-400"}`}>{savingRecvMsg}</p>
         )}
       </div>
     ) : null;
