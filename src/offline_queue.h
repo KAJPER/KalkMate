@@ -69,7 +69,23 @@ static String _oqUtf8Cut(const String& s, size_t maxBytes) {
     return s.substring(0, cut);
 }
 
-static inline bool _oqFsReady() { return SPIFFS.begin(false); }
+// Normalnie SPIFFS jest juz zamontowany przez _solEnsureFs() (solve_screen.h,
+// raz na boot, z ekranem formatowania). Ale zaobserwowano w logu zdalnym
+// przypadek gdzie SPIFFS.begin(false) tu failowal mimo to (mount failed,
+// -10025) — bez wlasnego fallbacku kolejka offline byla trwale niedostepna
+// na reszte sesji (zdjecie po nieudanym DNS po prostu przepadalo, zamiast
+// trafic do retry). Jeden dodatkowy, samodzielny format+mount jako ostatnia
+// szansa — SPIFFS.begin(true) jest no-op gdy juz zamontowane poprawnie.
+static bool _oqFormatTried = false;
+static inline bool _oqFsReady() {
+    if (SPIFFS.begin(false)) return true;
+    if (_oqFormatTried) return false;
+    _oqFormatTried = true;
+    Serial.println("[OQ] mount nieudany, probuje format (ostatnia szansa)...");
+    bool ok = SPIFFS.begin(true);
+    Serial.printf("[OQ] format: %s\n", ok ? "OK" : "BLAD");
+    return ok;
+}
 
 // Wolna nazwa pliku /oqNN.<ext> (licznik "gen" w NVS). false = brak.
 static bool _oqNewPath(Preferences& p, const char* ext, char* path, size_t sz) {

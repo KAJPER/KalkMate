@@ -894,6 +894,7 @@ static bool _solEnsureWifi(U8G2 &d) {
     }
     memset(pass, 0, sizeof(pass));
     wifiSaveBssidChannel();      // zapisz BSSID+kanal do NVS na nastepny raz
+    wifiApplyDnsFallback();      // niektore AP maja wadliwy wlasny DNS
     accountRegisterOnce();       // zarejestruj device po pierwszym polaczeniu
     return true;
 }
@@ -2279,6 +2280,7 @@ static void _solProcessQueue(U8G2 &d) {
         if (skipped) { _solQueueSkipAt = millis() | 1; return; }
         if (WiFi.status() != WL_CONNECTED) return;   // sprobuje przy nastepnym wejsciu
         wifiSaveBssidChannel();
+        wifiApplyDnsFallback();
         accountRegisterOnce();
     }
 

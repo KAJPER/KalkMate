@@ -35,7 +35,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "2.0.0"
+#define FW_VERSION "1.9.8"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -612,6 +612,19 @@ static void _timeSyncLoop() {
     Serial.println("[TIME] NTP sync odpalony po polaczeniu WiFi");
 }
 
+// DNS fallback (8.8.8.8/1.1.1.1) — patrz wifiApplyDnsFallback() w
+// wifi_persist.h. Tu tylko raz po pierwszym polaczeniu z auto-connect w
+// loop(); _solEnsureWifi() w solve_screen.h wola to samo bezposrednio po
+// WLASNYM (blokujacym) polaczeniu, bo to loop() moze nie zdazyc odpalic sie
+// pomiedzy connectem a wyslaniem zdjecia.
+static bool _dnsFallbackApplied = false;
+static void _dnsFallbackLoop() {
+    if (_dnsFallbackApplied) return;
+    if (WiFi.status() != WL_CONNECTED) return;
+    _dnsFallbackApplied = true;
+    wifiApplyDnsFallback();
+}
+
 void loop() {
     inputScan();        // skanuj matrycę co iterację (max raz na 30 ms)
     panicCheck();       // sprawdz panic key, ustaw flagę gdy nacisnięty
@@ -620,6 +633,7 @@ void loop() {
     _wifiAutoConnectLazy(); // auto-WiFi 3s po wejsciu w AI menu
     _otaValidateLoop();     // OTA health-check: po OTA raz HTTPS do kalkmate.pl (walidacja)
     _timeSyncLoop();        // NTP (TLS od tego nie zalezy — patrz komentarz przy _timeSyncLoop)
+    _dnsFallbackLoop();     // DNS 8.8.8.8/1.1.1.1 — niektore AP maja wadliwy wlasny DNS
     if (powerCheckSleep()) {
         // Po wybudzeniu — przerysuj menu
         drawMenu();

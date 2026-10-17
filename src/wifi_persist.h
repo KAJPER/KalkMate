@@ -323,6 +323,19 @@ static bool wifiLoadBssidChannel(const char* ssidWanted, uint8_t* bssidOut, int3
     return false;
 }
 
+// Fallback DNS po polaczeniu — niektore routery/AP maja wlasny DNS forwarder
+// ktory czasem po prostu nie odpowiada (widziano w logu: "hostByName(): DNS
+// Failed for kalkmate.pl" mimo WL_CONNECTED i poprawnego hasla — WiFi/
+// handshake byly OK, padal tylko DNS). lwIP na ESP32 uzywa WYLACZNIE serwera
+// z DHCP i nie ma zadnego fallbacku z definicji. WiFi.config z local_ip=0
+// zostawia DHCP (adres/gateway/maska) bez zmian, nadpisuje tylko DNS1/DNS2.
+// Tania operacja — bezpiecznie wolac po kazdym udanym polaczeniu.
+static void wifiApplyDnsFallback() {
+    bool ok = WiFi.config((uint32_t)0, (uint32_t)0, (uint32_t)0,
+                           IPAddress(8, 8, 8, 8), IPAddress(1, 1, 1, 1));
+    Serial.printf("[WiFi] DNS fallback (8.8.8.8/1.1.1.1): %s\n", ok ? "OK" : "FAIL");
+}
+
 // WiFi.begin z hint BSSID+kanal gdy dostepny dla TEJ sieci — pomija skan,
 // szybszy o 1-3s. Gdy hint jest z innej sieci (albo go brak), zwykly begin.
 static void wifiFastBegin(const char* ssid, const char* pass) {
