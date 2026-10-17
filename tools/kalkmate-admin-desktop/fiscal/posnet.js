@@ -30,6 +30,47 @@ function cleanText(value, maxLen) {
   return maxLen ? out.slice(0, maxLen) : out;
 }
 
+// Znaki typograficzne, których często nie ma w stronie kodowej drukarki
+// (ISO-8859-2 nie ma półpauzy ani cudzysłowów „”). Ta sama tabela co TRANSLIT
+// w fiscal-agent/fiscal_agent/posnet/frame.py.
+const TRANSLIT = {
+  '‐': '-', '‑': '-', '‒': '-', '–': '-', '—': '-', '―': '-', '−': '-',
+  '„': '"', '“': '"', '”': '"', '«': '"', '»': '"',
+  '‘': "'", '’': "'", '‚': "'", '‹': "'", '›': "'",
+  '…': '...', ' ': ' ', ' ': ' ', ' ': ' ', ' ': ' ',
+  '€': 'EUR', '×': 'x', '•': '*', '·': '*',
+};
+
+// iconv-lite po cichu wstawia '?' w miejsce znaku spoza strony kodowej —
+// bezstratność sprawdzamy kodując i dekodując z powrotem.
+function encodable(text, encoding) {
+  return iconv.decode(iconv.encode(text, encoding), encoding) === text;
+}
+
+/**
+ * Tekst do pola drukarki (nazwa towaru, płatności): bez znaków sterujących, w
+ * stronie kodowej drukarki. Znaki spoza niej transliterujemy (– → -, ñ → n);
+ * jeśli się nie da (np. emoji) — PrinterError INVALID, zanim cokolwiek pójdzie
+ * do drukarki.
+ */
+function printerText(value, maxLen, encoding = 'cp1250') {
+  if (!iconv.encodingExists(encoding)) {
+    throw new PrinterError(Category.INVALID, `Nieznana strona kodowa drukarki "${encoding}"`);
+  }
+  let out = '';
+  for (const ch of cleanText(value)) {
+    if (encodable(ch, encoding)) { out += ch; continue; }
+    let alt = TRANSLIT[ch];
+    if (alt == null) alt = ch.normalize('NFKD').replace(/\p{M}/gu, '');
+    if (alt && encodable(alt, encoding)) { out += alt; continue; }
+    const cp = ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+    throw new PrinterError(Category.INVALID, `Błędne dane paragonu: znak "${ch}" (U+${cp}) w tekście "${value}" `
+      + `nie istnieje w stronie kodowej drukarki ${encoding} i nie ma zamiennika`);
+  }
+  out = out.split(/\s+/).filter(Boolean).join(' ');
+  return maxLen ? out.slice(0, maxLen) : out;
+}
+
 function encode(command, params = [], token = null, encoding = 'cp1250') {
   const parts = [command];
   for (const [name, value] of params) {
@@ -38,7 +79,12 @@ function encode(command, params = [], token = null, encoding = 'cp1250') {
     parts.push(name + value);
   }
   if (token != null) parts.push('@' + String(token).padStart(4, '0'));
-  const body = iconv.encode(parts.join('\t') + '\t', encoding);
+  const text = parts.join('\t') + '\t';
+  const body = iconv.encode(text, encoding);
+  if (iconv.decode(body, encoding) !== text) {
+    // Ostatnia linia obrony: bez tego iconv wysłałby '?' zamiast znaku.
+    throw new PrinterError(Category.INVALID, `Rozkaz ${command} zawiera znak spoza strony kodowej ${encoding}`, null, command);
+  }
   const crc = crc16(body).toString(16).toUpperCase().padStart(4, '0');
   return Buffer.concat([Buffer.from([STX]), body, Buffer.from('#' + crc, 'ascii'), Buffer.from([ETX])]);
 }
@@ -128,11 +174,14 @@ function classifyCode(code, frameError) {
 }
 
 class PrinterError extends Error {
-  constructor(category, message, code = null, command = null) {
+  constructor(category, message, code = null, command = null, { garbled = false } = {}) {
     super(message);
     this.category = category;
     this.code = code;
     this.command = command;
+    // Odpowiedź nieczytelna (zły CRC / rozjechana ramka) — błąd łącza, a nie
+    // odpowiedź drukarki. Przed trend = ponowienie, po trend = sprawdzenie licznika.
+    this.garbled = garbled;
   }
   get retryable() { return RETRYABLE.has(this.category); }
   static fromCode(code, command, frameError = false) {
@@ -151,16 +200,51 @@ class AmbiguousCommand extends Error {
 
 class ConnectionLost extends Error {}
 
+// --- tokeny ------------------------------------------------------------------------
+const TOKEN_MAX = 9999; // token to 4 cyfry; 0 pomijamy
+const wrapToken = (n) => ((((Math.trunc(n) - 1) % TOKEN_MAX) + TOKEN_MAX) % TOKEN_MAX) + 1;
+const randomToken = () => 1 + Math.floor(Math.random() * TOKEN_MAX);
+
+/** Tokeny w pamięci (testy, narzędzia jednorazowe). */
+function memoryTokens(start) {
+  let next = wrapToken(start || randomToken());
+  return () => { const t = next; next = wrapToken(t + 1); return t; };
+}
+
+/**
+ * Tokeny rosnące także między restartami aplikacji. Losowy początek po restarcie
+ * mógł trafić na token, którego odpowiedź na INNY rozkaz wciąż leży w buforze
+ * drukarki — wtedy rpt oddałby cudzą odpowiedź. Rezerwujemy bloki tokenów i
+ * zapisujemy koniec bloku; po restarcie zaczynamy za nim. Błąd zapisu nie
+ * blokuje druku (tylko log) — weryfikacja resp.command w rpt łapie resztę.
+ */
+function persistentTokens({ load, save, block = 32, log = () => {} }) {
+  let start = null;
+  try { start = load(); } catch (e) { log('[fiscal] odczyt licznika tokenów:', e.message || e); }
+  let next = Number.isInteger(start) && start > 0 ? wrapToken(start) : randomToken();
+  let left = 0;
+  return () => {
+    if (left <= 0) {
+      try { save(wrapToken(next + block)); } catch (e) { log('[fiscal] zapis licznika tokenów:', e.message || e); }
+      left = block;
+    }
+    const t = next;
+    next = wrapToken(t + 1);
+    left -= 1;
+    return t;
+  };
+}
+
 // --- klient TCP ------------------------------------------------------------------
 // Każdy rozkaz ma token. Gdy połączenie zerwie się po wysłaniu, łączymy się
 // ponownie i prosimy drukarkę rozkazem `rpt` o powtórzenie odpowiedzi.
 class PosnetClient {
-  constructor({ host, port, timeout = 15000, connectTimeout = 5000, encoding = 'cp1250' }) {
+  constructor({ host, port, timeout = 15000, connectTimeout = 5000, encoding = 'cp1250', tokenSource = null }) {
     Object.assign(this, { host, port, timeout, connectTimeout, encoding });
     this.sock = null;
     this.frames = [];
     this.waiter = null;
-    this.nextToken = 1 + Math.floor(Math.random() * 9000);
+    this.tokenSource = tokenSource || memoryTokens();
   }
 
   connect() {
@@ -210,10 +294,10 @@ class PosnetClient {
     return decode(this.frames.shift(), this.encoding);
   }
 
-  async _exchange(command, params, token) {
+  async _exchange(frame, token) {
     if (!this.sock) await this.connect();
     const sock = this.sock;
-    sock.write(encode(command, params, token, this.encoding));
+    sock.write(frame);
     for (;;) {
       const resp = await this._readFrame(sock);
       if (resp.token == null || resp.token === token) return resp;
@@ -222,27 +306,43 @@ class PosnetClient {
   }
 
   _token() {
-    const t = this.nextToken;
-    this.nextToken = t >= 9999 ? 1 : t + 1;
-    return t;
+    return wrapToken(Number(this.tokenSource()));
   }
 
   async raw(command, params = []) {
     const token = this._token();
+    let frame;
     try {
-      return await this._exchange(command, params, token);
+      // Kodowanie PRZED wysłaniem: znak spoza strony kodowej nie może przerwać
+      // transakcji w połowie (nic jeszcze nie wyszło do drukarki).
+      frame = encode(command, params, token, this.encoding);
     } catch (e) {
-      if (e instanceof FrameError) throw new PrinterError(Category.PROTOCOL, `Nieczytelna odpowiedź na ${command}: ${e.message}`, null, command);
+      if (e instanceof PrinterError) throw e;
+      throw new PrinterError(Category.INVALID, `Nie da się zakodować rozkazu ${command}: ${e.message}`, null, command);
+    }
+    try {
+      return await this._exchange(frame, token);
+    } catch (e) {
+      if (e instanceof FrameError) {
+        throw new PrinterError(Category.PROTOCOL, `Nieczytelna odpowiedź na ${command}: ${e.message}`, null, command, { garbled: true });
+      }
       if (e instanceof PrinterError) throw e; // nie udało się połączyć — rozkaz nie wyszedł
       // Zerwane po wysłaniu: rozkaz mógł dojść. Pytamy drukarkę o odpowiedź.
       let resp;
       try {
         await this.connect();
-        resp = await this._exchange('rpt', [], token);
+        resp = await this._exchange(encode('rpt', [], token, this.encoding), token);
       } catch (_) {
         throw new AmbiguousCommand(command, token);
       }
-      if (resp.frameError && resp.error === 13) throw new AmbiguousCommand(command, token);
+      if (resp.frameError) {
+        // 13: drukarka nie zna tokenu; inny błąd ramki bez naszego cm dotyczy samego rpt.
+        if (resp.error === 13 || resp.fields.cm !== command) throw new AmbiguousCommand(command, token);
+        return resp; // błąd ramki zgłoszony dla NASZEGO rozkazu — nie został wykonany
+      }
+      const bare = (c) => String(c || '').replace(/^!/, '');
+      // Token trafił na odpowiedź innego rozkazu — nie wolno jej użyć.
+      if (bare(resp.command) !== bare(command)) throw new AmbiguousCommand(command, token);
       return resp;
     }
   }
@@ -255,6 +355,6 @@ class PosnetClient {
 }
 
 module.exports = {
-  crc16, cleanText, encode, decode, FrameReader, FrameError, PosnetClient, PrinterError, AmbiguousCommand,
-  Category, MECH_TEXT, DEVICE_TEXT,
+  crc16, cleanText, printerText, TRANSLIT, encode, decode, FrameReader, FrameError, PosnetClient, PrinterError,
+  AmbiguousCommand, Category, MECH_TEXT, DEVICE_TEXT, memoryTokens, persistentTokens, wrapToken,
 };

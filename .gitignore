@@ -34,3 +34,9 @@ website/prisma/dev.db-journal
 
 
 pcb
+# Audyt 2026-10-16: nigdy nie commitowac
+website/qr_code.png
+*qr_code*.png
+docs/*InPost*.pdf
+__pycache__/
+*.pyc

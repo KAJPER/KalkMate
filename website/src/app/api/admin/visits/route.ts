@@ -1,47 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { stripe } from "@/lib/stripe";
+import { prisma } from "@/lib/db";
 
-const PRODUCT_NAME = "__kalkmate_analytics";
-
-async function getOrCreateProduct() {
-  const result = await stripe.products.search({
-    query: `name:'${PRODUCT_NAME}'`,
-  });
-
-  if (result.data.length > 0) return result.data[0];
-
-  return await stripe.products.create({
-    name: PRODUCT_NAME,
-    metadata: { page_visits: "0", last_reset: new Date().toISOString() },
-  });
-}
-
-// POST: increment (public, no auth)
-export async function POST() {
-  try {
-    const product = await getOrCreateProduct();
-    const count = parseInt(product.metadata.page_visits || "0", 10);
-
-    await stripe.products.update(product.id, {
-      metadata: { ...product.metadata, page_visits: String(count + 1) },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Visit track error:", error);
-    return NextResponse.json({ success: false }, { status: 500 });
-  }
-}
-
-// GET: read (admin only)
+// Licznik wizyt na dashboardzie admina. Liczy z tabeli Visit (zapisuje ja
+// /api/track). Wczesniej licznik siedzial w metadanych produktu Stripe, a
+// publiczny POST przy KAZDYM wejsciu na strone glowna wolal Stripe
+// products.search + update kluczem sekretnym — kazdy mogl wyczerpac limity
+// API Stripe sklepu (audyt 2026-10-16). POST usuniety.
+//
+// GET (admin): { page_visits, last_reset } — ten sam ksztalt co wczesniej;
+// last_reset = najstarsza zapisana wizyta (od kiedy liczymy; patrz retencja
+// w lib/attribution.ts).
 export async function GET(request: NextRequest) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
-    const product = await getOrCreateProduct();
+    const [count, oldest] = await Promise.all([
+      prisma.visit.count(),
+      prisma.visit.aggregate({ _min: { createdAt: true } }),
+    ]);
+    const first = oldest._min.createdAt;
     return NextResponse.json({
-      page_visits: parseInt(product.metadata.page_visits || "0", 10),
-      last_reset: product.metadata.last_reset || null,
+      page_visits: count,
+      last_reset: first ? new Date(first).toISOString() : null,
     });
   } catch (error) {
     console.error("Visit read error:", error);

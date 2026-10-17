@@ -3,6 +3,7 @@ import { createReadStream, existsSync, statSync } from "fs";
 import { join } from "path";
 import { Readable } from "stream";
 import { requireAdminAuth } from "@/lib/admin-auth";
+import { clientIp } from "@/lib/rate-limit";
 import { BACKUP_DIR, isBackupName } from "@/lib/dbBackup";
 
 // GET — pobranie pliku kopii (nazwa sprawdzana wzorcem — bez wychodzenia poza katalog).
@@ -12,6 +13,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!isBackupName(name)) return NextResponse.json({ error: "Nieprawidłowa nazwa" }, { status: 400 });
   const file = join(BACKUP_DIR, name);
   if (!existsSync(file)) return NextResponse.json({ error: "Nie ma takiej kopii" }, { status: 404 });
+  // Kopia = cala baza klientow — kazde pobranie zostawia slad w logach (pm2).
+  console.info(`[admin/backups] download ${name} ip=${clientIp(request)} ua=${(request.headers.get("user-agent") || "").slice(0, 120)}`);
   const stream = Readable.toWeb(createReadStream(file)) as ReadableStream;
   return new NextResponse(stream, {
     headers: {

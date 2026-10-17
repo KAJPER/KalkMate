@@ -100,7 +100,7 @@ bool verifySignature = (sigB64.length() > 0);
 - **Severity:** Critical (zmitygowane gitignore, ale klucz/hasło są żywe)
 - **Plik:** `deploy.ps1:33-37`
 - **Opis:** Pełny login SSH do serwera produkcyjnego cleartextem, podawany w CLI do `pscp`/`plink` (`-pw`):
-  - `:35` `$ServerPass = "1234Kacper!"` (słabe, 8 znaków)
+  - `:35` `$ServerPass = "<REDACTED — haslo zmienione, nie wpisywac do repo>"` (słabe, 8 znaków)
   - `:33` host `57.131.30.57`, `:34` user `ubuntu`, `:37` `$ApiKey = "<CALCULATOR_API_KEY-REDACTED>"`
   - **Zweryfikowane: NIE w gicie** (gitignored, brak w historii). Ryzyko = lokalny dysk / przypadkowe udostępnienie. `-pw` w CLI ujawnia hasło innym procesom i historii powłoki.
 - **Fix:** Przejść na uwierzytelnianie kluczem SSH (bez `-pw`). Zrotować hasło serwera (i wzmocnić). Zrotować `CALCULATOR_API_KEY` (`<CALCULATOR_API_KEY-REDACTED>`) na losową wartość.

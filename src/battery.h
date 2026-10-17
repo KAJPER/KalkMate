@@ -38,6 +38,7 @@
   inline bool     batteryIsUsbPresent()     { return false; }
   inline bool     batteryIsChargeComplete() { return false; }
   inline const char* batterySourceName()    { return "-"; }
+  inline void     batteryTick()             {}
 #else
 
 #include <Wire.h>
@@ -60,6 +61,7 @@
 #define BATTERY_SHUTDOWN_MV  3200    // watchdog safe-shutdown — za niskie na boost+WiFi
 #define BATTERY_CRITICAL_MV  3100    // ponizej shutdown, rezerwa DW01A
 #define BATTERY_LOW_MV       3400    // ostrzezenie low battery (~10%)
+#define BATTERY_PRESENT_MV   500     // ponizej = brak baterii / nieznany odczyt (USB-only)
 
 // Cache - odczyt moze byc wolny (ADC ~ms na sample, I2C wspolny z klawiatura).
 // Update raz na ~5s wystarczy.
@@ -207,12 +209,16 @@ inline uint8_t batteryReadPercent() {
     return 0;
 }
 
+// 0 / < BATTERY_PRESENT_MV = "nieznane" (brak baterii, nieudany odczyt) —
+// to NIE jest niska bateria (inaczej ikonka migala "!" przy zasilaniu z USB).
 inline bool batteryIsCritical() {
-    return batteryReadMillivolts() < BATTERY_CRITICAL_MV;
+    uint16_t mv = batteryReadMillivolts();
+    return mv >= BATTERY_PRESENT_MV && mv < BATTERY_CRITICAL_MV;
 }
 
 inline bool batteryIsLow() {
-    return batteryReadMillivolts() < BATTERY_LOW_MV;
+    uint16_t mv = batteryReadMillivolts();
+    return mv >= BATTERY_PRESENT_MV && mv < BATTERY_LOW_MV;
 }
 
 inline bool batteryIsAvailable() {
@@ -261,6 +267,13 @@ inline bool batteryIsCharging() {
 
     // Sampluj raz na 12s (5 sampli x 12s = 60s okno)
     if (_batSlopeLast == 0 || now - _batSlopeLast > 12000) {
+        // Dluga przerwa w probkowaniu (uspienie, ekran bez batteryTick) —
+        // stare probki pochodza z innego obciazenia, porownanie z nimi
+        // dawaloby falszywe "laduje"/"nie laduje". Zacznij okno od nowa.
+        if (_batSlopeLast != 0 && now - _batSlopeLast > 36000) {
+            for (uint8_t i = 0; i < 5; i++) _batSlopeMv[i] = 0;
+            _batSlopeIdx = 0;
+        }
         _batSlopeLast = now;
         _batSlopeMv[_batSlopeIdx] = mv;
         _batSlopeIdx = (_batSlopeIdx + 1) % 5;
@@ -283,6 +296,17 @@ inline bool batteryIsCharging() {
 // Tylko wariant A (wymaga VBUS_SENSE) — w wariancie B zawsze false.
 inline bool batteryIsChargeComplete() {
     return batteryIsUsbPresent() && !batteryIsCharging();
+}
+
+// Wolac czesto (power.h: powerCheckSleep). Wariant B zbiera probki do
+// detekcji ladowania tylko gdy ktos wola batteryIsCharging() — bez tego
+// okno 60 s bylo puste/nieaktualne i ekran baterii pokazywal stary stan.
+// Tani no-op, dopoki nie minie 12 s od ostatniej probki.
+inline void batteryTick() {
+    _batEnsure();
+    if (_batSource == _BAT_SRC_GAUGE) return;   // wariant A: status wprost z pinu CHRG
+    if (_batSlopeLast != 0 && millis() - _batSlopeLast <= 12000) return;
+    (void)batteryIsCharging();
 }
 
 #endif // !KALK_HW_LEGACY

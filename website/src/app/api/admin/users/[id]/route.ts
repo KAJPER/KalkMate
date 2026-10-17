@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminAuth } from "@/lib/admin-auth";
+import { deleteUserAccount, normalizeEmail, EMAIL_RE } from "@/lib/auth";
 
 export async function PATCH(
   request: NextRequest,
@@ -34,16 +35,28 @@ export async function PATCH(
     }
 
     if (action === "updateUser") {
-      // Update user details
-      const updated = await prisma.user.update({
-        where: { id },
-        data: {
-          ...(data.name !== undefined && { name: data.name }),
-          ...(data.email !== undefined && { email: data.email }),
-        },
-      });
-
-      return NextResponse.json({ success: true, user: updated });
+      // Update user details. E-mail malymi literami (tak zapisuje rejestracja
+      // i szuka logowanie). Odpowiedz bez hasha hasla.
+      const email = data?.email !== undefined ? normalizeEmail(data.email) : undefined;
+      if (email !== undefined && !EMAIL_RE.test(email)) {
+        return NextResponse.json({ error: "Nieprawidłowy adres email" }, { status: 400 });
+      }
+      try {
+        const updated = await prisma.user.update({
+          where: { id },
+          data: {
+            ...(data.name !== undefined && { name: data.name }),
+            ...(email !== undefined && { email }),
+          },
+          select: { id: true, email: true, name: true, emailVerified: true, image: true, createdAt: true, updatedAt: true },
+        });
+        return NextResponse.json({ success: true, user: updated });
+      } catch (e: any) {
+        if (e?.code === "P2002") {
+          return NextResponse.json({ error: "Ten email jest już używany przez inne konto" }, { status: 409 });
+        }
+        throw e;
+      }
     }
 
     if (action === "addTokens") {
@@ -77,10 +90,14 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Delete user (cascade will handle related data)
-    await prisma.user.delete({
-      where: { id },
-    });
+    // Wczesniej prisma.user.delete — Order.userId ma w bazie ON DELETE
+    // CASCADE, wiec usuniecie konta kasowalo tez OPLACONE zamowienia (dane
+    // ksiegowe). deleteUserAccount odpina zamowienia (zostaja), czysci tokeny,
+    // zgody, jezyk newslettera i historie z kalkulatora (lib/auth.ts).
+    const result = await deleteUserAccount(id);
+    if (!result.ok) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

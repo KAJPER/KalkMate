@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminAuth } from "@/lib/admin-auth";
+import { randomInt } from "crypto";
 
-// Generator licencji: 16 znaków, więcej cyfr i znaków specjalnych niż liter
+// Generator licencji: 16 znaków, więcej cyfr i znaków specjalnych niż liter.
+// Losowanie z crypto.randomInt (CSPRNG) — Math.random jest przewidywalny, a kod
+// licencji = dostep do platnej uslugi.
 function generateLicenseCode(): string {
   const letters = "abcdefghijklmnopqrstuvwxyz"; // 26 znaków
   const digits = "123456789"; // 9 cyfr
@@ -12,22 +15,22 @@ function generateLicenseCode(): string {
 
   // Dodaj 5 małych liter (mniej niż połowa)
   for (let i = 0; i < 5; i++) {
-    chars.push(letters[Math.floor(Math.random() * letters.length)]);
+    chars.push(letters[randomInt(letters.length)]);
   }
 
   // Dodaj 7 cyfr
   for (let i = 0; i < 7; i++) {
-    chars.push(digits[Math.floor(Math.random() * digits.length)]);
+    chars.push(digits[randomInt(digits.length)]);
   }
 
   // Dodaj 4 znaki specjalne
   for (let i = 0; i < 4; i++) {
-    chars.push(special[Math.floor(Math.random() * special.length)]);
+    chars.push(special[randomInt(special.length)]);
   }
 
   // Pomieszaj (Fisher-Yates shuffle)
   for (let i = chars.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomInt(i + 1);
     [chars[i], chars[j]] = [chars[j], chars[i]];
   }
 

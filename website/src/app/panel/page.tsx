@@ -1,18 +1,47 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import Image from "next/image";
-import MessageRenderer from "@/components/MessageRenderer";
+import dynamic from "next/dynamic";
 import { TOKEN_PACKS } from "@/lib/tokenPacks";
 import { usePanelLang } from "@/lib/usePanelLang";
 import PanelLangSwitcher from "@/components/PanelLangSwitcher";
 import { type Locale } from "@/lib/i18n";
+import ChatInput, { type ChatDraft, type ChatInputLabels } from "./_components/ChatInput";
+import { fetchJson, sendJson, type FetchJsonResult } from "./_lib/fetchJson";
+import { fileToDataUrl } from "./_lib/compressImage";
+
+// react-markdown + remark/rehype + KaTeX (JS i CSS) to najcięższa część panelu —
+// ładujemy je dopiero, gdy w zakładce czatu pojawi się odpowiedź AI.
+const MessageRenderer = dynamic(() => import("@/components/MessageRenderer"), {
+  ssr: false,
+  loading: () => <div className="h-4 w-24 bg-[#F2EDE3]/10 animate-pulse" />,
+});
 
 const DATE_LOCALE: Record<Locale, string> = { pl: "pl-PL", en: "en-GB", de: "de-DE" };
+
+const TAB_IDS = ["orders", "chat", "subscription", "ai", "calculator", "notes", "tests", "settings"] as const;
+type TabId = (typeof TAB_IDS)[number];
+const CALC_TABS: readonly TabId[] = ["calculator", "notes", "tests", "subscription"];
+
+// Dane zakładki uznajemy za świeże przez 60 s — powrót do zakładki nie odpala
+// ponownie wszystkich zapytań (słabe telefony / mobilny internet).
+const FRESH_MS = 60_000;
+// Pakiet startowy przy rejestracji — tylko punkt odniesienia dla paska salda.
+const TOKEN_REFERENCE = 1_000_000;
+const CAPTURES_PAGE = 24;
+
+type ChatAttachment = { filename: string; mimeType: string; fileSize: number; data: string };
+type ChatMessage = { role: string; content: string; attachments?: ChatAttachment[] };
+type ReturnNotice = "tokens_success" | "tokens_cancelled" | "sub_success" | "sub_cancelled";
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
 
 const PANEL_DICT: Record<Locale, {
   // header / heading
@@ -52,10 +81,34 @@ const PANEL_DICT: Record<Locale, {
   confirmDeleteConversation: string;
   errPairFailed: string;
   errNetwork: string;
-  newConversationTitle: string;
+  sessionExpired: string;
   fileAttached: string;
   serverError: (status: number) => string;
   tryAgain: string;
+  chatNoTokens: string;
+  chatNoSubscription: string;
+  chatTooLarge: string;
+  chatOnlyImages: string;
+  chatTooMany: string;
+  chatUpstream: string;
+  chatReadFailed: string;
+  convLoadFailed: string;
+  convDeleteFailed: string;
+  goBuyTokens: string;
+  goSubscription: string;
+  dismiss: string;
+  imgProcessing: string;
+  imgTooMany: (max: number) => string;
+  imgDecodeFailed: (name: string) => string;
+  imgTooLarge: (name: string) => string;
+  returnTokensSuccess: string;
+  returnTokensCancelled: string;
+  returnSubSuccess: string;
+  returnSubCancelled: string;
+  loadFailed: string;
+  retry: string;
+  loadMore: string;
+  licenseRedeemed: string;
   subCreateFailed: string;
   enterLicenseCode: string;
   licenseRedeemFailed: string;
@@ -147,8 +200,8 @@ const PANEL_DICT: Record<Locale, {
   // ai tab
   tokenUsage: string;
   effectiveTokens: string;
-  used: string;
   remaining: string;
+  aiLoadFailed: string;
   tasksLeftLabel: string;
   maturaTasks: string;
   monthlyLimit: string;
@@ -244,6 +297,23 @@ const PANEL_DICT: Record<Locale, {
   confirmWithPassword: string;
   changeEmailBtn: string;
   emailChangeNote: string;
+  emailChangeLogout: string;
+  newsletterLoadFailed: string;
+  newsletterSaveFailed: string;
+  dataHeading: string;
+  exportData: string;
+  exportDataDesc: string;
+  exporting: string;
+  exportFailed: string;
+  deleteAccount: string;
+  deleteAccountDesc: string;
+  deletePasswordPlaceholder: string;
+  deleteGoogleHint: (phrase: string) => string;
+  deleteAccountBtn: string;
+  deleting: string;
+  deleteFailed: string;
+  deleteNeedConfirm: (phrase: string) => string;
+  featureUnavailable: string;
   session: string;
 }> = {
   pl: {
@@ -272,19 +342,43 @@ const PANEL_DICT: Record<Locale, {
     pwTooShort: "Nowe hasło musi mieć min. 6 znaków",
     pwMismatch: "Hasła nie są takie same",
     pwChanged: "Hasło zostało zmienione.",
-    emailChanged: "Email zmieniony. Za chwilę nastąpi wylogowanie...",
-    alertNoDeviceUnpair: "Brak urzadzenia do odpiecia.",
-    confirmUnpair: (id) => `Odepnac urzadzenie ${id}? Bedziesz mogl je sparowac ponownie.`,
-    alertError: "Blad",
-    confirmDeleteNote: "Usunac notatke?",
-    confirmDeleteTest: "Usunac sprawdzian?",
+    emailChanged: "Wysłaliśmy link na nowy adres — zmiana nastąpi po jego kliknięciu.",
+    alertNoDeviceUnpair: "Brak urządzenia do odpięcia.",
+    confirmUnpair: (id) => `Odpiąć urządzenie ${id}? Będzie można je sparować ponownie.`,
+    alertError: "Błąd",
+    confirmDeleteNote: "Usunąć notatkę?",
+    confirmDeleteTest: "Usunąć sprawdzian?",
     confirmDeleteConversation: "Czy na pewno chcesz usunąć tę konwersację?",
-    errPairFailed: "Nie udalo sie sparowac",
-    errNetwork: "Blad sieci",
-    newConversationTitle: "Nowa konwersacja",
+    errPairFailed: "Nie udało się sparować",
+    errNetwork: "Błąd sieci — sprawdź połączenie z internetem.",
+    sessionExpired: "Sesja wygasła — zaloguj się ponownie.",
     fileAttached: "(plik załączony)",
     serverError: (s) => `Błąd serwera (${s})`,
     tryAgain: "Spróbuj ponownie.",
+    chatNoTokens: "Skończyły się tokeny AI. Doładuj saldo, aby kontynuować.",
+    chatNoSubscription: "Brak aktywnej subskrypcji AI Chat.",
+    chatTooLarge: "Zdjęcie jest za duże. Usuń je lub dołącz mniejsze (maks. 4 zdjęcia).",
+    chatOnlyImages: "Można dołączać tylko zdjęcia (JPG, PNG, WebP).",
+    chatTooMany: "Za dużo zapytań. Poczekaj chwilę i spróbuj ponownie.",
+    chatUpstream: "Serwer AI chwilowo nie odpowiada. Twoja wiadomość wróciła do pola — spróbuj ponownie za chwilę.",
+    chatReadFailed: "Nie udało się odczytać załączonego zdjęcia.",
+    convLoadFailed: "Nie udało się wczytać konwersacji.",
+    convDeleteFailed: "Nie udało się usunąć konwersacji.",
+    goBuyTokens: "Kup tokeny →",
+    goSubscription: "Subskrypcja →",
+    dismiss: "Zamknij",
+    imgProcessing: "Zmniejszam zdjęcie…",
+    imgTooMany: (m) => `Maks. ${m} zdjęcia na wiadomość.`,
+    imgDecodeFailed: (n) => `Nie udało się odczytać zdjęcia „${n}”.`,
+    imgTooLarge: (n) => `Zdjęcie „${n}” jest za duże nawet po zmniejszeniu.`,
+    returnTokensSuccess: "Płatność przyjęta — tokeny pojawią się na koncie w ciągu kilku chwil.",
+    returnTokensCancelled: "Płatność za tokeny została anulowana.",
+    returnSubSuccess: "Płatność przyjęta — subskrypcja zostanie aktywowana w ciągu kilku chwil.",
+    returnSubCancelled: "Płatność za subskrypcję została anulowana.",
+    loadFailed: "Nie udało się wczytać danych.",
+    retry: "Spróbuj ponownie",
+    loadMore: "Pokaż więcej",
+    licenseRedeemed: "Licencja została zrealizowana.",
     subCreateFailed: "Nie udało się utworzyć subskrypcji. Spróbuj ponownie.",
     enterLicenseCode: "Wprowadź kod licencji",
     licenseRedeemFailed: "Nie udało się zrealizować licencji",
@@ -330,7 +424,7 @@ const PANEL_DICT: Record<Locale, {
     thinking: "Myślę...",
     removeFile: "Usuń",
     chatPlaceholder: "Wklej treść zadania lub dołącz zdjęcie (Ctrl+V działa też dla obrazów)...",
-    attachFile: "Załącz plik (maks. 5 x 10MB)",
+    attachFile: "Dołącz zdjęcie (maks. 4)",
     send: "Wyślij",
     subHeading: "Subskrypcja AI Chat",
     subSubtitle: "Zarządzaj dostępem do AI Chat",
@@ -370,13 +464,13 @@ const PANEL_DICT: Record<Locale, {
     savesYou: "(oszczędzasz 67%)",
     renewsOn: (d) => `Odnawia się: ${d}`,
     cancelSub: "Anuluj subskrypcję",
-    tokenUsage: "/ Zużycie tokenów",
-    effectiveTokens: "/ 1 000 000 efektywnych tokenów",
-    used: "ZUŻYTE",
-    remaining: "POZOSTAŁO:",
+    tokenUsage: "/ Saldo tokenów",
+    effectiveTokens: "efektywnych tokenów na koncie",
+    remaining: "POZOSTAŁO",
+    aiLoadFailed: "Nie udało się wczytać ustawień AI i salda tokenów.",
     tasksLeftLabel: "Zadań zostało",
     maturaTasks: "zadań",
-    monthlyLimit: "Limit na miesiąc",
+    monthlyLimit: "Na 1 mln tokenów",
     forModel: (m) => `dla modelu ${m}`,
     defaultModel: "domyślnego",
     modelPerformance: "WYDAJNOŚĆ MODELI — ile zadań z 1 mln tokenów",
@@ -415,7 +509,7 @@ const PANEL_DICT: Record<Locale, {
     yourDevice: "Twoje",
     license: "Licencja",
     firmware: "Firmware",
-    requests: "Zapytan",
+    requests: "Zapytań",
     aiModeAndModel: "/ Tryb AI i model",
     aiModeSetInTab: (link) => <>Model AI oraz tryb (Egzamin / Czysty AI) ustawisz w zakładce {link}.</>,
     photoGallery: "/ Galeria zdjęć",
@@ -431,28 +525,28 @@ const PANEL_DICT: Record<Locale, {
     calcRequired: "/ wymagany kalkulator",
     pairFirst: (link) => <>Najpierw sparuj kalkulator w zakładce {link}.</>,
     notesOffline: (n) => `Notatki offline (${n}/50)`,
-    syncToDevice: "Sync do urzadzenia przy WiFi",
-    editNote: "Edytuj notatke",
+    syncToDevice: "Synchronizacja z urządzeniem przez WiFi",
+    editNote: "Edytuj notatkę",
     newNote: "Nowa notatka",
-    noteTitlePlaceholder: "Tytul (max 60 znakow)",
-    noteContentPlaceholder: "Tresc (max 4000 znakow - wzory, definicje)",
+    noteTitlePlaceholder: "Tytuł (maks. 60 znaków)",
+    noteContentPlaceholder: "Treść (maks. 4000 znaków – wzory, definicje)",
     cancel: "Anuluj",
-    saving: "Zapisuje...",
+    saving: "Zapisuję...",
     save: "Zapisz",
     add: "Dodaj",
     noNotes: "Brak notatek.",
-    noTitle: "(bez tytulu)",
+    noTitle: "(bez tytułu)",
     empty: "(pusta)",
     edit: "Edytuj",
-    delete: "Usun",
+    delete: "Usuń",
     testsHeading: (n) => `Sprawdziany (${n}/50)`,
     markdownOk: "Markdown/LaTeX OK",
     editTest: "Edytuj sprawdzian",
     newTest: "Nowy sprawdzian",
-    testTitlePlaceholder: "Tytul (np. Matma 2026 - probna 1)",
-    testContentPlaceholder: "Wklej tutaj rozwiazanie (markdown, LaTeX, $..$, **bold**...)",
-    noTests: "Brak sprawdzianow.",
-    charsCount: (n) => `${n} znakow`,
+    testTitlePlaceholder: "Tytuł (np. Matma 2026 – próbna 1)",
+    testContentPlaceholder: "Wklej tutaj rozwiązanie (markdown, LaTeX, $..$, **pogrubienie**...)",
+    noTests: "Brak sprawdzianów.",
+    charsCount: (n) => `${n} znaków`,
     account: "/ Konto",
     loggedInAs: "Zalogowany jako",
     changePassword: "/ Zmiana hasła",
@@ -464,7 +558,24 @@ const PANEL_DICT: Record<Locale, {
     newEmail: "Nowy adres email",
     confirmWithPassword: "Potwierdź hasłem",
     changeEmailBtn: "Zmień email",
-    emailChangeNote: "Po zmianie emaila nastąpi wylogowanie — zaloguj się nowym adresem.",
+    emailChangeNote: "Wyślemy link potwierdzający na nowy adres — zmiana nastąpi dopiero po jego kliknięciu.",
+    emailChangeLogout: "Email zmieniony. Za chwilę nastąpi wylogowanie...",
+    newsletterLoadFailed: "Nie udało się wczytać statusu newslettera.",
+    newsletterSaveFailed: "Nie udało się zapisać zgody na newsletter.",
+    dataHeading: "/ Twoje dane",
+    exportData: "Pobierz moje dane",
+    exportDataDesc: "Plik JSON ze wszystkimi danymi powiązanymi z Twoim kontem (RODO, art. 20).",
+    exporting: "Przygotowuję…",
+    exportFailed: "Nie udało się pobrać danych.",
+    deleteAccount: "Usuń konto",
+    deleteAccountDesc: "Trwale usuwa konto, historię czatów, notatki, sprawdziany i powiązanie z kalkulatorem. Tej operacji nie da się cofnąć.",
+    deletePasswordPlaceholder: "Hasło do konta",
+    deleteGoogleHint: (p) => `Logujesz się przez Google (bez hasła)? Zostaw hasło puste i wpisz poniżej: ${p}`,
+    deleteAccountBtn: "Usuń konto na zawsze",
+    deleting: "Usuwam…",
+    deleteFailed: "Nie udało się usunąć konta.",
+    deleteNeedConfirm: (p) => `Podaj hasło albo wpisz „${p}”, aby potwierdzić.`,
+    featureUnavailable: "Ta funkcja nie jest jeszcze dostępna — spróbuj później lub napisz do nas.",
     session: "/ Sesja",
   },
   en: {
@@ -493,7 +604,7 @@ const PANEL_DICT: Record<Locale, {
     pwTooShort: "New password must be at least 6 characters",
     pwMismatch: "Passwords do not match",
     pwChanged: "Password has been changed.",
-    emailChanged: "Email changed. You will be logged out shortly...",
+    emailChanged: "We sent a link to the new address — the change takes effect once you click it.",
     alertNoDeviceUnpair: "No device to unpair.",
     confirmUnpair: (id) => `Unpair device ${id}? You will be able to pair it again.`,
     alertError: "Error",
@@ -501,11 +612,35 @@ const PANEL_DICT: Record<Locale, {
     confirmDeleteTest: "Delete test?",
     confirmDeleteConversation: "Are you sure you want to delete this conversation?",
     errPairFailed: "Could not pair",
-    errNetwork: "Network error",
-    newConversationTitle: "New conversation",
+    errNetwork: "Network error — check your internet connection.",
+    sessionExpired: "Your session has expired — please sign in again.",
     fileAttached: "(file attached)",
     serverError: (s) => `Server error (${s})`,
     tryAgain: "Please try again.",
+    chatNoTokens: "You are out of AI tokens. Top up your balance to continue.",
+    chatNoSubscription: "No active AI Chat subscription.",
+    chatTooLarge: "The image is too large. Remove it or attach a smaller one (max 4 images).",
+    chatOnlyImages: "Only images can be attached (JPG, PNG, WebP).",
+    chatTooMany: "Too many requests. Wait a moment and try again.",
+    chatUpstream: "The AI server is not responding right now. Your message is back in the input — try again shortly.",
+    chatReadFailed: "Could not read the attached image.",
+    convLoadFailed: "Could not load the conversation.",
+    convDeleteFailed: "Could not delete the conversation.",
+    goBuyTokens: "Buy tokens →",
+    goSubscription: "Subscription →",
+    dismiss: "Close",
+    imgProcessing: "Resizing image…",
+    imgTooMany: (m) => `Max ${m} images per message.`,
+    imgDecodeFailed: (n) => `Could not read image "${n}".`,
+    imgTooLarge: (n) => `Image "${n}" is too large even after resizing.`,
+    returnTokensSuccess: "Payment received — tokens will appear in your account within a few moments.",
+    returnTokensCancelled: "The token payment was cancelled.",
+    returnSubSuccess: "Payment received — your subscription will be activated within a few moments.",
+    returnSubCancelled: "The subscription payment was cancelled.",
+    loadFailed: "Could not load data.",
+    retry: "Try again",
+    loadMore: "Show more",
+    licenseRedeemed: "The license has been redeemed.",
     subCreateFailed: "Could not create subscription. Please try again.",
     enterLicenseCode: "Enter a license code",
     licenseRedeemFailed: "Could not redeem the license",
@@ -551,7 +686,7 @@ const PANEL_DICT: Record<Locale, {
     thinking: "Thinking...",
     removeFile: "Remove",
     chatPlaceholder: "Paste your problem or attach a photo (Ctrl+V works for images too)...",
-    attachFile: "Attach file (max 5 x 10MB)",
+    attachFile: "Attach image (max 4)",
     send: "Send",
     subHeading: "AI Chat subscription",
     subSubtitle: "Manage access to AI Chat",
@@ -591,13 +726,13 @@ const PANEL_DICT: Record<Locale, {
     savesYou: "(you save 67%)",
     renewsOn: (d) => `Renews on: ${d}`,
     cancelSub: "Cancel subscription",
-    tokenUsage: "/ Token usage",
-    effectiveTokens: "/ 1,000,000 effective tokens",
-    used: "USED",
-    remaining: "REMAINING:",
+    tokenUsage: "/ Token balance",
+    effectiveTokens: "effective tokens in your account",
+    remaining: "REMAINING",
+    aiLoadFailed: "Could not load AI settings and token balance.",
     tasksLeftLabel: "Tasks left",
     maturaTasks: "exam problems",
-    monthlyLimit: "Monthly limit",
+    monthlyLimit: "Per 1M tokens",
     forModel: (m) => `for model ${m}`,
     defaultModel: "default",
     modelPerformance: "MODEL EFFICIENCY — tasks per 1M tokens",
@@ -685,7 +820,24 @@ const PANEL_DICT: Record<Locale, {
     newEmail: "New email address",
     confirmWithPassword: "Confirm with password",
     changeEmailBtn: "Change email",
-    emailChangeNote: "After changing your email you will be logged out — sign in with the new address.",
+    emailChangeNote: "We will send a confirmation link to the new address — the change only takes effect after you click it.",
+    emailChangeLogout: "Email changed. You will be logged out shortly...",
+    newsletterLoadFailed: "Could not load the newsletter status.",
+    newsletterSaveFailed: "Could not save the newsletter consent.",
+    dataHeading: "/ Your data",
+    exportData: "Download my data",
+    exportDataDesc: "A JSON file with all data linked to your account (GDPR, Art. 20).",
+    exporting: "Preparing…",
+    exportFailed: "Could not download your data.",
+    deleteAccount: "Delete account",
+    deleteAccountDesc: "Permanently deletes your account, chat history, notes, tests and the calculator link. This cannot be undone.",
+    deletePasswordPlaceholder: "Account password",
+    deleteGoogleHint: (p) => `Signing in with Google (no password)? Leave the password empty and type: ${p}`,
+    deleteAccountBtn: "Delete account forever",
+    deleting: "Deleting…",
+    deleteFailed: "Could not delete the account.",
+    deleteNeedConfirm: (p) => `Enter your password or type "${p}" to confirm.`,
+    featureUnavailable: "This feature is not available yet — please try later or contact us.",
     session: "/ Session",
   },
   de: {
@@ -714,7 +866,7 @@ const PANEL_DICT: Record<Locale, {
     pwTooShort: "Das neue Passwort muss mindestens 6 Zeichen haben",
     pwMismatch: "Die Passwörter stimmen nicht überein",
     pwChanged: "Passwort wurde geändert.",
-    emailChanged: "E-Mail geändert. Du wirst gleich abgemeldet...",
+    emailChanged: "Wir haben einen Link an die neue Adresse gesendet — die Änderung gilt, sobald du ihn anklickst.",
     alertNoDeviceUnpair: "Kein Gerät zum Entkoppeln.",
     confirmUnpair: (id) => `Gerät ${id} entkoppeln? Du kannst es erneut koppeln.`,
     alertError: "Fehler",
@@ -722,11 +874,35 @@ const PANEL_DICT: Record<Locale, {
     confirmDeleteTest: "Klassenarbeit löschen?",
     confirmDeleteConversation: "Möchtest du diese Unterhaltung wirklich löschen?",
     errPairFailed: "Koppeln fehlgeschlagen",
-    errNetwork: "Netzwerkfehler",
-    newConversationTitle: "Neue Unterhaltung",
+    errNetwork: "Netzwerkfehler — prüfe deine Internetverbindung.",
+    sessionExpired: "Deine Sitzung ist abgelaufen — bitte melde dich erneut an.",
     fileAttached: "(Datei angehängt)",
     serverError: (s) => `Serverfehler (${s})`,
     tryAgain: "Bitte versuche es erneut.",
+    chatNoTokens: "Deine AI-Tokens sind aufgebraucht. Lade dein Guthaben auf, um fortzufahren.",
+    chatNoSubscription: "Kein aktives AI-Chat-Abonnement.",
+    chatTooLarge: "Das Bild ist zu groß. Entferne es oder hänge ein kleineres an (max. 4 Bilder).",
+    chatOnlyImages: "Es können nur Bilder angehängt werden (JPG, PNG, WebP).",
+    chatTooMany: "Zu viele Anfragen. Warte kurz und versuche es erneut.",
+    chatUpstream: "Der AI-Server antwortet gerade nicht. Deine Nachricht ist wieder im Eingabefeld — versuche es gleich erneut.",
+    chatReadFailed: "Das angehängte Bild konnte nicht gelesen werden.",
+    convLoadFailed: "Die Unterhaltung konnte nicht geladen werden.",
+    convDeleteFailed: "Die Unterhaltung konnte nicht gelöscht werden.",
+    goBuyTokens: "Tokens kaufen →",
+    goSubscription: "Abonnement →",
+    dismiss: "Schließen",
+    imgProcessing: "Bild wird verkleinert…",
+    imgTooMany: (m) => `Max. ${m} Bilder pro Nachricht.`,
+    imgDecodeFailed: (n) => `Bild „${n}“ konnte nicht gelesen werden.`,
+    imgTooLarge: (n) => `Bild „${n}“ ist auch nach dem Verkleinern zu groß.`,
+    returnTokensSuccess: "Zahlung erhalten — die Tokens erscheinen in wenigen Augenblicken auf deinem Konto.",
+    returnTokensCancelled: "Die Token-Zahlung wurde abgebrochen.",
+    returnSubSuccess: "Zahlung erhalten — dein Abonnement wird in wenigen Augenblicken aktiviert.",
+    returnSubCancelled: "Die Abonnement-Zahlung wurde abgebrochen.",
+    loadFailed: "Daten konnten nicht geladen werden.",
+    retry: "Erneut versuchen",
+    loadMore: "Mehr anzeigen",
+    licenseRedeemed: "Die Lizenz wurde eingelöst.",
     subCreateFailed: "Abonnement konnte nicht erstellt werden. Bitte versuche es erneut.",
     enterLicenseCode: "Lizenzcode eingeben",
     licenseRedeemFailed: "Lizenz konnte nicht eingelöst werden",
@@ -772,7 +948,7 @@ const PANEL_DICT: Record<Locale, {
     thinking: "Ich denke nach...",
     removeFile: "Entfernen",
     chatPlaceholder: "Aufgabe einfügen oder Foto anhängen (Strg+V funktioniert auch für Bilder)...",
-    attachFile: "Datei anhängen (max. 5 x 10MB)",
+    attachFile: "Bild anhängen (max. 4)",
     send: "Senden",
     subHeading: "AI-Chat-Abonnement",
     subSubtitle: "Zugang zum AI Chat verwalten",
@@ -812,13 +988,13 @@ const PANEL_DICT: Record<Locale, {
     savesYou: "(du sparst 67%)",
     renewsOn: (d) => `Verlängert sich am: ${d}`,
     cancelSub: "Abonnement kündigen",
-    tokenUsage: "/ Token-Verbrauch",
-    effectiveTokens: "/ 1.000.000 effektive Tokens",
-    used: "VERBRAUCHT",
-    remaining: "VERBLEIBEND:",
+    tokenUsage: "/ Token-Guthaben",
+    effectiveTokens: "effektive Tokens auf deinem Konto",
+    remaining: "VERBLEIBEND",
+    aiLoadFailed: "AI-Einstellungen und Token-Guthaben konnten nicht geladen werden.",
     tasksLeftLabel: "Aufgaben übrig",
     maturaTasks: "Prüfungsaufgaben",
-    monthlyLimit: "Monatslimit",
+    monthlyLimit: "Pro 1 Mio. Tokens",
     forModel: (m) => `für Modell ${m}`,
     defaultModel: "Standard",
     modelPerformance: "MODELLEFFIZIENZ — Aufgaben pro 1 Mio. Tokens",
@@ -906,7 +1082,24 @@ const PANEL_DICT: Record<Locale, {
     newEmail: "Neue E-Mail-Adresse",
     confirmWithPassword: "Mit Passwort bestätigen",
     changeEmailBtn: "E-Mail ändern",
-    emailChangeNote: "Nach dem Ändern der E-Mail wirst du abgemeldet — melde dich mit der neuen Adresse an.",
+    emailChangeNote: "Wir senden einen Bestätigungslink an die neue Adresse — die Änderung gilt erst, wenn du ihn anklickst.",
+    emailChangeLogout: "E-Mail geändert. Du wirst gleich abgemeldet...",
+    newsletterLoadFailed: "Newsletter-Status konnte nicht geladen werden.",
+    newsletterSaveFailed: "Newsletter-Einwilligung konnte nicht gespeichert werden.",
+    dataHeading: "/ Deine Daten",
+    exportData: "Meine Daten herunterladen",
+    exportDataDesc: "Eine JSON-Datei mit allen Daten zu deinem Konto (DSGVO, Art. 20).",
+    exporting: "Wird vorbereitet…",
+    exportFailed: "Deine Daten konnten nicht heruntergeladen werden.",
+    deleteAccount: "Konto löschen",
+    deleteAccountDesc: "Löscht dauerhaft dein Konto, den Chatverlauf, Notizen, Klassenarbeiten und die Rechner-Kopplung. Das kann nicht rückgängig gemacht werden.",
+    deletePasswordPlaceholder: "Kontopasswort",
+    deleteGoogleHint: (p) => `Anmeldung über Google (ohne Passwort)? Lass das Passwort leer und tippe: ${p}`,
+    deleteAccountBtn: "Konto endgültig löschen",
+    deleting: "Wird gelöscht…",
+    deleteFailed: "Das Konto konnte nicht gelöscht werden.",
+    deleteNeedConfirm: (p) => `Gib dein Passwort ein oder tippe „${p}“ zur Bestätigung.`,
+    featureUnavailable: "Diese Funktion ist noch nicht verfügbar — bitte versuche es später oder kontaktiere uns.",
     session: "/ Sitzung",
   },
 };
@@ -915,27 +1108,73 @@ export default function PanelPage() {
   const { lang, setLang } = usePanelLang();
   const t = PANEL_DICT[lang];
   const { data: session, status } = useSession();
+  // Efekty zależą od tej wartości (a nie od obiektu session, który next-auth
+  // podmienia np. przy powrocie do karty) — inaczej każdy focus = refetch wszystkiego.
+  const authed = status === "authenticated";
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"orders" | "chat" | "subscription" | "ai" | "calculator" | "notes" | "tests" | "settings">("orders");
+  const [activeTab, setActiveTab] = useState<TabId>("orders");
   const [isLoading, setIsLoading] = useState(false);
+  const [returnNotice, setReturnNotice] = useState<ReturnNotice | null>(null);
+
+  // Kiedy ostatnio pobrano dane danej zakładki (cache FRESH_MS).
+  const fetchedAtRef = useRef<Record<string, number>>({});
+  const isFresh = (key: string) => Date.now() - (fetchedAtRef.current[key] ?? 0) < FRESH_MS;
+  const markFetched = (key: string) => {
+    fetchedAtRef.current[key] = Date.now();
+  };
+
+  // Komunikat błędu z wyniku fetchJson: 401 → sesja wygasła, 0 → sieć,
+  // w pozostałych przypadkach komunikat serwera albo fallback.
+  const errText = (r: FetchJsonResult, fallback: string) =>
+    r.status === 401 ? t.sessionExpired : r.status === 0 ? t.errNetwork : r.error || fallback;
 
   // Chat state
-  const [messages, setMessages] = useState<Array<{ role: string; content: string; attachments?: any[] }>>([]);
-  const [userMessage, setUserMessage] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const [isSending, setIsSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
+  const [chatError, setChatError] = useState<{ text: string; action?: "ai" | "subscription" } | null>(null);
+  const messagesBoxRef = useRef<HTMLDivElement>(null);
+  // Szkic pola czatu (tekst + zdjęcia) — trzymany w ref, żeby pisanie nie
+  // przerenderowywało panelu; draftEpoch remountuje ChatInput po przywróceniu.
+  const chatDraftRef = useRef<ChatDraft>({ text: "", files: [] });
+  const [draftEpoch, setDraftEpoch] = useState(0);
 
   // Conversation history state
   const [conversations, setConversations] = useState<any[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const currentConvRef = useRef<string | null>(null);
+  // Zmienia się przy każdym przełączeniu rozmowy — odpowiedź z serwera dla
+  // poprzedniej rozmowy nie może trafić do aktualnie otwartej.
+  const chatEpochRef = useRef(0);
+  const sendAbortRef = useRef<AbortController | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
+  const [loadingConvId, setLoadingConvId] = useState<string | null>(null);
+  // Poniżej md sidebar jest szufladą i domyślnie zamknięty (patrz efekt niżej).
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // File upload state
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (window.matchMedia?.("(min-width: 768px)").matches) setIsSidebarOpen(true);
+  }, []);
+  const closeSidebarOnMobile = () => {
+    if (!window.matchMedia?.("(min-width: 768px)").matches) setIsSidebarOpen(false);
+  };
+
+  // Przerwij trwające żądania czatu przy opuszczeniu panelu.
+  useEffect(
+    () => () => {
+      sendAbortRef.current?.abort();
+      loadAbortRef.current?.abort();
+    },
+    []
+  );
 
   // Subscription state
   const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
+  const [subLoadError, setSubLoadError] = useState<string | null>(null);
 
   // License state
   const [licenseCode, setLicenseCode] = useState("");
@@ -944,6 +1183,7 @@ export default function PanelPage() {
   // Orders state
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
 
   // === Kalkulator: state ===
   const [calcInfo, setCalcInfo] = useState<any>(null);
@@ -951,69 +1191,83 @@ export default function PanelPage() {
   const [calcNotes, setCalcNotes] = useState<any[]>([]);
   const [calcTests, setCalcTests] = useState<any[]>([]);
   const [calcLoading, setCalcLoading] = useState(false);
-  const [calcClaimCode, setCalcClaimCode] = useState("");
-  const [calcClaiming, setCalcClaiming] = useState(false);
-  const [calcError, setCalcError] = useState<string | null>(null);
+  const [calcLoadError, setCalcLoadError] = useState<string | null>(null);
   const [calcOpenedConv, setCalcOpenedConv] = useState<any>(null);
-  const [showChangeLicense, setShowChangeLicense] = useState(false);
   const [unclaiming, setUnclaiming] = useState(false);
+  const calcAbortRef = useRef<AbortController | null>(null);
 
-  // Captures (galeria zdjec)
+  // Captures (galeria zdjęć)
   const [captures, setCaptures] = useState<Array<{ filename: string; deviceId: string; timestamp: string; sizeKB: number }>>([]);
+  const [capturesTotal, setCapturesTotal] = useState(0);
   const [capturesLoading, setCapturesLoading] = useState(false);
+  const [capturesVisible, setCapturesVisible] = useState(CAPTURES_PAGE);
+  // Kursor stronicowania po stronie serwera (jeśli API go zwraca); null = brak kolejnych stron.
+  const [capturesCursor, setCapturesCursor] = useState<string | null>(null);
+  const [capturesMoreLoading, setCapturesMoreLoading] = useState(false);
   const [openedCapture, setOpenedCapture] = useState<string | null>(null);
 
-  // === AI settings (sekcja AI): wybor modelu + tryb Matura/Czysty (per-user) ===
+  // === AI settings (sekcja AI): wybór modelu + tryb Matura/Czysty (per-user) ===
   const [aiModel, setAiModel] = useState<string>("default");
   const [aiMode, setAiMode] = useState<"matura" | "raw">("matura");
   const [aiModels, setAiModels] = useState<Array<{ id: string; label: string; provider: string; note?: string; costMultiplier: number }>>([]);
   const [aiSaving, setAiSaving] = useState(false);
-  const [tokenBalance, setTokenBalance] = useState<number>(1_000_000);
+  const [aiLoadError, setAiLoadError] = useState(false);
+  // null = jeszcze nie wczytane (nie pokazujemy fikcyjnego 1M przed odpowiedzią API)
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [buyingPack, setBuyingPack] = useState<string | null>(null);
   const [buyCurrency, setBuyCurrency] = useState<"pln" | "eur">("pln");
+
+  // Powrót przyciskiem "wstecz" z bramki płatności (bfcache) — odblokuj przyciski.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setBuyingPack(null);
+        setIsLoading(false);
+      }
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
+
   const buyTokens = async (packId: string) => {
+    if (buyingPack) return;
     setBuyingPack(packId);
-    try {
-      const r = await fetch("/api/tokens/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packId, currency: buyCurrency }),
-      });
-      const j = await r.json();
-      if (j?.url) { window.location.href = j.url; return; }
-      alert(j?.error || t.alertPaymentStart);
-    } catch {
-      alert(t.alertNetwork);
-    } finally {
-      setBuyingPack(null);
+    const r = await sendJson("/api/tokens/checkout", "POST", { packId, currency: buyCurrency });
+    const url = r.ok && typeof r.data?.url === "string" ? (r.data.url as string) : null;
+    if (url) {
+      // Bez resetu stanu — przycisk zostaje zablokowany aż do przekierowania.
+      window.location.href = url;
+      return;
     }
+    alert(errText(r, t.alertPaymentStart));
+    setBuyingPack(null);
   };
 
-  const TOKEN_GRANT = 1_000_000;
-
-  const loadAiSettings = async () => {
-    try {
-      const r = await fetch("/api/user/ai-settings");
-      const j = await r.json();
-      if (j?.ok) {
-        setAiModel(j.aiModel || "default");
-        setAiMode(j.aiMode === "raw" ? "raw" : "matura");
-        setAiModels(Array.isArray(j.models) ? j.models : []);
-        if (typeof j.tokenBalance === "number") setTokenBalance(j.tokenBalance);
-      }
-    } catch {}
+  const loadAiSettings = async (signal?: AbortSignal) => {
+    const r = await fetchJson("/api/user/ai-settings", { cache: "no-store", signal });
+    if (r.aborted) return;
+    if (!r.ok) {
+      setAiLoadError(true);
+      return;
+    }
+    const j = r.data;
+    setAiLoadError(false);
+    setAiModel(j.aiModel || "default");
+    setAiMode(j.aiMode === "raw" ? "raw" : "matura");
+    setAiModels(Array.isArray(j.models) ? j.models : []);
+    if (typeof j.tokenBalance === "number") setTokenBalance(j.tokenBalance);
+    markFetched("ai");
   };
 
   const saveAiSettings = async (patch: { aiModel?: string; aiMode?: "matura" | "raw" }) => {
+    if (aiSaving) return;
     setAiSaving(true);
     try {
-      const r = await fetch("/api/user/ai-settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      const j = await r.json();
-      if (!j?.ok) { alert(j?.error || t.alertSaveFailed); return; }
+      const r = await sendJson("/api/user/ai-settings", "PATCH", patch);
+      if (!r.ok) {
+        alert(errText(r, t.alertSaveFailed));
+        return;
+      }
       if (patch.aiModel !== undefined) setAiModel(patch.aiModel);
       if (patch.aiMode !== undefined) setAiMode(patch.aiMode);
     } finally {
@@ -1021,7 +1275,7 @@ export default function PanelPage() {
     }
   };
 
-  // === Ustawienia konta: zmiana hasla + emaila ===
+  // === Ustawienia konta: zmiana hasła + emaila ===
   const [pwCurrent, setPwCurrent] = useState("");
   const [pwNew, setPwNew] = useState("");
   const [pwNew2, setPwNew2] = useState("");
@@ -1029,18 +1283,17 @@ export default function PanelPage() {
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const changePassword = async () => {
+    if (pwSaving) return;
     setPwMsg(null);
     if (pwNew.length < 6) { setPwMsg({ ok: false, text: t.pwTooShort }); return; }
     if (pwNew !== pwNew2) { setPwMsg({ ok: false, text: t.pwMismatch }); return; }
     setPwSaving(true);
     try {
-      const r = await fetch("/api/user/account/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
+      const r = await sendJson("/api/user/account/change-password", "POST", {
+        currentPassword: pwCurrent,
+        newPassword: pwNew,
       });
-      const j = await r.json();
-      if (!j?.ok) { setPwMsg({ ok: false, text: j?.error || t.errGeneric }); return; }
+      if (!r.ok) { setPwMsg({ ok: false, text: errText(r, t.errGeneric) }); return; }
       setPwMsg({ ok: true, text: t.pwChanged });
       setPwCurrent(""); setPwNew(""); setPwNew2("");
     } finally { setPwSaving(false); }
@@ -1052,23 +1305,32 @@ export default function PanelPage() {
   // Zgoda marketingowa (newsletter) — /api/user/marketing-consent
   const [nlConsent, setNlConsent] = useState<boolean | null>(null);
   const [nlSaving, setNlSaving] = useState(false);
+  const [nlLoading, setNlLoading] = useState(false);
+  const [nlError, setNlError] = useState<string | null>(null);
+  const loadNewsletter = async (signal?: AbortSignal) => {
+    setNlLoading(true);
+    setNlError(null);
+    const r = await fetchJson("/api/user/marketing-consent", { cache: "no-store", signal });
+    if (r.aborted) return;
+    setNlLoading(false);
+    if (!r.ok) { setNlError(errText(r, t.newsletterLoadFailed)); return; }
+    setNlConsent(!!r.data?.consent);
+  };
   useEffect(() => {
-    if (!session || activeTab !== "settings" || nlConsent !== null) return;
-    fetch("/api/user/marketing-consent")
-      .then((r) => r.json())
-      .then((d) => { if (d.ok) setNlConsent(!!d.consent); })
-      .catch(() => {});
-  }, [session, activeTab, nlConsent]);
+    if (!authed || activeTab !== "settings" || nlConsent !== null) return;
+    const ac = new AbortController();
+    void loadNewsletter(ac.signal);
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, activeTab, nlConsent]);
   const toggleNewsletter = async () => {
+    if (nlSaving || nlConsent === null) return;
     setNlSaving(true);
+    setNlError(null);
     try {
-      const r = await fetch("/api/user/marketing-consent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ consent: !nlConsent }),
-      });
-      const d = await r.json();
-      if (d.ok) setNlConsent(!!d.consent);
+      const r = await sendJson("/api/user/marketing-consent", "POST", { consent: !nlConsent });
+      if (!r.ok) { setNlError(errText(r, t.newsletterSaveFailed)); return; }
+      setNlConsent(!!r.data?.consent);
     } finally {
       setNlSaving(false);
     }
@@ -1076,26 +1338,107 @@ export default function PanelPage() {
   const [emMsg, setEmMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const changeEmail = async () => {
+    if (emSaving) return;
     setEmMsg(null);
     setEmSaving(true);
     try {
-      const r = await fetch("/api/user/account/change-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newEmail: emNew, password: emPassword }),
-      });
-      const j = await r.json();
-      if (!j?.ok) { setEmMsg({ ok: false, text: j?.error || t.errGeneric }); return; }
-      setEmMsg({ ok: true, text: t.emailChanged });
+      const r = await sendJson("/api/user/account/change-email", "POST", { newEmail: emNew, password: emPassword });
+      if (!r.ok) { setEmMsg({ ok: false, text: errText(r, t.errGeneric) }); return; }
+      // Zmiana wymaga potwierdzenia linkiem na nowy adres — do tego czasu konto
+      // działa na starym e-mailu, więc NIE wylogowujemy.
+      const pending = r.data?.pendingVerification === true || r.data?.verificationSent === true;
+      if (pending) {
+        setEmMsg({ ok: true, text: t.emailChanged });
+        setEmNew(""); setEmPassword("");
+        return;
+      }
+      // Starsze API (zmiana natychmiastowa) — sesja ma stary e-mail, trzeba się przelogować.
+      setEmMsg({ ok: true, text: t.emailChangeLogout });
       setTimeout(() => signOut({ callbackUrl: "/auth/signin" }), 1600);
     } finally { setEmSaving(false); }
   };
 
-  // Wczytaj ustawienia AI gdy sesja gotowa
-  useEffect(() => {
-    if (session) loadAiSettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  // === Dane konta: eksport (RODO art. 20) i usunięcie konta ===
+  const DELETE_PHRASE = "USUN KONTO";
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [showDelete, setShowDelete] = useState(false);
+  const [delPassword, setDelPassword] = useState("");
+  const [delPhrase, setDelPhrase] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [delMsg, setDelMsg] = useState<string | null>(null);
+
+  const exportData = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportMsg(null);
+    try {
+      let res: Response;
+      try {
+        res = await fetch("/api/user/account/export", { cache: "no-store" });
+      } catch {
+        setExportMsg(t.errNetwork);
+        return;
+      }
+      const ct = res.headers.get("content-type") || "";
+      const isJson = ct.includes("application/json");
+      if (!res.ok) {
+        let msg = t.exportFailed;
+        if (res.status === 401) msg = t.sessionExpired;
+        else if ((res.status === 404 || res.status === 405) && !isJson) msg = t.featureUnavailable;
+        else if (isJson) {
+          try {
+            const j = await res.json();
+            if (typeof j?.error === "string" && j.error) msg = j.error;
+          } catch { /* zostaje ogólny komunikat */ }
+        }
+        setExportMsg(msg);
+        return;
+      }
+      if (ct.includes("text/html")) { setExportMsg(t.exportFailed); return; }
+      const blob = await res.blob();
+      const cd = res.headers.get("content-disposition") || "";
+      const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+      let name = `kalkmate-dane-${new Date().toISOString().slice(0, 10)}.json`;
+      if (m) {
+        try { name = decodeURIComponent(m[1]); } catch { name = m[1]; }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const normalizePhrase = (s: string) =>
+    s.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase().replace(/\s+/g, " ");
+
+  const deleteAccount = async () => {
+    if (deleting) return;
+    const pw = delPassword;
+    const phraseOk = normalizePhrase(delPhrase) === DELETE_PHRASE;
+    if (!pw && !phraseOk) { setDelMsg(t.deleteNeedConfirm(DELETE_PHRASE)); return; }
+    if (!confirm(t.deleteAccountDesc)) return;
+    setDeleting(true);
+    setDelMsg(null);
+    try {
+      const r = await sendJson("/api/user/account", "DELETE", pw ? { password: pw } : { confirm: DELETE_PHRASE });
+      if (r.ok) {
+        await signOut({ callbackUrl: "/" });
+        return;
+      }
+      if ((r.status === 404 || r.status === 405) && r.notJson) { setDelMsg(t.featureUnavailable); return; }
+      setDelMsg(errText(r, t.deleteFailed));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // === Pair device (deviceId + unlockCode) ===
   const [pairDeviceId, setPairDeviceId] = useState("");
@@ -1104,79 +1447,139 @@ export default function PanelPage() {
   const [pairError, setPairError] = useState<string | null>(null);
   const [pairOk, setPairOk] = useState(false);
 
-  const pairDevice = async () => {
-    setPairError(null);
-    setPairOk(false);
-    setPairing(true);
-    try {
-      const r = await fetch("/api/user/devices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deviceId: pairDeviceId.trim(),
-          unlockCode: pairUnlockCode.trim(),
-        }),
-      });
-      const j = await r.json();
-      if (!j.ok) {
-        setPairError(j.error || t.errPairFailed);
-      } else {
-        setPairOk(true);
-        setPairDeviceId("");
-        setPairUnlockCode("");
-        // Odswiez calcInfo
-        const r2 = await fetch("/api/user/license/claim", { cache: "no-store" });
-        setCalcInfo(await r2.json());
-      }
-    } catch (e) {
-      setPairError(e instanceof Error ? e.message : t.errNetwork);
-    } finally {
-      setPairing(false);
-    }
-  };
-
   // Notes
   const [editingNote, setEditingNote] = useState<any>(null);
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
 
   // Tests
   const [editingTest, setEditingTest] = useState<any>(null);
   const [testTitle, setTestTitle] = useState("");
   const [testContent, setTestContent] = useState("");
   const [savingTest, setSavingTest] = useState(false);
+  const [testError, setTestError] = useState<string | null>(null);
 
-  // Load calculator data when tab activated
-  useEffect(() => {
-    if (session && (activeTab === "calculator" || activeTab === "notes" || activeTab === "tests" || activeTab === "subscription")) {
-      const load = async () => {
-        setCalcLoading(true);
-        try {
-          const r1 = await fetch("/api/user/license/claim", { cache: "no-store" });
-          const j1 = await r1.json();
-          setCalcInfo(j1);
-          if (j1.claimed) {
-            setCapturesLoading(true);
-            const [r2, r3, r4, r5] = await Promise.all([
-              fetch("/api/user/conversations?limit=50", { cache: "no-store" }),
-              fetch("/api/user/notes", { cache: "no-store" }),
-              fetch("/api/user/tests", { cache: "no-store" }),
-              fetch("/api/user/captures", { cache: "no-store" }),
-            ]);
-            setCalcConvs((await r2.json()).items || []);
-            setCalcNotes((await r3.json()).notes || []);
-            setCalcTests((await r4.json()).tests || []);
-            setCaptures((await r5.json()).items || []);
-            setCapturesLoading(false);
-          }
-        } finally {
-          setCalcLoading(false);
-        }
-      };
-      load();
+  // Pierwsza strona galerii + kursor kolejnej (tolerancyjnie: API może zwracać
+  // wszystko naraz albo nextBefore/nextCursor/hasMore).
+  const capturesNextCursor = (data: any, items: Array<{ timestamp: string }>): string | null => {
+    const explicit = data?.nextBefore ?? data?.nextCursor ?? data?.next ?? null;
+    if (typeof explicit === "string" && explicit) return explicit;
+    if (data?.hasMore === true && items.length > 0) return items[items.length - 1].timestamp;
+    return null;
+  };
+
+  // Dane zakładek Kalkulator / Notatki / Sprawdziany / Subskrypcja (licencja).
+  const loadCalcData = async (opts?: { force?: boolean }) => {
+    if (!opts?.force && isFresh("calc")) return;
+    calcAbortRef.current?.abort();
+    const ac = new AbortController();
+    calcAbortRef.current = ac;
+    const isCurrent = () => calcAbortRef.current === ac;
+    setCalcLoading(true);
+    setCalcLoadError(null);
+    try {
+      const r1 = await fetchJson("/api/user/license/claim", { cache: "no-store", signal: ac.signal });
+      if (!isCurrent() || r1.aborted) return;
+      if (!r1.ok) { setCalcLoadError(errText(r1, t.loadFailed)); return; }
+      setCalcInfo(r1.data);
+      if (!r1.data?.claimed) {
+        setCalcConvs([]); setCalcNotes([]); setCalcTests([]); setCaptures([]); setCapturesTotal(0);
+        markFetched("calc");
+        return;
+      }
+      setCapturesLoading(true);
+      const [r2, r3, r4, r5] = await Promise.all([
+        fetchJson("/api/user/conversations?limit=50", { cache: "no-store", signal: ac.signal }),
+        fetchJson("/api/user/notes", { cache: "no-store", signal: ac.signal }),
+        fetchJson("/api/user/tests", { cache: "no-store", signal: ac.signal }),
+        fetchJson(`/api/user/captures?limit=${CAPTURES_PAGE}`, { cache: "no-store", signal: ac.signal }),
+      ]);
+      if (!isCurrent()) return;
+      if (r2.ok) setCalcConvs(r2.data?.items || []);
+      if (r3.ok) setCalcNotes(r3.data?.notes || []);
+      if (r4.ok) setCalcTests(r4.data?.tests || []);
+      if (r5.ok) {
+        const items = Array.isArray(r5.data?.items) ? r5.data.items : [];
+        setCaptures(items);
+        setCapturesTotal(Number(r5.data?.stats?.total ?? r5.data?.total ?? items.length) || items.length);
+        setCapturesCursor(capturesNextCursor(r5.data, items));
+        setCapturesVisible(CAPTURES_PAGE);
+      }
+      const failed = [r2, r3, r4, r5].find((r) => !r.ok && !r.aborted);
+      if (failed) setCalcLoadError(errText(failed, t.loadFailed));
+      else if (![r2, r3, r4, r5].some((r) => r.aborted)) markFetched("calc");
+    } finally {
+      if (isCurrent()) {
+        setCalcLoading(false);
+        setCapturesLoading(false);
+        calcAbortRef.current = null;
+      }
     }
-  }, [session, activeTab]);
+  };
+
+  const loadMoreCaptures = async () => {
+    if (capturesVisible < captures.length) {
+      setCapturesVisible((v) => v + CAPTURES_PAGE);
+      return;
+    }
+    if (!capturesCursor || capturesMoreLoading) return;
+    setCapturesMoreLoading(true);
+    try {
+      const r = await fetchJson(
+        `/api/user/captures?limit=${CAPTURES_PAGE}&before=${encodeURIComponent(capturesCursor)}`,
+        { cache: "no-store" }
+      );
+      if (!r.ok) { setCalcLoadError(errText(r, t.loadFailed)); return; }
+      const items: typeof captures = Array.isArray(r.data?.items) ? r.data.items : [];
+      const known = new Set(captures.map((c) => c.filename));
+      const fresh = items.filter((c) => !known.has(c.filename));
+      setCaptures((prev) => [...prev, ...fresh]);
+      // Brak nowych elementów = API zignorowało kursor — kończymy, żeby nie zapętlić.
+      setCapturesCursor(fresh.length > 0 ? capturesNextCursor(r.data, items) : null);
+      setCapturesVisible((v) => v + CAPTURES_PAGE);
+    } finally {
+      setCapturesMoreLoading(false);
+    }
+  };
+
+  const pairDevice = async () => {
+    if (pairing) return;
+    setPairError(null);
+    setPairOk(false);
+    setPairing(true);
+    try {
+      const r = await sendJson("/api/user/devices", "POST", {
+        deviceId: pairDeviceId.trim(),
+        unlockCode: pairUnlockCode.trim(),
+      });
+      if (!r.ok) {
+        setPairError(errText(r, t.errPairFailed));
+        return;
+      }
+      setPairOk(true);
+      setPairDeviceId("");
+      setPairUnlockCode("");
+      // Od razu pełne dane: urządzenie, galeria, historia, notatki, sprawdziany.
+      await loadCalcData({ force: true });
+    } finally {
+      setPairing(false);
+    }
+  };
+
+  // Load calculator data when one of the calculator-related tabs is active.
+  // Zależność od wartości logicznej — przełączanie między tymi zakładkami nie
+  // przerywa ani nie powtarza pobierania.
+  const needsCalc = CALC_TABS.includes(activeTab);
+  useEffect(() => {
+    if (!authed || !needsCalc) return;
+    void loadCalcData();
+    return () => {
+      calcAbortRef.current?.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, needsCalc]);
 
   const calcUnclaim = async () => {
     const deviceId = calcInfo?.device?.deviceId;
@@ -1184,104 +1587,85 @@ export default function PanelPage() {
       alert(t.alertNoDeviceUnpair);
       return;
     }
+    if (unclaiming) return;
     if (!confirm(t.confirmUnpair(deviceId))) return;
     setUnclaiming(true);
     try {
-      const r = await fetch(`/api/user/devices?deviceId=${encodeURIComponent(deviceId)}`, {
-        method: "DELETE",
-      });
-      const j = await r.json();
-      if (j.ok) {
-        setShowChangeLicense(false);
-        const r2 = await fetch("/api/user/license/claim", { cache: "no-store" });
-        setCalcInfo(await r2.json());
-      } else {
-        alert(j.error || t.alertError);
+      const r = await fetchJson(`/api/user/devices?deviceId=${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+      if (!r.ok) {
+        alert(errText(r, t.alertError));
+        return;
       }
+      setPairOk(false);
+      await loadCalcData({ force: true });
     } finally {
       setUnclaiming(false);
     }
   };
 
-  const calcDoClaim = async () => {
-    if (!calcClaimCode.trim()) return;
-    setCalcClaiming(true);
-    setCalcError(null);
-    try {
-      const r = await fetch("/api/user/license/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: calcClaimCode.trim() }),
-      });
-      const j = await r.json();
-      if (!j.ok) setCalcError(j.error || t.alertError);
-      else {
-        setCalcClaimCode("");
-        // reload
-        const r1 = await fetch("/api/user/license/claim", { cache: "no-store" });
-        setCalcInfo(await r1.json());
-      }
-    } finally {
-      setCalcClaiming(false);
-    }
+  const reloadNotes = async () => {
+    const r = await fetchJson("/api/user/notes", { cache: "no-store" });
+    if (r.ok) setCalcNotes(r.data?.notes || []);
   };
-
   const calcSaveNote = async () => {
+    if (savingNote) return;
     if (!noteTitle.trim() && !noteContent.trim()) return;
     setSavingNote(true);
+    setNoteError(null);
     try {
-      if (editingNote) {
-        await fetch("/api/user/notes", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingNote.id, title: noteTitle, content: noteContent }),
-        });
-      } else {
-        await fetch("/api/user/notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: noteTitle, content: noteContent }),
-        });
+      const r = editingNote
+        ? await sendJson("/api/user/notes", "PUT", { id: editingNote.id, title: noteTitle, content: noteContent })
+        : await sendJson("/api/user/notes", "POST", { title: noteTitle, content: noteContent });
+      // Przy błędzie formularz zostaje nietknięty — uczeń nie traci wpisanej treści.
+      if (!r.ok) { setNoteError(errText(r, t.alertSaveFailed)); return; }
+      const saved = r.data?.note;
+      if (saved?.id) {
+        setCalcNotes((prev) => (editingNote ? prev.map((n) => (n.id === saved.id ? saved : n)) : [...prev, saved]));
       }
       setEditingNote(null); setNoteTitle(""); setNoteContent("");
-      const r = await fetch("/api/user/notes", { cache: "no-store" });
-      setCalcNotes((await r.json()).notes || []);
+      await reloadNotes();
     } finally { setSavingNote(false); }
   };
   const calcDelNote = async (id: string) => {
     if (!confirm(t.confirmDeleteNote)) return;
-    await fetch(`/api/user/notes?id=${id}`, { method: "DELETE" });
-    const r = await fetch("/api/user/notes", { cache: "no-store" });
-    setCalcNotes((await r.json()).notes || []);
+    setNoteError(null);
+    const r = await fetchJson(`/api/user/notes?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!r.ok) { setNoteError(errText(r, t.alertError)); return; }
+    setCalcNotes((prev) => prev.filter((n) => n.id !== id));
+    if (editingNote?.id === id) { setEditingNote(null); setNoteTitle(""); setNoteContent(""); }
+    void reloadNotes();
   };
 
+  const reloadTests = async () => {
+    const r = await fetchJson("/api/user/tests", { cache: "no-store" });
+    if (r.ok) setCalcTests(r.data?.tests || []);
+  };
   const calcSaveTest = async () => {
+    if (savingTest) return;
     if (!testTitle.trim() && !testContent.trim()) return;
     setSavingTest(true);
+    setTestError(null);
     try {
-      if (editingTest) {
-        await fetch("/api/user/tests", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingTest.id, title: testTitle, content: testContent }),
-        });
-      } else {
-        await fetch("/api/user/tests", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: testTitle, content: testContent }),
-        });
+      const r = editingTest
+        ? await sendJson("/api/user/tests", "PUT", { id: editingTest.id, title: testTitle, content: testContent })
+        : await sendJson("/api/user/tests", "POST", { title: testTitle, content: testContent });
+      if (!r.ok) { setTestError(errText(r, t.alertSaveFailed)); return; }
+      const saved = r.data?.test;
+      if (saved?.id) {
+        setCalcTests((prev) => (editingTest ? prev.map((x) => (x.id === saved.id ? saved : x)) : [...prev, saved]));
       }
       setEditingTest(null); setTestTitle(""); setTestContent("");
-      const r = await fetch("/api/user/tests", { cache: "no-store" });
-      setCalcTests((await r.json()).tests || []);
+      await reloadTests();
     } finally { setSavingTest(false); }
   };
   const calcDelTest = async (id: string) => {
     if (!confirm(t.confirmDeleteTest)) return;
-    await fetch(`/api/user/tests?id=${id}`, { method: "DELETE" });
-    const r = await fetch("/api/user/tests", { cache: "no-store" });
-    setCalcTests((await r.json()).tests || []);
+    setTestError(null);
+    const r = await fetchJson(`/api/user/tests?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (!r.ok) { setTestError(errText(r, t.alertError)); return; }
+    setCalcTests((prev) => prev.filter((x) => x.id !== id));
+    if (editingTest?.id === id) { setEditingTest(null); setTestTitle(""); setTestContent(""); }
+    void reloadTests();
   };
 
 
@@ -1292,134 +1676,208 @@ export default function PanelPage() {
     }
   }, [status, router]);
 
+  // ?tab=<id> oraz powrót z płatności (?tokens=success, ?subscription=success…)
+  // → właściwa zakładka + potwierdzenie; parametry usuwamy z paska adresu.
+  useEffect(() => {
+    let sp: URLSearchParams;
+    try {
+      sp = new URLSearchParams(window.location.search);
+    } catch {
+      return;
+    }
+    const tok = sp.get("tokens");
+    const sub = sp.get("subscription");
+    const tabParam = sp.get("tab");
+    let tab: TabId | null = null;
+    let notice: ReturnNotice | null = null;
+    if (tok === "success") { tab = "ai"; notice = "tokens_success"; }
+    else if (tok === "cancelled") { tab = "ai"; notice = "tokens_cancelled"; }
+    else if (sub === "success") { tab = "subscription"; notice = "sub_success"; }
+    else if (sub === "cancelled") { tab = "subscription"; notice = "sub_cancelled"; }
+    else if (tabParam && (TAB_IDS as readonly string[]).includes(tabParam)) tab = tabParam as TabId;
+    if (tab) setActiveTab(tab);
+    if (notice) setReturnNotice(notice);
+    if (tok !== null || sub !== null || tabParam !== null) {
+      sp.delete("tokens");
+      sp.delete("subscription");
+      sp.delete("tab");
+      const qs = sp.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash
+      );
+    }
+  }, []);
+
+  // Webhook płatności dochodzi zwykle kilka sekund po powrocie — dociągnij
+  // saldo / status subskrypcji jeszcze raz.
+  useEffect(() => {
+    if (!authed || (returnNotice !== "tokens_success" && returnNotice !== "sub_success")) return;
+    const timers = [3000, 10000].map((ms) =>
+      setTimeout(() => {
+        if (returnNotice === "tokens_success") void loadAiSettings();
+        else void fetchSubscriptionStatus();
+      }, ms)
+    );
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, returnNotice]);
+
+  // Ustawienia AI + saldo: raz po zalogowaniu, potem przy wejściu w zakładkę AI
+  // (jeśli dane starsze niż FRESH_MS — saldo zmienia się po każdym zadaniu).
+  const isAiTab = activeTab === "ai";
+  useEffect(() => {
+    if (!authed) return;
+    if (fetchedAtRef.current.ai && (!isAiTab || isFresh("ai"))) return;
+    const ac = new AbortController();
+    void loadAiSettings(ac.signal);
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, isAiTab]);
+
   // Fetch subscription status
   useEffect(() => {
-    if (session && activeTab === "subscription") {
-      fetchSubscriptionStatus();
-    }
-  }, [session, activeTab]);
+    if (!authed || activeTab !== "subscription" || isFresh("sub")) return;
+    const ac = new AbortController();
+    void fetchSubscriptionStatus(ac.signal);
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, activeTab]);
 
   // Fetch orders when orders tab is active
   useEffect(() => {
-    if (session && activeTab === "orders") {
-      fetchOrders();
-    }
-  }, [session, activeTab]);
+    if (!authed || activeTab !== "orders" || isFresh("orders")) return;
+    const ac = new AbortController();
+    void fetchOrders(ac.signal);
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, activeTab]);
 
   // Fetch conversations when chat tab is active
   useEffect(() => {
-    if (session && activeTab === "chat") {
-      fetchConversations();
-    }
-  }, [session, activeTab]);
+    if (!authed || activeTab !== "chat" || isFresh("convs")) return;
+    const ac = new AbortController();
+    void fetchConversations(ac.signal);
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, activeTab]);
 
-  const fetchConversations = async () => {
-    try {
-      const res = await fetch("/api/conversations");
-      if (res.ok) {
-        const data = await res.json();
-        setConversations(data.conversations || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch conversations:", error);
-    }
+  const fetchConversations = async (signal?: AbortSignal) => {
+    const r = await fetchJson("/api/conversations", { cache: "no-store", signal });
+    if (!r.ok) return; // lista historii — błąd nie blokuje samego czatu
+    setConversations(Array.isArray(r.data?.conversations) ? r.data.conversations : []);
+    markFetched("convs");
   };
 
   const loadConversation = async (conversationId: string) => {
-    try {
-      const res = await fetch(`/api/conversations/${conversationId}`);
-      if (res.ok) {
-        const data = await res.json();
-        // Map messages to include attachments with correct data format
-        const messagesWithAttachments = data.conversation.messages.map((msg: any) => ({
-          role: msg.role,
-          content: msg.content,
-          attachments: msg.attachments?.map((att: any) => ({
-            filename: att.filename,
-            mimeType: att.mimeType,
-            fileSize: att.fileSize,
-            data: att.fileData,
-          })),
-        }));
-        setMessages(messagesWithAttachments);
-        setCurrentConversationId(conversationId);
-      }
-    } catch (error) {
-      console.error("Failed to load conversation:", error);
+    if (sendingRef.current) return;
+    loadAbortRef.current?.abort();
+    const ac = new AbortController();
+    loadAbortRef.current = ac;
+    chatEpochRef.current++;
+    setChatError(null);
+    setLoadingConvId(conversationId);
+    const r = await fetchJson(`/api/conversations/${encodeURIComponent(conversationId)}`, {
+      cache: "no-store",
+      signal: ac.signal,
+    });
+    if (loadAbortRef.current !== ac) return; // w międzyczasie kliknięto inną rozmowę
+    loadAbortRef.current = null;
+    setLoadingConvId(null);
+    if (r.aborted) return;
+    if (!r.ok) {
+      setChatError({ text: errText(r, t.convLoadFailed) });
+      return;
     }
+    // Tolerancyjnie: nowy kształt (messages/attachments) i surowy Prisma (ChatMessage/Attachment).
+    const conv = r.data?.conversation;
+    const rawMessages: any[] = conv?.messages ?? conv?.ChatMessage ?? [];
+    const mapped: ChatMessage[] = rawMessages.map((msg: any) => {
+      const atts: any[] = msg.attachments ?? msg.Attachment ?? [];
+      return {
+        role: msg.role,
+        content: msg.content ?? "",
+        attachments: atts.length
+          ? atts.map((att: any) => ({
+              filename: att.filename,
+              mimeType: att.mimeType || "",
+              fileSize: att.fileSize,
+              data: att.fileData ?? att.data ?? "",
+            }))
+          : undefined,
+      };
+    });
+    currentConvRef.current = conversationId;
+    setCurrentConversationId(conversationId);
+    setMessages(mapped);
+    closeSidebarOnMobile();
   };
 
-  const createNewConversation = async () => {
-    try {
-      const res = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: t.newConversationTitle }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentConversationId(data.conversation.id);
-        setMessages([]);
-        fetchConversations();
-      }
-    } catch (error) {
-      console.error("Failed to create conversation:", error);
-    }
+  // "Nowy chat" = pusta rozmowa lokalnie; serwer tworzy konwersację przy
+  // pierwszej wiadomości (z tytułem z treści). Bez POST-a nie ma też problemu
+  // podwójnego kliknięcia i pustych "Nowa konwersacja" na liście.
+  const startNewChat = () => {
+    if (sendingRef.current) return;
+    loadAbortRef.current?.abort();
+    loadAbortRef.current = null;
+    setLoadingConvId(null);
+    chatEpochRef.current++;
+    currentConvRef.current = null;
+    setCurrentConversationId(null);
+    setMessages([]);
+    setChatError(null);
+    closeSidebarOnMobile();
   };
 
   const deleteConversation = async (conversationId: string) => {
+    if (sendingRef.current) return;
     if (!confirm(t.confirmDeleteConversation)) return;
-
-    try {
-      const res = await fetch(`/api/conversations/${conversationId}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        if (currentConversationId === conversationId) {
-          setMessages([]);
-          setCurrentConversationId(null);
-        }
-        fetchConversations();
-      }
-    } catch (error) {
-      console.error("Failed to delete conversation:", error);
+    const r = await fetchJson(`/api/conversations/${encodeURIComponent(conversationId)}`, { method: "DELETE" });
+    if (!r.ok) {
+      alert(errText(r, t.convDeleteFailed));
+      return;
     }
+    if (currentConvRef.current === conversationId) startNewChat();
+    setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+    void fetchConversations();
   };
 
-  const fetchSubscriptionStatus = async () => {
-    try {
-      const res = await fetch("/api/subscription/status");
-      if (res.ok) {
-        const data = await res.json();
-        setSubscriptionStatus(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch subscription status:", error);
+  const fetchSubscriptionStatus = async (signal?: AbortSignal) => {
+    const r = await fetchJson("/api/subscription/status", { cache: "no-store", signal });
+    if (r.aborted) return;
+    if (!r.ok) {
+      setSubLoadError(errText(r, t.loadFailed));
+      return;
     }
+    setSubLoadError(null);
+    setSubscriptionStatus(r.data);
+    markFetched("sub");
   };
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (signal?: AbortSignal) => {
     setOrdersLoading(true);
+    setOrdersError(null);
     try {
-      const res = await fetch("/api/user/orders");
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data.orders || []);
+      const r = await fetchJson("/api/user/orders", { cache: "no-store", signal });
+      if (r.aborted) return;
+      if (!r.ok) {
+        setOrdersError(errText(r, t.loadFailed));
+        return;
       }
-    } catch (error) {
-      console.error("Failed to fetch orders:", error);
+      setOrders(Array.isArray(r.data?.orders) ? r.data.orders : []);
+      markFetched("orders");
     } finally {
-      setOrdersLoading(false);
+      if (!signal?.aborted) setOrdersLoading(false);
     }
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+  // Przewijamy tylko kontener wiadomości (nie całą stronę).
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (activeTab !== "chat") return;
+    const el = messagesBoxRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, isSending, activeTab]);
 
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const copyToClipboard = async (text: string, idx?: number) => {
@@ -1441,110 +1899,144 @@ export default function PanelPage() {
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    // Limit: max 5 files, max 10MB each
-    const validFiles = files.filter(f => f.size <= 10 * 1024 * 1024).slice(0, 5);
-    setSelectedFiles(validFiles);
+  const chatErrorFrom = (r: FetchJsonResult): { text: string; action?: "ai" | "subscription" } => {
+    switch (r.status) {
+      case 0: return { text: t.errNetwork };
+      case 401: return { text: t.sessionExpired };
+      case 402: return { text: t.chatNoTokens, action: "ai" };
+      case 403: return { text: t.chatNoSubscription, action: "subscription" };
+      case 413: return { text: t.chatTooLarge };
+      case 415: return { text: t.chatOnlyImages };
+      case 429: return { text: t.chatTooMany };
+      case 502:
+      case 503:
+      case 504: return { text: t.chatUpstream };
+      default: return { text: (!r.notJson && r.error) || `${t.serverError(r.status)} ${t.tryAgain}` };
+    }
   };
 
-  const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = error => reject(error);
-    });
-  };
-
-  const handleSend = async () => {
-    if ((!userMessage.trim() && selectedFiles.length === 0) || isSending) return;
-
+  const handleSend = async (text: string, files: File[]) => {
+    if (sendingRef.current) return;
+    if (!text.trim() && files.length === 0) return;
+    sendingRef.current = true;
     setIsSending(true);
+    setChatError(null);
+
+    const epoch = chatEpochRef.current;
+    const convIdAtSend = currentConvRef.current;
+    const prevMessages = messagesRef.current;
+    const ac = new AbortController();
+    sendAbortRef.current = ac;
+    let shownOptimistic = false;
+
+    // Błąd: treść i zdjęcia wracają do pola (nic nie ginie), a z listy znika
+    // niewysłana wiadomość — serwer jej nie zapisał.
+    const fail = (err: { text: string; action?: "ai" | "subscription" }) => {
+      chatDraftRef.current = { text, files };
+      setDraftEpoch((e) => e + 1);
+      if (chatEpochRef.current === epoch) {
+        if (shownOptimistic) setMessages(prevMessages);
+        setChatError(err);
+      }
+    };
 
     try {
-      // Convert files to base64
-      const attachments = await Promise.all(
-        selectedFiles.map(async (file) => ({
-          filename: file.name,
-          mimeType: file.type,
-          fileSize: file.size,
-          data: await fileToBase64(file),
-        }))
-      );
+      let attachments: ChatAttachment[] = [];
+      try {
+        attachments = await Promise.all(
+          files.map(async (file) => ({
+            filename: file.name,
+            mimeType: file.type,
+            fileSize: file.size,
+            data: await fileToDataUrl(file),
+          }))
+        );
+      } catch {
+        fail({ text: t.chatReadFailed });
+        return;
+      }
 
-      const newMessage = {
+      const newMessage: ChatMessage = {
         role: "user",
-        content: userMessage || t.fileAttached,
+        content: text.trim() ? text : t.fileAttached,
         attachments: attachments.length > 0 ? attachments : undefined,
       };
+      setMessages([...prevMessages, newMessage]);
+      shownOptimistic = true;
 
-      const newMessages = [...messages, newMessage];
-      setMessages(newMessages);
-      setUserMessage("");
-      setSelectedFiles([]);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages,
-          conversationId: currentConversationId || undefined,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || t.serverError(response.status));
+      // Historia bez base64 starych zdjęć — serwer bierze historię z bazy po
+      // conversationId, a stare obrazy tylko pompowały żądanie (413 z nginx).
+      const history = prevMessages.map((m) => ({ role: m.role, content: m.content }));
+      const r = await sendJson<{ response?: string; conversationId?: string; tokensLeft?: number }>(
+        "/api/chat",
+        "POST",
+        { messages: [...history, newMessage], conversationId: convIdAtSend || undefined },
+        { signal: ac.signal }
+      );
+      if (r.aborted) return;
+      const reply = r.ok && typeof r.data?.response === "string" ? r.data.response : null;
+      if (reply === null) {
+        fail(r.ok ? { text: `${t.serverError(r.status)} ${t.tryAgain}` } : chatErrorFrom(r));
+        // Przy 504 serwer mógł jednak dokończyć i zapisać rozmowę — odśwież listę.
+        void fetchConversations();
+        return;
       }
-
-      setMessages([...newMessages, { role: "assistant", content: data.response }]);
-
-      // Update conversationId if backend created a new one
-      if (data.conversationId && !currentConversationId) {
-        setCurrentConversationId(data.conversationId);
+      if (typeof r.data?.tokensLeft === "number") setTokenBalance(r.data.tokensLeft);
+      if (chatEpochRef.current !== epoch) {
+        // Użytkownik przełączył rozmowę — odpowiedź należy do innej, nie mieszamy.
+        void fetchConversations();
+        return;
       }
-
-      // Refresh conversations to update list
-      fetchConversations();
-    } catch (error) {
-      console.error("Chat error:", error);
-      const msg = error instanceof Error ? error.message : t.tryAgain;
-      setMessages([
-        ...messages,
-        { role: "assistant", content: `⚠️ ${msg}` },
-      ]);
+      setMessages((cur) => [...cur, { role: "assistant", content: reply }]);
+      const newConvId = r.data?.conversationId;
+      if (newConvId && !convIdAtSend) {
+        currentConvRef.current = newConvId;
+        setCurrentConversationId(newConvId);
+      }
+      void fetchConversations();
     } finally {
+      if (sendAbortRef.current === ac) sendAbortRef.current = null;
+      sendingRef.current = false;
       setIsSending(false);
     }
   };
 
+  // Stabilna referencja dla memo(ChatInput) — rodzic może się przerenderować,
+  // pole tekstowe nie.
+  const handleSendRef = useRef(handleSend);
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  });
+  const onChatSend = useCallback((text: string, files: File[]) => {
+    void handleSendRef.current(text, files);
+  }, []);
+  const chatInputLabels = useMemo<ChatInputLabels>(
+    () => ({
+      placeholder: t.chatPlaceholder,
+      attach: t.attachFile,
+      send: t.send,
+      remove: t.removeFile,
+      processing: t.imgProcessing,
+      tooMany: t.imgTooMany,
+      onlyImages: t.chatOnlyImages,
+      decodeFailed: t.imgDecodeFailed,
+      tooLarge: t.imgTooLarge,
+    }),
+    [t]
+  );
+
   const handleSubscribe = async (plan: "second_month" | "regular") => {
+    if (isLoading) return;
     setIsLoading(true);
-    try {
-      const res = await fetch("/api/subscription/purchase", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
-      });
-      if (res.ok) {
-        const { url } = await res.json();
-        window.location.href = url;
-      } else {
-        alert(t.subCreateFailed);
-      }
-    } catch (error) {
-      console.error("Failed to create subscription:", error);
-      alert(t.subCreateFailed);
-    } finally {
-      setIsLoading(false);
+    const r = await sendJson("/api/subscription/purchase", "POST", { plan });
+    const url = r.ok && typeof r.data?.url === "string" ? (r.data.url as string) : null;
+    if (url) {
+      // Bez resetu isLoading — przyciski zostają zablokowane do przekierowania.
+      window.location.href = url;
+      return;
     }
+    alert(errText(r, t.subCreateFailed));
+    setIsLoading(false);
   };
 
   const handleRedeemLicense = async () => {
@@ -1552,45 +2044,36 @@ export default function PanelPage() {
       alert(t.enterLicenseCode);
       return;
     }
-
+    if (redeemingLicense) return;
     setRedeemingLicense(true);
     try {
-      const res = await fetch("/api/subscription/redeem", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ licenseCode: licenseCode.trim() }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        alert(data.message);
-        setLicenseCode("");
-        fetchSubscriptionStatus();
-      } else {
-        alert(data.error || t.licenseRedeemFailed);
+      const r = await sendJson("/api/subscription/redeem", "POST", { licenseCode: licenseCode.trim() });
+      if (!r.ok) {
+        alert(r.status === 0 || (r.notJson && r.status !== 401) ? t.licenseRedeemError : errText(r, t.licenseRedeemFailed));
+        return;
       }
-    } catch (error) {
-      console.error("Failed to redeem license:", error);
-      alert(t.licenseRedeemError);
+      alert(typeof r.data?.message === "string" && r.data.message ? r.data.message : t.licenseRedeemed);
+      setLicenseCode("");
+      void fetchSubscriptionStatus();
+      void loadCalcData({ force: true });
     } finally {
       setRedeemingLicense(false);
     }
   };
 
   const handleCancelSubscription = async () => {
+    if (isLoading) return;
     if (!confirm(t.confirmCancelSub)) return;
 
     setIsLoading(true);
     try {
-      const res = await fetch("/api/subscription/cancel", { method: "POST" });
-      if (res.ok) {
-        alert(t.subCancelled);
-        fetchSubscriptionStatus();
+      const r = await fetchJson("/api/subscription/cancel", { method: "POST" });
+      if (!r.ok) {
+        alert(errText(r, t.subCancelFailed));
+        return;
       }
-    } catch (error) {
-      console.error("Failed to cancel subscription:", error);
-      alert(t.subCancelFailed);
+      alert(t.subCancelled);
+      void fetchSubscriptionStatus();
     } finally {
       setIsLoading(false);
     }
@@ -1623,7 +2106,10 @@ export default function PanelPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0B0B0B] text-[#F2EDE3]">
+    // data-clarity-mask: nawet gdyby Clarity załadował się na /panel, nie nagrywa treści.
+    <div className="min-h-screen bg-[#0B0B0B] text-[#F2EDE3]" data-clarity-mask="true">
+      {/* Lekka animacja wejścia zakładki w CSS (zamiast framer-motion/AnimatePresence). */}
+      <style>{`@keyframes kmPanelFade{from{opacity:0}to{opacity:1}}.km-panel-fade{animation:kmPanelFade .15s ease-out}@media (prefers-reduced-motion: reduce){.km-panel-fade{animation:none}}`}</style>
       {/* Header */}
       <header className="sticky top-0 z-40 bg-[#0B0B0B]/85 backdrop-blur-md border-b border-[rgba(242,237,227,0.10)]">
         <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
@@ -1653,9 +2139,9 @@ export default function PanelPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1400px] px-5 lg:px-10 py-10 lg:py-14">
+      <div className="mx-auto max-w-[1400px] px-4 sm:px-5 lg:px-10 py-6 md:py-10 lg:py-14">
         {/* Page heading */}
-        <div className="mb-10 lg:mb-14 grid lg:grid-cols-12 gap-8 items-end">
+        <div className="mb-6 md:mb-10 lg:mb-14 grid lg:grid-cols-12 gap-4 md:gap-8 items-end">
           <div className="lg:col-span-8">
             <p className="km-mono-eyebrow text-[#D8FF3D]">{t.yourPanel}</p>
             <h1 className="km-display text-[clamp(40px,7vw,96px)] mt-3">
@@ -1663,19 +2149,19 @@ export default function PanelPage() {
             </h1>
           </div>
           <div className="lg:col-span-4 km-mono-eyebrow text-[#F2EDE3]/45 lg:text-right">
-            <p>PANEL · v0.6.4</p>
+            <p>PANEL{process.env.NEXT_PUBLIC_APP_VERSION ? ` · v${process.env.NEXT_PUBLIC_APP_VERSION}` : ""}</p>
             <p className="mt-1 text-[#F2EDE3]/30">{t.sessionActive}</p>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="mb-10 border-y border-[rgba(242,237,227,0.10)]">
+        <div className="mb-6 md:mb-10 border-y border-[rgba(242,237,227,0.10)]">
           <div className="flex overflow-x-auto km-no-scrollbar">
             {tabs.map((tab, i) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative group flex items-baseline gap-2.5 px-5 py-4 whitespace-nowrap transition-colors ${
+                className={`relative group flex items-baseline gap-2.5 px-4 md:px-5 py-3 md:py-4 whitespace-nowrap transition-colors ${
                   i > 0 ? "border-l border-[rgba(242,237,227,0.10)]" : ""
                 } ${
                   activeTab === tab.id
@@ -1695,17 +2181,42 @@ export default function PanelPage() {
           </div>
         </div>
 
-        {/* Tab Content */}
-        <AnimatePresence mode="wait">
-          {activeTab === "orders" && (
-            <motion.div
-              key="orders"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" as const }}
+        {/* Powrót z płatności (Stripe / Przelewy24) */}
+        {returnNotice && (
+          <div
+            role="status"
+            className={`mb-6 flex items-start justify-between gap-3 border p-3 ${
+              returnNotice.endsWith("success")
+                ? "border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.06]"
+                : "border-[#FFB800]/40 bg-[#FFB800]/[0.06]"
+            }`}
+          >
+            <p className={`text-sm ${returnNotice.endsWith("success") ? "text-[#D8FF3D]" : "text-[#FFB800]"}`}>
+              {returnNotice === "tokens_success"
+                ? t.returnTokensSuccess
+                : returnNotice === "tokens_cancelled"
+                ? t.returnTokensCancelled
+                : returnNotice === "sub_success"
+                ? t.returnSubSuccess
+                : t.returnSubCancelled}
+            </p>
+            <button
+              onClick={() => setReturnNotice(null)}
+              className="km-mono-eyebrow text-[#F2EDE3]/60 hover:text-[#F2EDE3] shrink-0"
             >
-              <div className="bg-[#0E0E0E]  p-8 border border-[rgba(242,237,227,0.10)]">
+              {t.dismiss} ×
+            </button>
+          </div>
+        )}
+
+        {/* Tab Content */}
+        <>
+          {activeTab === "orders" && (
+            <div
+              key="orders"
+              className="km-panel-fade"
+            >
+              <div className="bg-[#0E0E0E] p-4 sm:p-8 border border-[rgba(242,237,227,0.10)]">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-12 h-12  bg-[#D8FF3D]/10 bg-[#D8FF3D]/10 flex items-center justify-center">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#D8FF3D]">
@@ -1728,6 +2239,16 @@ export default function PanelPage() {
                 {ordersLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="w-8 h-8 border-4 border-[#D8FF3D] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : ordersError ? (
+                  <div className="text-center py-12">
+                    <p className="text-sm text-[#FF4D2E] mb-4">{ordersError}</p>
+                    <button
+                      onClick={() => void fetchOrders()}
+                      className="km-mono-eyebrow px-4 py-2 border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors"
+                    >
+                      {t.retry}
+                    </button>
                   </div>
                 ) : orders.length === 0 ? (
                   <div className="text-center py-12">
@@ -1753,18 +2274,21 @@ export default function PanelPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {orders.map((order, index) => (
-                      <motion.div
+                    {orders.map((order) => (
+                      <div
                         key={order.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: index * 0.1, ease: "easeOut" as const }}
-                        className="border border-[rgba(242,237,227,0.10)]  p-6  transition-shadow duration-300"
+                        className="border border-[rgba(242,237,227,0.10)] p-4 sm:p-6"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
                           <div>
                             <p className="text-lg font-bold text-[#F2EDE3]">
                               {t.orderNo(order.orderNumber)}
+                              {/* Ilosc sztuk — starsze zamowienia nie maja pola (= 1) */}
+                              {Number(order.quantity) > 1 && (
+                                <span className="ml-2 km-mono-eyebrow text-sm text-[#D8FF3D]">
+                                  KalkMate × {Math.floor(Number(order.quantity))}
+                                </span>
+                              )}
                             </p>
                             <p className="text-sm text-[#F2EDE3]/60 mt-1 flex items-center gap-2">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1826,48 +2350,76 @@ export default function PanelPage() {
                             </div>
                           )}
                         </div>
-                      </motion.div>
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
-            </motion.div>
+            </div>
           )}
 
           {activeTab === "chat" && (
-            <motion.div
+            <div
               key="chat"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" as const }}
-              className="bg-[#0E0E0E]  border border-[rgba(242,237,227,0.10)] overflow-hidden flex h-[700px]"
+              className="km-panel-fade relative bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)] overflow-hidden flex h-[calc(100dvh-5rem)] md:h-[calc(100dvh-8rem)] min-h-[420px] max-h-[900px]"
             >
-              {/* Sidebar with conversations */}
-              <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} border-r border-[rgba(242,237,227,0.10)] flex flex-col transition-all duration-300 overflow-hidden`}>
+              {/* Telefon: tło pod otwartą szufladą historii */}
+              {isSidebarOpen && (
+                <div
+                  className="md:hidden absolute inset-0 z-20 bg-black/60"
+                  onClick={() => setIsSidebarOpen(false)}
+                  aria-hidden="true"
+                />
+              )}
+              {/* Sidebar with conversations — poniżej md szuflada nad czatem */}
+              <div
+                className={`absolute md:relative inset-y-0 left-0 z-30 md:z-auto w-64 max-w-[85%] shrink-0 bg-[#0E0E0E] border-r border-[rgba(242,237,227,0.10)] flex flex-col overflow-hidden transition-[transform,width,visibility] duration-200 ${
+                  isSidebarOpen
+                    ? "translate-x-0 md:w-64"
+                    : "-translate-x-full invisible md:visible md:translate-x-0 md:w-0 md:border-r-0"
+                }`}
+              >
                 {/* Sidebar header */}
                 <div className="p-4 border-b border-[rgba(242,237,227,0.10)] flex items-center justify-between">
                   <h3 className="font-semibold text-[#F2EDE3] text-sm">{t.chatHistories}</h3>
-                  <button
-                    onClick={createNewConversation}
-                    className="p-1.5  bg-[#D8FF3D] text-[#0B0B0B] hover:opacity-80 transition-opacity"
-                    title={t.newConversation}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19"/>
-                      <line x1="5" y1="12" x2="19" y2="12"/>
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={startNewChat}
+                      disabled={isSending}
+                      className="p-1.5  bg-[#D8FF3D] text-[#0B0B0B] hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={t.newConversation}
+                      aria-label={t.newConversation}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setIsSidebarOpen(false)}
+                      className="md:hidden p-1.5 text-[#F2EDE3]/60 hover:text-[#F2EDE3]"
+                      title={t.hideHistory}
+                      aria-label={t.hideHistory}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
-                {/* Conversations list */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {/* Conversations list — zablokowana w trakcie wysyłania, żeby odpowiedź nie trafiła do innej rozmowy */}
+                <div
+                  className={`flex-1 overflow-y-auto p-2 space-y-1 ${isSending ? "opacity-50 pointer-events-none" : ""}`}
+                  aria-busy={isSending}
+                >
                   {conversations.map((conv) => (
                     <div
                       key={conv.id}
                       className={`group relative p-3  cursor-pointer transition-colors ${
                         currentConversationId === conv.id
-                          ? 'bg-[#D8FF3D]/10 bg-[#D8FF3D]/10'
+                          ? 'bg-[#D8FF3D]/10'
                           : 'hover:bg-[#141414]'
                       }`}
                       onClick={() => loadConversation(conv.id)}
@@ -1876,15 +2428,18 @@ export default function PanelPage() {
                         {conv.title}
                       </p>
                       <p className="text-xs text-[#F2EDE3]/60 mt-1">
-                        {t.messagesCount(conv._count?.messages || 0)}
+                        {loadingConvId === conv.id
+                          ? t.loading
+                          : t.messagesCount(conv._count?.messages ?? conv._count?.ChatMessage ?? 0)}
                       </p>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteConversation(conv.id);
                         }}
-                        className="absolute top-2 right-2 p-1 rounded bg-red-500/10 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 p-1 rounded bg-red-500/10 hover:bg-red-500/20 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition-opacity"
                         title={t.deleteTitle}
+                        aria-label={t.deleteTitle}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600 dark:text-red-400">
                           <polyline points="3 6 5 6 21 6"/>
@@ -1904,16 +2459,16 @@ export default function PanelPage() {
               </div>
 
               {/* Main chat area */}
-              <div className="flex-1 flex flex-col"
-            >
+              <div className="flex-1 min-w-0 flex flex-col">
               {/* Chat header */}
-              <div className="p-6 border-b border-[rgba(242,237,227,0.10)]  from-[#D8FF3D]/5 to-[#D8FF3D]/5 dark:from-[#D8FF3D]/10 dark:to-[#D8FF3D]/10">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+              <div className="px-3 py-3 md:p-6 border-b border-[rgba(242,237,227,0.10)]">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 md:gap-3 min-w-0">
                     <button
                       onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                      className="p-2  hover:bg-[#141414]/50 transition-colors"
+                      className="p-2 shrink-0 hover:bg-[#141414]/50 transition-colors"
                       title={isSidebarOpen ? t.hideHistory : t.showHistory}
+                      aria-label={isSidebarOpen ? t.hideHistory : t.showHistory}
                     >
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="3" y1="12" x2="21" y2="12"/>
@@ -1921,22 +2476,23 @@ export default function PanelPage() {
                         <line x1="3" y1="18" x2="21" y2="18"/>
                       </svg>
                     </button>
-                    <div className="w-12 h-12   from-[#D8FF3D] to-[#D8FF3D] flex items-center justify-center">
+                    <div className="hidden md:flex w-12 h-12 shrink-0 items-center justify-center">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                       </svg>
                     </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-[#F2EDE3]">{t.chatTitle}</h2>
-                      <p className="text-sm text-[#F2EDE3]/60">
+                    <div className="min-w-0">
+                      <h2 className="text-base md:text-xl font-bold text-[#F2EDE3] truncate">{t.chatTitle}</h2>
+                      <p className="hidden sm:block text-sm text-[#F2EDE3]/60">
                         {t.chatSubtitle}
                       </p>
                     </div>
                   </div>
-                  {currentConversationId && (
+                  {(currentConversationId || messages.length > 0) && (
                     <button
-                      onClick={createNewConversation}
-                      className="px-4 py-2  bg-[#D8FF3D] text-[#0B0B0B] hover:opacity-80 transition-opacity text-sm font-medium"
+                      onClick={startNewChat}
+                      disabled={isSending}
+                      className="shrink-0 px-3 md:px-4 py-2 bg-[#D8FF3D] text-[#0B0B0B] hover:opacity-80 transition-opacity text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {t.newChat}
                     </button>
@@ -1945,10 +2501,10 @@ export default function PanelPage() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#141414]">
+              <div ref={messagesBoxRef} className="flex-1 overflow-y-auto p-3 md:p-6 space-y-4 bg-[#141414]">
                 {messages.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full text-center">
-                    <div className="w-20 h-20 mb-4  bg-[#0E0E0E] flex items-center justify-center">
+                  <div className="flex flex-col items-center justify-center min-h-full py-4 text-center">
+                    <div className="w-16 h-16 md:w-20 md:h-20 mb-4  bg-[#0E0E0E] flex items-center justify-center">
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#D8FF3D]">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                       </svg>
@@ -1984,35 +2540,35 @@ export default function PanelPage() {
                   </div>
                 )}
                 {messages.map((msg, i) => (
-                  <motion.div
+                  <div
                     key={i}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, ease: "easeOut" as const }}
                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} group`}
                   >
                     <div
-                      className={`max-w-[85%] flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+                      className={`max-w-[92%] md:max-w-[85%] min-w-0 flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
                     >
                     <div
-                      className={`w-full px-5 py-3.5 ${
+                      className={`w-full px-3 py-2.5 md:px-5 md:py-3.5 ${
                         msg.role === "user"
                           ? "bg-[#D8FF3D] text-[#0B0B0B] border border-[#D8FF3D]"
-                          : "bg-[#0E0E0E] text-[#F2EDE3] border border-[rgba(242,237,227,0.10)]"
+                          : "bg-[#0E0E0E] text-[#F2EDE3] border border-[rgba(242,237,227,0.10)] overflow-x-auto"
                       }`}
                     >
                       {msg.role === "user" ? (
                         <>
-                          {msg.content && <p className="text-sm whitespace-pre-wrap leading-relaxed">{msg.content}</p>}
+                          {msg.content && <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>}
                           {msg.attachments && msg.attachments.length > 0 && (
                             <div className="mt-2 space-y-2">
-                              {msg.attachments.map((att: any, i: number) => (
-                                <div key={i}>
-                                  {att.mimeType.startsWith('image/') ? (
+                              {msg.attachments.map((att, j) => (
+                                <div key={j}>
+                                  {att.mimeType.startsWith("image/") && att.data ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
                                     <img
-                                      src={att.data}
+                                      src={att.data.startsWith("data:") ? att.data : `data:${att.mimeType};base64,${att.data}`}
                                       alt={att.filename}
-                                      className="max-w-sm "
+                                      loading="lazy"
+                                      decoding="async"
+                                      className="max-w-full sm:max-w-sm"
                                     />
                                   ) : (
                                     <div className="flex items-center gap-2 bg-white/20 px-3 py-2 rounded">
@@ -2057,15 +2613,10 @@ export default function PanelPage() {
                       </button>
                     )}
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
-                <div ref={messagesEndRef} />
                 {isSending && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex justify-start"
-                  >
+                  <div className="flex justify-start">
                     <div className="bg-[#0E0E0E] border border-[rgba(242,237,227,0.10)]  px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className="flex gap-1">
@@ -2076,129 +2627,53 @@ export default function PanelPage() {
                         <span className="text-sm text-[#F2EDE3]/60">{t.thinking}</span>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
               </div>
 
-              {/* Input */}
-              <div className="p-6 border-t border-[rgba(242,237,227,0.10)] bg-[#0E0E0E]">
-                {/* Selected files preview */}
-                {selectedFiles.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {selectedFiles.map((file, idx) => {
-                      const isImg = file.type.startsWith("image/");
-                      const thumb = isImg ? URL.createObjectURL(file) : null;
-                      return (
-                        <div key={idx} className="relative flex items-center gap-2 bg-[#D8FF3D]/10 border border-[#D8FF3D]/30 px-2 py-1.5">
-                          {thumb && (
-                            <img
-                              src={thumb}
-                              alt={file.name}
-                              className="w-10 h-10 object-cover border border-[#D8FF3D]/40"
-                              onLoad={() => URL.revokeObjectURL(thumb)}
-                            />
-                          )}
-                          <div className="flex flex-col leading-tight">
-                            <span className="text-xs text-[#F2EDE3] truncate max-w-[180px]">{file.name}</span>
-                            <span className="km-mono-eyebrow text-[#F2EDE3]/45">{(file.size / 1024).toFixed(1)} KB</span>
-                          </div>
-                          <button
-                            onClick={() => removeFile(idx)}
-                            className="text-[#F2EDE3]/50 hover:text-[#FF4D2E] transition-colors p-1"
-                            title={t.removeFile}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <line x1="18" y1="6" x2="6" y2="18"/>
-                              <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <div className="flex-1 flex flex-col gap-2">
-                    <textarea
-                      value={userMessage}
-                      onChange={(e) => setUserMessage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSend();
-                        }
-                      }}
-                      onPaste={(e) => {
-                        const items = e.clipboardData?.items;
-                        if (!items) return;
-                        const pasted: File[] = [];
-                        for (let i = 0; i < items.length; i++) {
-                          const it = items[i];
-                          if (it.kind === "file" && it.type.startsWith("image/")) {
-                            const f = it.getAsFile();
-                            if (f && f.size <= 10 * 1024 * 1024) {
-                              const ext = (it.type.split("/")[1] || "png").split("+")[0];
-                              const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-                              const renamed = new File([f], f.name && f.name !== "image.png" ? f.name : `wklejone-${stamp}.${ext}`, { type: it.type });
-                              pasted.push(renamed);
-                            }
-                          }
-                        }
-                        if (pasted.length > 0) {
-                          e.preventDefault();
-                          setSelectedFiles((prev) => [...prev, ...pasted].slice(0, 5));
-                        }
-                      }}
-                      placeholder={t.chatPlaceholder}
-                      className="flex-1 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] px-4 py-3 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/35 focus:outline-none focus:border-[#D8FF3D] resize-none transition-colors"
-                      rows={3}
-                      disabled={isSending}
-                    />
-                    {/* File upload button */}
-                    <div className="flex items-center gap-2">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*,.pdf,.doc,.docx"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
+              {/* Błąd wysyłki / wczytywania — treść wiadomości wróciła do pola */}
+              {chatError && (
+                <div role="alert" className="border-t border-[#FF4D2E]/30 bg-[#FF4D2E]/[0.06] px-3 md:px-6 py-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-[#FF4D2E]">{chatError.text}</p>
+                    {chatError.action && (
                       <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isSending}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 km-mono-eyebrow text-[#D8FF3D]/80 hover:text-[#D8FF3D] hover:bg-[#D8FF3D]/10 transition-colors disabled:opacity-40"
+                        onClick={() => setActiveTab(chatError.action === "ai" ? "ai" : "subscription")}
+                        className="mt-1.5 km-mono-eyebrow text-[#D8FF3D] hover:underline"
                       >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                        </svg>
-                        {t.attachFile}
+                        {chatError.action === "ai" ? t.goBuyTokens : t.goSubscription}
                       </button>
-                    </div>
+                    )}
                   </div>
                   <button
-                    onClick={handleSend}
-                    disabled={(!userMessage.trim() && selectedFiles.length === 0) || isSending}
-                    className="self-end bg-[#D8FF3D] text-[#0B0B0B] px-7 py-3 km-mono-eyebrow hover:bg-[#F2EDE3] transition-colors disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                    onClick={() => setChatError(null)}
+                    className="km-mono-eyebrow text-[#F2EDE3]/60 hover:text-[#F2EDE3] shrink-0 p-1"
+                    title={t.dismiss}
+                    aria-label={t.dismiss}
                   >
-                    {t.send} <span>→</span>
+                    ×
                   </button>
                 </div>
+              )}
+
+              {/* Input — własny stan (memo), rodzic dostaje tekst dopiero przy wysyłce */}
+              <ChatInput
+                key={draftEpoch}
+                draftRef={chatDraftRef}
+                disabled={isSending}
+                labels={chatInputLabels}
+                onSend={onChatSend}
+              />
               </div>
-              </div>
-            </motion.div>
+            </div>
           )}
 
           {activeTab === "subscription" && (
-            <motion.div
+            <div
               key="subscription"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" as const }}
+              className="km-panel-fade"
             >
-              <div className="bg-[#0E0E0E]  p-8 border border-[rgba(242,237,227,0.10)]">
+              <div className="bg-[#0E0E0E] p-4 sm:p-8 border border-[rgba(242,237,227,0.10)]">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-12 h-12  bg-[#D8FF3D]/10 bg-[#D8FF3D]/10 flex items-center justify-center">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#D8FF3D]">
@@ -2238,8 +2713,8 @@ export default function PanelPage() {
                           <div className="text-xs text-[#F2EDE3]/60 mt-1">
                             {t.daysWord(calcInfo.license.durationDays)}
                             {calcInfo.license.activatedAt
-                              ? ` · ${t.activatedOn(new Date(calcInfo.license.activatedAt).toLocaleDateString(DATE_LOCALE[lang]))}`
-                              : ` · ${t.notActivated}`}
+                              ? t.activatedOn(new Date(calcInfo.license.activatedAt).toLocaleDateString(DATE_LOCALE[lang]))
+                              : t.notActivated}
                           </div>
                         </div>
                         <button
@@ -2270,7 +2745,7 @@ export default function PanelPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex gap-3">
+                      <div className="flex flex-col sm:flex-row gap-3">
                         <input
                           type="text"
                           value={licenseCode}
@@ -2361,7 +2836,7 @@ export default function PanelPage() {
                             </div>
 
                             {/* Regular Plan - 15 zł */}
-                            <div className="bg-[#0E0E0E]  p-5 border-2 border-[rgba(242,237,227,0.15)] border-[rgba(242,237,227,0.10)]">
+                            <div className="relative bg-[#0E0E0E]  p-5 border-2 border-[rgba(242,237,227,0.15)]">
                               <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow">
                                 {t.fixedPrice}
                               </div>
@@ -2426,73 +2901,82 @@ export default function PanelPage() {
                       </div>
                     )}
                   </div>
+                ) : subLoadError ? (
+                  <div className="text-center py-12">
+                    <p className="text-sm text-[#FF4D2E] mb-4">{subLoadError}</p>
+                    <button
+                      onClick={() => void fetchSubscriptionStatus()}
+                      className="km-mono-eyebrow px-4 py-2 border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors"
+                    >
+                      {t.retry}
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex items-center justify-center py-12">
                     <div className="w-8 h-8 border-4 border-[#D8FF3D] border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
-            </motion.div>
+            </div>
           )}
 
           {activeTab === "ai" && (
-            <motion.div
+            <div
               key="ai"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" as const }}
-              className="space-y-5 max-w-3xl"
+              className="km-panel-fade space-y-5 max-w-3xl"
             >
               {/* === LICZNIK TOKENÓW === */}
               {(() => {
-                const consumed = Math.max(0, TOKEN_GRANT - tokenBalance);
-                const pct = Math.min(100, (consumed / TOKEN_GRANT) * 100);
+                // Serwer nie zwraca puli startowej (rejestracja daje 1M, zakupy
+                // dokładają dowolnie dużo), więc pokazujemy SALDO, a pasek liczymy
+                // względem max(saldo, 1M) — bez fikcyjnego "zużyto X%".
+                const loaded = tokenBalance !== null;
+                const balance = tokenBalance ?? 0;
+                const base = Math.max(balance, TOKEN_REFERENCE);
+                const pctLeft = base > 0 ? Math.min(100, (balance / base) * 100) : 0;
                 const currentModel = aiModels.find((m) => m.id === aiModel);
                 const multiplier = currentModel?.costMultiplier ?? 4;
                 // Szacowana liczba zadań maturalnych (typowe zadanie: ~800 realnych tokenów wejście+wyjście)
                 const avgRealTokensPerTask = 800;
                 const avgEffectiveTokensPerTask = Math.ceil(avgRealTokensPerTask * multiplier);
-                const tasksLeft = Math.floor(tokenBalance / avgEffectiveTokensPerTask);
-                const tasksTotal = Math.floor(TOKEN_GRANT / avgEffectiveTokensPerTask);
-                const barColor = pct > 80 ? "#FF4D2E" : pct > 50 ? "#FFB800" : "#D8FF3D";
+                const tasksLeft = Math.floor(balance / avgEffectiveTokensPerTask);
+                const tasksTotal = Math.floor(TOKEN_REFERENCE / avgEffectiveTokensPerTask);
+                const barColor =
+                  balance < TOKEN_REFERENCE * 0.1 ? "#FF4D2E" : balance < TOKEN_REFERENCE * 0.3 ? "#FFB800" : "#D8FF3D";
                 return (
-                  <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <div className="bg-[#0E0E0E] p-4 sm:p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.tokenUsage}</div>
 
-                    {/* Pasek postępu */}
+                    {aiLoadError && (
+                      <div className="mb-3 flex flex-wrap items-center gap-3">
+                        <p className="text-sm text-[#FF4D2E]">{t.aiLoadFailed}</p>
+                        <button
+                          onClick={() => void loadAiSettings()}
+                          className="km-mono-eyebrow px-3 py-1 border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors"
+                        >
+                          {t.retry}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Saldo + pasek */}
                     <div className="mb-4">
                       <div className="flex items-end justify-between mb-1.5">
                         <div>
-                          <span className="text-2xl font-bold" style={{ color: barColor }}>
-                            {consumed >= 1_000_000
-                              ? `${(consumed / 1_000_000).toFixed(2)}M`
-                              : consumed >= 1_000
-                              ? `${(consumed / 1_000).toFixed(1)}K`
-                              : consumed}
+                          <span className="text-2xl font-bold" style={{ color: loaded ? barColor : undefined }}>
+                            {loaded ? formatTokens(balance) : "…"}
                           </span>
-                          <span className="text-sm text-[#F2EDE3]/40 ml-1">{t.effectiveTokens}</span>
+                          <span className="text-sm text-[#F2EDE3]/40 ml-1.5">{t.effectiveTokens}</span>
                         </div>
-                        <span className="km-mono-eyebrow text-[#F2EDE3]/40">{pct.toFixed(1)}%</span>
                       </div>
                       <div className="w-full bg-[#1a1a1a] h-2 border border-[rgba(242,237,227,0.08)]">
                         <div
                           className="h-full transition-all duration-700"
-                          style={{ width: `${pct}%`, backgroundColor: barColor }}
+                          style={{ width: `${loaded ? pctLeft : 0}%`, backgroundColor: barColor }}
                         />
                       </div>
                       <div className="flex justify-between mt-1">
-                        <span className="km-mono-eyebrow text-[#F2EDE3]/30">{t.used}</span>
-                        <span className="km-mono-eyebrow text-[#F2EDE3]/30">
-                          {t.remaining}{" "}
-                          <span className="text-[#F2EDE3]/60">
-                            {tokenBalance >= 1_000_000
-                              ? `${(tokenBalance / 1_000_000).toFixed(3)}M`
-                              : tokenBalance >= 1_000
-                              ? `${(tokenBalance / 1_000).toFixed(1)}K`
-                              : tokenBalance}
-                          </span>
-                        </span>
+                        <span className="km-mono-eyebrow text-[#F2EDE3]/30">{t.remaining}</span>
                       </div>
                     </div>
 
@@ -2501,7 +2985,7 @@ export default function PanelPage() {
                       <div className="bg-[#141414] border border-[rgba(242,237,227,0.08)] p-3">
                         <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">{t.tasksLeftLabel}</div>
                         <div className="text-xl font-bold text-[#D8FF3D]">
-                          ~{tasksLeft.toLocaleString(DATE_LOCALE[lang])}
+                          {loaded ? `~${tasksLeft.toLocaleString(DATE_LOCALE[lang])}` : "…"}
                         </div>
                         <div className="text-xs text-[#F2EDE3]/40 mt-0.5">{t.maturaTasks}</div>
                       </div>
@@ -2522,12 +3006,12 @@ export default function PanelPage() {
                       <div className="divide-y divide-[rgba(242,237,227,0.05)]">
                         {aiModels.map((m) => {
                           const eff = Math.ceil(avgRealTokensPerTask * m.costMultiplier);
-                          const tasks = Math.floor(TOKEN_GRANT / eff);
+                          const tasks = Math.floor(TOKEN_REFERENCE / eff);
                           const isCurrent = m.id === aiModel;
                           return (
                             <div
                               key={m.id}
-                              className={`flex items-center justify-between px-3 py-2 ${isCurrent ? "bg-[#D8FF3D]/05" : ""}`}
+                              className={`flex items-center justify-between px-3 py-2 ${isCurrent ? "bg-[#D8FF3D]/5" : ""}`}
                             >
                               <div className="flex items-center gap-2 min-w-0">
                                 {isCurrent && <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full flex-shrink-0" />}
@@ -2545,8 +3029,8 @@ export default function PanelPage() {
                                 }`}>
                                   ×{m.costMultiplier}
                                 </span>
-                                <span className={`text-xs font-bold w-20 text-right ${isCurrent ? "text-[#D8FF3D]" : "text-[#F2EDE3]/50"}`}>
-                                  ~{tasks.toLocaleString("pl-PL")} zad.
+                                <span className={`text-xs font-bold w-24 text-right ${isCurrent ? "text-[#D8FF3D]" : "text-[#F2EDE3]/50"}`}>
+                                  ~{tasks.toLocaleString(DATE_LOCALE[lang])} {t.tasksAbbr}
                                 </span>
                               </div>
                             </div>
@@ -2689,23 +3173,30 @@ export default function PanelPage() {
                   {aiMode === "raw" ? t.rawModeDesc : t.maturaModeDesc}
                 </div>
               </div>
-            </motion.div>
+            </div>
           )}
 
           {activeTab === "calculator" && (
-            <motion.div
+            <div
               key="calculator"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" as const }}
-              className="space-y-6"
+              className="km-panel-fade space-y-6"
             >
-              {calcLoading && (
+              {calcLoading && !calcInfo && (
                 <div className="text-[#F2EDE3]/60">{t.loading}</div>
               )}
+              {calcLoadError && (
+                <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
+                  <p className="text-sm text-[#FF4D2E]">{calcLoadError}</p>
+                  <button
+                    onClick={() => void loadCalcData({ force: true })}
+                    className="km-mono-eyebrow px-3 py-1 border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors"
+                  >
+                    {t.retry}
+                  </button>
+                </div>
+              )}
 
-              {!calcLoading && calcInfo && !calcInfo.device && (
+              {calcInfo && !calcInfo.device && (
                 <div className="relative bg-[#0E0E0E] border border-[rgba(242,237,227,0.18)]">
                   <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-l border-t border-[#D8FF3D]" />
                   <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-r border-t border-[#D8FF3D]" />
@@ -2771,7 +3262,7 @@ export default function PanelPage() {
 
                     {pairError && (
                       <div className="mt-4 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
-                        <p className="km-mono-eyebrow text-[#FF4D2E]">/ ERROR</p>
+                        <p className="km-mono-eyebrow text-[#FF4D2E]">{t.errorLabel}</p>
                         <p className="text-sm text-[#FF4D2E] mt-1">{pairError}</p>
                       </div>
                     )}
@@ -2785,7 +3276,7 @@ export default function PanelPage() {
                 </div>
               )}
 
-              {!calcLoading && calcInfo && calcInfo.device && (
+              {calcInfo && calcInfo.device && (
                 <>
                   {/* Info o urzadzeniu */}
                   <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
@@ -2840,10 +3331,10 @@ export default function PanelPage() {
                     <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(242,237,227,0.10)]">
                       <span className="km-mono-eyebrow text-[#D8FF3D]">{t.photoGallery}</span>
                       <span className="km-mono-eyebrow text-[#F2EDE3]/45">
-                        {t.photosCount(String(captures.length).padStart(2, "0"))}
+                        {t.photosCount(String(Math.max(capturesTotal, captures.length)).padStart(2, "0"))}
                       </span>
                     </div>
-                    {capturesLoading ? (
+                    {capturesLoading && captures.length === 0 ? (
                       <div className="px-6 py-10 text-center km-mono-eyebrow text-[#F2EDE3]/45">
                         {t.loading}
                       </div>
@@ -2852,8 +3343,9 @@ export default function PanelPage() {
                         {t.noPhotos}
                       </div>
                     ) : (
+                      <>
                       <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                        {captures.map((c) => (
+                        {captures.slice(0, capturesVisible).map((c) => (
                           <button
                             key={c.filename}
                             onClick={() => setOpenedCapture(c.filename)}
@@ -2865,6 +3357,7 @@ export default function PanelPage() {
                               src={`/api/user/captures/${encodeURIComponent(c.filename)}`}
                               alt={c.filename}
                               loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover"
                             />
                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5">
@@ -2880,6 +3373,18 @@ export default function PanelPage() {
                           </button>
                         ))}
                       </div>
+                      {(capturesVisible < captures.length || capturesCursor) && (
+                        <div className="px-4 pb-4">
+                          <button
+                            onClick={() => void loadMoreCaptures()}
+                            disabled={capturesMoreLoading}
+                            className="w-full km-mono-eyebrow px-4 py-2.5 border border-[rgba(242,237,227,0.18)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] disabled:opacity-50 transition-colors"
+                          >
+                            {capturesMoreLoading ? t.loading : t.loadMore}
+                          </button>
+                        </div>
+                      )}
+                      </>
                     )}
                   </div>
 
@@ -2893,6 +3398,7 @@ export default function PanelPage() {
                       <img
                         src={`/api/user/captures/${encodeURIComponent(openedCapture)}`}
                         alt={openedCapture}
+                        decoding="async"
                         className="max-w-full max-h-full object-contain"
                         onClick={(e) => e.stopPropagation()}
                       />
@@ -2900,7 +3406,7 @@ export default function PanelPage() {
                         onClick={() => setOpenedCapture(null)}
                         className="absolute top-4 right-4 km-mono-eyebrow text-[#F2EDE3]/80 hover:text-[#D8FF3D] border border-[rgba(242,237,227,0.20)] px-3 py-1.5"
                       >
-                        {t.close} ×
+                        {t.close}
                       </button>
                     </div>
                   )}
@@ -2934,7 +3440,7 @@ export default function PanelPage() {
                                   {it.mode === "image" ? t.photo : it.question}
                                 </div>
                                 <div className="text-[13px] text-[#F2EDE3]/55 mt-1 line-clamp-1">
-                                  {it.answer.slice(0, 140)}…
+                                  {String(it.answer || "").slice(0, 140)}…
                                 </div>
                               </div>
                               <span className="km-mono-eyebrow text-[#F2EDE3]/40 whitespace-nowrap tabular-nums">
@@ -2990,22 +3496,30 @@ export default function PanelPage() {
                   </div>
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
 
 
           {activeTab === "notes" && (
-            <motion.div
+            <div
               key="notes"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" as const }}
+              className="km-panel-fade"
             >
-              {calcLoading && (
+              {calcLoading && !calcInfo && (
                 <div className="text-[#F2EDE3]/60">{t.loading}</div>
               )}
-              {!calcLoading && calcInfo && !calcInfo.device && (
+              {calcLoadError && (
+                <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
+                  <p className="text-sm text-[#FF4D2E]">{calcLoadError}</p>
+                  <button
+                    onClick={() => void loadCalcData({ force: true })}
+                    className="km-mono-eyebrow px-3 py-1 border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors"
+                  >
+                    {t.retry}
+                  </button>
+                </div>
+              )}
+              {calcInfo && !calcInfo.device && (
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
                   <p className="km-mono-eyebrow text-[#D8FF3D]">{t.calcRequired}</p>
                   <p className="text-sm text-[#F2EDE3]/70 mt-2">
@@ -3013,7 +3527,7 @@ export default function PanelPage() {
                   </p>
                 </div>
               )}
-              {!calcLoading && calcInfo && calcInfo.device && (<>{/* Notatki */}
+              {calcInfo && calcInfo.device && (<>{/* Notatki */}
                   <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-xl font-bold text-[#F2EDE3]">
@@ -3049,7 +3563,7 @@ export default function PanelPage() {
                         <div className="flex gap-2">
                           {editingNote && (
                             <button
-                              onClick={() => { setEditingNote(null); setNoteTitle(""); setNoteContent(""); }}
+                              onClick={() => { setEditingNote(null); setNoteTitle(""); setNoteContent(""); setNoteError(null); }}
                               className="px-3 py-1.5 km-mono-eyebrow bg-[#1a1a1a] border border-[rgba(242,237,227,0.20)] hover:border-[#F2EDE3] text-[#F2EDE3]/80 hover:text-[#F2EDE3] transition-colors"
                             >{t.cancel}</button>
                           )}
@@ -3060,6 +3574,9 @@ export default function PanelPage() {
                           >{savingNote ? t.saving : editingNote ? t.save : t.add}</button>
                         </div>
                       </div>
+                      {noteError && (
+                        <p role="alert" className="mt-2 text-xs text-[#FF4D2E]">{noteError}</p>
+                      )}
                     </div>
                     {calcNotes.length === 0 ? (
                       <div className="text-[#F2EDE3]/60 text-sm text-center py-4">
@@ -3086,21 +3603,29 @@ export default function PanelPage() {
                       </div>
                     )}
                   </div></>)}
-            </motion.div>
+            </div>
           )}
 
           {activeTab === "tests" && (
-            <motion.div
+            <div
               key="tests"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" as const }}
+              className="km-panel-fade"
             >
-              {calcLoading && (
+              {calcLoading && !calcInfo && (
                 <div className="text-[#F2EDE3]/60">{t.loading}</div>
               )}
-              {!calcLoading && calcInfo && !calcInfo.device && (
+              {calcLoadError && (
+                <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
+                  <p className="text-sm text-[#FF4D2E]">{calcLoadError}</p>
+                  <button
+                    onClick={() => void loadCalcData({ force: true })}
+                    className="km-mono-eyebrow px-3 py-1 border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors"
+                  >
+                    {t.retry}
+                  </button>
+                </div>
+              )}
+              {calcInfo && !calcInfo.device && (
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
                   <p className="km-mono-eyebrow text-[#D8FF3D]">{t.calcRequired}</p>
                   <p className="text-sm text-[#F2EDE3]/70 mt-2">
@@ -3108,7 +3633,7 @@ export default function PanelPage() {
                   </p>
                 </div>
               )}
-              {!calcLoading && calcInfo && calcInfo.device && (<>{/* Sprawdziany */}
+              {calcInfo && calcInfo.device && (<>{/* Sprawdziany */}
                   <div className="bg-[#0E0E0E]  p-6 border border-[rgba(242,237,227,0.10)]">
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-xl font-bold text-[#F2EDE3]">
@@ -3142,7 +3667,7 @@ export default function PanelPage() {
                         <div className="flex gap-2">
                           {editingTest && (
                             <button
-                              onClick={() => { setEditingTest(null); setTestTitle(""); setTestContent(""); }}
+                              onClick={() => { setEditingTest(null); setTestTitle(""); setTestContent(""); setTestError(null); }}
                               className="px-3 py-1.5 km-mono-eyebrow bg-[#1a1a1a] border border-[rgba(242,237,227,0.20)] hover:border-[#F2EDE3] text-[#F2EDE3]/80 hover:text-[#F2EDE3] transition-colors"
                             >{t.cancel}</button>
                           )}
@@ -3153,6 +3678,9 @@ export default function PanelPage() {
                           >{savingTest ? t.saving : editingTest ? t.save : t.add}</button>
                         </div>
                       </div>
+                      {testError && (
+                        <p role="alert" className="mt-2 text-xs text-[#FF4D2E]">{testError}</p>
+                      )}
                     </div>
                     {calcTests.length === 0 ? (
                       <div className="text-[#F2EDE3]/60 text-sm text-center py-4">
@@ -3179,16 +3707,13 @@ export default function PanelPage() {
                       </div>
                     )}
                   </div></>)}
-            </motion.div>
+            </div>
           )}
 
           {activeTab === "settings" && (
-            <motion.div
+            <div
               key="settings"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "easeOut" as const }}
+              className="km-panel-fade"
             >
               <div className="max-w-2xl space-y-6">
                 {/* Profil */}
@@ -3226,17 +3751,93 @@ export default function PanelPage() {
                 <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
                   <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.newsletterTitle}</div>
                   <p className="text-sm text-[#F2EDE3]/55 mb-4 leading-relaxed">{t.newsletterDesc}</p>
+                  {nlConsent === null && nlError && !nlLoading ? (
+                    <button
+                      onClick={() => void loadNewsletter()}
+                      className="px-4 py-2 km-mono-eyebrow border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors"
+                    >
+                      {t.retry}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={toggleNewsletter}
+                      disabled={nlSaving || nlConsent === null}
+                      className={`px-4 py-2 km-mono-eyebrow transition-colors disabled:opacity-50 ${
+                        nlConsent
+                          ? "border border-[#D8FF3D]/50 text-[#D8FF3D] hover:border-[#FF4D2E] hover:text-[#FF4D2E]"
+                          : "bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B]"
+                      }`}
+                    >
+                      {nlConsent === null ? "…" : nlConsent ? t.newsletterOn : t.newsletterOff}
+                    </button>
+                  )}
+                  {nlError && <div role="alert" className="text-xs mt-2 text-[#FF4D2E]">{nlError}</div>}
+                </div>
+
+                {/* Twoje dane: eksport (RODO art. 20) + usunięcie konta */}
+                <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                  <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.dataHeading}</div>
+                  <p className="text-sm text-[#F2EDE3]/55 mb-3 leading-relaxed">{t.exportDataDesc}</p>
                   <button
-                    onClick={toggleNewsletter}
-                    disabled={nlSaving || nlConsent === null}
-                    className={`px-4 py-2 km-mono-eyebrow transition-colors disabled:opacity-50 ${
-                      nlConsent
-                        ? "border border-[#D8FF3D]/50 text-[#D8FF3D] hover:border-[#FF4D2E] hover:text-[#FF4D2E]"
-                        : "bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B]"
-                    }`}
+                    onClick={exportData}
+                    disabled={exporting}
+                    className="px-4 py-2 border border-[rgba(242,237,227,0.20)] hover:border-[#D8FF3D] text-[#F2EDE3]/80 hover:text-[#D8FF3D] km-mono-eyebrow transition-colors disabled:opacity-50"
                   >
-                    {nlConsent === null ? "…" : nlConsent ? t.newsletterOn : t.newsletterOff}
+                    {exporting ? t.exporting : t.exportData}
                   </button>
+                  {exportMsg && <div role="alert" className="text-xs mt-2 text-[#FF4D2E]">{exportMsg}</div>}
+
+                  <div className="mt-6 pt-5 border-t border-[rgba(242,237,227,0.10)]">
+                    {!showDelete ? (
+                      <button
+                        onClick={() => { setShowDelete(true); setDelMsg(null); }}
+                        className="px-4 py-2 border border-[#FF4D2E]/40 text-[#FF4D2E] hover:bg-[#FF4D2E]/10 km-mono-eyebrow transition-colors"
+                      >
+                        {t.deleteAccount}
+                      </button>
+                    ) : (
+                      <div className="border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.04] p-4">
+                        <p className="km-mono-eyebrow text-[#FF4D2E] mb-2">{t.deleteAccount}</p>
+                        <p className="text-sm text-[#F2EDE3]/70 mb-3 leading-relaxed">{t.deleteAccountDesc}</p>
+                        <div className="space-y-2">
+                          <input
+                            type="password"
+                            value={delPassword}
+                            onChange={(e) => setDelPassword(e.target.value)}
+                            placeholder={t.deletePasswordPlaceholder}
+                            autoComplete="current-password"
+                            className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#FF4D2E] text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors"
+                          />
+                          <p className="text-xs text-[#F2EDE3]/45">{t.deleteGoogleHint(DELETE_PHRASE)}</p>
+                          <input
+                            type="text"
+                            value={delPhrase}
+                            onChange={(e) => setDelPhrase(e.target.value)}
+                            placeholder={DELETE_PHRASE}
+                            autoComplete="off"
+                            className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#FF4D2E] text-sm font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/20 transition-colors"
+                          />
+                        </div>
+                        {delMsg && <div role="alert" className="text-xs mt-2 text-[#FF4D2E]">{delMsg}</div>}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button
+                            onClick={deleteAccount}
+                            disabled={deleting}
+                            className="px-4 py-2 bg-[#FF4D2E] hover:bg-[#FF4D2E]/85 text-[#0B0B0B] km-mono-eyebrow disabled:opacity-50 transition-colors"
+                          >
+                            {deleting ? t.deleting : t.deleteAccountBtn}
+                          </button>
+                          <button
+                            onClick={() => { setShowDelete(false); setDelPassword(""); setDelPhrase(""); setDelMsg(null); }}
+                            disabled={deleting}
+                            className="px-4 py-2 border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:text-[#F2EDE3] km-mono-eyebrow transition-colors disabled:opacity-50"
+                          >
+                            {t.cancel}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Wyloguj */}
@@ -3245,10 +3846,10 @@ export default function PanelPage() {
                   <button onClick={() => signOut({ callbackUrl: "/" })} className="px-4 py-2 border border-[rgba(242,237,227,0.20)] hover:border-[#FF4D2E] text-[#F2EDE3]/80 hover:text-[#FF4D2E] km-mono-eyebrow transition-colors">{t.logoutLong}</button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           )}
 
-        </AnimatePresence>
+        </>
       </div>
     </div>
   );

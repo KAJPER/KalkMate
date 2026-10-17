@@ -35,7 +35,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "1.9.7"
+#define FW_VERSION "2.0.0"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -129,6 +129,8 @@ void     remoteSendBuffer()      { u8g2.sendBuffer(); }
 #else
   #define KALK_BOOST_EN_PIN 47
 #endif
+// power.h ma wlasna kopie pinu (dolaczany przed ta definicja) — musza byc zgodne.
+static_assert(KALK_BOOST_EN_PIN == _PWR_BOOST_EN_PIN, "power.h: _PWR_BOOST_EN_PIN != KALK_BOOST_EN_PIN");
 
 // === Menu ===
 const char* menuItemsPL[] = {
@@ -376,6 +378,16 @@ void setup() {
     // OTA rollback check — wykrywa boot loop po aktualizacji (>= 3 proby = rollback)
     otaBootCheck();
 
+    // K5: dev_token mieszka teraz w "kalkid" (reset fabryczny go nie czysci).
+    // Odczyt robi jednorazowa migracje ze starego "kalkmate" — wolamy go tu,
+    // ZANIM uzytkownik zdazy zrobic reset fabryczny (hold C/CE w kalkulatorze),
+    // ktory wyczysci stary namespace.
+    {
+        char tok[68];
+        wifiLoadDeviceToken(tok, sizeof(tok));
+        memset(tok, 0, sizeof(tok));
+    }
+
     // Klawiatura matrycowa
     if (!inputBegin()) {
         Serial.println("[FATAL] MCP23017 brak — klawiatura nie dziala");
@@ -391,46 +403,63 @@ void setup() {
     // recznego wpisywania go na klawiaturze 5x5 na linii produkcyjnej.
     // Protokol (linia tekstowa zakonczona \n):
     //   PC wysyla:  KALKPROV:SETCODE:1234
-    //   ESP32 odp:  KALKPROV:OK               (albo KALKPROV:ERR:BADCODE)
+    //   ESP32 odp:  KALKPROV:OK   albo  KALKPROV:ERR:BADCODE / KALKPROV:ERR:NVS
     // Gate na fladze "done" w NVS ("kalkprov") — dziala TYLKO przy
     // pierwszym boocie po flashu (swiezy NVS). Dla kazdego kolejnego bootu
     // (czyli realnie caly czas u klienta) ten blok jest pomijany calkowicie,
     // zero opoznienia/zero ryzyka ze przypadkowe dane na UART cos zmienia.
+    // "done" zapisujemy po udanym SETCODE albo gdy okno minelo bez zadnej
+    // komendy. Gdy komenda przyszla, ale byla bledna (zly kod / blad NVS),
+    // okno zostaje otwarte na nastepny boot, zeby flasher mogl powtorzyc
+    // (traktuje ERR jako FAIL) — inaczej urzadzenie zostaloby z kodem "1111".
     {
+        static const char kProvPrefix[] = "KALKPROV:SETCODE:";
+        const unsigned int kProvPrefixLen = sizeof(kProvPrefix) - 1;   // 17 znakow
         Preferences provPrefs;
         provPrefs.begin("kalkprov", false);
         if (!provPrefs.getBool("done", false)) {
             Serial.println("[PROV] Pierwszy boot — okno 3s na KALKPROV:SETCODE:XXXX");
             unsigned long provT0 = millis();
             String provLine = "";
-            while (millis() - provT0 < 3000) {
-                while (Serial.available()) {
+            bool provGotCmd = false;   // przyszla jakakolwiek komenda SETCODE
+            bool provOk     = false;   // kod zapisany w NVS
+            while (!provOk && millis() - provT0 < 3000) {
+                while (!provOk && Serial.available()) {
                     char c = (char)Serial.read();
                     if (c == '\n') {
                         provLine.trim();
-                        if (provLine.startsWith("KALKPROV:SETCODE:")) {
-                            String code = provLine.substring(18);
+                        if (provLine.startsWith(kProvPrefix)) {
+                            provGotCmd = true;
+                            String code = provLine.substring(kProvPrefixLen);
                             code.trim();
                             bool ok = (code.length() == 4);
                             for (int i = 0; ok && i < 4; i++) {
                                 if (!isDigit((unsigned char)code[i])) ok = false;
                             }
-                            if (ok) {
-                                saveAiCode(code.c_str());
-                                Serial.println("KALKPROV:OK");
-                                Serial.printf("[PROV] Kod AI ustawiony: %s\n", code.c_str());
-                            } else {
+                            if (!ok) {
                                 Serial.println("KALKPROV:ERR:BADCODE");
+                            } else if (!saveAiCode(code.c_str())) {
+                                Serial.println("KALKPROV:ERR:NVS");
+                            } else {
+                                provOk = true;
+                                Serial.println("KALKPROV:OK");
+                                Serial.println("[PROV] Kod AI ustawiony");   // bez wartosci (M9)
                             }
                         }
                         provLine = "";
                     } else if (c != '\r') {
-                        provLine += c;
+                        if (provLine.length() < 64) provLine += c;   // smieci na UART nie rosna bez konca
                     }
                 }
                 delay(5);
             }
-            provPrefs.putBool("done", true);
+            if (provOk || !provGotCmd) {
+                if (!provPrefs.putBool("done", true)) {
+                    Serial.println("[PROV] BLAD zapisu flagi done");
+                }
+            } else {
+                Serial.println("[PROV] bledna komenda — okno zostaje otwarte na nastepny boot");
+            }
         }
         provPrefs.end();
     }
@@ -459,7 +488,7 @@ void setup() {
 
     // === FAZA 3: pelen kalkulator (przejmuje renderowanie) ===
     // Ratunkowy reset fabryczny — przytrzymaj C/CE 5s w trybie kalkulatora
-    // (nie trzeba lapac momentu wlaczania) — patrz _calcFactoryResetFlow
+    // (nie trzeba lapac momentu wlaczania) — patrz factoryResetRun() w factory_reset.h
     // w calculator.h.
     runCalculator(u8g2);
 
@@ -490,8 +519,7 @@ static void _wifiAutoConnectLazy() {
     }
     Serial.println("[WiFi-auto] lacze z zapisanymi danymi");
     Serial.flush();
-    WiFi.mode(WIFI_STA);
-    WiFi.setTxPower(WIFI_POWER_8_5dBm);  // anty-brownout
+    wifiStaOnLimited();  // WIFI_STA + TxPower 8.5 dBm (anty-brownout)
     delay(50);
     wifiFastBegin(ssid, pass);  // uzywa cache BSSID+kanal jesli dostepny
     // Nie blokujemy - async connect w tle. _solEnsureWifi w solve_screen
@@ -553,23 +581,28 @@ static void _vbatWatchdogLoop() {
 #endif
 }
 
-// OTA walidacja: oznacz firmware jako valid gdy WiFi sie polaczy po raz pierwszy.
-// Jezeli to nie nastapi przed 3 rebootami, otaBootCheck() zrobi rollback.
-static bool _otaValidated = false;
+// OTA walidacja: firmware po OTA jest zatwierdzany dopiero po pierwszej
+// odpowiedzi HTTPS 200 z kalkmate.pl (otaConfirmServerOk() w device_account.h
+// i otaCheck()) — samo WL_CONNECTED nie dowodzi, ze TLS/serwer dzialaja.
+// Tu: w niezwalidowanym boocie po OTA, gdy WiFi wstanie w menu AI, raz
+// rejestrujemy urzadzenie (to samo co i tak robi pierwsze "Rozwiaz zadanie"),
+// zeby walidacja nie czekala na pierwsze uzycie AI. Zwykle booty: no-op.
+static bool _otaValidateTried = false;
 static void _otaValidateLoop() {
-    if (_otaValidated) return;
-    if (WiFi.status() == WL_CONNECTED) {
-        otaMarkValid();
-        _otaValidated = true;
-    }
+    if (_otaValidateTried) return;
+    if (!otaIsPendingValidation()) { _otaValidateTried = true; return; }
+    if (WiFi.status() != WL_CONNECTED) return;
+    _otaValidateTried = true;
+    Serial.println("[OTA] niezwalidowany boot po OTA — rejestracja w celu walidacji");
+    accountRegisterOnce();
 }
 
 // Synchronizacja czasu (NTP) po pierwszym polaczeniu WiFi. ESP32 nie ma RTC
-// z bateria, wiec zegar startuje od ~1970 kazdego boota. WiFiClientSecure::
-// setCACert() robi pelna walidacje X.509 WLACZNIE z data waznosci certyfikatu
-// wzgledem zegara urzadzenia — bez tej synchronizacji KAZDE polaczenie HTTPS
-// (OTA check, status konta, wysylka zadan AI) failuje handshake TLS (blad -1),
-// bo certyfikat serwera wyglada jakby byl "z przyszlosci" wzgledem roku 1970.
+// z bateria, wiec zegar startuje od ~1970 kazdego boota.
+// UWAGA: TLS od tego NIE zalezy — mbedtls w core 2.0.17 jest zbudowany bez
+// CONFIG_MBEDTLS_HAVE_TIME_DATE, wiec setCACert() weryfikuje lancuch
+// i podpisy, ale NIE sprawdza dat waznosci certyfikatow (ani z zegarem
+// 1970, ani po synchronizacji). Zegar jest tylko "nice to have".
 static bool _timeSynced = false;
 static void _timeSyncLoop() {
     if (_timeSynced) return;
@@ -585,8 +618,8 @@ void loop() {
     handlePanicIfRequested();  // jesli flaga -> kalkulator
     _vbatWatchdogLoop();    // anti-brownout: shutdown przy VBAT<3.2V
     _wifiAutoConnectLazy(); // auto-WiFi 3s po wejsciu w AI menu
-    _otaValidateLoop();     // OTA health-check: waliduj po polaczeniu WiFi
-    _timeSyncLoop();        // NTP: zegar musi byc ustawiony zanim HTTPS (TLS daty certyfikatu)
+    _otaValidateLoop();     // OTA health-check: po OTA raz HTTPS do kalkmate.pl (walidacja)
+    _timeSyncLoop();        // NTP (TLS od tego nie zalezy — patrz komentarz przy _timeSyncLoop)
     if (powerCheckSleep()) {
         // Po wybudzeniu — przerysuj menu
         drawMenu();
@@ -637,5 +670,8 @@ void loop() {
     }
 
     if (changed) drawMenu();
+
+    // Bez tego loop() kreci sie 100% CPU (inputScan i tak skanuje max co 30 ms).
+    delay(10);
 }
 

@@ -25,6 +25,24 @@ import { translateNewsletter, type NewsletterTexts } from "@/lib/translate";
 
 const DELAY_MS = Math.max(200, parseInt(process.env.NEWSLETTER_DELAY_MS || "2500", 10) || 2500);
 
+// Przejsciowe bledy SMTP (4xx, zerwane polaczenie, timeout): ponowienie tego
+// samego odbiorcy z rosnacym odstepem, dopiero potem 'failed'. Seria bledow z
+// rzedu = problem z kontem/serwerem SMTP, nie z adresami -> auto-pauza.
+const MAX_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = [30_000, 120_000];
+const MAX_CONSECUTIVE_ERRORS = 5;
+
+// Stan workerow wspolny dla calego procesu (modul moze byc zaladowany w kilku
+// bundlach route'ow Next — patrz tez prisma w lib/db.ts).
+const nlState = ((globalThis as unknown as { __kmNewsletter?: { running: Set<string>; stopRequested: Set<string>; recovered: boolean } })
+  .__kmNewsletter ??= { running: new Set<string>(), stopRequested: new Set<string>(), recovered: false });
+
+export function isTransientSmtpError(message: string | undefined | null): boolean {
+  const m = message || "";
+  if (/\b4\d\d[\s-]/.test(m) || /\b4\.\d{1,3}\.\d{1,3}\b/.test(m)) return true;
+  return /ECONN|ETIMEDOUT|ESOCKET|EAI_AGAIN|ENOTFOUND|EPIPE|ECONNRESET|EAUTH|timeout|timed out|greeting never received|socket|connection (closed|lost)|too many (connections|messages)|try again/i.test(m);
+}
+
 // === Wypisywanie ===
 
 export function unsubscribeToken(email: string): string {
@@ -87,7 +105,41 @@ async function ensureTables(): Promise<void> {
   if (!cols.some((c) => c.name === "lang")) {
     await prisma.$executeRawUnsafe(`ALTER TABLE "NewsletterDelivery" ADD COLUMN "lang" TEXT`);
   }
+  // pauseReason — dlaczego kampania stoi ('paused'): auto-pauza po serii
+  // bledow SMTP albo restart serwera. clientRequestId — idempotencja POST
+  // (podwojne klikniecie "Wyslij" nie tworzy dwoch kampanii).
+  const campCols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("NewsletterCampaign")`);
+  for (const [name, type] of [["pauseReason", "TEXT"], ["clientRequestId", "TEXT"]] as const) {
+    if (campCols.some((c) => c.name === name)) continue;
+    try {
+      await prisma.$executeRawUnsafe(`ALTER TABLE "NewsletterCampaign" ADD COLUMN "${name}" ${type}`);
+    } catch (e) {
+      if (!/duplicate column/i.test(String((e as Error)?.message))) throw e;
+    }
+  }
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "NewsletterCampaign_clientRequestId"
+    ON "NewsletterCampaign" ("clientRequestId") WHERE "clientRequestId" IS NOT NULL`);
   _ready = true;
+  await recoverOrphanedCampaigns();
+}
+
+// Przy pierwszym uzyciu modulu w procesie: kampanie 'sending' nie maja tu
+// workera (serwer zrestartowal sie w trakcie wysylki) — oznaczamy je jako
+// wstrzymane, admin wznawia recznie ("Wznow"). Flaga na globalThis, bo modul
+// moze byc zaladowany w kilku bundlach route'ow tego samego procesu.
+async function recoverOrphanedCampaigns(): Promise<void> {
+  if (nlState.recovered) return;
+  nlState.recovered = true;
+  try {
+    const n = await prisma.$executeRaw`
+      UPDATE "NewsletterCampaign" SET "status" = 'paused',
+        "pauseReason" = 'Przerwana restartem serwera — sprawdź postęp i wznów ręcznie.'
+      WHERE "status" = 'sending'`;
+    if (n) console.warn(`[newsletter] ${n} kampanii 'sending' bez workera po starcie procesu -> 'paused'`);
+  } catch (e) {
+    console.error("[newsletter] recovery of orphaned campaigns failed:", e);
+  }
 }
 
 // Wypisanie z newslettera = tez wycofanie zgody marketingowej.
@@ -412,22 +464,24 @@ export interface CampaignRow {
   id: string;
   subject: string;
   audience: string;
-  status: string; // sending | done | stopped
+  status: string; // sending | done | stopped | paused
   total: number;
   sent: number;
   failed: number;
   createdAt: string;
   finishedAt: string | null;
+  // Dlaczego 'paused' (auto-pauza po bledach SMTP / restart serwera).
+  pauseReason: string | null;
 }
 
 export async function listCampaigns(): Promise<CampaignRow[]> {
   await ensureTables();
   const rows = await prisma.$queryRaw<(Omit<CampaignRow, "sent" | "failed"> & { sent: bigint | number; failed: bigint | number; total: bigint | number })[]>`
-    SELECT c."id", c."subject", c."audience", c."status", c."total", c."createdAt", c."finishedAt",
+    SELECT c."id", c."subject", c."audience", c."status", c."total", c."createdAt", c."finishedAt", c."pauseReason",
       (SELECT COUNT(*) FROM "NewsletterDelivery" d WHERE d."campaignId" = c."id" AND d."status" = 'sent') AS sent,
       (SELECT COUNT(*) FROM "NewsletterDelivery" d WHERE d."campaignId" = c."id" AND d."status" = 'failed') AS failed
     FROM "NewsletterCampaign" c ORDER BY c."createdAt" DESC LIMIT 50`;
-  return rows.map((r) => ({ ...r, total: Number(r.total), sent: Number(r.sent), failed: Number(r.failed) }));
+  return rows.map((r) => ({ ...r, total: Number(r.total), sent: Number(r.sent), failed: Number(r.failed), pauseReason: r.pauseReason ?? null }));
 }
 
 export async function campaignFailures(id: string): Promise<{ email: string; error: string | null }[]> {
@@ -435,11 +489,24 @@ export async function campaignFailures(id: string): Promise<{ email: string; err
   return prisma.$queryRaw`SELECT "email", "error" FROM "NewsletterDelivery" WHERE "campaignId" = ${id} AND "status" = 'failed'`;
 }
 
+async function campaignByRequestId(clientRequestId: string): Promise<{ id: string; total: number } | null> {
+  const rows = await prisma.$queryRaw<{ id: string; total: number | bigint }[]>`
+    SELECT "id", "total" FROM "NewsletterCampaign" WHERE "clientRequestId" = ${clientRequestId} LIMIT 1`;
+  return rows[0] ? { id: rows[0].id, total: Number(rows[0].total) } : null;
+}
+
 export async function createCampaign(
   content: CampaignContent,
-  filter: AudienceFilter
-): Promise<{ id: string; total: number }> {
+  filter: AudienceFilter,
+  clientRequestId: string | null = null
+): Promise<{ id: string; total: number; duplicate?: boolean }> {
   await ensureTables();
+  // Idempotencja: ten sam clientRequestId (np. podwojne klikniecie, ponowienie
+  // po timeoucie sieci) zwraca istniejaca kampanie zamiast drugiej wysylki.
+  if (clientRequestId) {
+    const existing = await campaignByRequestId(clientRequestId);
+    if (existing) return { ...existing, duplicate: true };
+  }
   const recipients = (await listRecipients(filter)).filter((r) => !r.unsubscribed);
   if (!recipients.length) throw new Error("Brak odbiorców dla wybranych filtrów.");
 
@@ -449,9 +516,18 @@ export async function createCampaign(
 
   const id = randomUUID();
   const now = new Date().toISOString();
-  await prisma.$executeRaw`
-    INSERT INTO "NewsletterCampaign" ("id", "subject", "content", "audience", "status", "total", "createdAt")
-    VALUES (${id}, ${content.subject}, ${JSON.stringify(content)}, ${JSON.stringify(filter)}, 'sending', ${recipients.length}, ${now})`;
+  try {
+    await prisma.$executeRaw`
+      INSERT INTO "NewsletterCampaign" ("id", "subject", "content", "audience", "status", "total", "createdAt", "clientRequestId")
+      VALUES (${id}, ${content.subject}, ${JSON.stringify(content)}, ${JSON.stringify(filter)}, 'sending', ${recipients.length}, ${now}, ${clientRequestId})`;
+  } catch (e) {
+    // Rownolegly duplikat wygral wyscig (indeks unikalny na clientRequestId).
+    if (clientRequestId && /UNIQUE constraint failed/i.test(String((e as Error)?.message))) {
+      const existing = await campaignByRequestId(clientRequestId);
+      if (existing) return { ...existing, duplicate: true };
+    }
+    throw e;
+  }
   // SQLite: w transakcji, inaczej kilkaset osobnych INSERT-ow trwa sekundy.
   await prisma.$transaction(
     recipients.map((r) => prisma.$executeRaw`
@@ -462,8 +538,8 @@ export async function createCampaign(
 }
 
 // Kampanie, ktore ten proces aktualnie wysyla (zeby "Wznow" nie odpalil drugiej petli).
-const running = new Set<string>();
-const stopRequested = new Set<string>();
+const running = nlState.running;
+const stopRequested = nlState.stopRequested;
 
 export function startWorker(id: string): void {
   if (running.has(id)) return;
@@ -476,8 +552,23 @@ export function startWorker(id: string): void {
 
 export async function resumeCampaign(id: string): Promise<void> {
   await ensureTables();
-  await prisma.$executeRaw`UPDATE "NewsletterCampaign" SET "status" = 'sending', "finishedAt" = NULL WHERE "id" = ${id}`;
+  // Najpierw zdejmij prosbe o stop: jesli worker jeszcze dziala (czeka miedzy
+  // mailami po "Zatrzymaj"), startWorker() nic nie zrobi, a stara flaga
+  // zatrzymalaby go mimo wznowienia.
+  stopRequested.delete(id);
+  await prisma.$executeRaw`
+    UPDATE "NewsletterCampaign" SET "status" = 'sending', "finishedAt" = NULL, "pauseReason" = NULL WHERE "id" = ${id}`;
   startWorker(id);
+}
+
+/** "Ponow nieudane": nieudani odbiorcy (poza wypisanymi) wracaja do kolejki. */
+export async function retryFailedDeliveries(id: string): Promise<number> {
+  await ensureTables();
+  const n = await prisma.$executeRaw`
+    UPDATE "NewsletterDelivery" SET "status" = 'pending', "error" = NULL, "sentAt" = NULL
+    WHERE "campaignId" = ${id} AND "status" = 'failed' AND COALESCE("error", '') <> 'wypisany'`;
+  if (n > 0) await resumeCampaign(id);
+  return n;
 }
 
 export async function stopCampaign(id: string): Promise<void> {
@@ -490,13 +581,29 @@ export function isRunning(id: string): boolean {
   return running.has(id);
 }
 
+// Czeka `ms`, ale wychodzi wczesniej po "Zatrzymaj" (backoff trwa minuty).
+async function sleepUnlessStopped(id: string, ms: number): Promise<void> {
+  const until = Date.now() + ms;
+  while (Date.now() < until && !stopRequested.has(id)) {
+    await new Promise((r) => setTimeout(r, Math.min(2000, until - Date.now())));
+  }
+}
+
+async function campaignStatus(id: string): Promise<string | null> {
+  const rows = await prisma.$queryRaw<{ status: string }[]>`SELECT "status" FROM "NewsletterCampaign" WHERE "id" = ${id}`;
+  return rows[0]?.status ?? null;
+}
+
 async function runWorker(id: string): Promise<void> {
   const rows = await prisma.$queryRaw<{ content: string }[]>`SELECT "content" FROM "NewsletterCampaign" WHERE "id" = ${id}`;
   if (!rows[0]) return;
   const content = JSON.parse(rows[0].content) as CampaignContent;
+  let consecutiveErrors = 0;
 
   for (;;) {
     if (stopRequested.has(id)) return;
+    // Status w bazie tez sie liczy (zatrzymanie/pauza z innego procesu).
+    if ((await campaignStatus(id)) !== "sending") return;
     const next = await prisma.$queryRaw<{ email: string; name: string | null; lang: NlLang | null }[]>`
       SELECT "email", "name", "lang" FROM "NewsletterDelivery"
       WHERE "campaignId" = ${id} AND "status" = 'pending' LIMIT 1`;
@@ -506,9 +613,30 @@ async function runWorker(id: string): Promise<void> {
     // Ktos mogl sie wypisac w trakcie wysylki (wysylka trwa nawet godzine).
     const unsub = await prisma.$queryRaw<{ email: string }[]>`
       SELECT "email" FROM "NewsletterUnsubscribe" WHERE "email" = ${email}`;
-    const result = unsub.length
-      ? { ok: false, error: "wypisany" }
-      : await sendMail(buildMail(content, email, name, lang || "pl"));
+
+    let result: { ok: boolean; error?: string } = { ok: false, error: "wypisany" };
+    if (!unsub.length) {
+      for (let attempt = 1; ; attempt++) {
+        result = await sendMail(buildMail(content, email, name, lang || "pl"));
+        if (result.ok) {
+          consecutiveErrors = 0;
+          break;
+        }
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          // Odbiorca zostaje 'pending' — po wznowieniu dostanie maila.
+          const reason = `Auto-pauza: ${consecutiveErrors} błędów wysyłki z rzędu (ostatni: ${(result.error || "błąd").slice(0, 200)}). Sprawdź konto SMTP i wznów.`;
+          await prisma.$executeRaw`
+            UPDATE "NewsletterCampaign" SET "status" = 'paused', "pauseReason" = ${reason}
+            WHERE "id" = ${id} AND "status" = 'sending'`;
+          console.error(`[newsletter] ${id}: ${reason}`);
+          return;
+        }
+        if (!isTransientSmtpError(result.error) || attempt >= MAX_ATTEMPTS) break;
+        await sleepUnlessStopped(id, RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS[RETRY_BACKOFF_MS.length - 1]);
+        if (stopRequested.has(id)) return; // odbiorca zostaje 'pending'
+      }
+    }
 
     await prisma.$executeRaw`
       UPDATE "NewsletterDelivery"

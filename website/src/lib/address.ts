@@ -17,7 +17,9 @@ export interface SplitAddress {
   apartment: string;
 }
 
-const UNIT_AT_END = /[,\s]+(?:unit|apt\.?|apartment|suite|ste\.?|flat|room|rm\.?|#)\s*\.?\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*$/i;
+// Takze polskie "m. 2" / "lok. 2" / "lokal 2" ("Marszalkowska 1 m. 2") — dawniej
+// numer mieszkania lądowal jako numer budynku, a "1 m." w nazwie ulicy.
+const UNIT_AT_END = /[,\s]+(?:unit|apt\.?|apartment|suite|ste\.?|flat|room|rm\.?|lok\.?|lokal|m\.|#)\s*\.?\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*$/i;
 
 export function splitAddress(full: string | null | undefined, country?: string | null): SplitAddress {
   let s = (full || "").trim().replace(/\s+/g, " ");

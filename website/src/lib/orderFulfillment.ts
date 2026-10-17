@@ -8,6 +8,7 @@ import {
   localeFromCountry,
   EMAIL_SUBJECTS,
 } from "@/lib/email-templates";
+import { cancelOpenFiscalJobsForOrder } from "@/lib/fiscal";
 
 // Jedno miejsce, w ktorym zmienia sie fulfillmentStatus zamowienia i wysyla
 // maila do klienta. Uzywane przez:
@@ -21,6 +22,19 @@ export type FulfillmentStatus =
   | "shipped"
   | "fulfilled"
   | "cancelled";
+
+// Allowlista dla PATCH /api/admin/orders/[id] (kontrakt K7).
+export const FULFILLMENT_STATUSES: readonly FulfillmentStatus[] = [
+  "unfulfilled",
+  "in_progress",
+  "shipped",
+  "fulfilled",
+  "cancelled",
+];
+
+export function isFulfillmentStatus(v: unknown): v is FulfillmentStatus {
+  return typeof v === "string" && (FULFILLMENT_STATUSES as readonly string[]).includes(v);
+}
 
 // Kolejnosc "postepu" — automat ze sledzenia nigdy nie cofa statusu
 // (np. z fulfilled na shipped, gdy InPost zwroci starszy status) i nigdy nie
@@ -40,10 +54,14 @@ export function isForwardTransition(from: string, to: FulfillmentStatus): boolea
 }
 
 interface ApplyOptions {
+  // undefined = bez zmian, null/"" = wyczysc numer, tekst = ustaw
   trackingNumber?: string | null;
-  adminNotes?: string;
+  adminNotes?: string | null;
   // "manual" = admin w panelu (moze cofac statusy), "tracking" = automat
   source: "manual" | "tracking";
+  // Status, ktory widzial admin przy zaladowaniu (K7). Inny niz aktualny →
+  // nic nie zmieniamy, wynik ma conflict=true (route zwraca 409).
+  expectedStatus?: string;
 }
 
 export interface ApplyResult {
@@ -51,6 +69,9 @@ export interface ApplyResult {
   emailSent: boolean;
   previousStatus: string;
   newStatus: string;
+  // true = status zmienil sie w miedzyczasie (expectedStatus albo rownolegla
+  // zmiana cron vs panel) — nic nie wyslano.
+  conflict?: boolean;
 }
 
 export async function applyFulfillmentStatus(
@@ -64,12 +85,18 @@ export async function applyFulfillmentStatus(
   const previousStatus = order.fulfillmentStatus || "unfulfilled";
   const now = new Date();
 
-  const data: {
+  if (opts.expectedStatus !== undefined && opts.expectedStatus !== previousStatus) {
+    return { changed: false, emailSent: false, previousStatus, newStatus: previousStatus, conflict: true };
+  }
+
+  const statusData: {
     fulfillmentStatus?: string;
     shippedAt?: Date;
     deliveredAt?: Date;
-    trackingNumber?: string;
-    adminNotes?: string;
+  } = {};
+  const data: {
+    trackingNumber?: string | null;
+    adminNotes?: string | null;
   } = {};
 
   let statusChanged = false;
@@ -78,23 +105,47 @@ export async function applyFulfillmentStatus(
     if (opts.source === "tracking" && !isForwardTransition(previousStatus, newStatus)) {
       newStatus = undefined;
     } else {
-      data.fulfillmentStatus = newStatus;
+      statusData.fulfillmentStatus = newStatus;
       statusChanged = true;
-      if (newStatus === "shipped" && !order.shippedAt) data.shippedAt = now;
+      if (newStatus === "shipped" && !order.shippedAt) statusData.shippedAt = now;
       if (newStatus === "fulfilled") {
-        if (!order.shippedAt) data.shippedAt = now;
-        if (!order.deliveredAt) data.deliveredAt = now;
+        if (!order.shippedAt) statusData.shippedAt = now;
+        if (!order.deliveredAt) statusData.deliveredAt = now;
       }
     }
   }
 
-  if (opts.trackingNumber !== undefined && opts.trackingNumber !== null && opts.trackingNumber !== "") {
-    data.trackingNumber = opts.trackingNumber;
+  if (opts.trackingNumber !== undefined) {
+    const t = typeof opts.trackingNumber === "string" ? opts.trackingNumber.trim() : "";
+    // Pusty string / null = admin wyczyscil pole (K7).
+    data.trackingNumber = t || null;
   }
   if (opts.adminNotes !== undefined) data.adminNotes = opts.adminNotes;
 
-  if (Object.keys(data).length > 0) {
+  let conflict = false;
+  if (statusChanged) {
+    // Warunkowo wzgledem statusu, ktory przeczytalismy: cron sledzenia i reczny
+    // PATCH w tym samym momencie nie zmienia statusu dwa razy (dwa maile).
+    const r = await prisma.order.updateMany({
+      where: { id: orderId, fulfillmentStatus: order.fulfillmentStatus },
+      data: { ...statusData, ...data },
+    });
+    if (r.count === 0) {
+      statusChanged = false;
+      conflict = true;
+      // Status przegral wyscig — pozostale pola (notatka/numer) i tak zapisujemy,
+      // chyba ze admin wyraznie oczekiwal konkretnego statusu.
+      if (opts.expectedStatus === undefined && Object.keys(data).length > 0) {
+        await prisma.order.update({ where: { id: orderId }, data });
+      }
+    }
+  } else if (Object.keys(data).length > 0) {
     await prisma.order.update({ where: { id: orderId }, data });
+  }
+
+  // Anulowane = pieniadze zwrocone: paragon fiskalny nie moze sie juz wydrukowac.
+  if (statusChanged && newStatus === "cancelled") {
+    await cancelOpenFiscalJobsForOrder(orderId, "Zamówienie anulowane (zwrot) — paragon wstrzymany");
   }
 
   let emailSent = false;
@@ -103,7 +154,7 @@ export async function applyFulfillmentStatus(
     const emailData = {
       customerName: order.customerName || "Customer",
       product: "KalkMate v3.0",
-      trackingNumber: opts.trackingNumber || order.trackingNumber || "",
+      trackingNumber: (data.trackingNumber !== undefined ? data.trackingNumber : order.trackingNumber) || "",
       pickupPoint: order.pickupPoint || "",
       pickupPointAddress: order.pickupPointAddress || "",
     };
@@ -125,12 +176,10 @@ export async function applyFulfillmentStatus(
     }
 
     if (html) {
-      try {
-        await sendMail({ to: order.customerEmail, subject, html });
-        emailSent = true;
-      } catch (err) {
-        console.error(`[fulfillment] email failed for order ${orderId}:`, err);
-      }
+      // sendMail nie rzuca — zwraca { ok:false } (patrz lib/mailer.ts).
+      const r = await sendMail({ to: order.customerEmail, subject, html }).catch((err) => ({ ok: false, error: String(err) }));
+      emailSent = r.ok;
+      if (!r.ok) console.error(`[fulfillment] email failed for order ${orderId}:`, r.error);
     }
   }
 
@@ -138,6 +187,7 @@ export async function applyFulfillmentStatus(
     changed: statusChanged,
     emailSent,
     previousStatus,
-    newStatus: newStatus ?? previousStatus,
+    newStatus: statusChanged && newStatus ? newStatus : previousStatus,
+    ...(conflict ? { conflict: true } : {}),
   };
 }

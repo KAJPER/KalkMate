@@ -15,6 +15,9 @@
 // wygasniecia bez bazy; route'y dodatkowo sprawdzaja odwolanie w bazie.
 
 export const ADMIN_COOKIE_VERSION = "v2";
+// Nazwa cookie sesji admina — jedno zrodlo dla middleware (Edge) i
+// lib/admin-auth.ts (COOKIE_NAME). Nie zmieniac: zmiana wylogowuje admina.
+export const ADMIN_COOKIE_NAME = "admin_session";
 
 function hexToBytes(hex: string): Uint8Array {
   const out = new Uint8Array(hex.length / 2);

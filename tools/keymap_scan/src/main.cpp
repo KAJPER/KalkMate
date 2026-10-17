@@ -373,10 +373,16 @@ void setup() {
     Wire.begin(I2C_SDA, I2C_SCL);
     Wire.setClock(400000);
 
-    if (!mcp.begin_I2C(MCP_ADDR)) {
-        Serial.println("BLAD: nie znaleziono MCP23017 @ 0x20!");
-        Serial.println("Sprawdz I2C (SDA=21, SCL=22) i zasilanie 3.3V chipa.");
-        while (true) delay(1000);
+    // Brak MCP -> komunikat co sekunde i ponowna proba (zamiast cichego
+    // zawieszenia). Najpierw sonda Wire, bo kazde begin_I2C() alokuje nowy
+    // obiekt urzadzenia I2C w bibliotece Adafruit (wyciek przy petli).
+    while (true) {
+        Wire.beginTransmission(MCP_ADDR);
+        if (Wire.endTransmission() == 0 && mcp.begin_I2C(MCP_ADDR)) break;
+        Serial.printf("BLAD: nie znaleziono MCP23017 @ 0x%02X!\n", MCP_ADDR);
+        Serial.printf("Sprawdz I2C (SDA=%d, SCL=%d) i zasilanie 3.3V chipa. Ponawiam...\n",
+                      I2C_SDA, I2C_SCL);
+        delay(1000);
     }
     mcpReady = true;
     Serial.println("MCP23017 OK.");

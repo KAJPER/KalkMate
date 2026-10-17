@@ -10,10 +10,12 @@ import { randomUUID } from "crypto";
 
 // POST /api/tokens/checkout  { packId, currency? }
 // PLN (domyslnie) -> Przelewy24 (spojne z platnoscia za kalkulator).
-// Kazda inna waluta -> Stripe Checkout (karta), bo p24 jako Stripe payment
+// EUR -> Stripe Checkout (karta), bo p24 jako Stripe payment
 // method type NIE jest aktywowane na koncie Stripe — probowanie tego zawsze
 // konczylo sie 400 "payment method type provided: p24 is invalid" (100%
 // nieudanych platnosci).
+// Inna waluta -> 400 (audyt 2026-10-16: wczesniej dowolna waluta dostawala
+// cene EUR w centach, np. 7 EUR -> "700 HUF").
 // Po udanej platnosci: webhook P24 (TokenPurchaseP24) albo Stripe webhook
 // (checkout.session.completed, type=token_purchase) dolicza tokeny do
 // User.tokenBalance.
@@ -35,7 +37,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nie znaleziono uzytkownika" }, { status: 404 });
     }
 
-    const resolvedCurrency = String(currency || "pln").toLowerCase();
+    const resolvedCurrency = String(currency || "pln").trim().toLowerCase();
+    if (resolvedCurrency !== "pln" && resolvedCurrency !== "eur") {
+      return NextResponse.json({ error: "Nieobslugiwana waluta" }, { status: 400 });
+    }
 
     if (resolvedCurrency === "pln") {
       const sessionId = `km-tok-${randomUUID()}`;
@@ -69,7 +74,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ url: paymentUrl(token) });
     }
 
-    // Inna waluta niz PLN -> Stripe (tylko karta, bez p24 - nieaktywowane).
+    // EUR -> Stripe (tylko karta, bez p24 - nieaktywowane).
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kalkmate.pl";
     const checkout = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -78,7 +83,7 @@ export async function POST(request: NextRequest) {
       line_items: [
         {
           price_data: {
-            currency: resolvedCurrency,
+            currency: "eur",
             product_data: {
               name: `KalkMate — ${pack.label}`,
               description: "Doładowanie tokenów AI dla kalkulatora KalkMate",

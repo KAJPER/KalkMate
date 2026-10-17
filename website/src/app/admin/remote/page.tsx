@@ -39,8 +39,11 @@ export default function RemoteControlPage() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deviceIdRef = useRef("");
+  // "Generacja" sesji: kazdy Start/Zatrzymaj ja zmienia, wiec odpowiedz
+  // zapytania wyslanego przed Zatrzymaj nie przelaczy widoku z powrotem na "live".
+  const sessionGenRef = useRef(0);
 
   const drawFrame = useCallback((base64: string) => {
     const canvas = canvasRef.current;
@@ -94,23 +97,63 @@ export default function RemoteControlPage() {
     ctx.drawImage(off, 0, 0, SCREEN_W, SCREEN_H, 0, 0, SCREEN_W * SCALE, SCREEN_H * SCALE);
   }, []);
 
-  const poll = useCallback(async () => {
+  const clearPollTimer = () => {
+    if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
+  };
+
+  // Koniec sesji z inicjatywy serwera (wygasla / urzadzenie wyszlo / 401).
+  const endSession = useCallback((msg: string) => {
+    sessionGenRef.current++;
+    if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
+    deviceIdRef.current = "";
+    setSession("idle");
+    setStatus(null);
+    setError(msg);
+  }, []);
+
+  // Jedno zapytanie; true = odpytuj dalej.
+  const pollOnce = useCallback(async (gen: number): Promise<boolean> => {
     const id = deviceIdRef.current;
-    if (!id) return;
+    if (!id || gen !== sessionGenRef.current) return false;
     try {
       const res = await fetch(`/api/admin/remote/frame?deviceId=${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (gen !== sessionGenRef.current) return false; // Zatrzymaj w trakcie zapytania
+      if (res.status === 401) {
+        endSession("Sesja panelu wygasła — zaloguj się ponownie.");
+        return false;
+      }
+      if (!res.ok) return true; // chwilowy blad serwera — sprobuj za chwile
       const json: FrameResp = await res.json();
+      if (gen !== sessionGenRef.current) return false;
+      if (json.active === false) {
+        endSession("Sesja zakończona (wygasła albo urządzenie wyszło z trybu Zdalna pomoc).");
+        return false;
+      }
       setStatus(json);
       if (json.active) setSession("live");
       if (json.frame) drawFrame(json.frame);
     } catch {
       // chwilowy blad sieci — kolejny poll i tak nadejdzie za chwile
     }
-  }, [drawFrame]);
+    return gen === sessionGenRef.current;
+  }, [drawFrame, endSession]);
+
+  // Kolejne zapytanie dopiero PO zakonczeniu poprzedniego (setInterval co
+  // 500 ms przy wolnym laczu nakladal zapytania na siebie).
+  const runPollLoop = async (gen: number) => {
+    while (gen === sessionGenRef.current) {
+      if (!(await pollOnce(gen))) break;
+      await new Promise<void>((resolve) => {
+        pollRef.current = setTimeout(resolve, 500);
+      });
+    }
+  };
 
   const start = async () => {
     const id = deviceId.trim().toUpperCase();
     if (!id) return;
+    const gen = ++sessionGenRef.current;
+    clearPollTimer();
     setError(null);
     deviceIdRef.current = id;
     setSession("starting");
@@ -120,19 +163,22 @@ export default function RemoteControlPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deviceId: id }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = setInterval(poll, 500);
-      poll();
+      if (!res.ok) throw new Error(res.status === 401 ? "Sesja panelu wygasła — zaloguj się ponownie." : `HTTP ${res.status}`);
+      if (gen !== sessionGenRef.current) return; // Zatrzymaj w trakcie startu
+      void runPollLoop(gen);
     } catch (e) {
+      if (gen !== sessionGenRef.current) return;
       setError(e instanceof Error ? e.message : "Blad startu sesji");
+      deviceIdRef.current = "";
       setSession("idle");
     }
   };
 
   const stop = async () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    sessionGenRef.current++;
+    clearPollTimer();
     const id = deviceIdRef.current;
+    deviceIdRef.current = "";
     setSession("idle");
     setStatus(null);
     if (id) {
@@ -145,8 +191,11 @@ export default function RemoteControlPage() {
   };
 
   useEffect(() => {
+    // Celowo najnowsza wartosc przy odmontowaniu (przerwanie petli odpytywania).
+    const gen = sessionGenRef;
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      gen.current++;
+      if (pollRef.current) clearTimeout(pollRef.current);
       // best-effort — zatrzymaj sesje po zejsciu ze strony
       if (deviceIdRef.current) {
         navigator.sendBeacon?.(

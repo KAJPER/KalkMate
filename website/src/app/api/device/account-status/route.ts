@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyDeviceAuth } from "@/lib/device-auth";
+import { isSubscriptionValid, readTokenBalance } from "@/lib/aiCost";
+
+// Prog salda, przy ktorym wygasla licencja nadal "dziala" (spojnie z solve).
+const MIN_TOKENS_FOR_EXPIRED_LICENSE = 1000;
 
 // GET /api/device/account-status
 // Headers: x-api-key, x-device-id, x-device-token
@@ -19,64 +23,78 @@ export async function GET(request: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({ where: { id: device.userId } });
-    const license = await prisma.license.findFirst({
+    // Audyt 2026-10-16: wczesniej findFirst bez sortowania -> przypadkowa
+    // (czesto stara, wygasla) licencja, a firmware zapisuje zwrocony "code"
+    // do NVS i wysyla go w x-license-key. Teraz: najnowsza aktywna licencja,
+    // potem subskrypcja (K2), potem saldo tokenow — tak jak decyduje solve.
+    const licenses = await prisma.license.findMany({
       where: { claimedByUserId: device.userId },
+      orderBy: { usedAt: "desc" },
     });
     const subscription = await prisma.subscription.findUnique({
       where: { userId: device.userId },
     });
+    const tokenBalance = (await readTokenBalance(device.userId)) ?? 0;
 
     const now = new Date();
+    const DAY = 24 * 60 * 60 * 1000;
+    const expiresAtOf = (l: { usedAt: Date | null; durationDays: number }) =>
+      l.usedAt ? new Date(new Date(l.usedAt).getTime() + l.durationDays * DAY) : null;
+
+    const activeLicense = licenses.find((l) => {
+      const exp = expiresAtOf(l);
+      return !!exp && exp > now;
+    });
+    const unusedLicense = licenses.find((l) => !l.usedAt);
+    const latestLicense = licenses[0] ?? null;
+    const subValid = isSubscriptionValid(subscription, now);
 
     let outCode: string | null = null;
     let outStatus: string | null = null;
     let outDays: number | null = null;
     let outDuration: number | null = null;
 
-    if (license) {
-      outCode = license.code;
-      outDuration = license.durationDays;
-      if (license.usedAt) {
-        const expiresAt = new Date(
-          new Date(license.usedAt).getTime() + license.durationDays * 24 * 60 * 60 * 1000
-        );
-        if (now > expiresAt) {
-          outStatus = "expired";
-          outDays = 0;
-        } else {
-          outStatus = "active";
-          outDays = Math.ceil(
-            (expiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)
-          );
-        }
-      } else {
-        outStatus = "trial";
-      }
-    } else if (subscription) {
+    if (activeLicense) {
+      const exp = expiresAtOf(activeLicense) as Date;
+      outCode = activeLicense.code;
+      outDuration = activeLicense.durationDays;
+      outStatus = "active";
+      outDays = Math.ceil((exp.getTime() - now.getTime()) / DAY);
+    } else if (subscription && subValid) {
       if (subscription.status === "active") {
         outStatus = "active";
         outCode = "(subscription)";
         if (subscription.stripeCurrentPeriodEnd) {
           outDays = Math.ceil(
-            (new Date(subscription.stripeCurrentPeriodEnd).getTime() - now.getTime()) /
-              (24 * 60 * 60 * 1000)
+            (new Date(subscription.stripeCurrentPeriodEnd).getTime() - now.getTime()) / DAY
           );
         }
-      } else if (
-        subscription.status === "trial" &&
-        new Date(subscription.trialEndsAt) > now
-      ) {
+      } else {
         outStatus = "trial";
         outCode = "(trial)";
         outDuration = subscription.trialDays;
-        outDays = Math.ceil(
-          (new Date(subscription.trialEndsAt).getTime() - now.getTime()) /
-            (24 * 60 * 60 * 1000)
-        );
+        outDays = Math.ceil((new Date(subscription.trialEndsAt).getTime() - now.getTime()) / DAY);
+      }
+    } else if (unusedLicense) {
+      // Licencja jeszcze nieaktywowana — timer startuje przy pierwszym solve.
+      outCode = unusedLicense.code;
+      outDuration = unusedLicense.durationDays;
+      outStatus = "trial";
+    } else if (latestLicense) {
+      outCode = latestLicense.code;
+      outDuration = latestLicense.durationDays;
+      if (tokenBalance >= MIN_TOKENS_FOR_EXPIRED_LICENSE) {
+        // Model tokenowy: wygasla licencja czasowa dziala dalej, dopoki sa
+        // tokeny (patrz /api/device/solve) — nie pokazuj "expired".
+        outStatus = "active";
+        outDays = null;
       } else {
         outStatus = "expired";
         outDays = 0;
       }
+    } else if (subscription) {
+      outStatus = "expired";
+      outDays = 0;
     }
 
     return NextResponse.json({
@@ -86,6 +104,7 @@ export async function GET(request: NextRequest) {
       license: outCode
         ? { code: outCode, status: outStatus, daysLeft: outDays, durationDays: outDuration }
         : null,
+      tokenBalance,
     });
   } catch (e) {
     console.error("[device/account-status]", e);

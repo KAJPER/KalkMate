@@ -9,27 +9,27 @@
 #define FW_VERSION "?.?.?"
 #endif
 
-// === Przyciski (INPUT_PULLUP, LOW = wcisniety) ===
-#ifndef BTN_UP
-#define BTN_UP    26
+// === Przyciski: wirtualne BTN_xx z input.h (>=200) ===
+// Dawne fallbacki "#define BTN_UP 26" itp. wskazywaly na piny KAMERY
+// (GPIO 12/13/14/26/27) — usuniete.
+#if !defined(BTN_UP) || !defined(BTN_DOWN) || !defined(BTN_LEFT) || \
+    !defined(BTN_RIGHT) || !defined(BTN_OK) || !defined(BTN_BACK)
+#error "about_screen.h wymaga BTN_xx z input.h"
 #endif
-#ifndef BTN_DOWN
-#define BTN_DOWN  12
-#endif
-#ifndef BTN_LEFT
-#define BTN_LEFT  13
-#endif
-#ifndef BTN_RIGHT
-#define BTN_RIGHT 14
-#endif
-#ifndef BTN_OK
-#define BTN_OK    27
+
+// Dane sprzetowe strony "Wersja" — zalezne od PCB
+#ifdef KALK_HW_LEGACY
+  #define _ABOUT_CHIP_LINE   "Chip: ESP32-WROVER-E"
+  #define _ABOUT_MEM_LINE    "Flash: 4MB, PSRAM: 8MB"
+#else
+  #define _ABOUT_CHIP_LINE   "Chip: ESP32-S3 (N16R8)"
+  #define _ABOUT_MEM_LINE    "Flash: 16MB, PSRAM: 8MB"
 #endif
 
 // ---------------------------------------------------------------------------
 // showAboutScreen — wyswietla ekran "O programie" (3 strony, nawigacja przyciskami)
-// Powraca do callera po nacisnieciu BTN_OK na stronie 1
-// lub BTN_LEFT na stronie 1.
+// Powraca do callera po nacisnieciu BTN_OK lub BTN_LEFT/BTN_UP na stronie 1,
+// albo C/CE (BTN_BACK) na dowolnej stronie.
 // ---------------------------------------------------------------------------
 void showAboutScreen(U8G2 &display) {
 
@@ -73,28 +73,15 @@ void showAboutScreen(U8G2 &display) {
         },
         {
             _aboutFwLine,
-            "Chip: ESP32-WROVER-E",
-            "Flash: 16MB, PSRAM: 8MB",
+            _ABOUT_CHIP_LINE,
+            _ABOUT_MEM_LINE,
             _abT("Wyswietlacz: OLED 256x64", "Display: OLED 256x64", "Display: OLED 256x64")
         }
     };
 
-    // dodatkowa 5. linia na stronie 2 (silnik AI) — wyswietlana jako linia 4
-    // (strona 2 ma 5 pozycji, ale layout ma tylko 4 sloty — pomijamy ostatnia)
-    // Zamiast tego upakuj w 4 linie jak powyzej; "Silnik AI" trafia do linii 4
-    // na stronie 2 zamieniajac puste miejsce:
-    // (juz jest upakowane powyzej, linia 4 strony 2 = "  Kacper + Claude AI")
-    // Strona 2 linia 5 "Silnik AI: Anthropic Claude" nie miesci sie w layoucie —
-    // dodajemy ja jako nadpisanie linii [1][3]:
-    // (zrobione statycznie powyzej — linia [1][3] = "  Kacper + Claude AI",
-    //  a "Silnik AI: Anthropic Claude" ladujemy do linii [1][2] + [1][3])
-    // Ostateczna kolejnosc linii strony 2:
-    //   [1][0] "Projekt i hardware:"
-    //   [1][1] "  Kacper"
-    //   [1][2] "Oprogramowanie i AI:"
-    //   [1][3] "  Kacper + Claude AI"
-    // Silnik AI zmiesci sie tylko jesli zmniejszymy ilosc linii lub font;
-    // zgodnie ze specyfikacja layout ma dokladnie 4 linie — pomijamy 5. pozycje.
+    // Layout: dokladnie 4 linie tresci na strone (font 6x10, y=22..52).
+    // Strona 2 ("Tworcy"): projekt/hardware + oprogramowanie — patrz
+    // _about_lines[1] powyzej.
 
     static const int  _about_total_pages = 3;
 
@@ -190,6 +177,12 @@ void showAboutScreen(U8G2 &display) {
         if (panicTriggered()) return;
 
         bool changed = false;
+
+        // C/CE = wyjscie z dowolnej strony
+        if (btnPressed(BTN_BACK)) {
+            inputWaitRelease();
+            return;
+        }
 
         // Nastepna strona
         if (btnPressed(BTN_RIGHT) || btnPressed(BTN_DOWN)) {

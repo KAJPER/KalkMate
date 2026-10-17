@@ -2,7 +2,7 @@ interface StatCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
-  color: "blue" | "green" | "red" | "yellow" | "purple" | "cyan" | "indigo" | "pink" | "teal";
+  color: "blue" | "green" | "red" | "yellow" | "purple" | "cyan" | "indigo" | "pink" | "teal" | "orange";
 }
 
 const colorMap = {
@@ -15,6 +15,7 @@ const colorMap = {
   indigo: "border-indigo-500",
   pink: "border-pink-500",
   teal: "border-teal-500",
+  orange: "border-orange-500",
 };
 
 export default function StatCard({ title, value, subtitle, color }: StatCardProps) {

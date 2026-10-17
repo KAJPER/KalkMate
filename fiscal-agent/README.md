@@ -22,7 +22,7 @@ fiscal_agent/
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev]'
-pytest                                   # 30 testów, bez urządzenia (symulator)
+pytest                                   # bez urządzenia (symulator); regresje audytu: tests/test_regressions.py
 
 cp .env.example .env                     # ustaw drukarkę i tokeny
 set -a; . ./.env; set +a
@@ -70,8 +70,17 @@ Nadpłata jest dozwolona tylko gotówką — agent dolicza wtedy resztę.
 | `failed` | Błąd danych lub stanu urządzenia — wymaga poprawy |
 | `uncertain` | Nie wiadomo, czy paragon powstał — sprawdź drukarkę, potem `POST /receipts/{id}/retry?confirm_not_printed=true` |
 
+`POST /receipts/{id}/retry` działa tylko dla `failed` i `uncertain` (dla `uncertain` z `confirm_not_printed=true`).
+
 ## Bezpieczniki
 
-- `FISCAL_ALLOW_REAL=0` (domyślnie): agent odmawia druku, gdy drukarka zgłasza tryb fiskalny (`scomm.fs`).
+- `FISCAL_ALLOW_REAL=0` (domyślnie): agent odmawia druku, gdy drukarka zgłasza tryb fiskalny (`scomm.fs`). Brak albo nieznana wartość `fs` = drukarka traktowana jak FISKALNA.
 - Po restarcie agenta zlecenie przerwane w trakcie druku dostaje stan `uncertain` i **nie** jest ponawiane automatycznie.
+- Po wysłaniu `trend` każdy błąd (zerwane łącze, zły CRC, błąd odczytu licznika) kończy się `printed` (licznik `bn` wzrósł dokładnie o 1) albo `uncertain`. Ponowienie albo `failed` tylko po dowodzie, że paragon nie powstał: transakcja była otwarta, `prncancel`, potem `to=0` i `bn` bez zmian.
+- Limity: `FISCAL_MAX_TOTAL` (domyślnie 400000 gr = 4000 zł — mieści zamówienie 5 sztuk z wysyłką), `FISCAL_MAX_ITEMS` (5), `FISCAL_REQUIRE_REFERENCE` (1). Paragon poza limitem = `failed`/`invalid` bez kontaktu z drukarką.
+- Nazwy spoza strony kodowej drukarki są transliterowane (– → -, „ → "), a niemożliwe do zapisania (np. emoji) dają `invalid` przed `trinit`.
+- Tokeny ramek i `agent_id` są trwałe (tabela `meta` w bazie agenta). `rpt` przyjmuje tylko odpowiedź na ten sam rozkaz.
+- Platforma: claim i raporty niosą `agentId`. Odpowiedź raportu `accepted=false` albo stan `cancelled`/`cancel_requested`/`superseded` = zlecenie porzucone bez drukowania (wydrukowane zostaje i dostaje notatkę o konflikcie). 404 = zlecenie osierocone (nie drukowane, ostrzeżenie w `/status`). Przed drukiem agent potwierdza zlecenie raportem `printing`.
+- Agent nie pobiera nowych zleceń, gdy drukarka jest niegotowa, w trybie fiskalnym przy `FISCAL_ALLOW_REAL=0` albo lokalnie czeka zlecenie po błędzie. Claim jest też heartbeatem, więc w tym czasie panel pokazuje agenta jako offline.
+- `GET /status`: `worker_alive`, `alerts` (osierocone, konflikty, błąd pętli), `platform.claim_blocked`, `platform.agent_id`, `limits`.
 - Lokalne API nasłuchuje na `127.0.0.1` i wymaga tokenu Bearer. Drukarka nie ma uwierzytelniania, więc trzymaj ją w zaufanej sieci lub VLAN.

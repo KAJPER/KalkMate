@@ -5,6 +5,12 @@ import { prisma } from "@/lib/db";
 import { bcGetWaybillPdf } from "@/lib/basecourier";
 import { cropToLabel } from "@/lib/labelPdf";
 
+// Dawniej: sekwencyjnie do 100 zamowien x 25 s timeoutu Base Courier = request
+// trwajacy dziesiatki minut. Teraz najwyzej 4 pobrania naraz i calkowity
+// budzet czasu — czego nie zdazymy pobrac, idzie do X-Skipped.
+const CONCURRENCY = 4;
+const TOTAL_BUDGET_MS = 90_000;
+
 // POST { ids: string[] } -> jeden PDF z etykietami (4x6", strona na etykiete)
 // wszystkich zaznaczonych zamowien, ktore maja juz przesylke Base Courier.
 // Zamowienia bez przesylki / z bledem pobrania sa pomijane — ich numery KM
@@ -22,24 +28,49 @@ export async function POST(request: NextRequest) {
   // Kolejnosc jak na liscie w panelu.
   orders.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
 
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
+  // Wynik per zamowienie (w kolejnosci listy): PDF etykiety albo powod pominiecia.
+  const results: ({ label: Buffer } | { skip: string })[] = new Array(orders.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < orders.length) {
+      const i = next++;
+      const o = orders[i];
+      if (o.furgonetkaStatus !== "basecourier" || !o.furgonetkaPackageId) {
+        results[i] = { skip: `${o.orderNumber} (brak przesyłki)` };
+        continue;
+      }
+      if (Date.now() > deadline) {
+        results[i] = { skip: `${o.orderNumber} (przekroczono limit czasu — pobierz ponownie)` };
+        continue;
+      }
+      try {
+        const { pdf } = await bcGetWaybillPdf(o.furgonetkaPackageId);
+        if (!pdf) { results[i] = { skip: `${o.orderNumber} (etykieta jeszcze niedostępna)` }; continue; }
+        let label: Buffer = pdf;
+        try { label = await cropToLabel(pdf); } catch { /* zostaje oryginal */ }
+        results[i] = { label };
+      } catch (e) {
+        console.error("[orders/labels]", o.orderNumber, e);
+        results[i] = { skip: `${o.orderNumber} (błąd: ${(e as Error).message.slice(0, 60)})` };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, orders.length) }, worker));
+
   const out = await PDFDocument.create();
   const skipped: string[] = [];
-  for (const o of orders) {
-    if (o.furgonetkaStatus !== "basecourier" || !o.furgonetkaPackageId) {
-      skipped.push(`${o.orderNumber} (brak przesyłki)`);
-      continue;
-    }
+  for (let i = 0; i < orders.length; i++) {
+    const r = results[i];
+    if (!r) continue;
+    if ("skip" in r) { skipped.push(r.skip); continue; }
     try {
-      const { pdf } = await bcGetWaybillPdf(o.furgonetkaPackageId);
-      if (!pdf) { skipped.push(`${o.orderNumber} (etykieta jeszcze niedostępna)`); continue; }
-      let label: Buffer = pdf;
-      try { label = await cropToLabel(pdf); } catch { /* zostaje oryginal */ }
-      const src = await PDFDocument.load(label, { ignoreEncryption: true });
+      const src = await PDFDocument.load(r.label, { ignoreEncryption: true });
       const pages = await out.copyPages(src, src.getPageIndices());
       pages.forEach((p) => out.addPage(p));
     } catch (e) {
-      console.error("[orders/labels]", o.orderNumber, e);
-      skipped.push(`${o.orderNumber} (błąd: ${(e as Error).message.slice(0, 60)})`);
+      console.error("[orders/labels] pdf merge", orders[i].orderNumber, e);
+      skipped.push(`${orders[i].orderNumber} (błąd PDF: ${(e as Error).message.slice(0, 60)})`);
     }
   }
   if (!out.getPageCount()) {

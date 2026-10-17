@@ -5,7 +5,9 @@ import { createCampaign, isRunning, listCampaigns } from "@/lib/newsletter";
 import { parseContent, parseFilter } from "@/lib/newsletterInput";
 
 // GET  — historia kampanii z postepem (panel odpytuje co kilka sekund w trakcie wysylki)
-// POST — { content, filter } -> tworzy kampanie i startuje wysylke w tle
+// POST — { content, filter, clientRequestId? } -> tworzy kampanie i startuje
+//        wysylke w tle. clientRequestId (unikalny, np. uuid z panelu) =
+//        idempotencja: powtorzony POST zwraca istniejaca kampanie (duplicate: true).
 export async function GET(request: NextRequest) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
@@ -25,8 +27,13 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const parsed = parseContent(body?.content);
   if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
+  const rawRequestId = body?.clientRequestId;
+  if (rawRequestId !== undefined && rawRequestId !== null && (typeof rawRequestId !== "string" || !rawRequestId.trim() || rawRequestId.length > 100)) {
+    return NextResponse.json({ ok: false, error: "Nieprawidłowy clientRequestId" }, { status: 400 });
+  }
+  const clientRequestId = typeof rawRequestId === "string" ? rawRequestId.trim() : null;
   try {
-    const result = await createCampaign(parsed.content, parseFilter(body?.filter));
+    const result = await createCampaign(parsed.content, parseFilter(body?.filter), clientRequestId);
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });

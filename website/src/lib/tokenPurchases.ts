@@ -81,6 +81,70 @@ export async function markTokenPurchasePaid(id: string): Promise<void> {
   `;
 }
 
+// === Doliczenie tokenow — atomowo i dokladnie raz (audyt 2026-10-16) ===
+// Wczesniej: check-then-act (status sprawdzany, potem osobno UPDATE salda) —
+// dwa rownolegle powiadomienia mogly doliczyc tokeny dwa razy. Teraz zmiana
+// statusu / wstawienie wiersza jest warunkiem, a saldo rosnie w TEJ SAMEJ
+// transakcji tylko gdy zmienil sie dokladnie 1 wiersz.
+
+// P24: pending -> paid. Zwraca true gdy to wywolanie doliczylo tokeny.
+export async function markTokenPurchasePaidAndCredit(purchase: Pick<TokenPurchaseRow, "id" | "userId" | "tokens">): Promise<boolean> {
+  await ensureTokenPurchaseTable();
+  const now = new Date().toISOString();
+  return prisma.$transaction(async (tx) => {
+    const changed = await tx.$executeRaw`
+      UPDATE TokenPurchase SET status = 'paid', paidAt = ${now} WHERE id = ${purchase.id} AND status = 'pending'
+    `;
+    if (Number(changed) !== 1) return false;
+    await tx.$executeRaw`
+      UPDATE "User" SET "tokenBalance" = COALESCE("tokenBalance", 0) + ${purchase.tokens} WHERE "id" = ${purchase.userId}
+    `;
+    return true;
+  });
+}
+
+// Stripe: INSERT OR IGNORE po unikalnym sessionId (Checkout Session) — powtorzony
+// webhook nie wstawi drugiego wiersza, wiec nie doliczy drugi raz.
+export async function createPaidTokenPurchaseAndCredit(row: {
+  id: string; sessionId: string; provider: string; userId: string; tokens: number; amount: number; currency: string;
+}): Promise<boolean> {
+  await ensureTokenPurchaseTable();
+  const now = new Date().toISOString();
+  return prisma.$transaction(async (tx) => {
+    const inserted = await tx.$executeRaw`
+      INSERT OR IGNORE INTO TokenPurchase (id, sessionId, provider, userId, tokens, amount, currency, status, createdAt, paidAt)
+      VALUES (${row.id}, ${row.sessionId}, ${row.provider}, ${row.userId}, ${row.tokens}, ${row.amount}, ${row.currency}, 'paid', ${now}, ${now})
+    `;
+    if (Number(inserted) !== 1) return false;
+    await tx.$executeRaw`
+      UPDATE "User" SET "tokenBalance" = COALESCE("tokenBalance", 0) + ${row.tokens} WHERE "id" = ${row.userId}
+    `;
+    return true;
+  });
+}
+
+// Notatka admina przy zakupie tokenow (zwrot / chargeback ze Stripe). Kolumna
+// dodawana leniwie (ALTER TABLE w try/catch — juz istnieje = OK). Zwraca true
+// gdy dopisano (dedupeMarker juz w notatce = powtorzone zdarzenie, pomijamy).
+let _notesReady = false;
+export async function appendTokenPurchaseNote(sessionId: string, note: string, dedupeMarker?: string): Promise<boolean> {
+  await ensureTokenPurchaseTable();
+  if (!_notesReady) {
+    try { await prisma.$executeRawUnsafe(`ALTER TABLE TokenPurchase ADD COLUMN adminNotes TEXT`); } catch { /* juz jest */ }
+    _notesReady = true;
+  }
+  const marker = dedupeMarker || "";
+  const changed = await prisma.$executeRaw`
+    UPDATE TokenPurchase SET adminNotes = CASE
+      WHEN adminNotes IS NULL OR adminNotes = '' THEN ${note}
+      ELSE adminNotes || char(10) || ${note}
+    END
+    WHERE sessionId = ${sessionId}
+      AND (${marker} = '' OR adminNotes IS NULL OR instr(adminNotes, ${marker}) = 0)
+  `;
+  return Number(changed) > 0;
+}
+
 export async function sumTokensPurchasedByUser(userId: string): Promise<{ tokens: number; count: number }> {
   await ensureTokenPurchaseTable();
   const rows = await prisma.$queryRaw<{ tokens: number | null; count: number }[]>`

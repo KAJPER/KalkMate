@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
-import { ensureOrderPersonalizationColumns } from "@/lib/orderPersonalization";
+import { ensureOrderPersonalizationColumns, parseOrderUnitsRow } from "@/lib/orderPersonalization";
 
 const PAYMENT_STATUS: Record<string, string> = {
   pending: "requires_payment_method",
@@ -79,16 +79,36 @@ export async function GET(request: NextRequest) {
     // poza Prisma schema, patrz lib/orderPersonalization.ts. Potrzebne tutaj
     // zeby realizujący zamówienie widział co wgrać/wydrukować przed wysyłką.
     await ensureOrderPersonalizationColumns();
-    const persMap = new Map<string, { code: string | null; name: string | null }>();
+    const persMap = new Map<string, {
+      code: string | null;
+      name: string | null;
+      quantity: number;
+      units: { code: string; name: string }[];
+    }>();
     if (page.length) {
       const placeholders = page.map(() => "?").join(",");
+      // SELECT * — kolumny "quantity"/"personalizationJson" (wiele sztuk) moga
+      // jeszcze nie istniec w starej bazie; parseOrderUnitsRow obsluguje ich brak.
       const persRows = await prisma.$queryRawUnsafe<
-        { id: string; personalizedCode: string | null; personalizedName: string | null }[]
+        ({ id: string; personalizedCode: string | null; personalizedName: string | null } & Record<string, unknown>)[]
       >(
-        `SELECT id, "personalizedCode", "personalizedName" FROM "Order" WHERE id IN (${placeholders})`,
+        `SELECT * FROM "Order" WHERE id IN (${placeholders})`,
         ...page.map((o) => o.id)
       );
-      for (const r of persRows) persMap.set(r.id, { code: r.personalizedCode, name: r.personalizedName });
+      for (const r of persRows) {
+        let parsed: { quantity: number; units: { code: string; name: string }[] } = { quantity: 1, units: [] };
+        try { parsed = parseOrderUnitsRow(r); } catch { /* uszkodzony JSON — zostaje para pol */ }
+        persMap.set(r.id, {
+          code: r.personalizedCode,
+          name: r.personalizedName,
+          quantity: Math.max(1, Math.floor(Number(parsed.quantity) || 1)),
+          units: parsed.units?.length
+            ? parsed.units
+            : r.personalizedCode || r.personalizedName
+              ? [{ code: r.personalizedCode || "", name: r.personalizedName || "" }]
+              : [],
+        });
+      }
     }
 
     const orders = page.map((o) => ({
@@ -106,6 +126,9 @@ export async function GET(request: NextRequest) {
       customer_country: o.customerCountry || "PL",
       customer_address: [o.customerAddressStreet, o.customerAddressPostcode, o.customerAddressCity].filter(Boolean).join(", "),
       has_shipment: o.furgonetkaStatus === "basecourier" && !!o.furgonetkaPackageId,
+      furgonetka_status: o.furgonetkaStatus || "",
+      // Nadanie w toku / niepewne (timeout API kuriera) — masowe nadanie musi to pominac.
+      shipment_uncertain: o.furgonetkaStatus === "basecourier_pending",
       product: "KalkMate v3.0",
       fulfillment_status: o.fulfillmentStatus || "unfulfilled",
       shipped_at: o.shippedAt ? o.shippedAt.toISOString() : null,
@@ -113,6 +136,8 @@ export async function GET(request: NextRequest) {
       payment_provider: o.paymentProvider,
       personalized_code: persMap.get(o.id)?.code || null,
       personalized_name: persMap.get(o.id)?.name || null,
+      quantity: persMap.get(o.id)?.quantity ?? 1,
+      personalizations: persMap.get(o.id)?.units ?? [],
     }));
 
     return NextResponse.json({

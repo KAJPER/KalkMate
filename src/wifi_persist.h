@@ -5,12 +5,29 @@
 // Uzyj #include "wifi_persist.h" przed wifi_settings.h i solve_screen.h
 
 #include <Preferences.h>
+#include <WiFi.h>
 
 #define _WP_NS        "kalkmate"   // przestrzen nazw NVS
 #define _WP_SSID      "wifi_ssid"
 #define _WP_PASS      "wifi_pass"
 #define _WP_LIC       "license"
 #define _WP_DEV_TOKEN "dev_token"  // unikalny token urzadzenia (64 znaki hex)
+
+// Tozsamosc urzadzenia — osobny namespace, ktorego reset fabryczny NIE czysci
+// (kontrakt K5). Trzyma dev_token oraz flage "unpair" (ustawiana przez reset
+// fabryczny: przy nastepnej rejestracji serwer ma odpiac urzadzenie od konta).
+#define _WP_ID_NS     "kalkid"
+#define _WP_UNPAIR    "unpair"
+
+// Wlacza tryb STA z ograniczona moca nadawania. Na PCB v4 radio przy
+// domyslnych ~20 dBm potrafi razem z boostem OLED przeciagnac LiPo do
+// brownoutu. Wolac zamiast samego WiFi.mode(WIFI_STA) — kazde wylaczenie
+// radia (WiFi.disconnect(true) / WIFI_OFF) przywraca domyslna moc, wiec
+// limit trzeba ustawic po kazdym ponownym wlaczeniu STA.
+static void wifiStaOnLimited() {
+    WiFi.mode(WIFI_STA);
+    WiFi.setTxPower(WIFI_POWER_8_5dBm);
+}
 
 // Zapisz SSID i haslo WiFi do NVS
 static void wifiSaveCreds(const char* ssid, const char* pass) {
@@ -163,29 +180,87 @@ static void wifiLoadLicense(char* keyBuf, int keySize) {
 }
 
 // === Unikalny token urzadzenia (przydzielany przez serwer przy rejestracji) ===
-static void wifiSaveDeviceToken(const char* token) {
+// Zapis zawsze do "kalkid" (przezywa reset fabryczny). Zwraca false przy
+// bledzie NVS (logowane bez wartosci tokenu).
+static bool wifiSaveDeviceToken(const char* token) {
+    if (!token) return false;
     Preferences prefs;
-    prefs.begin(_WP_NS, false);
-    prefs.putString(_WP_DEV_TOKEN, token);
+    if (!prefs.begin(_WP_ID_NS, false)) {
+        Serial.println("[NVS] BLAD: nie mozna otworzyc kalkid (dev_token)");
+        return false;
+    }
+    size_t n = prefs.putString(_WP_DEV_TOKEN, token);
     prefs.end();
+    if (n != strlen(token)) {
+        Serial.println("[NVS] BLAD zapisu dev_token");
+        return false;
+    }
+    return true;
 }
 
 // buf musi miec min. 65 bajtow (64 znaki hex + \0)
+// Odczyt najpierw z "kalkid"; gdy pusto — fallback do starego miejsca
+// ("kalkmate", firmware sprzed K5) i jednorazowa migracja do "kalkid".
+// Stary klucz zostaje (inny kod moze go jeszcze czytac); po migracji odczyt
+// i tak bierze "kalkid".
 static void wifiLoadDeviceToken(char* buf, int size) {
     Preferences prefs;
-    prefs.begin(_WP_NS, true);
-    String t = prefs.getString(_WP_DEV_TOKEN, "");
-    prefs.end();
+    String t = "";
+    if (prefs.begin(_WP_ID_NS, true)) {   // read-only: false gdy namespace jeszcze nie istnieje
+        t = prefs.getString(_WP_DEV_TOKEN, "");
+        prefs.end();
+    }
+    if (t.length() == 0) {
+        if (prefs.begin(_WP_NS, true)) {
+            t = prefs.getString(_WP_DEV_TOKEN, "");
+            prefs.end();
+        }
+        if (t.length() > 0 && wifiSaveDeviceToken(t.c_str())) {
+            Serial.println("[NVS] dev_token zmigrowany do kalkid");
+        }
+    }
     strncpy(buf, t.c_str(), size - 1);
     buf[size - 1] = '\0';
 }
 
-// === Kod odblokowujacy tryb AI ===
-static void saveAiCode(const char* code) {
+// Flaga "unpair" (K5) — ustawiana przez reset fabryczny w "kalkid".
+static bool wifiFactoryUnpairPending() {
     Preferences prefs;
-    prefs.begin(_WP_NS, false);
-    prefs.putString("ai_code", code);
+    if (!prefs.begin(_WP_ID_NS, true)) return false;
+    bool v = prefs.getBool(_WP_UNPAIR, false);
     prefs.end();
+    return v;
+}
+
+// Kasuje flage "unpair" po potwierdzeniu przez serwer (HTTP 200).
+static bool wifiClearFactoryUnpair() {
+    Preferences prefs;
+    if (!prefs.begin(_WP_ID_NS, false)) {
+        Serial.println("[NVS] BLAD: nie mozna otworzyc kalkid (unpair)");
+        return false;
+    }
+    bool ok = (prefs.putBool(_WP_UNPAIR, false) == 1);
+    prefs.end();
+    if (!ok) Serial.println("[NVS] BLAD zapisu flagi unpair");
+    return ok;
+}
+
+// === Kod odblokowujacy tryb AI ===
+// Zwraca false przy bledzie NVS (logowane bez wartosci kodu).
+static bool saveAiCode(const char* code) {
+    if (!code) return false;
+    Preferences prefs;
+    if (!prefs.begin(_WP_NS, false)) {
+        Serial.println("[NVS] BLAD: nie mozna otworzyc kalkmate (ai_code)");
+        return false;
+    }
+    size_t n = prefs.putString("ai_code", code);
+    prefs.end();
+    if (n != strlen(code)) {
+        Serial.println("[NVS] BLAD zapisu kodu AI");
+        return false;
+    }
+    return true;
 }
 static void loadAiCode(char* buf, int bufSize, const char* defaultCode) {
     Preferences prefs;
@@ -254,8 +329,8 @@ static void wifiFastBegin(const char* ssid, const char* pass) {
     uint8_t bssid[6];
     int32_t ch;
     if (wifiLoadBssidChannel(ssid, bssid, ch)) {
-        Serial.printf("[WiFi] fast begin ch=%d bssid=%02X:%02X:%02X:%02X:%02X:%02X\n",
-                      ch, bssid[0],bssid[1],bssid[2],bssid[3],bssid[4],bssid[5]);
+        // Bez BSSID w logu (M9) — identyfikuje konkretny router/lokalizacje.
+        Serial.printf("[WiFi] fast begin ch=%d (hint BSSID)\n", (int)ch);
         WiFi.begin(ssid, pass, ch, bssid);
     } else {
         WiFi.begin(ssid, pass);

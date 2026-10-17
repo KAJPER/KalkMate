@@ -40,6 +40,7 @@ def receipt(**over):
             {"name": "Wysyłka", "unit_price": 1599, "vat": "23"},
         ],
         "payments": [{"type": "transfer", "amount": 64499, "name": "Przelewy24"}],
+        "reference": "KM-1001",
     }
     data.update(over)
     return data

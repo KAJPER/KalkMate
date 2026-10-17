@@ -14,7 +14,7 @@
 
 import { ImapFlow, type SearchObject } from "imapflow";
 import { simpleParser, type AddressObject, type EmailAddress } from "mailparser";
-import nodemailer from "nodemailer";
+import nodemailer, { type SendMailOptions } from "nodemailer";
 
 const IMAP_HOST = process.env.MAILBOX_IMAP_HOST || process.env.MAIL_HOST || "h24.seohost.pl";
 const IMAP_PORT = parseInt(process.env.MAILBOX_IMAP_PORT || "993", 10);
@@ -31,6 +31,22 @@ export const MAILBOX_FOLDERS = [
   { path: "Drafts", label: "Robocze" },
   { path: "Trash", label: "Kosz" },
 ] as const;
+
+const MAILBOX_FOLDER_PATHS = new Set<string>(MAILBOX_FOLDERS.map((f) => f.path));
+
+// Allowlista folderow dla WSZYSTKICH route'ow /api/admin/mailbox/** — folder
+// idzie prosto do getMailboxLock(), wiec nie przyjmujemy dowolnych nazw.
+export function isMailboxFolder(folder: unknown): folder is string {
+  return typeof folder === "string" && MAILBOX_FOLDER_PATHS.has(folder);
+}
+
+// imapflow/mailparser potrafia zwrocic "Invalid Date" (zepsuty naglowek Date
+// od spamera) — toISOString() rzuca wtedy RangeError i wywalal cala liste.
+function safeIso(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  const t = d instanceof Date ? d : new Date(d);
+  return Number.isNaN(t.getTime()) ? null : t.toISOString();
+}
 
 export interface MailAddress {
   name: string;
@@ -90,7 +106,7 @@ export async function listMessages(folder = "INBOX", limit = 100): Promise<Mailb
           subject: msg.envelope?.subject || "(brak tematu)",
           from: from ? { name: from.name || "", address: from.address || "" } : null,
           to: (msg.envelope?.to || []).map((a) => ({ name: a.name || "", address: a.address || "" })),
-          date: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : null,
+          date: safeIso(msg.envelope?.date),
           seen: msg.flags?.has("\\Seen") ?? false,
           flagged: msg.flags?.has("\\Flagged") ?? false,
           answered: msg.flags?.has("\\Answered") ?? false,
@@ -116,6 +132,9 @@ export interface MailboxMessageFull {
   folder: string;
   subject: string;
   from: MailAddress | null;
+  // Naglowek Reply-To (np. formularz kontaktowy wysyla z noreply@, a adres
+  // klienta jest w Reply-To) — odpowiedz ma isc tutaj, nie na `from`.
+  replyTo: MailAddress | null;
   to: MailAddress[];
   cc: MailAddress[];
   date: string | null;
@@ -163,9 +182,10 @@ export async function getMessage(uid: number, folder = "INBOX"): Promise<Mailbox
         folder,
         subject: parsed.subject || "(brak tematu)",
         from: flattenAddresses(parsed.from)[0] || null,
+        replyTo: flattenAddresses(parsed.replyTo).find((a) => a.address) || null,
         to: flattenAddresses(parsed.to),
         cc: flattenAddresses(parsed.cc),
-        date: parsed.date ? parsed.date.toISOString() : null,
+        date: safeIso(parsed.date),
         html: typeof parsed.html === "string" ? parsed.html : null,
         text: parsed.text || null,
         messageId: parsed.messageId || null,
@@ -181,6 +201,16 @@ export async function getMessage(uid: number, folder = "INBOX"): Promise<Mailbox
       lock.release();
     }
   });
+}
+
+// Komu odpowiadamy domyslnie: Reply-To (formularz kontaktowy wysyla z
+// noreply@, adres klienta jest w Reply-To), chyba ze Reply-To wskazuje na nasza
+// wlasna skrzynke (mailer.ts ustawia Reply-To: kontakt@ we wlasnych mailach) —
+// wtedy From.
+export function preferredReplyAddress(m: Pick<MailboxMessageFull, "from" | "replyTo">): MailAddress | null {
+  const rt = m.replyTo;
+  if (rt?.address && rt.address.toLowerCase() !== MAILBOX_USER.toLowerCase()) return rt;
+  return m.from;
 }
 
 export async function getAttachment(
@@ -250,7 +280,7 @@ function buildMailOptions(input: ReplyInput) {
 // Wysyla przez SMTP konta kontakt@ i doklada TA SAMA wiadomosc (ten sam
 // Message-ID) do folderu "Sent", zeby byla widoczna w zwyklej poczcie
 // (webmail) tak samo jak wyslana recznie.
-async function deliver(mailOptions: nodemailer.SendMailOptions): Promise<{ ok: boolean; error?: string }> {
+async function deliver(mailOptions: SendMailOptions): Promise<{ ok: boolean; error?: string }> {
   if (!MAILBOX_PASS) return { ok: false, error: "Brak MAILBOX_PASS w konfiguracji serwera" };
   try {
     const smtp = nodemailer.createTransport({
@@ -266,7 +296,9 @@ async function deliver(mailOptions: nodemailer.SendMailOptions): Promise<{ ok: b
       const composed = await composer.sendMail(mailOptions);
       if (composed.message) {
         await withImap(async (client) => {
-          await client.append("Sent", composed.message as Buffer, ["\Seen"]);
+          // "\\Seen" — w JS "\Seen" to po prostu "Seen" (nieznany escape),
+          // czyli niestandardowe slowo kluczowe zamiast flagi systemowej IMAP.
+          await client.append("Sent", composed.message as Buffer, ["\\Seen"]);
         });
       }
     } catch (e) {
@@ -314,7 +346,7 @@ export async function markAnswered(uid: number, folder = "INBOX"): Promise<void>
     await withImap(async (client) => {
       const lock = await client.getMailboxLock(folder);
       try {
-        await client.messageFlagsAdd(String(uid), ["\Answered"], { uid: true });
+        await client.messageFlagsAdd(String(uid), ["\\Answered"], { uid: true });
       } finally {
         lock.release();
       }
@@ -402,10 +434,15 @@ export async function getRelatedMessages(uid: number, folder = "INBOX"): Promise
       }
     }
 
-    // 3) Tresc znalezionych wiadomosci.
+    // 3) Tresc znalezionych wiadomosci. UID rosna z czasem dodania do
+    // folderu, wiec bierzemy NAJNOWSZE (najwyzsze UID), nie najstarsze —
+    // w dlugiej rozmowie panel ma pokazac ostatnie wiadomosci.
     const out: ThreadMessage[] = [];
     for (const f of THREAD_FOLDERS) {
-      const wanted = found.filter((x) => x.folder === f).slice(0, THREAD_MAX * 2);
+      const wanted = found
+        .filter((x) => x.folder === f)
+        .sort((a, b) => a.uid - b.uid)
+        .slice(-THREAD_MAX * 2);
       if (wanted.length === 0) continue;
       const lock = await client.getMailboxLock(f);
       try {
@@ -422,7 +459,7 @@ export async function getRelatedMessages(uid: number, folder = "INBOX"): Promise
             subject: parsed.subject || "(brak tematu)",
             from,
             to: flattenAddresses(parsed.to),
-            date: parsed.date ? parsed.date.toISOString() : null,
+            date: safeIso(parsed.date),
             text: stripQuotes(parsed.text || "").slice(0, 6000),
           });
         }

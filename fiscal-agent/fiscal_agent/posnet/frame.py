@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass, field
 
 STX = 0x02
@@ -27,6 +28,58 @@ TAB = 0x09
 
 # Znaki, których nie wolno przesłać w wartości pola (rozbiłyby ramkę).
 _FORBIDDEN = {chr(STX), chr(ETX), chr(TAB), "\r", "\n"}
+
+# Znaki typograficzne, których często nie ma w stronie kodowej drukarki
+# (np. ISO-8859-2 nie ma półpauzy ani cudzysłowów „”). Ta sama tabela co w
+# tools/kalkmate-admin-desktop/fiscal/posnet.js (TRANSLIT).
+TRANSLIT = {
+    "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "−": "-",
+    "„": '"', "“": '"', "”": '"', "«": '"', "»": '"',
+    "‘": "'", "’": "'", "‚": "'", "‹": "'", "›": "'",
+    "…": "...", " ": " ", " ": " ", " ": " ", " ": " ",
+    "€": "EUR", "×": "x", "•": "*", "·": "*",
+}
+
+
+class UnmappableText(ValueError):
+    """Tekstu nie da się zapisać w stronie kodowej drukarki (nawet po transliteracji)."""
+
+    def __init__(self, char: str, value: str, encoding: str) -> None:
+        super().__init__(f"znak {char!r} (U+{ord(char):04X}) w tekście {value!r} nie istnieje w stronie kodowej "
+                         f"drukarki {encoding} i nie ma zamiennika")
+        self.char = char
+
+
+def _encodable(text: str, encoding: str) -> bool:
+    try:
+        text.encode(encoding)
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def printer_text(value: str, max_len: int | None, encoding: str) -> str:
+    """Tekst do pola drukarki (nazwa towaru, płatności): bez znaków sterujących
+    ramki, w stronie kodowej drukarki.
+
+    Znaki spoza strony kodowej transliterujemy (– → -, „ → ", ñ → n…). Jeśli się
+    nie da (np. emoji), rzucamy UnmappableText — paragon nie może wyjść z '?'
+    w miejscu znaku ani wywrócić się w połowie transakcji.
+    """
+    out: list[str] = []
+    for ch in clean_text(value):
+        if _encodable(ch, encoding):
+            out.append(ch)
+            continue
+        alt = TRANSLIT.get(ch)
+        if alt is None:
+            alt = "".join(c for c in unicodedata.normalize("NFKD", ch) if not unicodedata.combining(c))
+        if alt and _encodable(alt, encoding):
+            out.append(alt)
+            continue
+        raise UnmappableText(ch, value, encoding)
+    text = " ".join("".join(out).split())
+    return text[:max_len] if max_len else text
 
 
 def crc16_xmodem(data: bytes) -> int:

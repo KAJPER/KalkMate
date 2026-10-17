@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { getMessage } from "@/lib/contactMailbox";
+import { getMessage, isMailboxFolder, preferredReplyAddress } from "@/lib/contactMailbox";
 import { findOrdersByEmail, generateReplyDraft } from "@/lib/mailReply";
 
 // POST /api/admin/mailbox/[uid]/draft-reply — { folder?, instruction? }
@@ -25,7 +25,8 @@ export async function POST(
   if (!Number.isFinite(uidNum)) return NextResponse.json({ ok: false, error: "Nieprawidlowe uid" }, { status: 400 });
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>));
-  const folder = typeof body?.folder === "string" ? body.folder : "INBOX";
+  const folder = body?.folder === undefined || body?.folder === null || body?.folder === "" ? "INBOX" : body.folder;
+  if (!isMailboxFolder(folder)) return NextResponse.json({ ok: false, error: "Nieznany folder" }, { status: 400 });
   const instruction = typeof body?.instruction === "string" ? body.instruction : "";
 
   try {
@@ -37,8 +38,10 @@ export async function POST(
       : (original.html || "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     if (!text) return NextResponse.json({ ok: false, error: "Pusta tresc oryginalnej wiadomosci" }, { status: 400 });
 
-    const orders = original.from?.address ? await findOrdersByEmail(original.from.address) : [];
-    const draft = await generateReplyDraft({ customerEmailText: text, customerName: original.from?.name, orders, instruction });
+    // Klient = Reply-To (formularz kontaktowy wysyla z noreply@), inaczej From.
+    const customer = preferredReplyAddress(original);
+    const orders = customer?.address ? await findOrdersByEmail(customer.address) : [];
+    const draft = await generateReplyDraft({ customerEmailText: text, customerName: customer?.name || original.from?.name, orders, instruction });
 
     return NextResponse.json({ ok: true, draft, ordersFound: orders.length });
   } catch (e) {

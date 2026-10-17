@@ -10,7 +10,7 @@
 //   MAIL_FROM_NAME=KalkMate
 //   MAIL_FROM_ADDRESS=noreply@kalkmate.pl
 
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 
 const host   = process.env.MAIL_HOST   || "h24.seohost.pl";
 const port   = parseInt(process.env.MAIL_PORT || "465", 10);
@@ -21,9 +21,9 @@ const pass   = process.env.MAIL_PASS   || "";
 const fromName    = process.env.MAIL_FROM_NAME    || "KalkMate";
 const fromAddress = process.env.MAIL_FROM_ADDRESS || "noreply@kalkmate.pl";
 
-let _transporter: nodemailer.Transporter | null = null;
+let _transporter: Transporter | null = null;
 
-function getTransporter(): nodemailer.Transporter {
+function getTransporter(): Transporter {
   if (_transporter) return _transporter;
   if (!pass) {
     console.warn("[mailer] MAIL_PASS missing - mail send will fail");

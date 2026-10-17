@@ -1,5 +1,31 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { loadSignatureImage, drawSignature } from "./signature";
+import { shippingCentsForCountry } from "./checkoutPricing";
+import { countryName as intlCountryName } from "./countries";
+
+// Domyslna wartosc celna TOWARU (w walucie zamowienia, jednostki glowne) —
+// kwota zamowienia MINUS oplata za wysylke wg cennika sklepu (checkoutPricing:
+// PL 0, UE 2000, reszta 3500 minor). Dawniej brano cala kwote zamowienia, czyli
+// towar + wysylka, a Karta odprawy UPS deklaruje "koszt transportu NIE wliczony
+// w cene towaru" — zawyzona wartosc = wyzsze clo/VAT u odbiorcy i niespojne dokumenty.
+export function customsGoodsValue(order: { amount: number; customerCountry: string | null }): number {
+  const shipping = shippingCentsForCountry(order.customerCountry ?? "");
+  const goods = order.amount - shipping;
+  return (goods > 0 ? goods : order.amount) / 100;
+}
+
+// Zamowienie kilku sztuk: wartosc towaru (customsGoodsValue, juz po rabacie)
+// rozkladamy rowno na sztuki — rabat z kuponu dotyczy calego subtotalu, wiec
+// proporcjonalnie obniza cene kazdej sztuki. Wartosc jednostkowa zaokraglona do
+// grosza; ostatnia roznica zaokraglenia (max kilka groszy) jest pomijalna, ale
+// zeby "Total" na fakturze zgadzal sie co do grosza z deklaracja, liczymy go
+// jako quantity x unitValue (zaokraglone), a deklarowana laczna wartosc = total.
+export const CUSTOMS_UNIT_WEIGHT_KG = 1; // waga 1 sztuki w paczce (= KALKMATE_PARCEL.weight)
+
+export function customsUnitValue(totalValue: number, quantity: number): number {
+  const q = quantity >= 1 ? Math.floor(quantity) : 1;
+  return Math.round((totalValue / q) * 100) / 100;
+}
 
 // Faktura handlowa (Commercial Invoice) do przesylek poza UE — wersja
 // papierowa dokumentow celnych (Base Courier: CourierSearch.paper_customs_docs).
@@ -39,9 +65,14 @@ const COUNTRY_NAMES: Record<string, string> = {
   CA: "Canada", AU: "Australia", DE: "Germany", OTHER: "United States",
 };
 
+// Pelna angielska nazwa kraju dla urzedu celnego — dawniej spoza malej tablicy
+// drukowal sie sam kod ISO (np. "JP", "IL"). Intl.DisplayNames (Node ma pelne ICU).
 function countryName(code: string): string {
   const c = (code || "").trim();
-  return COUNTRY_NAMES[c.toUpperCase()] || c;
+  const up = c.toUpperCase();
+  if (COUNTRY_NAMES[up]) return COUNTRY_NAMES[up];
+  if (/^[A-Z]{2}$/.test(up)) return intlCountryName(up, "en");
+  return c;
 }
 
 export function asciiText(s: string): string {
@@ -52,6 +83,13 @@ function ascii(s: string): string {
   return (s || "")
     .replace(/ł/g, "l")
     .replace(/Ł/g, "L")
+    .replace(/[‘’ʼ]/g, "'") // O’Brien, Côte d’Ivoire — zamiast "?"
+    .replace(/[“”„]/g, '"')
+    .replace(/[–—]/g, "-")
+    .replace(/ß/g, "ss")
+    .replace(/[Øø]/g, (m) => (m === "Ø" ? "O" : "o"))
+    .replace(/Æ/g, "AE")
+    .replace(/æ/g, "ae")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^\x20-\x7E]/g, "?");
@@ -125,7 +163,7 @@ export async function buildCustomsInvoicePdf(input: CustomsInvoiceInput): Promis
 
   // Tabela towarow
   const g = input.goods;
-  const total = g.quantity * g.unitValue;
+  const total = Math.round(g.quantity * g.unitValue * 100) / 100;
   const cols = { desc: M, hs: 250, origin: 320, qty: 390, unit: 430, total: 505 };
   y -= 8;
   text("Description of goods", cols.desc, y, 9, true);

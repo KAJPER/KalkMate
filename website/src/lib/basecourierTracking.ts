@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { applyFulfillmentStatus, type FulfillmentStatus } from "@/lib/orderFulfillment";
-import { bcGetOrderDetails, type BcTrackingEvent } from "@/lib/basecourier";
-import { looksLikeInPostNumber } from "@/lib/inpostTracking";
+import { bcGetOrderDetails, type BcOrderDetails, type BcTrackingEvent } from "@/lib/basecourier";
+import { looksLikeInPostNumber, appendOrderNoteOnce, trackingSkipReason, mapWithConcurrency } from "@/lib/inpostTracking";
 
 // Sledzenie przesylek zagranicznych (DPD, GLS, UPS...) nadanych przez Base
 // Courier — patrz src/app/api/admin/orders/[id]/basecourier/route.ts
@@ -20,12 +20,18 @@ import { looksLikeInPostNumber } from "@/lib/inpostTracking";
 // po nazwie, bo Base Courier nie publikuje pelnej listy kodow. W razie
 // niepewnosci NIC nie zmieniamy (lepiej przegapic automatyczna aktualizacje
 // niz falszywie oznaczyc zamowienie).
+// Kolejnosc sprawdzen ma znaczenie: dawniej /DELIVER/ bylo pierwsze, wiec
+// "OUT_FOR_DELIVERY" i "UNDELIVERED"/"NOT_DELIVERED" oznaczaly zamowienie jako
+// DOSTARCZONE (mail "dostarczono" do klienta, a paczka jeszcze w drodze / wraca).
 function mapBaseCourierStatus(ev: BcTrackingEvent): FulfillmentStatus | "return" | null {
   if (ev.delivered) return "fulfilled";
   const code = (ev.blStatusMapped || ev.status || "").toUpperCase();
-  if (/DELIVER/.test(code)) return "fulfilled";
-  if (/RETURN|CANCEL|FAIL|PROBLEM|UNDELIVER|REFUS|LOST|DAMAG/.test(code)) return "return";
-  if (/TRANSIT|PICKUP|PICKED_UP|COLLECT|DISPATCH|COURIER|SORT|OUT_FOR_DELIVERY|SENT/.test(code)) return "shipped";
+  if (/UNDELIVER|NOT_DELIVER|NON_DELIVER|RETURN|CANCEL|FAIL|PROBLEM|REFUS|LOST|DAMAG/.test(code)) return "return";
+  if (/OUT_FOR_DELIVERY|FOR_DELIVERY|IN_DELIVERY|DELIVERY_ATTEMPT/.test(code)) return "shipped";
+  if (/DELIVERED/.test(code)) return "fulfilled";
+  // Zamowiony/umowiony podjazd = kurier jeszcze NIE odebral paczki.
+  if (/PICKUP_(ORDER|SCHEDUL|REQUEST|BOOK)/.test(code)) return null;
+  if (/TRANSIT|PICKUP|PICKED_UP|COLLECT|DISPATCH|COURIER|SORT|SENT/.test(code)) return "shipped";
   // "STATUS_CREATE" i inne nieznane — etykieta istnieje, nic pewnego sie nie
   // zmienilo, nie ruszamy statusu.
   return null;
@@ -49,15 +55,18 @@ function latestEvent(events: BcTrackingEvent[]): BcTrackingEvent | null {
 // (najdalej posunięty) rozpoznany status.
 const STATUS_RANK: Record<string, number> = { fulfilled: 3, return: 2, shipped: 1 };
 
-function bestBaseCourierStatus(events: BcTrackingEvent[]): FulfillmentStatus | "return" | null {
-  let best: FulfillmentStatus | "return" | null = null;
+// Zwraca tez zdarzenie, z ktorego wzial sie status — znacznik flagi zwrotu
+// budujemy z JEGO kodu (dawniej z najnowszego zdarzenia, np. STATUS_OMIT, wiec
+// kazde kolejne powiadomienie dopisywalo do notatek nowa, zdublowana flage).
+function bestBaseCourierStatus(events: BcTrackingEvent[]): { mapped: FulfillmentStatus | "return"; event: BcTrackingEvent } | null {
+  let best: { mapped: FulfillmentStatus | "return"; event: BcTrackingEvent } | null = null;
   let bestRank = 0;
   for (const ev of events) {
     const mapped = mapBaseCourierStatus(ev);
     if (mapped === null) continue;
     const rank = STATUS_RANK[mapped] ?? 0;
     if (rank > bestRank) {
-      best = mapped;
+      best = { mapped, event: ev };
       bestRank = rank;
     }
   }
@@ -75,56 +84,67 @@ export interface BcSyncResult {
   note?: string;
 }
 
-export async function syncBaseCourierOrder(orderId: string): Promise<BcSyncResult | null> {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+// prefetched — szczegoly zlecenia JUZ pobrane przez wywolujacego (przycisk
+// "Sprawdz status" pokazuje tez zdarzenia — bez drugiego zapytania do Base
+// Courier): undefined = pobierz samodzielnie, null = Base Courier niedostepny.
+export async function syncBaseCourierOrder(orderId: string, prefetched?: BcOrderDetails | null): Promise<BcSyncResult | null> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { furgonetkaStatus: true, furgonetkaPackageId: true, fulfillmentStatus: true },
+  });
   if (!order || order.furgonetkaStatus !== "basecourier" || !order.furgonetkaPackageId) return null;
 
+  const current = order.fulfillmentStatus || "unfulfilled";
   const base: BcSyncResult = {
     orderId,
     blpaczkaOrderId: order.furgonetkaPackageId,
     status: null,
-    previousStatus: order.fulfillmentStatus || "unfulfilled",
-    newStatus: order.fulfillmentStatus || "unfulfilled",
+    previousStatus: current,
+    newStatus: current,
     changed: false,
     emailSent: false,
   };
 
-  let details;
-  try {
-    details = await bcGetOrderDetails(order.furgonetkaPackageId);
-  } catch (e) {
-    console.error(`[basecourierTracking] getOrderDetails failed for ${order.furgonetkaPackageId}:`, e);
-    return { ...base, note: "basecourier_unavailable" };
+  let details: BcOrderDetails | null = prefetched ?? null;
+  if (prefetched === undefined) {
+    try {
+      details = await bcGetOrderDetails(order.furgonetkaPackageId);
+    } catch (e) {
+      console.error(`[basecourierTracking] getOrderDetails failed for ${order.furgonetkaPackageId}:`, e);
+      details = null;
+    }
   }
+  if (!details) return { ...base, note: "basecourier_unavailable" };
 
   const latest = latestEvent(details.events);
   if (!latest) return { ...base, note: "no_tracking_yet" };
   base.status = latest.blStatusMapped || latest.status;
 
-  const mapped = bestBaseCourierStatus(details.events);
-  if (mapped === null) return { ...base, note: "no_change" };
+  const best = bestBaseCourierStatus(details.events);
+  if (best === null) return { ...base, note: "no_change" };
 
-  if (mapped === "return") {
-    const marker = `[Base Courier ${base.status}]`;
-    if (!(order.adminNotes || "").includes(marker)) {
-      await prisma.order.update({
-        where: { id: orderId },
-        data: {
-          adminNotes: `${order.adminNotes ? order.adminNotes + "\n" : ""}${marker} ${new Date().toISOString().slice(0, 16)} — ${latest.statusDesc || "wymaga recznej decyzji"} (zwrot/problem z dostawa).`,
-        },
-      });
-    }
+  if (best.mapped === "return") {
+    const ev = best.event;
+    const marker = `[Base Courier ${ev.blStatusMapped || ev.status}]`;
+    await appendOrderNoteOnce(
+      orderId,
+      `${marker} ${new Date().toISOString().slice(0, 16)} — ${ev.statusDesc || "wymaga recznej decyzji"} (zwrot/problem z dostawa).`,
+      marker
+    );
     return { ...base, note: "return_flagged" };
   }
 
-  const result = await applyFulfillmentStatus(orderId, mapped, { source: "tracking" });
+  const skip = trackingSkipReason(current, best.mapped);
+  if (skip) return { ...base, note: skip };
+
+  const result = await applyFulfillmentStatus(orderId, best.mapped, { source: "tracking" });
   if (!result) return null;
   return {
     ...base,
     newStatus: result.newStatus,
     changed: result.changed,
     emailSent: result.emailSent,
-    note: result.changed ? "updated" : "no_change",
+    note: result.changed ? "updated" : result.conflict ? "conflict" : "no_change",
   };
 }
 
@@ -143,11 +163,9 @@ export async function syncAllPendingBaseCourierOrders(limit = 200): Promise<BcSy
     select: { id: true, trackingNumber: true },
   });
 
-  const results: BcSyncResult[] = [];
-  for (const o of orders) {
-    if (looksLikeInPostNumber(o.trackingNumber)) continue; // juz obsluzone przez inpostTracking.ts
-    const r = await syncBaseCourierOrder(o.id);
-    if (r) results.push(r);
-  }
-  return results;
+  // InPost (24 cyfry) juz obsluzone przez inpostTracking.ts. Do 4 zapytan naraz
+  // (bcCall ma 25 s timeoutu — sekwencyjnie 200 zamowien moglo trwac ponad godzine).
+  const todo = orders.filter((o) => !looksLikeInPostNumber(o.trackingNumber));
+  const results = await mapWithConcurrency(todo, 4, (o) => syncBaseCourierOrder(o.id), "basecourierTracking");
+  return results.filter((r): r is BcSyncResult => r !== null);
 }

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import { downloadLicenseSheetPdf, CARDS_PER_SHEET } from "@/lib/licensePdf";
 import { toast } from "@/components/admin/toast";
+import { createLicenses, LICENSE_DURATION_DAYS, type LicenseDuration } from "@/components/admin/licenseGen";
 
 interface License {
   id: string;
@@ -24,7 +25,7 @@ interface License {
 export default function LicensesPage() {
   const [generatingCodes, setGeneratingCodes] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
-  const [licenseDuration, setLicenseDuration] = useState<"week" | "month" | "3months">("month");
+  const [licenseDuration, setLicenseDuration] = useState<LicenseDuration>("month");
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "used" | "unused">("all");
@@ -78,27 +79,12 @@ export default function LicensesPage() {
     setGeneratingCodes(true);
     setGeneratedCodes([]);
 
-    const durationDays = licenseDuration === "week" ? 7 : licenseDuration === "month" ? 30 : 90;
-
     try {
-      const res = await fetch("/api/admin/licenses", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ count, durationDays }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setGeneratedCodes(data.codes);
-        fetchLicenses(); // Refresh list
-      } else {
-        toast("Nie udało się wygenerować licencji", "error");
-      }
+      setGeneratedCodes(await createLicenses(count, licenseDuration));
+      fetchLicenses(); // Refresh list
     } catch (error) {
       console.error("Failed to generate licenses:", error);
-      toast("Wystąpił błąd", "error");
+      toast((error as Error).message || "Wystąpił błąd", "error");
     } finally {
       setGeneratingCodes(false);
     }
@@ -106,27 +92,17 @@ export default function LicensesPage() {
 
   const generateSheetPdf = async () => {
     setGeneratingPdf(true);
-    const durationDays = licenseDuration === "week" ? 7 : licenseDuration === "month" ? 30 : 90;
     const count = sheetCount * CARDS_PER_SHEET;
 
     try {
-      const res = await fetch("/api/admin/licenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count, durationDays, description: "Arkusz PDF do druku" }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        await downloadLicenseSheetPdf(data.codes, durationDays);
-        setGeneratedCodes(data.codes);
-        fetchLicenses();
-      } else {
-        toast("Nie udało się wygenerować licencji", "error");
-      }
+      const codes = await createLicenses(count, licenseDuration, "Arkusz PDF do druku");
+      // Kody sa juz w bazie — pokaz je nawet, gdyby generowanie PDF sie wysypalo.
+      setGeneratedCodes(codes);
+      fetchLicenses();
+      await downloadLicenseSheetPdf(codes, LICENSE_DURATION_DAYS[licenseDuration]);
     } catch (error) {
       console.error("Failed to generate license sheet PDF:", error);
-      toast("Wystąpił błąd", "error");
+      toast((error as Error).message || "Wystąpił błąd", "error");
     } finally {
       setGeneratingPdf(false);
     }

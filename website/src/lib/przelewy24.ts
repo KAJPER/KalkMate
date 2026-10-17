@@ -162,4 +162,53 @@ export async function verifyTransaction(params: {
   }
 }
 
+// === Status transakcji po sessionId ===
+// GET /transaction/by/sessionId/{sessionId} (Basic auth jak reszta API).
+// Uzywane przed przypomnieniem o platnosci i przed auto-anulowaniem
+// (lib/paymentReminders.ts, lib/orderCleanup.ts) — gdyby webhook P24 nie
+// dotarl, nie chcemy anulowac oplaconego zamowienia.
+// status P24: 0 = brak wplaty, 1 = wplata jest, czeka na weryfikacje (verify),
+//             2 = dokonana (zweryfikowana), 3 = zwrocona.
+// found=false = P24 nie zna transakcji (nikt nic nie wplacil). Inny blad
+// (siec, 5xx, 401) = wyjatek — wywolujacy ma pominac rekord (fail-safe).
+export interface P24TransactionInfo {
+  found: boolean;
+  sessionId: string;
+  status: number;
+  orderId: number;   // id transakcji po stronie P24 (do verify)
+  amount: number;    // grosze/centy
+  currency: string;  // np. "PLN"
+}
+
+export function p24StatusIsPaid(status: number): boolean {
+  return status === 1 || status === 2;
+}
+
+export async function getTransactionBySessionId(sessionId: string): Promise<P24TransactionInfo> {
+  const notFound: P24TransactionInfo = { found: false, sessionId, status: 0, orderId: 0, amount: 0, currency: "" };
+  const res = await fetch(`${P24_BASE_URL}/transaction/by/sessionId/${encodeURIComponent(sessionId)}`, {
+    method: "GET",
+    headers: { Authorization: basicAuth() },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    if (res.status === 404 || (res.status === 400 && /not\s*found/i.test(text))) return notFound;
+    throw new Error(`P24 transaction/by/sessionId failed ${res.status}: ${text.slice(0, 300)}`);
+  }
+  const data = await res.json().catch(() => null);
+  const d = data?.data;
+  if (!d || typeof d !== "object") throw new Error("P24 transaction/by/sessionId: brak danych w odpowiedzi");
+  const status = Number(d.status);
+  if (!Number.isFinite(status)) throw new Error("P24 transaction/by/sessionId: nieprawidlowy status");
+  return {
+    found: true,
+    sessionId,
+    status,
+    orderId: Number(d.orderId) || 0,
+    amount: Number(d.amount) || 0,
+    currency: String(d.currency || ""),
+  };
+}
+
 export { MERCHANT_ID, POS_ID };

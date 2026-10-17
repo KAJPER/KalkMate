@@ -1,12 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 async function getUser() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
   return await prisma.user.findUnique({ where: { email: session.user.email } });
+}
+
+// K11: przegladarka NIGDY nie dostaje deviceToken (sekret urzadzenia),
+// unlockCode (kod AI) ani lastIp — tylko pola potrzebne w panelu.
+const DEVICE_PUBLIC_SELECT = {
+  id: true,
+  deviceId: true,
+  userId: true,
+  licenseCode: true,
+  firstSeen: true,
+  lastSeen: true,
+  requestCount: true,
+  firmwareVersion: true,
+} as const;
+
+const PAIR_LOCK_THRESHOLD = 5;
+const PAIR_LOCK_MS = 15 * 60 * 1000;
+// Kod fabryczny z firmware (settings_screen.h). Znaja go wszyscy, wiec nie
+// moze sluzyc za dowod posiadania urzadzenia.
+const DEFAULT_UNLOCK_CODE = "1111";
+// Jedna odpowiedz dla: brak urzadzenia / zly kod / sparowane z innym kontem
+// — inaczej endpoint zdradza, ktore Device ID istnieja i ktore sa wolne.
+const PAIR_GENERIC_ERROR =
+  "Nieprawidlowe urzadzenie lub kod (albo urzadzenie jest juz sparowane z innym kontem).";
+
+function codesEqual(a: string, b: string): boolean {
+  const x = createHash("sha256").update(a).digest();
+  const y = createHash("sha256").update(b).digest();
+  return timingSafeEqual(x, y);
 }
 
 // GET /api/user/devices — lista sparowanych urzadzen + status licencji konta
@@ -17,6 +48,7 @@ export async function GET() {
   const devices = await prisma.device.findMany({
     where: { userId: user.id },
     orderBy: { lastSeen: "desc" },
+    select: DEVICE_PUBLIC_SELECT,
   });
 
   // Aktualna licencja konta
@@ -50,63 +82,68 @@ export async function GET() {
 }
 
 // POST /api/user/devices — sparuj device (body: { deviceId, unlockCode })
-// Wymaga: user ma claim'd licencje + unlockCode pasuje do zapisanego przez kalkulator
+// Wymaga: unlockCode pasuje do zapisanego przez kalkulator (POST /api/device/register).
 export async function POST(req: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ ok: false, error: "Nie zalogowany" }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const deviceId = String(body?.deviceId || "").trim().toUpperCase();
   const unlockCode = String(body?.unlockCode || "").trim();
-  if (!deviceId || deviceId.length < 6) {
+  if (!deviceId || deviceId.length < 6 || deviceId.length > 64) {
     return NextResponse.json({ ok: false, error: "Nieprawidlowy Device ID" }, { status: 400 });
   }
-  if (!unlockCode) {
+  if (!unlockCode || unlockCode.length > 16) {
     return NextResponse.json(
       { ok: false, error: "Wpisz kod odblokowania (Settings -> Kod AI w kalkulatorze)" },
       { status: 400 }
     );
   }
 
-  // Sprawdz czy kalkulator zglosil sie do serwera (Device musi istniec)
-  const existing = await prisma.device.findUnique({ where: { deviceId } });
-  if (!existing) {
+  // Audyt 2026-10-16: Device ID to MAC (sekwencyjny), a kod AI ma kilka cyfr —
+  // bez limitow per konto/IP mozna bylo przechodzic po kolejnych urzadzeniach.
+  const rlUser = rateLimit(`pair-user:${user.id}`, 10, 60 * 60_000);
+  const rlIp = rateLimit(`pair-ip:${clientIp(req)}`, 10, 60 * 60_000);
+  if (!rlUser.ok || !rlIp.ok) {
+    const waitMs = Math.max(rlUser.ok ? 0 : rlUser.resetMs, rlIp.ok ? 0 : rlIp.resetMs);
     return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "Kalkulator jeszcze nie zglosil sie do serwera. Polacz go z WiFi i odczekaj chwile.",
-      },
-      { status: 404 }
+      { ok: false, error: `Za duzo prob parowania. Sprobuj ponownie za ${Math.max(1, Math.ceil(waitMs / 60_000))} min.` },
+      { status: 429 }
     );
   }
 
-  // Anty brute-force: pobierz unlockCode + failedPairs + lockedUntil (raw SQL,
-  // kolumn nie ma w Prisma schemie).
+  // Anty brute-force: unlockCode + failedPairs + lockedUntil (raw SQL, kolumn
+  // nie ma w Prisma schemie).
   const rows = await prisma.$queryRaw<
-    { unlockCode: string | null; failedPairs: number | null; lockedUntil: string | null }[]
+    { id: string; userId: string | null; unlockCode: string | null; lockedUntil: string | null }[]
   >`
-    SELECT "unlockCode", "failedPairs", "lockedUntil"
+    SELECT "id", "userId", "unlockCode", "lockedUntil"
     FROM "Device" WHERE "deviceId" = ${deviceId} LIMIT 1
   `;
   const row = rows?.[0];
-  const storedUnlock = row?.unlockCode || null;
+  if (!row) {
+    return NextResponse.json({ ok: false, error: PAIR_GENERIC_ERROR }, { status: 403 });
+  }
 
   // Czy device jest zablokowany po 5 nieudanych probach?
-  if (row?.lockedUntil) {
+  if (row.lockedUntil) {
     const lockedUntilTs = new Date(row.lockedUntil).getTime();
     if (lockedUntilTs > Date.now()) {
       const minsLeft = Math.ceil((lockedUntilTs - Date.now()) / 60_000);
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Za duzo nieudanych prob. Sprobuj ponownie za ${minsLeft} min.`,
-        },
+        { ok: false, error: `Za duzo nieudanych prob. Sprobuj ponownie za ${minsLeft} min.` },
         { status: 429 }
       );
     }
   }
 
+  // Sparowane z innym kontem — odmowa PRZED porownaniem kodu (bez wyroczni
+  // "kod dobry, ale urzadzenie zajete") i z ta sama odpowiedzia co zly kod.
+  if (row.userId && row.userId !== user.id) {
+    return NextResponse.json({ ok: false, error: PAIR_GENERIC_ERROR }, { status: 403 });
+  }
+
+  const storedUnlock = row.unlockCode || null;
   if (!storedUnlock) {
     return NextResponse.json(
       {
@@ -117,51 +154,67 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (storedUnlock !== unlockCode) {
-    // Inkrementuj failedPairs, przy 5 zablokuj na 15 minut
-    const newFails = (row?.failedPairs || 0) + 1;
-    const LOCK_THRESHOLD = 5;
-    const LOCK_DURATION_MS = 15 * 60 * 1000;
-    if (newFails >= LOCK_THRESHOLD) {
-      const lockedUntil = new Date(Date.now() + LOCK_DURATION_MS).toISOString();
-      await prisma.$executeRaw`
-        UPDATE "Device"
-        SET "failedPairs" = ${newFails}, "lockedUntil" = ${lockedUntil}
-        WHERE "deviceId" = ${deviceId}
-      `;
-      console.warn(`[devices/pair] lockout deviceId=${deviceId} after ${newFails} fails`);
+
+  if (!codesEqual(storedUnlock, unlockCode)) {
+    // Licznik ATOMOWO w bazie (wczesniej odczyt + zapis -> rownolegle proby
+    // nie zwiekszaly licznika). Przy 5. nieudanej probie blokada na 15 min.
+    const nowIso = new Date().toISOString();
+    const lockedUntil = new Date(Date.now() + PAIR_LOCK_MS).toISOString();
+    await prisma.$executeRaw`
+      UPDATE "Device"
+      SET "failedPairs" = COALESCE("failedPairs", 0) + 1,
+          "lockedUntil" = CASE WHEN COALESCE("failedPairs", 0) + 1 >= ${PAIR_LOCK_THRESHOLD}
+                               THEN ${lockedUntil} ELSE "lockedUntil" END
+      WHERE "id" = ${row.id}
+    `;
+    const after = await prisma.$queryRaw<{ failedPairs: number | bigint | null; lockedUntil: string | null }[]>`
+      SELECT "failedPairs", "lockedUntil" FROM "Device" WHERE "id" = ${row.id} LIMIT 1
+    `;
+    const fails = Number(after?.[0]?.failedPairs ?? 0);
+    const lockedNow = after?.[0]?.lockedUntil && after[0].lockedUntil > nowIso;
+    if (fails >= PAIR_LOCK_THRESHOLD || lockedNow) {
+      // Po blokadzie licznik od zera (kolejna seria = kolejna blokada).
+      await prisma.$executeRaw`UPDATE "Device" SET "failedPairs" = 0 WHERE "id" = ${row.id}`;
+      console.warn(`[devices/pair] lockout deviceId=${deviceId} user=${user.id}`);
       return NextResponse.json(
-        { ok: false, error: "Za duzo nieudanych prob. Konto urzadzenia zablokowane na 15 minut." },
+        { ok: false, error: "Za duzo nieudanych prob. Parowanie tego urzadzenia zablokowane na 15 minut." },
         { status: 429 }
       );
     }
-    await prisma.$executeRaw`
-      UPDATE "Device" SET "failedPairs" = ${newFails} WHERE "deviceId" = ${deviceId}
-    `;
+    return NextResponse.json({ ok: false, error: PAIR_GENERIC_ERROR }, { status: 403 });
+  }
+
+  // Juz sparowane z tym kontem — nic do zrobienia.
+  if (row.userId === user.id) {
+    await prisma.$executeRaw`UPDATE "Device" SET "failedPairs" = 0, "lockedUntil" = NULL WHERE "id" = ${row.id}`;
+    const device = await prisma.device.findUnique({ where: { id: row.id }, select: DEVICE_PUBLIC_SELECT });
+    return NextResponse.json({ ok: true, device, action: "paired" });
+  }
+
+  // Kod fabryczny = kazdy zna "kod" — parowanie tylko po ustawieniu wlasnego.
+  // Kalkulator zglasza nowy kod przy otwarciu ekranu Konto / Device ID + QR
+  // (accountRegister w firmware), wiec swieze urzadzenie da sie sparowac.
+  if (storedUnlock === DEFAULT_UNLOCK_CODE) {
     return NextResponse.json(
       {
         ok: false,
-        error: `Nieprawidlowy kod odblokowania (proba ${newFails}/${LOCK_THRESHOLD})`,
+        code: "default_unlock_code",
+        error:
+          "Zmien kod AI na urzadzeniu (Ustawienia -> Kod AI) przed sparowaniem. Potem otworz na kalkulatorze ekran Konto (polaczony z WiFi), zeby zglosil nowy kod, i sprobuj ponownie.",
       },
-      { status: 403 }
+      { status: 400 }
     );
   }
 
-  // Pair
-  if (existing.userId && existing.userId !== user.id) {
-    return NextResponse.json(
-      { ok: false, error: "Urzadzenie sparowane z innym kontem" },
-      { status: 409 }
-    );
-  }
-  // Sukces — wyczysc licznik failedPairs i lockedUntil
-  await prisma.$executeRaw`
-    UPDATE "Device" SET "failedPairs" = 0, "lockedUntil" = NULL WHERE "id" = ${existing.id}
+  // Sukces — sparuj ATOMOWO (tylko jesli nadal wolne) i wyczysc licznik.
+  const paired = await prisma.$executeRaw`
+    UPDATE "Device" SET "userId" = ${user.id}, "failedPairs" = 0, "lockedUntil" = NULL
+    WHERE "id" = ${row.id} AND ("userId" IS NULL OR "userId" = ${user.id})
   `;
-  const updated = await prisma.device.update({
-    where: { id: existing.id },
-    data: { userId: user.id },
-  });
+  if (paired !== 1) {
+    return NextResponse.json({ ok: false, error: PAIR_GENERIC_ERROR }, { status: 403 });
+  }
+  const updated = await prisma.device.findUnique({ where: { id: row.id }, select: DEVICE_PUBLIC_SELECT });
   return NextResponse.json({ ok: true, device: updated, action: "paired" });
 }
 
@@ -186,7 +239,10 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
-  const device = await prisma.device.findUnique({ where: { deviceId } });
+  const device = await prisma.device.findUnique({
+    where: { deviceId },
+    select: { id: true, userId: true, licenseCode: true },
+  });
   if (!device) {
     return NextResponse.json({ ok: false, error: "Nie znaleziono" }, { status: 404 });
   }
@@ -222,7 +278,10 @@ export async function DELETE(req: NextRequest) {
   const deviceId = (url.searchParams.get("deviceId") || "").trim().toUpperCase();
   if (!deviceId) return NextResponse.json({ ok: false, error: "Brak deviceId" }, { status: 400 });
 
-  const device = await prisma.device.findUnique({ where: { deviceId } });
+  const device = await prisma.device.findUnique({
+    where: { deviceId },
+    select: { id: true, userId: true, licenseCode: true },
+  });
   if (!device) {
     return NextResponse.json({ ok: false, error: "Nie znaleziono" }, { status: 404 });
   }
@@ -245,6 +304,7 @@ export async function DELETE(req: NextRequest) {
   await prisma.device.update({
     where: { id: device.id },
     data: { userId: null, licenseCode: null },
+    select: { id: true },
   });
 
   return NextResponse.json({ ok: true });

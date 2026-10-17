@@ -1,5 +1,34 @@
 import { prisma } from "@/lib/db";
-import { applyFulfillmentStatus, type FulfillmentStatus } from "@/lib/orderFulfillment";
+import { applyFulfillmentStatus, isForwardTransition, type FulfillmentStatus } from "@/lib/orderFulfillment";
+
+// Atomowe dopisanie linii do Order.adminNotes (jedno UPDATE w SQL). Dawniej
+// read-modify-write: notatka admina zapisana w panelu miedzy odczytem a zapisem
+// crona/nadania ginela. marker (opcjonalny) = nie dopisuj, jesli ten tekst juz
+// jest w notatkach (deduplikacja flag zwrotu przy kolejnych przebiegach crona).
+// Zwraca true, gdy dopisano.
+export async function appendOrderNoteOnce(orderId: string, line: string, marker = ""): Promise<boolean> {
+  const n = await prisma.$executeRaw`
+    UPDATE "Order" SET "adminNotes" = CASE
+      WHEN "adminNotes" IS NULL OR "adminNotes" = '' THEN ${line}
+      ELSE COALESCE("adminNotes", '') || char(10) || ${line}
+    END
+    WHERE id = ${orderId}
+      AND (${marker} = '' OR "adminNotes" IS NULL OR instr("adminNotes", ${marker}) = 0)`;
+  return Number(n) > 0;
+}
+
+// Wspolny straznik automatu sledzenia (InPost i Base Courier): nie ruszamy
+// statusu ustawionego recznie na "cancelled" i nigdy go nie cofamy (np.
+// fulfilled -> shipped, gdy przewoznik zwroci starsze zdarzenie). To samo
+// sprawdza applyFulfillmentStatus(source:"tracking") — tu dodatkowo, zeby nie
+// robic zbednego zapisu i miec czytelna notatke w wyniku.
+export function trackingSkipReason(current: string | null | undefined, target: FulfillmentStatus): string | null {
+  const cur = current || "unfulfilled";
+  if (cur === "cancelled") return "cancelled_skip";
+  if (cur === target) return "no_change";
+  if (!isForwardTransition(cur, target)) return "no_downgrade";
+  return null;
+}
 
 // Sledzenie InPost przez publiczne API ShipX (bez klucza):
 //   GET https://api-shipx-pl.easypack24.net/v1/tracking/{numer}
@@ -8,6 +37,7 @@ import { applyFulfillmentStatus, type FulfillmentStatus } from "@/lib/orderFulfi
 // nie dzialal.
 
 const INPOST_TRACKING_URL = "https://api-shipx-pl.easypack24.net/v1/tracking";
+const INPOST_TIMEOUT_MS = 20_000;
 
 export interface InPostTrackingEvent {
   status: string;
@@ -35,7 +65,7 @@ export async function fetchInPostTracking(trackingNumber: string): Promise<InPos
   try {
     const res = await fetch(`${INPOST_TRACKING_URL}/${encodeURIComponent(n)}`, {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(INPOST_TIMEOUT_MS),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -122,16 +152,25 @@ export interface SyncResult {
 }
 
 // Synchronizacja jednego zamowienia. Bezpieczna do wywolania wielokrotnie.
-export async function syncOrderTracking(orderId: string): Promise<SyncResult | null> {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+// prefetched — stan przesylki JUZ pobrany przez wywolujacego (np. przycisk
+// "Sprawdz status" pokazuje tez zdarzenia, wiec nie pytamy InPost drugi raz):
+//   undefined = pobierz samodzielnie, null = InPost niedostepny (bez ponownej proby).
+// Jesli prefetched dotyczy innego numeru niz aktualny w zamowieniu (zmiana w
+// miedzyczasie), pobieramy od nowa.
+export async function syncOrderTracking(orderId: string, prefetched?: InPostTracking | null): Promise<SyncResult | null> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { trackingNumber: true, fulfillmentStatus: true },
+  });
   if (!order || !order.trackingNumber) return null;
 
+  const current = order.fulfillmentStatus || "unfulfilled";
   const base: SyncResult = {
     orderId,
     trackingNumber: order.trackingNumber,
     inpostStatus: null,
-    previousStatus: order.fulfillmentStatus || "unfulfilled",
-    newStatus: order.fulfillmentStatus || "unfulfilled",
+    previousStatus: current,
+    newStatus: current,
     changed: false,
     emailSent: false,
   };
@@ -140,7 +179,11 @@ export async function syncOrderTracking(orderId: string): Promise<SyncResult | n
     return { ...base, note: "not_inpost_number" };
   }
 
-  const tracking = await fetchInPostTracking(order.trackingNumber);
+  const number = order.trackingNumber.trim();
+  const tracking =
+    prefetched === undefined || (prefetched !== null && prefetched.trackingNumber !== number)
+      ? await fetchInPostTracking(number)
+      : prefetched;
   if (!tracking) return { ...base, note: "inpost_unavailable" };
   base.inpostStatus = tracking.status;
 
@@ -149,16 +192,16 @@ export async function syncOrderTracking(orderId: string): Promise<SyncResult | n
 
   if (mapped === "return") {
     const marker = `[InPost ${tracking.status}]`;
-    if (!(order.adminNotes || "").includes(marker)) {
-      await prisma.order.update({
-        where: { id: orderId },
-        data: {
-          adminNotes: `${order.adminNotes ? order.adminNotes + "\n" : ""}${marker} ${new Date().toISOString().slice(0, 16)} — wymaga recznej decyzji (zwrot/awizo).`,
-        },
-      });
-    }
+    await appendOrderNoteOnce(
+      orderId,
+      `${marker} ${new Date().toISOString().slice(0, 16)} — wymaga recznej decyzji (zwrot/awizo).`,
+      marker
+    );
     return { ...base, note: "return_flagged" };
   }
+
+  const skip = trackingSkipReason(current, mapped);
+  if (skip) return { ...base, note: skip };
 
   const result = await applyFulfillmentStatus(orderId, mapped, { source: "tracking" });
   if (!result) return null;
@@ -167,11 +210,38 @@ export async function syncOrderTracking(orderId: string): Promise<SyncResult | n
     newStatus: result.newStatus,
     changed: result.changed,
     emailSent: result.emailSent,
-    note: result.changed ? "updated" : "no_change",
+    note: result.changed ? "updated" : result.conflict ? "conflict" : "no_change",
   };
 }
 
+// Prosta pula: najwyzej `concurrency` zadan naraz, wyniki w kolejnosci wejscia.
+// Bledy pojedynczych zadan nie przerywaja reszty (null + log).
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R | null>,
+  label = "tracking"
+): Promise<(R | null)[]> {
+  const out: (R | null)[] = new Array(items.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      try {
+        out[i] = await fn(items[i]);
+      } catch (e) {
+        console.error(`[${label}] item ${i} failed:`, e);
+        out[i] = null;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, items.length)) }, worker));
+  return out;
+}
+
 // Wszystkie zamowienia z numerem InPost, ktore nie sa jeszcze zamkniete.
+// Do 4 zapytan naraz: sekwencyjnie 200 x 20 s timeoutu przekraczalo 30-minutowy
+// zamek crona, gdy InPost nie odpowiadal.
 export async function syncAllPendingOrders(limit = 200): Promise<SyncResult[]> {
   const orders = await prisma.order.findMany({
     where: {
@@ -183,11 +253,7 @@ export async function syncAllPendingOrders(limit = 200): Promise<SyncResult[]> {
     select: { id: true, trackingNumber: true },
   });
 
-  const results: SyncResult[] = [];
-  for (const o of orders) {
-    if (!looksLikeInPostNumber(o.trackingNumber)) continue;
-    const r = await syncOrderTracking(o.id);
-    if (r) results.push(r);
-  }
-  return results;
+  const inpost = orders.filter((o) => looksLikeInPostNumber(o.trackingNumber));
+  const results = await mapWithConcurrency(inpost, 4, (o) => syncOrderTracking(o.id), "inpostTracking");
+  return results.filter((r): r is SyncResult => r !== null);
 }

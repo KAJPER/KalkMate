@@ -55,11 +55,19 @@ export interface OrderContext {
 // Ostatnie zamowienia tego adresu e-mail — kontekst dla AI, zeby odpowiedz
 // odwolywala sie do prawdziwych danych, a nie zgadywala.
 export async function findOrdersByEmail(email: string): Promise<OrderContext[]> {
-  if (!email) return [];
+  const normalized = (email || "").trim();
+  if (!normalized) return [];
+  // Bez rozrozniania wielkosci liter — klient pisze z "Jan.Kowalski@..." a w
+  // zamowieniu ma "jan.kowalski@..." (SQLite/Prisma nie ma mode: insensitive).
+  const ids = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT id FROM "Order"
+    WHERE lower("customerEmail") = lower(${normalized})
+    ORDER BY "createdAt" DESC
+    LIMIT 5`;
+  if (!ids.length) return [];
   const rows = await prisma.order.findMany({
-    where: { customerEmail: email },
+    where: { id: { in: ids.map((r) => r.id) } },
     orderBy: { createdAt: "desc" },
-    take: 5,
   });
   return rows.map((o) => ({
     orderNumber: o.orderNumber,
@@ -103,6 +111,8 @@ async function callOpenRouter(system: string, user: string): Promise<string> {
       "HTTP-Referer": "https://kalkmate.pl",
       "X-Title": "KalkMate",
     },
+    // Bez limitu zawieszony OpenRouter trzymal request panelu w nieskonczonosc.
+    signal: AbortSignal.timeout(60_000),
     body: JSON.stringify({
       model: REPLY_MODEL,
       messages: [

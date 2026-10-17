@@ -18,24 +18,27 @@ export const LABEL_MAX_W_MM = 100;
 export const LABEL_MAX_H_MM = 150;
 
 export async function splitLabelSheet(inputBytes: Uint8Array): Promise<Uint8Array> {
-  const srcDoc = await PDFDocument.load(inputBytes);
+  // ignoreEncryption: eksporty PDF bywaja "zaszyfrowane" pustym haslem (tylko
+  // uprawnienia) — bez tego pdf-lib odmawia wczytania (tak samo jak w labelPdf.ts).
+  const srcDoc = await PDFDocument.load(inputBytes, { ignoreEncryption: true });
   const outDoc = await PDFDocument.create();
   const outW = mm(LABEL_MAX_W_MM);
   const outH = mm(LABEL_MAX_H_MM);
 
   const srcPages = srcDoc.getPages();
   for (const srcPage of srcPages) {
-    const { width: pw, height: ph } = srcPage.getSize();
+    // Cwiartki liczone od poczatku MediaBox (nie zawsze (0,0)).
+    const { x: ox, y: oy, width: pw, height: ph } = srcPage.getMediaBox();
     const halfW = pw / 2;
     const halfH = ph / 2;
 
     // Kolejnosc jak w standardowym arkuszu InPost: gora-lewo, gora-prawo,
     // dol-lewo, dol-prawo.
     const quadrants = [
-      { left: 0, bottom: halfH, right: halfW, top: ph },
-      { left: halfW, bottom: halfH, right: pw, top: ph },
-      { left: 0, bottom: 0, right: halfW, top: halfH },
-      { left: halfW, bottom: 0, right: pw, top: halfH },
+      { left: ox, bottom: oy + halfH, right: ox + halfW, top: oy + ph },
+      { left: ox + halfW, bottom: oy + halfH, right: ox + pw, top: oy + ph },
+      { left: ox, bottom: oy, right: ox + halfW, top: oy + halfH },
+      { left: ox + halfW, bottom: oy, right: ox + pw, top: oy + halfH },
     ];
 
     for (const box of quadrants) {
@@ -70,5 +73,6 @@ export async function downloadSplitLabelSheet(inputBytes: Uint8Array, sourceName
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Natychmiastowe revoke potrafi przerwac pobieranie (Firefox/Safari).
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { usePanelLang } from "@/lib/usePanelLang";
 import PanelLangSwitcher from "@/components/PanelLangSwitcher";
 import { type Locale } from "@/lib/i18n";
+import { forgetCallback, rememberCallback, safeCallback } from "@/app/auth/callback";
 
 const DICT: Record<
   Locale,
@@ -208,11 +209,24 @@ const DICT: Record<
 };
 
 function SignInForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { lang, setLang } = usePanelLang();
   const t = DICT[lang];
-  const callbackUrl = searchParams.get("callbackUrl") || "/panel";
+  // callbackUrl z query jest kontrolowany przez atakujacego — tylko sciezki
+  // w obrebie naszego originu (bez javascript:, //host, /\host). Patrz callback.ts.
+  const callbackParam = searchParams.get("callbackUrl");
+
+  // Zapamietaj intencje (np. powrot do checkoutu), zeby przezyla rejestracje
+  // i klik w link weryfikacyjny z maila (nowa karta).
+  useEffect(() => {
+    if (callbackParam) rememberCallback(callbackParam);
+  }, [callbackParam]);
+
+  // Docelowy adres po zalogowaniu (niepoprawny/brak -> /panel). Zapamietanej
+  // intencji NIE czytamy tutaj, tylko na /auth/verify (link do logowania
+  // dostaje ja jako callbackUrl) — inaczej zwykle logowanie z menu w ciagu
+  // 24h wrzucaloby usera w checkout.
+  const resolveCallback = () => safeCallback(callbackParam);
   // Tryb formularza: ?mode=register | ?mode=signup | ?signup=1 -> rejestracja, domyslnie login
   const initialMode = searchParams.get("mode") || (searchParams.get("signup") ? "register" : "");
   const startAsRegister = initialMode === "register" || initialMode === "signup";
@@ -253,8 +267,10 @@ function SignInForm() {
           setError(result.error);
           if (result.error.toLowerCase().includes("niezweryfikowany")) setShowResend(true);
         } else if (result?.ok) {
+          const target = resolveCallback();
+          forgetCallback();
           // Hard navigation - upewniamy sie ze cookie sesji jest widoczne w SSR
-          window.location.href = callbackUrl;
+          window.location.href = target;
         }
       } else {
         const res = await fetch("/api/auth/register", {
@@ -406,7 +422,11 @@ function SignInForm() {
             <div className="mt-6">
               <button
                 type="button"
-                onClick={() => signIn("google", { callbackUrl })}
+                onClick={() => {
+                  const target = resolveCallback();
+                  forgetCallback();
+                  signIn("google", { callbackUrl: target });
+                }}
                 className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-[rgba(242,237,227,0.18)] bg-transparent text-[#F2EDE3]/80 hover:border-[rgba(242,237,227,0.35)] hover:text-[#F2EDE3] transition-colors km-mono-eyebrow"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

@@ -72,9 +72,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Create Stripe Checkout Session for subscription (regular price - 15 zł)
+    // Tylko karta: BLIK i P24 nie obsluguja platnosci cyklicznych w trybie
+    // subscription (Stripe zwracal blad -> zawsze 500).
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
-      payment_method_types: ["card", "blik", "p24"],
+      payment_method_types: ["card"],
       line_items: [
         {
           price_data: {

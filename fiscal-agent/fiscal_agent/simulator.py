@@ -38,8 +38,36 @@ class SimState:
     drop_after: set[str] = field(default_factory=set)    # wykonaj i zerwij połączenie (raz)
     drop_before: set[str] = field(default_factory=set)   # zerwij przed wykonaniem (raz)
     errors: dict[str, int] = field(default_factory=dict)  # komenda -> kod błędu (raz)
+    # Awarie na n-tym wykonaniu komendy (licząc od wstrzyknięcia): lista
+    # [rodzaj, komenda, ile_jeszcze, kod]; rodzaj: drop_after | drop_before | error | bad_crc.
+    faults: list[list] = field(default_factory=list)
+    fs_raw: str | None = None                # nadpisuje scomm.fs ("-" = pomiń pole)
+    to_raw: str | None = None                # nadpisuje strns.to ("-" = pomiń pole)
+    trend_jump: int = 0                      # dodatkowy skok licznika bn przy następnym trend (raz)
+    forget_responses: bool = False           # rpt nic nie pamięta (bufor odpowiedzi „zgubiony”)
+    commands: list[str] = field(default_factory=list)  # log odebranych rozkazów (do asercji w testach)
     responses: "OrderedDict[int, bytes]" = field(default_factory=OrderedDict)
     lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def add_fault(self, kind: str, spec: str) -> None:
+        """spec: 'cmd', 'cmd:n' (n-te wykonanie) albo dla error 'cmd:kod[:n]'."""
+        parts = spec.split(":")
+        if kind == "error":
+            cmd, code, nth = parts[0], int(parts[1]), int(parts[2]) if len(parts) > 2 else 1
+        else:
+            cmd, code, nth = parts[0], 0, int(parts[1]) if len(parts) > 1 else 1
+        self.faults.append([kind, cmd, nth, code])
+
+    def take_fault(self, cmd: str) -> list[tuple[str, int]]:
+        """Liczy wykonanie komendy; zwraca awarie, które właśnie wypadają."""
+        hit = []
+        for f in self.faults:
+            if f[1] == cmd and f[2] > 0:
+                f[2] -= 1
+                if f[2] == 0:
+                    hit.append((f[0], f[3]))
+        self.faults = [f for f in self.faults if f[2] > 0]
+        return hit
 
 
 class _Drop(Exception):
@@ -98,21 +126,29 @@ class Simulator(socketserver.ThreadingTCPServer):
         cmd = req.command.lstrip("!")
         token = req.token
         with s.lock:
+            if cmd != "simset":
+                s.commands.append(cmd)
             if cmd == "rpt":
-                if token in s.responses:
+                if token in s.responses and not s.forget_responses:
                     return s.responses[token]
                 return _err_frame(13, token, "rpt")
-            if cmd in s.drop_before:
+            hits = dict(s.take_fault(cmd)) if cmd != "simset" else {}
+            if cmd in s.drop_before or "drop_before" in hits:
                 s.drop_before.discard(cmd)
                 raise _Drop()
-            if cmd in s.errors:
-                code = s.errors.pop(cmd)
+            if cmd in s.errors or "error" in hits:
+                code = s.errors.pop(cmd) if cmd in s.errors else hits["error"]
                 return self._remember(token, _cmd_err(cmd, code, token))
             out = self._run(cmd, req.fields, token)
             self._remember(token, out)
-            if cmd in s.drop_after:
+            if cmd in s.drop_after or "drop_after" in hits:
                 s.drop_after.discard(cmd)
                 raise _Drop()
+            if "bad_crc" in hits:
+                # Rozkaz wykonany, ale odpowiedź przekłamana (zła suma kontrolna).
+                bad = bytearray(out)
+                bad[-2] = ord("0") if bad[-2] != ord("0") else ord("1")
+                return bytes(bad)
             return out
 
     def _remember(self, token: int | None, frame: bytes) -> bytes:
@@ -141,13 +177,27 @@ class Simulator(socketserver.ThreadingTCPServer):
             if "fs" in f:
                 s.fiscal = f["fs"] in {"1", "T"}
             if "da" in f:
-                s.drop_after.add(f["da"])
+                s.add_fault("drop_after", f["da"])
             if "db" in f:
-                s.drop_before.add(f["db"])
+                s.add_fault("drop_before", f["db"])
             if "er" in f:
-                name, code = f["er"].split(":")
-                s.errors[name] = int(code)
-            return ok([("bn", str(s.receipt_no)), ("np", str(len(s.printed))), ("nc", str(s.cancelled))])
+                s.add_fault("error", f["er"])
+            if "bc" in f:
+                s.add_fault("bad_crc", f["bc"])
+            if "fv" in f:
+                s.fs_raw = f["fv"] or None
+            if "tv" in f:
+                s.to_raw = f["tv"] or None
+            if "tj" in f:
+                s.trend_jump = int(f["tj"])
+            if "rf" in f:
+                s.forget_responses = f["rf"] == "1"
+            if "op" in f:
+                s.open = f["op"] == "1"
+            if "cc" in f:
+                s.commands.clear()
+            return ok([("bn", str(s.receipt_no)), ("np", str(len(s.printed))), ("nc", str(s.cancelled)),
+                       ("to", "1" if s.open else "0"), ("cl", ",".join(s.commands))])
         if cmd == "sid":
             return ok([("nm", "POSNET Simulator"), ("vr", "0.1")])
         if cmd == "sdev":
@@ -155,10 +205,12 @@ class Simulator(socketserver.ThreadingTCPServer):
         if cmd == "sprn":
             return ok([("pr", str(s.mechanism))])
         if cmd == "scomm":
-            return ok([("fs", "T" if s.fiscal else "N"), ("tz", "N"), ("ts", "17" if s.open else "0"),
-                       ("hr", "T"), ("nu", "SIM00000001")])
+            fs = s.fs_raw if s.fs_raw is not None else ("T" if s.fiscal else "N")
+            return ok(([("fs", fs)] if fs != "-" else []) + [("tz", "N"), ("ts", "17" if s.open else "0"),
+                                                             ("hr", "T"), ("nu", "SIM00000001")])
         if cmd == "strns":
-            return ok([("to", "1" if s.open else "0"), ("ts", "17")])
+            to = s.to_raw if s.to_raw is not None else ("1" if s.open else "0")
+            return ok(([("to", to)] if to != "-" else []) + [("ts", "17")])
         if cmd == "scnt":
             return ok([("rd", "1"), ("hn", "1"), ("bn", str(s.receipt_no)), ("fn", "0"), ("nu", "SIM00000001")])
         if cmd == "vatget":
@@ -212,7 +264,8 @@ class Simulator(socketserver.ThreadingTCPServer):
                 return err(2808)
             if s.paid - s.change != fiscal_total and not (s.paid > fiscal_total and s.change == 0):
                 return err(2054)
-            s.receipt_no += 1
+            s.receipt_no += 1 + s.trend_jump
+            s.trend_jump = 0
             s.printed.append({"number": s.receipt_no, "lines": s.lines, "total": fiscal_total,
                               "paid": s.paid, "change": s.change, "fiscal": s.fiscal})
             s.open, s.lines, s.paid, s.change = False, [], 0, 0

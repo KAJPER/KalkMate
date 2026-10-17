@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { toast } from "@/components/admin/toast";
+import { fmtDateTime } from "@/components/admin/format";
 
 interface InventoryItem {
   id: string;
@@ -18,11 +19,19 @@ interface InventoryData {
   items: InventoryItem[];
 }
 
-function fmt(s: string) {
-  return new Date(s).toLocaleString("pl-PL", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+const fmt = (s: string) => fmtDateTime(s);
+
+// Zapytanie do API magazynu ({ ok, error }). Blad sieci / odpowiedz nie-JSON
+// (np. 502 z nginx) / !res.ok -> { ok: false, error } zamiast nieobsluzonego wyjatku.
+async function inventoryCall(url: string, init: RequestInit): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch(url, init);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) return { ok: false, error: j.error || `HTTP ${r.status}` };
+    return j;
+  } catch (e) {
+    return { ok: false, error: (e as Error).message || "Błąd sieci" };
+  }
 }
 
 export default function InventoryPage() {
@@ -65,7 +74,7 @@ export default function InventoryPage() {
     if (!newName.trim()) return;
     setAdding(true);
     try {
-      const r = await fetch("/api/admin/inventory", {
+      const j = await inventoryCall("/api/admin/inventory", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -74,7 +83,6 @@ export default function InventoryPage() {
           notes: newNotes.trim() || undefined,
         }),
       });
-      const j = await r.json();
       if (!j.ok) {
         toast(j.error || "Blad dodawania", "error");
       } else {
@@ -91,12 +99,11 @@ export default function InventoryPage() {
   const updateDelta = async (id: string, delta: number) => {
     setBusy(id);
     try {
-      const r = await fetch(`/api/admin/inventory?id=${encodeURIComponent(id)}`, {
+      const j = await inventoryCall(`/api/admin/inventory?id=${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ delta }),
       });
-      const j = await r.json();
       if (!j.ok) toast(j.error || "Blad", "error");
       await load();
     } finally {
@@ -115,7 +122,7 @@ export default function InventoryPage() {
     if (!editingId) return;
     setBusy(editingId);
     try {
-      const r = await fetch(`/api/admin/inventory?id=${encodeURIComponent(editingId)}`, {
+      const j = await inventoryCall(`/api/admin/inventory?id=${encodeURIComponent(editingId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -124,7 +131,6 @@ export default function InventoryPage() {
           notes: editNotes.trim(),
         }),
       });
-      const j = await r.json();
       if (!j.ok) {
         toast(j.error || "Blad zapisu", "error");
       } else {
@@ -140,10 +146,9 @@ export default function InventoryPage() {
     if (!confirm(`Usunac "${name}" z magazynu?`)) return;
     setBusy(id);
     try {
-      const r = await fetch(`/api/admin/inventory?id=${encodeURIComponent(id)}`, {
+      const j = await inventoryCall(`/api/admin/inventory?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
-      const j = await r.json();
       if (!j.ok) toast(j.error || "Blad usuwania", "error");
       await load();
     } finally {

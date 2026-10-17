@@ -14,7 +14,9 @@ export default function PanelLayout({
 }) {
   return (
     <SessionProvider>
-      <div className="min-h-screen bg-[#0B0B0B] text-[#F2EDE3] km-grain">
+      {/* data-clarity-mask: druga linia obrony — gdyby Clarity jednak się
+          załadował na /panel, nie nagrywa treści (czaty, notatki, e-mail). */}
+      <div className="min-h-screen bg-[#0B0B0B] text-[#F2EDE3] km-grain" data-clarity-mask="true">
         {children}
       </div>
     </SessionProvider>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { getMessage } from "@/lib/contactMailbox";
+import { getMessage, isMailboxFolder } from "@/lib/contactMailbox";
 
 // GET /api/admin/mailbox/[uid]?folder=INBOX — pelna tresc wiadomosci (oznacza jako przeczytana)
 export async function GET(
@@ -13,6 +13,7 @@ export async function GET(
   if (!Number.isFinite(uidNum)) return NextResponse.json({ ok: false, error: "Nieprawidlowe uid" }, { status: 400 });
 
   const folder = request.nextUrl.searchParams.get("folder") || "INBOX";
+  if (!isMailboxFolder(folder)) return NextResponse.json({ ok: false, error: "Nieznany folder" }, { status: 400 });
 
   try {
     const message = await getMessage(uidNum, folder);

@@ -1,15 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import type { Prisma } from "@prisma/client";
 import { stripe } from "@/lib/stripe";
 import { sendMail } from "@/lib/mailer";
-import { purchaseConfirmationEmail, localeFromCountry, EMAIL_SUBJECTS } from "@/lib/email-templates";
+import { purchaseConfirmationEmail, localeFromCountry } from "@/lib/email-templates";
 import { prisma } from "@/lib/db";
 import { attributionFromMetadata, saveOrderAttribution } from "@/lib/attribution";
-import { incrementCouponUsage, setOrderCoupon } from "@/lib/coupons";
+import { consumeCouponUsage, setOrderCoupon } from "@/lib/coupons";
 import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
-import { createPaidTokenPurchase } from "@/lib/tokenPurchases";
-import { setOrderPersonalization } from "@/lib/orderPersonalization";
+import { createPaidTokenPurchaseAndCredit, appendTokenPurchaseNote } from "@/lib/tokenPurchases";
+import { getTokenPack } from "@/lib/tokenPacks";
+import { setOrderPersonalization, setOrderUnits, unitsFromStripeMetadata, type OrderUnit } from "@/lib/orderPersonalization";
+import {
+  alertAdmin, appendOrderAdminNote, expectedPaidAmount, formatMinor,
+  generateOrderNumber, grantDevicePurchaseTrial, isUniqueViolation, parseOrderQuantity,
+} from "@/lib/checkoutPricing";
 import { randomUUID } from "crypto";
+
+// Idempotencja na poziomie zdarzenia: tabela poza Prisma schema, tworzona
+// leniwie. Event oznaczamy jako przetworzony DOPIERO po udanej obsludze —
+// wyjatek = 500, Stripe ponowi. Handlery i tak sa idempotentne same w sobie
+// (unikalny stripePaymentIntentId zamowienia, INSERT OR IGNORE zakupu tokenow),
+// bo dwa rownolegle doreczenia tego samego eventu moga sie minac.
+let _eventTableReady = false;
+async function ensureProcessedEventTable(): Promise<void> {
+  if (_eventTableReady) return;
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS ProcessedStripeEvent (
+      id        TEXT PRIMARY KEY,
+      type      TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+  _eventTableReady = true;
+}
 
 export async function POST(request: NextRequest) {
   console.log("[WEBHOOK] Received webhook request");
@@ -35,99 +58,173 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  // Idempotency: Stripe potrafi powtarzac eventy (retry przy 5xx/timeout).
-  // Zapis do ProcessedStripeEvent z UNIQUE id — jezeli juz przetwarzane, skip.
-  // Tabela utworzona raw SQL bo nie ma jej w Prisma schemie.
   try {
-    const inserted = await prisma.$executeRaw`
-      INSERT OR IGNORE INTO ProcessedStripeEvent (id, type) VALUES (${event.id}, ${event.type})
+    await ensureProcessedEventTable();
+    const done = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM ProcessedStripeEvent WHERE id = ${event.id} LIMIT 1
     `;
-    if (inserted === 0) {
+    if (done.length > 0) {
       console.log(`[WEBHOOK] Duplicate event ${event.id} (${event.type}) — skip`);
       return NextResponse.json({ received: true, duplicate: true });
     }
   } catch (e) {
-    // Jezeli idempotency tabela padla — log ale nie blokuj webhooka
-    // (gorzej miec duplikat niz zgubic event)
+    // Tabela idempotencji padla — log, ale obsluguj dalej (handlery sa
+    // idempotentne; gorzej zgubic event niz go powtorzyc).
     console.error("[WEBHOOK] idempotency check failed:", e);
   }
 
   // Handle different event types
   console.log(`[WEBHOOK] Processing event: ${event.type}`);
-  switch (event.type) {
-    case "payment_intent.succeeded": {
-      const pi = event.data.object as Stripe.PaymentIntent;
-      await handlePaymentIntentSucceeded(pi);
-      break;
-    }
+  try {
+    switch (event.type) {
+      case "payment_intent.succeeded": {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        await handlePaymentIntentSucceeded(pi);
+        break;
+      }
 
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      if (session.mode === "payment") {
-        if (session.metadata?.type === "token_purchase") {
-          await handleTokenPurchase(session);
-        } else {
-          await handleCalculatorPurchase(session);
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.mode === "payment") {
+          if (session.metadata?.type === "token_purchase") {
+            await handleTokenPurchase(session);
+          } else {
+            await handleCalculatorPurchase(session);
+          }
+        } else if (session.mode === "subscription") {
+          await handleSubscriptionCreated(session);
         }
-      } else if (session.mode === "subscription") {
-        await handleSubscriptionCreated(session);
+        break;
       }
-      break;
-    }
 
-    case "customer.subscription.updated": {
-      const subscription = event.data.object as Stripe.Subscription;
-      await handleSubscriptionUpdated(subscription);
-      break;
-    }
-
-    case "customer.subscription.deleted": {
-      const subscription = event.data.object as Stripe.Subscription;
-      await handleSubscriptionDeleted(subscription);
-      break;
-    }
-
-    case "invoice.payment_succeeded": {
-      const invoice = event.data.object as Stripe.Invoice;
-      if ((invoice as any).subscription) {
-        await handleInvoicePaymentSucceeded(invoice);
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionUpdated(subscription);
+        break;
       }
-      break;
-    }
 
-    case "invoice.payment_failed": {
-      const invoice = event.data.object as Stripe.Invoice;
-      if ((invoice as any).subscription) {
-        await handleInvoicePaymentFailed(invoice);
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await handleSubscriptionDeleted(subscription);
+        break;
       }
-      break;
-    }
 
-    default:
-      console.log(`Unhandled event type: ${event.type}`);
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (invoiceSubscriptionId(invoice)) {
+          await handleInvoicePaymentSucceeded(invoice);
+        }
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (invoiceSubscriptionId(invoice)) {
+          await handleInvoicePaymentFailed(invoice);
+        }
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        await handleChargeRefunded(charge, event.id);
+        break;
+      }
+
+      case "charge.dispute.created": {
+        const dispute = event.data.object as Stripe.Dispute;
+        await handleDisputeCreated(dispute, event.id);
+        break;
+      }
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+  } catch (e) {
+    console.error(`[WEBHOOK] ❌ handler failed for ${event.type} (${event.id}) — 500, Stripe ponowi:`, e);
+    return NextResponse.json({ error: "Handler failed" }, { status: 500 });
+  }
+
+  try {
+    await prisma.$executeRaw`
+      INSERT OR IGNORE INTO ProcessedStripeEvent (id, type) VALUES (${event.id}, ${event.type})
+    `;
+  } catch (e) {
+    console.error("[WEBHOOK] mark event processed failed:", e);
   }
 
   return NextResponse.json({ received: true });
 }
 
+function dayTag(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Zamowienie oplacone przez Stripe. Numer zamowienia z crypto; kolizja UNIQUE
+// na orderNumber = losujemy ponownie, kolizja na stripePaymentIntentId =
+// rownolegly webhook juz je utworzyl (null).
+async function createPaidOrder(
+  data: Omit<Prisma.OrderUncheckedCreateInput, "orderNumber">
+): Promise<{ orderNumber: string } | null> {
+  for (let attempt = 0; ; attempt++) {
+    const orderNumber = generateOrderNumber();
+    try {
+      await prisma.order.create({ data: { ...data, orderNumber } });
+      return { orderNumber };
+    } catch (e) {
+      if (isUniqueViolation(e, "stripePaymentIntentId")) return null;
+      if (attempt < 5 && isUniqueViolation(e, "orderNumber")) continue;
+      throw e;
+    }
+  }
+}
+
 async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
-  const meta = pi.metadata;
+  const meta = pi.metadata || {};
   console.log("[WEBHOOK] handlePaymentIntentSucceeded called", { paymentIntentId: pi.id, metadata: meta });
 
   if (!meta.customer_email) {
+    // Np. PaymentIntent faktury subskrypcji / Checkout Session — nie nasze zamowienie.
     console.error("[WEBHOOK] Missing customer_email in payment intent metadata");
     return;
   }
 
-  // M3: Weryfikacja kwoty — oblicz oczekiwany total z metadanych i porównaj z faktycznie zapłaconą kwotą.
-  const currency = (meta.currency || pi.currency || "pln").toLowerCase();
-  const productAmount = currency === "eur" ? 16900 : 69900;
-  const discountAmount = parseInt(meta.discount_amount || "0", 10);
-  const shippingAmount = parseInt(meta.shipping_amount || "0", 10);
-  const expectedTotal = (productAmount - discountAmount) + shippingAmount;
-  if (pi.amount !== expectedTotal) {
-    console.error(`[WEBHOOK] ❌ KWOTA NIESPÓJNA: zapłacono ${pi.amount}, oczekiwano ${expectedTotal} (PI: ${pi.id})`);
+  // Idempotencja: zamowienie dla tego PaymentIntentu juz jest.
+  const already = await prisma.order.findUnique({
+    where: { stripePaymentIntentId: pi.id },
+    select: { orderNumber: true },
+  });
+  if (already) {
+    console.log(`[WEBHOOK] Order for PI ${pi.id} already exists (${already.orderNumber}) — skip`);
     return;
+  }
+
+  // M3/K1: kwota i waluta wg SERWEROWEGO cennika (kraj + kupon z metadata),
+  // nie wg kwot z metadata. Niezgodnosc NIE gubi oplaconego zamowienia —
+  // tworzymy je z notatka "DO SPRAWDZENIA" i alertem do admina.
+  const country = meta.customer_country || "PL";
+  // Ilosc sztuk z metadata (brak = 1, stare PaymentIntenty). Nieprawidlowa
+  // (nie powinno sie zdarzyc) = liczymy 1 i oznaczamy do sprawdzenia.
+  const qParsed = parseOrderQuantity(meta.quantity);
+  const quantity = qParsed.ok ? qParsed.quantity : 1;
+  const expected = await expectedPaidAmount(country, meta.coupon_code || null, quantity);
+  const paidCurrency = String(pi.currency || "").toLowerCase();
+  const amountOk = qParsed.ok && pi.amount === expected.amount && paidCurrency === expected.currency && !expected.couponMissing;
+  const mismatchNote = amountOk
+    ? null
+    : `[auto ${dayTag()}] [DO SPRAWDZENIA: kwota/waluta niezgodna — zaplacono ${formatMinor(pi.amount, paidCurrency)}, ` +
+      `oczekiwano ${formatMinor(expected.amount, expected.currency)} (kraj ${country}, ilosc ${qParsed.ok ? quantity : `NIEPRAWIDLOWA "${meta.quantity}"`}` +
+      `${meta.coupon_code ? `, kupon ${meta.coupon_code}${expected.couponMissing ? " — brak w bazie" : ""}` : ""}); PI ${pi.id}]`;
+
+  // Personalizacje sztuk: nowy format (personalization / personalization_1..n),
+  // fallback na stare pola = 1 sztuka.
+  let units: OrderUnit[] = unitsFromStripeMetadata(meta) ?? [];
+  if (units.length === 0 && meta.personalized_code && meta.personalized_name) {
+    units = [{ code: meta.personalized_code, name: meta.personalized_name }];
+  }
+  const unitsOk = units.length === quantity;
+  if (!amountOk) {
+    console.error(`[WEBHOOK] ❌ KWOTA/WALUTA NIESPÓJNA: ${mismatchNote}`);
   }
 
   const email = meta.customer_email;
@@ -138,7 +235,6 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   const addressStreet = meta.customer_address_street || "";
   const addressPostcode = meta.customer_address_postcode || "";
   const addressCity = meta.customer_address_city || "";
-  const country = meta.customer_country || "";
 
   console.log(`[WEBHOOK] Processing order for email: ${email}`);
 
@@ -152,39 +248,59 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     existingUser = await prisma.user.findUnique({ where: { email } });
   }
 
-  // Generate order number (e.g., KM-20260220-1234)
-  const orderNumber = `KM-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
   const orderId = randomUUID();
-
-  // Zapisz zamowienie z userId
-  await prisma.order.create({
-    data: {
-      id: orderId,
-      userId: existingUser?.id,
-      orderNumber,
-      status: "paid",
-      customerName: name,
-      customerEmail: email,
-      customerPhone: phone,
-      pickupPoint: pickupPoint,
-      pickupPointAddress: pickupPointAddress,
-      customerAddressStreet: addressStreet,
-      customerAddressPostcode: addressPostcode,
-      customerAddressCity: addressCity,
-      customerCountry: country,
-      stripePaymentIntentId: pi.id,
-      amount: pi.amount,
-      currency: pi.currency,
-      paidAt: new Date(),
-      updatedAt: new Date(),
-    },
+  const created = await createPaidOrder({
+    id: orderId,
+    userId: existingUser?.id,
+    status: "paid",
+    customerName: name,
+    customerEmail: email,
+    customerPhone: phone,
+    pickupPoint: pickupPoint,
+    pickupPointAddress: pickupPointAddress,
+    customerAddressStreet: addressStreet,
+    customerAddressPostcode: addressPostcode,
+    customerAddressCity: addressCity,
+    customerCountry: meta.customer_country || "",
+    stripePaymentIntentId: pi.id,
+    amount: pi.amount,
+    currency: pi.currency,
+    paidAt: new Date(),
+    updatedAt: new Date(),
+    adminNotes: mismatchNote,
   });
+  if (!created) {
+    console.log(`[WEBHOOK] Order for PI ${pi.id} created concurrently — skip`);
+    return;
+  }
+  const { orderNumber } = created;
 
   // Personalizacja (kod AI + imie na etykiete) — podstawa wylaczenia prawa
   // odstapienia, patrz lib/orderPersonalization.ts. Order nie ma tych kolumn
-  // w Prisma schemie, wiec dopisujemy raw SQL zaraz po create().
-  if (meta.personalized_code && meta.personalized_name) {
-    await setOrderPersonalization(orderId, meta.personalized_code, meta.personalized_name);
+  // w Prisma schemie, wiec dopisujemy raw SQL zaraz po create(). Blad tu nie
+  // moze dac 500 (retry zobaczylby istniejace zamowienie i pominal reszte).
+  // Ilosc + personalizacje wszystkich sztuk (kolumny quantity/personalizationJson).
+  // Gdy zapis padnie, kolumna quantity zostaje DEFAULT 1 — wtedy notatka z
+  // pelna lista, alert i BEZ automatycznego paragonu (decyzja admina).
+  const unitsList = units.map((u, i) => `#${i + 1} kod ${u.code}, imie "${u.name}"`).join("; ") || "brak";
+  let unitsSaved = false;
+  if (units.length > 0 || quantity > 1) {
+    try {
+      await setOrderUnits(orderId, quantity, units);
+      unitsSaved = true;
+    } catch (e) {
+      console.error("[WEBHOOK] personalization save failed:", e);
+      const note = `[auto ${dayTag()}] [DO SPRAWDZENIA: nie zapisano ilosci/personalizacji — ILOSC ${quantity} szt.; ${unitsList}]`;
+      await appendOrderAdminNote(orderId, note).catch(() => {});
+      await alertAdmin(`Stripe: brak personalizacji — ${orderNumber}`, [note]);
+    }
+  } else {
+    unitsSaved = true; // 1 sztuka bez personalizacji (stare PI) — nic do zapisu
+  }
+  if (unitsSaved && !unitsOk) {
+    const note = `[auto ${dayTag()}] [DO SPRAWDZENIA: ${units.length} personalizacji na ${quantity} szt. — ${unitsList}]`;
+    await appendOrderAdminNote(orderId, note).catch(() => {});
+    await alertAdmin(`Stripe: niekompletna personalizacja — ${orderNumber}`, [note, `PI ${pi.id}`]);
   }
 
   // Zrodlo klienta (UTM/referer) z create-payment-intent — lib/attribution.ts.
@@ -193,51 +309,55 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     await saveOrderAttribution(orderId, attribution).catch((e) => console.error("[WEBHOOK] attribution save failed:", e));
   }
 
-  // Jeśli użytkownik już ma konto, upgrade subskrypcji do 30 dni
-  if (existingUser) {
-    const subscription = await prisma.subscription.findUnique({
-      where: { userId: existingUser.id },
-    });
-
-    if (subscription) {
-      const newTrialEndsAt = new Date();
-      newTrialEndsAt.setDate(newTrialEndsAt.getDate() + 30);
-
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: {
-          trialDays: 30,
-          trialEndsAt: newTrialEndsAt,
-          status: "trial",
-        },
-      });
-    }
-  }
-
-  console.log(`[WEBHOOK] ✅ Order created successfully: ${orderNumber} for email ${email}${existingUser ? ` (user ID: ${existingUser.id})` : " (no account yet)"}`);
-
-  // Zlicz uzycie kuponu (dopiero po oplaceniu, zeby porzucone platnosci nie liczyly).
+  // Zuzycie kuponu (dopiero po oplaceniu) — konsumpcja rezerwacji z
+  // create-payment-intent, raz. Wygasly/nieaktywny kupon nie blokuje: platnosc juz jest.
   if (meta.coupon_code) {
     try {
       // Do statystyk kuponow w panelu (lib/coupons.ts getCouponStats).
       await setOrderCoupon(orderId, meta.coupon_code, parseInt(meta.discount_amount || "0", 10) || 0)
         .catch((e) => console.error("[WEBHOOK] order coupon save failed:", e));
-      await incrementCouponUsage(meta.coupon_code);
-      console.log(`[WEBHOOK] ✅ Coupon usage incremented: ${meta.coupon_code} (-${meta.discount_amount || 0})`);
+      await consumeCouponUsage({ code: meta.coupon_code, reservationId: meta.coupon_reservation || null, ref: pi.id });
+      console.log(`[WEBHOOK] ✅ Coupon usage counted: ${meta.coupon_code} (-${meta.discount_amount || 0})`);
     } catch (e) {
-      console.error("[WEBHOOK] ❌ Failed to increment coupon usage:", e);
+      console.error("[WEBHOOK] ❌ Failed to count coupon usage:", e);
     }
   }
 
+  if (!amountOk) {
+    // Bez maila do klienta, triala i paragonu z automatu — decyzja admina.
+    await alertAdmin(`Stripe: niezgodna kwota/waluta — ${orderNumber}`, [
+      `Zamowienie ${orderNumber} (${orderId}) utworzone jako oplacone, ale kwota nie pasuje do cennika.`,
+      mismatchNote || "",
+      `Klient: ${name} <${email}>`,
+      `Sprawdz w Stripe i zdecyduj: wysylka, doplata czy zwrot.`,
+    ]);
+    console.log(`[WEBHOOK] ⚠️ Order created FLAGGED: ${orderNumber} for email ${email}`);
+    return;
+  }
+
+  // Zakup kalkulatora = 30 dni AI, bez skracania dluzszego dostepu.
+  try {
+    await grantDevicePurchaseTrial(existingUser?.id);
+  } catch (e) {
+    console.error("[WEBHOOK] subscription trial update failed:", e);
+  }
+
+  console.log(`[WEBHOOK] ✅ Order created successfully: ${orderNumber} for email ${email}${existingUser ? ` (user ID: ${existingUser.id})` : " (no account yet)"}`);
+
   // Paragon do kolejki agenta fiskalnego (tylko gdy FISCAL_AUTO_ENQUEUE=1) — lib/fiscal.ts.
-  await autoEnqueueOrderReceipt(orderId);
+  // Bez zapisanej ilosci (kolumna = 1, a kupiono wiecej) paragon bylby zly — admin.
+  if (unitsSaved || quantity === 1) {
+    await autoEnqueueOrderReceipt(orderId);
+  }
 
   // Send confirmation email
   try {
     const locale = localeFromCountry(meta.customer_country);
     const subject = locale === "de"
       ? `Bestellbestätigung ${orderNumber} – KalkMate`
-      : `Order confirmation ${orderNumber} – KalkMate`;
+      : locale === "pl"
+        ? `Potwierdzenie zamówienia ${orderNumber} – KalkMate`
+        : `Order confirmation ${orderNumber} – KalkMate`;
     await sendMail({
       to: email,
       subject,
@@ -249,8 +369,10 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         currency: pi.currency,
         pickupPoint: pickupPoint,
         pickupPointAddress: pickupPointAddress,
-        deliveryAddress: [addressStreet, [addressPostcode, addressCity].filter(Boolean).join(" "), country].filter(Boolean).join(", "),
+        deliveryAddress: [addressStreet, [addressPostcode, addressCity].filter(Boolean).join(" "), meta.customer_country || ""].filter(Boolean).join(", "),
         orderId: orderNumber,
+        quantity,
+        unitNames: units.map((u) => u.name),
       }, locale),
     });
     console.log(`[WEBHOOK] ✅ Confirmation email sent to ${email}`);
@@ -259,6 +381,8 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   }
 }
 
+// Stara sciezka (Checkout Session w trybie payment bez type=token_purchase) —
+// zaden endpoint juz takich sesji nie tworzy, zostaje dla zgodnosci.
 async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
   console.log("[WEBHOOK] handleCalculatorPurchase called", { sessionId: session.id, metadata: session.metadata });
   const { name, email, phone, pickupPoint, pickupPointAddress, personalized_code, personalized_name } = session.metadata || {};
@@ -268,6 +392,15 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
     return;
   }
 
+  const piId = typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
+  if (piId) {
+    const already = await prisma.order.findUnique({ where: { stripePaymentIntentId: piId }, select: { orderNumber: true } });
+    if (already) {
+      console.log(`[WEBHOOK] Order for PI ${piId} already exists (${already.orderNumber}) — skip`);
+      return;
+    }
+  }
+
   console.log(`[WEBHOOK] Processing order for email: ${email}`);
 
   // Sprawdź czy użytkownik już istnieje (ma konto)
@@ -275,56 +408,43 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
     where: { email },
   });
 
-  // Generate order number (e.g., KM-20260220-1234)
-  const orderNumber = `KM-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
   const orderId = randomUUID();
 
   // Zapisz zamówienie (z userId jeśli użytkownik istnieje, bez userId jeśli nie)
-  await prisma.order.create({
-    data: {
-      id: orderId,
-      userId: existingUser?.id, // Może być undefined - wtedy NULL w bazie
-      orderNumber,
-      status: "paid",
-      customerName: name || "",
-      customerEmail: email,
-      customerPhone: phone || "",
-      pickupPoint: pickupPoint || "",
-      pickupPointAddress: pickupPointAddress || "",
-      stripePaymentIntentId: session.payment_intent as string,
-      amount: session.amount_total || 0,
-      currency: session.currency || "pln",
-      paidAt: new Date(),
-      updatedAt: new Date(),
-    },
+  const created = await createPaidOrder({
+    id: orderId,
+    userId: existingUser?.id, // Może być undefined - wtedy NULL w bazie
+    status: "paid",
+    customerName: name || "",
+    customerEmail: email,
+    customerPhone: phone || "",
+    pickupPoint: pickupPoint || "",
+    pickupPointAddress: pickupPointAddress || "",
+    stripePaymentIntentId: piId,
+    amount: session.amount_total || 0,
+    currency: session.currency || "pln",
+    paidAt: new Date(),
+    updatedAt: new Date(),
   });
+  if (!created) {
+    console.log(`[WEBHOOK] Order for PI ${piId} created concurrently — skip`);
+    return;
+  }
+  const { orderNumber } = created;
 
   // Personalizacja (kod AI + imie na etykiete) — jak w handlePaymentIntentSucceeded.
   if (personalized_code && personalized_name) {
-    await setOrderPersonalization(orderId, personalized_code, personalized_name);
+    await setOrderPersonalization(orderId, personalized_code, personalized_name)
+      .catch((e) => console.error("[WEBHOOK] personalization save failed:", e));
   }
 
-  // Jeśli użytkownik już ma konto, upgrade subskrypcji do 30 dni
-  if (existingUser) {
-    const subscription = await prisma.subscription.findUnique({
-      where: { userId: existingUser.id },
-    });
-
-    if (subscription) {
-      const newTrialEndsAt = new Date();
-      newTrialEndsAt.setDate(newTrialEndsAt.getDate() + 30);
-
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: {
-          trialDays: 30,
-          trialEndsAt: newTrialEndsAt,
-          status: "trial",
-        },
-      });
-    }
-  }
+  // Zakup kalkulatora = 30 dni AI, bez skracania dluzszego dostepu.
   // Jeśli użytkownik NIE ma konta, zamówienie zostanie połączone przy rejestracji
+  try {
+    await grantDevicePurchaseTrial(existingUser?.id);
+  } catch (e) {
+    console.error("[WEBHOOK] subscription trial update failed:", e);
+  }
 
   await autoEnqueueOrderReceipt(orderId);
 
@@ -335,7 +455,9 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
     const locale = localeFromCountry(session.metadata?.customer_country);
     const subject = locale === "de"
       ? `Bestellbestätigung ${orderNumber} – KalkMate`
-      : `Order confirmation ${orderNumber} – KalkMate`;
+      : locale === "pl"
+        ? `Potwierdzenie zamówienia ${orderNumber} – KalkMate`
+        : `Order confirmation ${orderNumber} – KalkMate`;
     await sendMail({
       to: email,
       subject,
@@ -359,31 +481,100 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
 async function handleTokenPurchase(session: Stripe.Checkout.Session) {
   const userId = session.metadata?.userId;
   const tokens = parseInt(session.metadata?.tokens || "0", 10);
+  const packId = String(session.metadata?.packId || "");
   if (!userId || !tokens || tokens <= 0) {
     console.error("[WEBHOOK] token purchase: brak userId/tokens w metadata", session.metadata);
     return;
   }
-  // Dolicz tokeny (kolumna raw SQL, nie ma jej w Prisma schema). Idempotencja
-  // zapewniona wyzej przez ProcessedStripeEvent (event.id) — brak podwojnego doladowania.
-  await prisma.$executeRaw`
-    UPDATE "User" SET "tokenBalance" = COALESCE("tokenBalance", 0) + ${tokens} WHERE "id" = ${userId}
-  `;
-  console.log(`[WEBHOOK] token purchase: +${tokens} tokenow dla user ${userId}`);
 
-  // Loguj do historii zakupow (widoczne w /admin/users) — spojne z P24.
-  try {
-    await createPaidTokenPurchase({
-      id: randomUUID(),
-      sessionId: session.id,
-      provider: "stripe",
-      userId,
-      tokens,
-      amount: session.amount_total || 0,
-      currency: (session.currency || "eur").toLowerCase(),
-    });
-  } catch (e) {
-    console.error("[WEBHOOK] token purchase: log do TokenPurchase failed:", e);
+  // Kwota/waluta wg SERWEROWEGO cennika paczki (lib/tokenPacks.ts), nie wg metadata.
+  const pack = getTokenPack(packId);
+  const currency = String(session.currency || "").toLowerCase();
+  const amount = session.amount_total ?? -1;
+  const problems: string[] = [];
+  if (!pack) {
+    problems.push(`nieznany pakiet "${packId}"`);
+  } else {
+    if (pack.tokens !== tokens) problems.push(`tokeny w metadata ${tokens} != pakiet ${pack.tokens}`);
+    if (currency !== "pln" && currency !== "eur") {
+      problems.push(`nieobslugiwana waluta "${currency}"`);
+    } else {
+      const expected = currency === "pln" ? pack.priceGrosze : pack.priceEurCents;
+      if (amount !== expected) problems.push(`kwota ${formatMinor(amount, currency)} != cena pakietu ${formatMinor(expected, currency)}`);
+    }
   }
+  if (session.payment_status !== "paid") problems.push(`payment_status=${session.payment_status}`);
+
+  if (problems.length > 0) {
+    await alertAdmin("Stripe: zakup tokenow NIE doliczony", [
+      `Checkout Session: ${session.id}`,
+      `User: ${userId}, pakiet: ${packId}, tokeny: ${tokens}`,
+      `Zaplacono: ${formatMinor(amount, currency)}`,
+      `Problemy: ${problems.join("; ")}`,
+      `Tokenow NIE doliczono — sprawdz w Stripe i zdecyduj (doliczenie recznie albo zwrot).`,
+    ]);
+    return;
+  }
+
+  // Dolicz tokeny: INSERT OR IGNORE po unikalnym sessionId + saldo w jednej
+  // transakcji — powtorzony/rownolegly webhook nie doladuje drugi raz.
+  const credited = await createPaidTokenPurchaseAndCredit({
+    id: randomUUID(),
+    sessionId: session.id,
+    provider: "stripe",
+    userId,
+    tokens,
+    amount,
+    currency,
+  });
+  if (credited) {
+    console.log(`[WEBHOOK] token purchase: +${tokens} tokenow dla user ${userId}`);
+  } else {
+    console.log(`[WEBHOOK] token purchase ${session.id} already credited — skip`);
+  }
+}
+
+// === Subskrypcje (stripe@20, API 2026-01-28.clover) ===
+// Subscription.current_period_end przeniesiono na pozycje (items.data[].current_period_end),
+// Invoice.subscription -> invoice.parent.subscription_details.subscription.
+
+function subscriptionPeriodEnd(sub: Stripe.Subscription): Date | null {
+  const fromItem = sub.items?.data?.[0]?.current_period_end;
+  const legacy = (sub as unknown as { current_period_end?: number }).current_period_end;
+  const ts = typeof fromItem === "number" ? fromItem : typeof legacy === "number" ? legacy : null;
+  if (ts === null || !Number.isFinite(ts) || ts <= 0) return null;
+  const d = new Date(ts * 1000);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// active/trialing -> active; past_due/unpaid -> past_due (dostep do konca
+// oplaconego okresu — K2); canceled -> cancelled. incomplete = pierwsza
+// platnosc w toku — statusu nie ruszamy (null).
+function mapStripeStatus(status: Stripe.Subscription.Status): "active" | "past_due" | "cancelled" | null {
+  switch (status) {
+    case "active":
+    case "trialing":
+      return "active";
+    case "past_due":
+    case "unpaid":
+      return "past_due";
+    case "canceled":
+    case "incomplete_expired":
+    case "paused":
+      return "cancelled";
+    default:
+      return null;
+  }
+}
+
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const sub = invoice.parent?.subscription_details?.subscription;
+  if (typeof sub === "string") return sub;
+  if (sub && typeof sub === "object") return sub.id;
+  const legacy = (invoice as unknown as { subscription?: string | { id: string } | null }).subscription;
+  if (typeof legacy === "string") return legacy;
+  if (legacy && typeof legacy === "object") return legacy.id;
+  return null;
 }
 
 async function handleSubscriptionCreated(session: Stripe.Checkout.Session) {
@@ -393,42 +584,62 @@ async function handleSubscriptionCreated(session: Stripe.Checkout.Session) {
     console.error("Missing userId in checkout session metadata");
     return;
   }
-
-  const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription as string) as any;
-
-  await prisma.subscription.update({
-    where: { userId },
-    data: {
-      stripeSubscriptionId: stripeSubscription.id,
-      stripePriceId: stripeSubscription.items.data[0].price.id,
-      stripeCurrentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
-      status: "active",
-    },
-  });
-
-  console.log(`Subscription created for user ${userId}`);
-}
-
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  const sub = subscription as any;
-  const dbSubscription = await prisma.subscription.findUnique({
-    where: { stripeSubscriptionId: sub.id },
-  });
-
-  if (!dbSubscription) {
-    console.error(`Subscription not found: ${sub.id}`);
+  const subId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+  if (!subId) {
+    console.error(`[WEBHOOK] checkout session ${session.id} bez subscription`);
     return;
   }
 
-  await prisma.subscription.update({
-    where: { id: dbSubscription.id },
-    data: {
-      status: sub.status === "active" ? "active" : "cancelled",
-      stripeCurrentPeriodEnd: new Date(sub.current_period_end * 1000),
+  const stripeSubscription = await stripe.subscriptions.retrieve(subId);
+  const periodEnd = subscriptionPeriodEnd(stripeSubscription);
+  const status = mapStripeStatus(stripeSubscription.status);
+
+  const data = {
+    stripeSubscriptionId: stripeSubscription.id,
+    stripePriceId: stripeSubscription.items.data[0]?.price?.id ?? null,
+    ...(periodEnd ? { stripeCurrentPeriodEnd: periodEnd } : {}),
+    ...(status ? { status } : {}),
+    ...(status === "active" ? { cancelledAt: null } : {}),
+  };
+  await prisma.subscription.upsert({
+    where: { userId },
+    update: data,
+    create: {
+      id: randomUUID(),
+      userId,
+      trialEndsAt: new Date(),
+      trialDays: 0,
+      updatedAt: new Date(),
+      ...data,
+      status: status ?? "trial",
     },
   });
 
-  console.log(`Subscription updated: ${subscription.id}`);
+  console.log(`Subscription created for user ${userId} (${stripeSubscription.status})`);
+}
+
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+  const dbSubscription = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: subscription.id },
+  });
+
+  if (!dbSubscription) {
+    console.error(`Subscription not found: ${subscription.id}`);
+    return;
+  }
+
+  const status = mapStripeStatus(subscription.status);
+  const periodEnd = subscriptionPeriodEnd(subscription);
+  const data = {
+    ...(status ? { status } : {}),
+    ...(periodEnd ? { stripeCurrentPeriodEnd: periodEnd } : {}),
+    ...(status === "cancelled" && !dbSubscription.cancelledAt ? { cancelledAt: new Date() } : {}),
+  };
+  if (Object.keys(data).length > 0) {
+    await prisma.subscription.update({ where: { id: dbSubscription.id }, data });
+  }
+
+  console.log(`Subscription updated: ${subscription.id} (${subscription.status}${subscription.cancel_at_period_end ? ", cancel_at_period_end" : ""})`);
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
@@ -445,7 +656,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     where: { id: dbSubscription.id },
     data: {
       status: "cancelled",
-      cancelledAt: new Date(),
+      cancelledAt: dbSubscription.cancelledAt ?? new Date(),
     },
   });
 
@@ -453,7 +664,9 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 }
 
 async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-  const subscription = await stripe.subscriptions.retrieve((invoice as any).subscription as string) as any;
+  const subId = invoiceSubscriptionId(invoice);
+  if (!subId) return;
+  const subscription = await stripe.subscriptions.retrieve(subId);
 
   const dbSubscription = await prisma.subscription.findUnique({
     where: { stripeSubscriptionId: subscription.id },
@@ -461,11 +674,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
   if (!dbSubscription) return;
 
+  const periodEnd = subscriptionPeriodEnd(subscription);
   await prisma.subscription.update({
     where: { id: dbSubscription.id },
     data: {
-      status: "active",
-      stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      status: mapStripeStatus(subscription.status) ?? "active",
+      ...(periodEnd ? { stripeCurrentPeriodEnd: periodEnd } : {}),
     },
   });
 
@@ -473,6 +687,79 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 }
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
-  console.error(`Invoice payment failed for subscription ${(invoice as any).subscription}`);
+  // Status (past_due/unpaid) przyjdzie w customer.subscription.updated.
+  console.error(`Invoice payment failed for subscription ${invoiceSubscriptionId(invoice)}`);
   // TODO: Send payment failed email to customer
+}
+
+// === Zwroty i spory (chargeback) ===
+// Tylko notatka w zamowieniu / zakupie tokenow + alert do admina. Tokenow NIE
+// odejmujemy automatycznie (decyzja wlasciciela). Marker = id zdarzenia, zeby
+// powtorzony webhook nie dopisal notatki drugi raz.
+
+async function annotateStripePayment(piId: string | null, note: string, marker: string): Promise<{ target: string; added: boolean }> {
+  if (!piId) return { target: "brak PaymentIntent w zdarzeniu", added: true };
+  const order = await prisma.order.findUnique({
+    where: { stripePaymentIntentId: piId },
+    select: { id: true, orderNumber: true },
+  });
+  if (order) {
+    const added = await appendOrderAdminNote(order.id, note, marker);
+    return { target: `zamowienie ${order.orderNumber} (${order.id})`, added };
+  }
+  // Zakup tokenow: TokenPurchase.sessionId = id Checkout Session tej platnosci.
+  try {
+    const sessions = await stripe.checkout.sessions.list({ payment_intent: piId, limit: 1 });
+    const cs = sessions.data[0];
+    if (cs && cs.metadata?.type === "token_purchase") {
+      const added = await appendTokenPurchaseNote(cs.id, `${note} — tokenow NIE odjeto automatycznie (decyzja wlasciciela)`, marker);
+      return {
+        target: `zakup tokenow ${cs.id} (user ${cs.metadata?.userId}, ${cs.metadata?.tokens} tokenow — NIE odjeto automatycznie)`,
+        added,
+      };
+    }
+    if (cs) return { target: `Checkout Session ${cs.id} (${cs.mode}) — bez zamowienia w bazie`, added: true };
+  } catch (e) {
+    console.error("[WEBHOOK] checkout session lookup failed:", e);
+  }
+  return { target: `nie znaleziono zamowienia ani zakupu tokenow dla PI ${piId}`, added: true };
+}
+
+async function handleChargeRefunded(charge: Stripe.Charge, eventId: string) {
+  const piId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id ?? null;
+  const refunded = formatMinor(charge.amount_refunded, charge.currency);
+  const total = formatMinor(charge.amount, charge.currency);
+  const kind = charge.refunded ? "ZWROT CALKOWITY" : "zwrot czesciowy";
+  const note = `[auto ${dayTag()}] Stripe: ${kind} ${refunded} z ${total} (charge ${charge.id}) ${eventId}`;
+  const { target, added } = await annotateStripePayment(piId, note, eventId);
+  if (added) {
+    await alertAdmin(`Stripe: ${kind} ${refunded}`, [
+      note,
+      `Dotyczy: ${target}`,
+      `Status zamowienia/tokeny NIE zmienione automatycznie.`,
+    ]);
+  }
+}
+
+async function handleDisputeCreated(dispute: Stripe.Dispute, eventId: string) {
+  let piId = typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id ?? null;
+  if (!piId) {
+    const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
+    if (chargeId) {
+      const ch = await stripe.charges.retrieve(chargeId);
+      piId = typeof ch.payment_intent === "string" ? ch.payment_intent : ch.payment_intent?.id ?? null;
+    }
+  }
+  const dueBy = dispute.evidence_details?.due_by ? new Date(dispute.evidence_details.due_by * 1000).toISOString().slice(0, 10) : "?";
+  const note =
+    `[auto ${dayTag()}] Stripe: SPOR/CHARGEBACK ${formatMinor(dispute.amount, dispute.currency)} — powod: ${dispute.reason}, ` +
+    `status: ${dispute.status}, dowody do ${dueBy} (dispute ${dispute.id}) ${eventId}`;
+  const { target, added } = await annotateStripePayment(piId, note, eventId);
+  if (added) {
+    await alertAdmin(`Stripe: CHARGEBACK ${formatMinor(dispute.amount, dispute.currency)}`, [
+      note,
+      `Dotyczy: ${target}`,
+      `Odpowiedz w panelu Stripe przed terminem. Nic nie zmieniono automatycznie.`,
+    ]);
+  }
 }

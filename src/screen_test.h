@@ -8,21 +8,15 @@
 #include "settings_screen.h"
 #include "power.h"
 
-#ifndef BTN_OK
-#define BTN_OK 27
+// BTN_xx = wirtualne ID z input.h (>=200). Dawne fallbacki "#define BTN_OK 27"
+// itp. wskazywaly na piny KAMERY (GPIO 12/13/14/26/27) — usuniete.
+#if !defined(BTN_OK) || !defined(BTN_LEFT) || !defined(BTN_RIGHT) || !defined(BTN_BACK)
+#error "screen_test.h wymaga BTN_xx z input.h"
 #endif
-#ifndef BTN_LEFT
-#define BTN_LEFT 13
-#endif
-#ifndef BTN_RIGHT
-#define BTN_RIGHT 14
-#endif
-#ifndef BTN_UP
-#define BTN_UP 26
-#endif
-#ifndef BTN_DOWN
-#define BTN_DOWN 12
-#endif
+
+// Kazdy ekran testu wraca do menu po tym czasie bez reakcji — pelny bialy
+// ekran nie moze swiecic bez konca (bateria + wypalanie OLED).
+#define _ST_TIMEOUT_MS  60000UL
 
 static unsigned long _stLastPress = 0;
 
@@ -37,13 +31,16 @@ static bool _stBtn(int pin) {
     return false;
 }
 
-static void _stWaitBtn() {
-    // Czeka na OK lub LEFT zeby przejsc dalej / wyjsc
+// Czeka na decyzje usera: true = dalej (OK / >), false = wyjscie
+// (< / C/CE / panic / timeout _ST_TIMEOUT_MS).
+static bool _stWaitNext() {
+    const uint32_t t0 = millis();
     while (true) {
-        powerCheckSleep();
-        if (panicTriggered()) return;
-        if (_stBtn(BTN_OK) || _stBtn(BTN_RIGHT)) return;
-        if (_stBtn(BTN_LEFT)) return;
+        panicCheck();
+        if (panicTriggered()) return false;
+        if (_stBtn(BTN_LEFT) || _stBtn(BTN_BACK)) return false;
+        if (_stBtn(BTN_OK) || _stBtn(BTN_RIGHT)) return true;
+        if (millis() - t0 > _ST_TIMEOUT_MS) return false;
         delay(20);
     }
 }
@@ -232,6 +229,8 @@ static void _stShadowText(U8G2 &d) {
 static void _stAnimation(U8G2 &d) {
     // Faza 1: tekst przesuwa sie od lewej do prawej (scroll)
     for (int x = -100; x < 260; x += 4) {
+        panicCheck();
+        if (panicTriggered()) return;
         if (inputBtn(BTN_OK) == LOW || inputBtn(BTN_LEFT) == LOW) return;
         d.clearBuffer();
         d.setFont(u8g2_font_10x20_tf);
@@ -247,6 +246,8 @@ static void _stAnimation(U8G2 &d) {
     bool visible = true;
     unsigned long lastToggle = millis();
     while (millis() - start < 3000) {
+        panicCheck();
+        if (panicTriggered()) return;
         if (inputBtn(BTN_OK) == LOW || inputBtn(BTN_LEFT) == LOW) return;
         if (millis() - lastToggle > 350) {
             visible = !visible;
@@ -326,20 +327,13 @@ void showScreenTest(U8G2 &display) {
         _stShowInfo(display, i + 1, TOTAL, name);
 
         // Czekaj na przycisk przed uruchomieniem testu
-        while (true) {
-            if (_stBtn(BTN_LEFT)) return;  // wyjdz z testow
-            if (_stBtn(BTN_OK) || _stBtn(BTN_RIGHT)) break;
-            delay(20);
-        }
+        if (!_stWaitNext()) return;   // wyjdz z testow (takze panic / timeout)
 
         tests[i].fn(display);
+        if (panicTriggered()) return;
 
         // Czekaj na nastepny / wyjscie
-        while (true) {
-            if (_stBtn(BTN_LEFT)) return;
-            if (_stBtn(BTN_OK) || _stBtn(BTN_RIGHT)) break;
-            delay(20);
-        }
+        if (!_stWaitNext()) return;
     }
 
     // Koniec testow

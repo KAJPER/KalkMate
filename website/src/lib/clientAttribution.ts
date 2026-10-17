@@ -5,18 +5,13 @@
 
 import type { Touch } from "@/lib/attribution";
 
-const CONSENT_KEY = "kalkmate-cookie-consent";
+import { hasAnalyticsConsent } from "@/components/consent";
+
+// Jedno zrodlo prawdy o zgodzie (klucz + wersja) — components/consent.ts.
+export { hasAnalyticsConsent };
+
 const ATTR_KEY = "km-attr";
 const MAX_AGE_MS = 90 * 86400_000;
-
-export function hasAnalyticsConsent(): boolean {
-  try {
-    const raw = localStorage.getItem(CONSENT_KEY);
-    return !!raw && JSON.parse(raw)?.choice === "all";
-  } catch {
-    return false;
-  }
-}
 
 interface Stored { first: Touch | null; last: Touch | null }
 

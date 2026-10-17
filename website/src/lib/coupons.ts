@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { randomUUID } from "crypto";
 
 // Coupon NIE jest w Prisma schemie (kolumny tylko w sqlite) — wszystko raw SQL,
 // wzorem tabeli Inventory. Tabela tworzona lazy przez ensureCouponTable().
@@ -58,9 +59,17 @@ export async function getCoupon(code: string): Promise<CouponRow | null> {
   return rows[0] || null;
 }
 
+// reasonCode — do odpowiedzi API (409 {error, reason}):
+//   invalid   = nie istnieje / nieaktywny / wygasl (JEDEN komunikat — anty-enumeracja)
+//   used_up   = limit uzyc wyczerpany (wliczajac aktywne rezerwacje)
+//   currency  = kupon kwotowy (PLN) przy zamowieniu w EUR
+//   no_effect = kupon nie obniza ceny
+export type CouponReasonCode = "invalid" | "used_up" | "currency" | "no_effect";
+
 export interface DiscountResult {
   ok: boolean;
   reason?: string;          // komunikat bledu (PL) gdy !ok
+  reasonCode?: CouponReasonCode;
   discountCents: number;    // ile odjac od ceny produktu (w minor units waluty)
   finalCents: number;       // produkt - rabat (BEZ wysylki)
   coupon?: { code: string; type: "percent" | "fixed"; value: number };
@@ -69,57 +78,215 @@ export interface DiscountResult {
 // Minimalna kwota do pobrania przez Stripe (zeby total nie spadl ponizej progu).
 const MIN_CHARGE_CENTS = 200; // ~2 zł / 2 EUR
 
-// Oblicza rabat dla danej ceny PRODUKTU (bez wysylki) w danej walucie.
-// productCents = cena produktu w groszach (PLN) lub centach (EUR).
-export function computeDiscount(
-  coupon: CouponRow | null,
+export const COUPON_INVALID_MSG = "Nieprawidlowy lub nieaktywny kod kuponu.";
+export const COUPON_USED_UP_MSG = "Kupon zostal juz wykorzystany.";
+
+// Sama matematyka rabatu (bez sprawdzania active/expiresAt/maxUses) — uzywana
+// tez przez webhook do przeliczenia oczekiwanej kwoty juz OPLACONEJ platnosci
+// (kupon mogl w miedzyczasie wygasnac — to nie powod, zeby kwota "nie pasowala").
+// null = kupon nie ma zastosowania (kwotowy przy EUR).
+export function discountForCoupon(
+  coupon: Pick<CouponRow, "type" | "value">,
   productCents: number,
   currency: string,
-): DiscountResult {
+): number | null {
   const cur = (currency || "pln").toLowerCase();
-  const noDiscount: DiscountResult = { ok: false, discountCents: 0, finalCents: productCents };
-
-  if (!coupon) return { ...noDiscount, reason: "Kupon nie istnieje." };
-  if (!coupon.active) return { ...noDiscount, reason: "Kupon jest nieaktywny." };
-
-  if (coupon.expiresAt) {
-    // Porownanie po dacie (expiresAt traktujemy jako koniec dnia).
-    const exp = new Date(coupon.expiresAt + (coupon.expiresAt.length <= 10 ? "T23:59:59" : ""));
-    if (!isNaN(exp.getTime()) && Date.now() > exp.getTime()) {
-      return { ...noDiscount, reason: "Kupon wygasl." };
-    }
-  }
-  if (coupon.maxUses != null && coupon.usedCount >= coupon.maxUses) {
-    return { ...noDiscount, reason: "Kupon zostal juz wykorzystany." };
-  }
-
   let discount = 0;
   if (coupon.type === "percent") {
     const pct = Math.max(0, Math.min(100, coupon.value));
     discount = Math.floor((productCents * pct) / 100);
   } else {
     // fixed = grosze (PLN). Dla EUR nie ma sensownego przelicznika — odrzucamy.
-    if (cur !== "pln") {
-      return { ...noDiscount, reason: "Kupon kwotowy dziala tylko dla zamowien w PLN." };
-    }
+    if (cur !== "pln") return null;
     discount = Math.max(0, coupon.value);
   }
-
   // Rabat nie moze przekroczyc ceny produktu ani zejsc ponizej progu Stripe.
-  discount = Math.min(discount, Math.max(0, productCents - MIN_CHARGE_CENTS));
+  return Math.min(discount, Math.max(0, productCents - MIN_CHARGE_CENTS));
+}
+
+// Oblicza rabat dla danej ceny PRODUKTU (bez wysylki) w danej walucie.
+// productCents = cena produktu w groszach (PLN) lub centach (EUR).
+// reservedCount = aktywne (niewygasle, nieskonsumowane) rezerwacje INNYCH
+// klientow — wliczane do limitu maxUses (patrz CouponReservation nizej).
+export function computeDiscount(
+  coupon: CouponRow | null,
+  productCents: number,
+  currency: string,
+  reservedCount = 0,
+): DiscountResult {
+  const noDiscount: DiscountResult = { ok: false, discountCents: 0, finalCents: productCents };
+  const invalid: DiscountResult = { ...noDiscount, reason: COUPON_INVALID_MSG, reasonCode: "invalid" };
+
+  if (!coupon) return invalid;
+  if (!coupon.active) return invalid;
+
+  if (coupon.expiresAt) {
+    // Porownanie po dacie (expiresAt traktujemy jako koniec dnia).
+    const exp = new Date(coupon.expiresAt + (coupon.expiresAt.length <= 10 ? "T23:59:59" : ""));
+    if (!isNaN(exp.getTime()) && Date.now() > exp.getTime()) return invalid;
+  }
+  if (coupon.maxUses != null && Number(coupon.usedCount) + reservedCount >= coupon.maxUses) {
+    return { ...noDiscount, reason: COUPON_USED_UP_MSG, reasonCode: "used_up" };
+  }
+
+  const discount = discountForCoupon(coupon, productCents, currency);
+  if (discount === null) {
+    return { ...noDiscount, reason: "Kupon kwotowy dziala tylko dla zamowien w PLN.", reasonCode: "currency" };
+  }
   const finalCents = productCents - discount;
 
   return {
     ok: discount > 0,
     reason: discount > 0 ? undefined : "Kupon nie obniza ceny tego zamowienia.",
+    reasonCode: discount > 0 ? undefined : "no_effect",
     discountCents: discount,
     finalCents,
     coupon: { code: coupon.code, type: coupon.type, value: coupon.value },
   };
 }
 
+// === Rezerwacje kuponow (audyt 2026-10-16) ===
+// Wczesniej usedCount rosl dopiero w webhooku, a sprawdzenie bylo przy
+// tworzeniu platnosci — kupon jednorazowy mozna bylo uzyc N razy otwierajac N
+// platnosci naraz. Teraz przy tworzeniu platnosci zakladamy rezerwacje:
+// dostepnosc = usedCount + aktywne rezerwacje < maxUses, sprawdzane i zapisane
+// JEDNYM warunkowym INSERT-em (atomowo w SQLite). Webhook po oplaceniu
+// konsumuje rezerwacje (usedCount + 1, raz), anulowanie zamowienia ja zwalnia.
+//
+// ref = orderId (P24) albo id PaymentIntentu (Stripe). Czasy = ms od epoki.
+export const COUPON_RESERVATION_TTL_P24_MS = 35 * 24 * 60 * 60 * 1000;   // zamowienie P24 mozna oplacic do 30 dni
+export const COUPON_RESERVATION_TTL_STRIPE_MS = 24 * 60 * 60 * 1000;     // PaymentIntent
+
+let _reservationReady = false;
+async function ensureCouponReservationTable(): Promise<void> {
+  if (_reservationReady) return;
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "CouponReservation" (
+      "id"         TEXT PRIMARY KEY,
+      "code"       TEXT NOT NULL,
+      "ref"        TEXT NOT NULL,
+      "userId"     TEXT,
+      "expiresAt"  INTEGER NOT NULL,
+      "createdAt"  INTEGER NOT NULL,
+      "consumedAt" INTEGER,
+      "releasedAt" INTEGER
+    )`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CouponReservation_code" ON "CouponReservation" ("code")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CouponReservation_ref" ON "CouponReservation" ("ref")`);
+  _reservationReady = true;
+}
+
+// Aktywne rezerwacje kuponu (opcjonalnie bez rezerwacji danego usera — jego
+// wlasne i tak zwalniamy przy nowej probie, patrz reserveCoupon).
+export async function countActiveReservations(code: string, excludeUserId?: string | null): Promise<number> {
+  const norm = normalizeCode(code);
+  if (!norm) return 0;
+  await ensureCouponReservationTable();
+  const now = Date.now();
+  const rows = await prisma.$queryRaw<{ n: bigint | number }[]>`
+    SELECT COUNT(*) AS n FROM "CouponReservation"
+    WHERE "code" = ${norm} AND "consumedAt" IS NULL AND "releasedAt" IS NULL AND "expiresAt" > ${now}
+      AND (${excludeUserId ?? null} IS NULL OR "userId" IS NULL OR "userId" <> ${excludeUserId ?? null})`;
+  return Number(rows[0]?.n ?? 0);
+}
+
+// Walidacja kuponu do zamowienia — z uwzglednieniem rezerwacji innych klientow.
+export async function checkCouponForCheckout(
+  code: string,
+  productCents: number,
+  currency: string,
+  userId?: string | null,
+): Promise<DiscountResult> {
+  const coupon = await getCoupon(code);
+  const reserved = coupon && coupon.maxUses != null ? await countActiveReservations(coupon.code, userId) : 0;
+  return computeDiscount(coupon, productCents, currency, reserved);
+}
+
+// Atomowa rezerwacja. Zwraca id rezerwacji albo null (limit wyczerpany /
+// kupon nieaktywny). Wczesniejsze, niedokonczone rezerwacje TEGO SAMEGO usera
+// na ten kod sa zwalniane — inaczej powrot do formularza i ponowna proba
+// platnosci blokowalaby kupon jednorazowy na 1-35 dni.
+export async function reserveCoupon(opts: {
+  code: string;
+  ref: string;
+  userId?: string | null;
+  ttlMs: number;
+  id?: string;
+}): Promise<string | null> {
+  const norm = normalizeCode(opts.code);
+  if (!norm) return null;
+  await ensureCouponTable();
+  await ensureCouponReservationTable();
+  const now = Date.now();
+  const id = opts.id || randomUUID();
+  if (opts.userId) {
+    await prisma.$executeRaw`
+      UPDATE "CouponReservation" SET "releasedAt" = ${now}
+      WHERE "code" = ${norm} AND "userId" = ${opts.userId} AND "consumedAt" IS NULL AND "releasedAt" IS NULL`;
+  }
+  const inserted = await prisma.$executeRaw`
+    INSERT INTO "CouponReservation" ("id", "code", "ref", "userId", "expiresAt", "createdAt")
+    SELECT ${id}, c.code, ${opts.ref}, ${opts.userId ?? null}, ${now + opts.ttlMs}, ${now}
+    FROM Coupon c
+    WHERE c.code = ${norm} AND c.active = 1
+      AND (c.maxUses IS NULL OR c.usedCount + (
+        SELECT COUNT(*) FROM "CouponReservation" r
+        WHERE r."code" = c.code AND r."consumedAt" IS NULL AND r."releasedAt" IS NULL AND r."expiresAt" > ${now}
+      ) < c.maxUses)`;
+  return Number(inserted) === 1 ? id : null;
+}
+
+// Po utworzeniu PaymentIntentu podmieniamy ref na jego id (do wgladu/konsumpcji).
+export async function setCouponReservationRef(id: string, ref: string): Promise<void> {
+  await ensureCouponReservationTable();
+  await prisma.$executeRaw`UPDATE "CouponReservation" SET "ref" = ${ref} WHERE "id" = ${id}`;
+}
+
+// Zwolnienie rezerwacji (anulowane zamowienie / nieudane utworzenie platnosci).
+export async function releaseCouponReservation(opts: { ref?: string; id?: string }): Promise<void> {
+  if (!opts.ref && !opts.id) return;
+  await ensureCouponReservationTable();
+  const now = Date.now();
+  await prisma.$executeRaw`
+    UPDATE "CouponReservation" SET "releasedAt" = ${now}
+    WHERE ("id" = ${opts.id ?? ""} OR "ref" = ${opts.ref ?? ""})
+      AND "consumedAt" IS NULL AND "releasedAt" IS NULL`;
+}
+
+// Zliczenie uzycia OPLACONEGO zamowienia: konsumuje rezerwacje i podbija
+// usedCount dokladnie raz (powtorzony webhook nic nie dolicza). Rezerwacja
+// wygasla/zwolniona tez jest konsumowana — platnosc juz jest, nie odrzucamy jej.
+// Brak rezerwacji (platnosc utworzona przed wdrozeniem rezerwacji) = zwykle
+// +1; idempotencje zapewnia wtedy wywolujacy (zamowienie tworzone/oplacane raz).
+export async function consumeCouponUsage(opts: { code: string; reservationId?: string | null; ref?: string | null }): Promise<void> {
+  const norm = normalizeCode(opts.code);
+  if (!norm) return;
+  await ensureCouponTable();
+  await ensureCouponReservationTable();
+  const rid = opts.reservationId || "";
+  const ref = opts.ref || "";
+  const now = Date.now();
+  await prisma.$transaction(async (tx) => {
+    // Najpierw zapis (blokada zapisu od razu, bez "read -> upgrade" w SQLite).
+    const consumed = await tx.$executeRaw`
+      UPDATE "CouponReservation" SET "consumedAt" = ${now}
+      WHERE "code" = ${norm} AND ("id" = ${rid} OR "ref" = ${ref}) AND "consumedAt" IS NULL`;
+    if (Number(consumed) > 0) {
+      await tx.$executeRaw`UPDATE Coupon SET usedCount = usedCount + 1 WHERE code = ${norm}`;
+      return;
+    }
+    const existing = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "CouponReservation" WHERE "code" = ${norm} AND ("id" = ${rid} OR "ref" = ${ref}) LIMIT 1`;
+    if (existing.length === 0) {
+      await tx.$executeRaw`UPDATE Coupon SET usedCount = usedCount + 1 WHERE code = ${norm}`;
+    }
+    // else: juz skonsumowana — powtorzone powiadomienie, nic nie robimy
+  });
+}
+
 // Zlicza uzycie kuponu po oplaceniu. H11: atomowe — nie przekroczy maxUses
 // nawet przy równoczesnych żądaniach (wyścig CHECK→webhook).
+// (Stara sciezka bez rezerwacji — webhooki uzywaja juz consumeCouponUsage.)
 export async function incrementCouponUsage(code: string): Promise<void> {
   const norm = normalizeCode(code);
   if (!norm) return;

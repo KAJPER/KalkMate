@@ -27,33 +27,112 @@ export interface BaseCourierEnvelope<T = unknown> {
   data?: T;
 }
 
-function creds() {
+// === Bledy typowane ===
+// Przy NADANIU (createOrderV2 — realne pieniadze) kluczowe jest, czy zlecenie
+// moglo powstac:
+//   BcRejectedError  — PEWNE: zlecenie na pewno NIE powstalo. API odpowiedzialo
+//                      i odrzucilo zadanie (success:false / HTTP 4xx, np. blad
+//                      walidacji, brak srodkow, zly kod Paczkomatu) albo zadanie
+//                      nadania w ogole nie zostalo wyslane (brak konfiguracji,
+//                      blad pobrania profilu nadawcy). Mozna bezpiecznie ponowic.
+//   BcUncertainError — NIEPEWNE: blad sieci, timeout, HTTP 5xx, nieczytelna
+//                      odpowiedz — zadanie moglo dojsc i paczka mogla zostac
+//                      utworzona i oplacona. NIE ponawiac bez sprawdzenia panelu.
+export class BcError extends Error {
+  readonly endpoint: string;
+  readonly httpStatus: number | null;
+  constructor(message: string, endpoint: string, httpStatus: number | null, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "BcError";
+    this.endpoint = endpoint;
+    this.httpStatus = httpStatus;
+  }
+}
+
+export class BcRejectedError extends BcError {
+  readonly certain = true as const;
+  constructor(message: string, endpoint: string, httpStatus: number | null, options?: { cause?: unknown }) {
+    super(message, endpoint, httpStatus, options);
+    this.name = "BcRejectedError";
+  }
+}
+
+export class BcUncertainError extends BcError {
+  readonly certain = false as const;
+  constructor(message: string, endpoint: string, httpStatus: number | null, options?: { cause?: unknown }) {
+    super(message, endpoint, httpStatus, options);
+    this.name = "BcUncertainError";
+  }
+}
+
+export function isBcRejected(e: unknown): e is BcRejectedError {
+  return e instanceof BcRejectedError;
+}
+
+// Stan "nadanie w toku / niepewne" (Order.furgonetkaStatus) i znacznik w
+// adminNotes — wspolne dla basecourier/route.ts (nadanie) i basecourier/link
+// (powiazanie zlecenia czysci znacznik).
+export const BC_PENDING_STATUS = "basecourier_pending";
+export const BC_UNCERTAIN_NOTE = "[NIEPEWNE NADANIE — sprawdz w panelu Base Courier i uzyj 'Powiaz zlecenie']";
+export const BC_UNCERTAIN_RESOLVED_NOTE = "[niepewne nadanie — rozwiazane]";
+
+// Id zlecenia Base Courier jest liczba — "abc" dawal NaN, ktory JSON zamienia na null.
+function bcNumericId(id: string, endpoint: string): number {
+  const s = String(id ?? "").trim();
+  if (!/^\d{1,15}$/.test(s)) throw new BcRejectedError(`Niepoprawne ID zlecenia Base Courier: "${s.slice(0, 40)}"`, endpoint, null);
+  return Number(s);
+}
+
+function creds(endpoint: string) {
   const login = process.env.BASECOURIER_LOGIN || "";
   const api_key = process.env.BASECOURIER_API_KEY || "";
   if (!login || !api_key) {
-    throw new Error("Brak BASECOURIER_LOGIN / BASECOURIER_API_KEY w konfiguracji serwera");
+    // Nic nie zostalo wyslane — pewne.
+    throw new BcRejectedError("Brak BASECOURIER_LOGIN / BASECOURIER_API_KEY w konfiguracji serwera", endpoint, null);
   }
   return { login, api_key };
 }
 
+// Zwraca koperte API dla odpowiedzi HTTP < 500 (takze success:false — wywolujacy
+// decyduje, co z tym zrobic). Rzuca:
+//   BcUncertainError — blad sieci / timeout / HTTP 5xx / nieczytelna odpowiedz 2xx-3xx,
+//   BcRejectedError  — brak konfiguracji / nieczytelna odpowiedz HTTP 4xx (np. strona
+//                      bledu proxy — zadanie odrzucone, zanim cokolwiek przetworzono).
 export async function bcCall<T = unknown>(
   endpoint: string,
   body: Record<string, unknown> = {},
   timeoutMs = 25000
 ): Promise<BaseCourierEnvelope<T>> {
-  const res = await fetch(`${API_BASE}/${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ auth: creds(), ...body }),
-    signal: AbortSignal.timeout(timeoutMs),
-    cache: "no-store",
-  });
-  const text = await res.text();
+  const payload = JSON.stringify({ auth: creds(endpoint), ...body });
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`${API_BASE}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: payload,
+      signal: AbortSignal.timeout(timeoutMs),
+      cache: "no-store",
+    });
+    text = await res.text();
+  } catch (e) {
+    const name = (e as { name?: string } | null)?.name;
+    const what = name === "TimeoutError" || name === "AbortError" ? `timeout po ${Math.round(timeoutMs / 1000)} s` : `blad sieci: ${(e as Error)?.message ?? String(e)}`;
+    throw new BcUncertainError(`Base Courier (${endpoint}): ${what}`, endpoint, null, { cause: e });
+  }
+  if (res.status >= 500) {
+    throw new BcUncertainError(`Base Courier (${endpoint}): HTTP ${res.status}: ${text.slice(0, 200)}`, endpoint, res.status);
+  }
   let json: BaseCourierEnvelope<T>;
   try {
     json = JSON.parse(text);
   } catch {
-    throw new Error(`Base Courier: niepoprawna odpowiedz HTTP ${res.status}: ${text.slice(0, 200)}`);
+    const msg = `Base Courier (${endpoint}): niepoprawna odpowiedz HTTP ${res.status}: ${text.slice(0, 200)}`;
+    if (res.status >= 400) throw new BcRejectedError(msg, endpoint, res.status);
+    throw new BcUncertainError(msg, endpoint, res.status);
+  }
+  if (!json || typeof json !== "object") {
+    throw new BcUncertainError(`Base Courier (${endpoint}): pusta odpowiedz HTTP ${res.status}`, endpoint, res.status);
   }
   return json;
 }
@@ -108,7 +187,7 @@ let _profileCache: { at: number; profile: BcProfile } | null = null;
 export async function bcGetProfile(): Promise<BcProfile> {
   if (_profileCache && Date.now() - _profileCache.at < 60 * 60 * 1000) return _profileCache.profile;
   const env = await bcCall<{ Broker: Record<string, string | null> }>("getProfile.json");
-  if (!env.success || !env.data?.Broker) throw new Error(bcErrorMessage(env));
+  if (!env.success || !env.data?.Broker) throw new BcRejectedError(bcErrorMessage(env), "getProfile.json", null);
   const b = env.data.Broker;
   const profile: BcProfile = {
     name: b.name || `${b.person_name ?? ""} ${b.person_surname ?? ""}`.trim(),
@@ -134,6 +213,31 @@ export const KALKMATE_PARCEL = {
   content: "Kalkulator elektroniczny",
 } as const;
 
+// Zamowienie kilku sztuk = JEDNA paczka (wysylka stala na zamowienie, patrz
+// checkoutPricing.shippingCentsForCountry). Waga = waga 1 sztuki x ilosc.
+// Wymiary: domyslnie pudelka 18x12x4 ulozone jedno na drugim (side_z x ilosc) —
+// to dolne oszacowanie, NIE zmierzony karton zbiorczy.
+// TODO(wlasciciel): jesli kilka sztuk pakujesz do innego kartonu, wpisz jego
+// wymiary (cm) tutaj — wtedy beda uzyte dla kazdego zamowienia > 1 szt.
+export const KALKMATE_MULTI_PARCEL_SIDES: { side_x: number; side_y: number; side_z: number } | null = null;
+
+export function normalizeParcelQuantity(quantity: unknown): number {
+  const q = Math.floor(Number(quantity));
+  return Number.isFinite(q) && q >= 1 ? Math.min(q, 50) : 1;
+}
+
+export function kalkmateParcel(quantity: unknown = 1): { weight: number; side_x: number; side_y: number; side_z: number; content: string } {
+  const q = normalizeParcelQuantity(quantity);
+  if (q === 1) return { ...KALKMATE_PARCEL };
+  const sides = KALKMATE_MULTI_PARCEL_SIDES ?? {
+    side_x: KALKMATE_PARCEL.side_x,
+    side_y: KALKMATE_PARCEL.side_y,
+    side_z: KALKMATE_PARCEL.side_z * q,
+  };
+  // "x" zamiast "×": package_content trafia na etykiete kuriera (UPS = ASCII).
+  return { weight: KALKMATE_PARCEL.weight * q, ...sides, content: `${KALKMATE_PARCEL.content} x${q}` };
+}
+
 export interface BcReceiver {
   name: string;
   email: string;
@@ -152,6 +256,7 @@ export interface BcReceiver {
 // ma tylko pole "miasto" — stan wykrywamy z niego (splitCityState).
 export { needsStateCode, isValidStateCode, splitCityState } from "./address";
 import { splitAddress } from "./address";
+import { isEuCountry } from "./countries";
 
 // Rozbija "ul. Zastawie I 37" -> { street:"ul. Zastawie I", house_no:"37" };
 // gdy brak numeru, zwraca house_no "1" (API wymaga niepustego numeru).
@@ -197,9 +302,13 @@ export interface BcShipOptions {
   pickup?: BcPickup | null;
   // Dokumenty celne w wersji papierowej (przesylki poza UE) — patrz courierSearch().
   customsPaper?: boolean;
+  // Liczba sztuk w zamowieniu (Order.quantity) — waga/wymiary/opis paczki.
+  quantity?: number;
 }
 
-function warsawToday(): string {
+// Dzisiejsza data (YYYY-MM-DD) w strefie Europe/Warsaw — serwer chodzi w UTC,
+// wiec toISOString() miedzy 00:00 a 01:00/02:00 czasu PL dawal wczorajsza date.
+export function warsawToday(): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Warsaw" }).format(new Date());
 }
 
@@ -255,25 +364,25 @@ export function parsePickup(raw: unknown): { ok: true; pickup: BcPickup } | { ok
 // (pole ustalone empirycznie 2026-09-25 — nie ma go w wtyczce WooCommerce ani
 // w publicznej dokumentacji; boolean true/1 przechodzi, false/0 nie). Papier =
 // wydrukowac fakture w 3 egzemplarzach i dolaczyc do paczki.
-const EU_COUNTRIES = new Set([
-  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE",
-  "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
-]);
-
+// Zbior UE: wspolny z countries.ts (ten sam co EU_COUNTRIES + PL w checkoutPricing.ts).
+// Terytoria z osobnym kodem ISO poza obszarem celno-VAT UE (AX, GF, GP, MQ, RE,
+// YT, MF...) NIE sa w zbiorze — tak jak w cenniku (wysylka 3500) — wiec dla nich
+// tez idzie wersja papierowa dokumentow celnych.
 export function needsCustomsDocs(countryCode: string): boolean {
-  return !EU_COUNTRIES.has(normalizeCountryForShipping(countryCode));
+  return !isEuCountry(normalizeCountryForShipping(countryCode));
 }
 
 function courierSearch(courierCode = "paczkomaty", countryCode = "PL", opts: BcShipOptions = {}) {
+  const parcel = kalkmateParcel(opts.quantity);
   return {
     courier_code: courierCode,
     type: "package",
     origin: "api",
     country_code: countryCode,
-    weight: KALKMATE_PARCEL.weight,
-    side_x: KALKMATE_PARCEL.side_x,
-    side_y: KALKMATE_PARCEL.side_y,
-    side_z: KALKMATE_PARCEL.side_z,
+    weight: parcel.weight,
+    side_x: parcel.side_x,
+    side_y: parcel.side_y,
+    side_z: parcel.side_z,
     // "Nie zamawiaj podjazdu" (nazwa z oficjalnej wtyczki WooCommerce):
     // domyslnie wlasciciel sam wrzuca paczke do Paczkomatu/punktu. Przy
     // no_pickup=false API wymaga daty i godzin (Order.pickup_date + godziny).
@@ -288,12 +397,12 @@ export interface BcValuation {
   raw: unknown;
 }
 
-export async function bcValuation(): Promise<BcValuation> {
+export async function bcValuation(quantity = 1): Promise<BcValuation> {
   const env = await bcCall<{
     CourierSearch?: { id?: string };
     results?: { Courier?: { courier_code?: string }; Price?: { value: string; netto: string; vat: string } }[];
-  }>("getValuation.json", { CourierSearch: courierSearch() });
-  if (!env.success) throw new Error(bcErrorMessage(env));
+  }>("getValuation.json", { CourierSearch: courierSearch("paczkomaty", "PL", { quantity }) });
+  if (!env.success) throw new BcRejectedError(bcErrorMessage(env), "getValuation.json", null);
   const r = (env.data?.results ?? []).find((x) => x.Courier?.courier_code === "paczkomaty") ?? env.data?.results?.[0];
   return {
     courierSearchId: env.data?.CourierSearch?.id ?? null,
@@ -339,13 +448,13 @@ export function normalizeCountryForShipping(countryCode: string): string {
   return c === "OTHER" || !c ? "US" : c;
 }
 
-export async function bcValuationInternational(countryCode: string): Promise<BcIntlQuote[]> {
+export async function bcValuationInternational(countryCode: string, quantity = 1): Promise<BcIntlQuote[]> {
   const country = normalizeCountryForShipping(countryCode);
   const results = await Promise.allSettled(
     INTL_COURIER_CANDIDATES.map(async (c) => {
       const env = await bcCall<{
         results?: { Courier?: { courier_code?: string }; Price?: { value: string; netto: string; vat: string } }[];
-      }>("getValuation.json", { CourierSearch: courierSearch(c.code, country) });
+      }>("getValuation.json", { CourierSearch: courierSearch(c.code, country, { quantity }) });
       if (!env.success) return null;
       const r = env.data?.results?.[0];
       if (!r?.Price) return null;
@@ -405,11 +514,15 @@ function buildOrderPayload(
   opts: BcShipOptions = {}
 ): Record<string, unknown> {
   // Zagranica: "217 Manhattan Avenue, unit 5B-3" -> ulica / numer 217 / mieszkanie 5B-3 (USA pisze numer przed ulica).
-  // Kraj: bez zmian (splitStreet, mieszkanie puste).
+  // Kraj: "Marszalkowska 1/2" -> numer "1/2" (jak dawniej); "Marszalkowska 1 m. 2"
+  // -> numer 1, mieszkanie 2 (dawniej numer "2", a "1 m." w nazwie ulicy).
   const foreign = receiver.country && receiver.country.toUpperCase() !== "PL" ? splitAddress(receiver.street, receiver.country) : null;
+  const domestic = foreign ? null : splitAddress(receiver.street, "PL");
   const recvAddr = foreign
     ? { street: foreign.street || "-", house_no: foreign.building || "1", locum_no: foreign.apartment }
-    : { ...splitStreet(receiver.street), locum_no: "" };
+    : domestic && domestic.building
+      ? { street: domestic.street || "-", house_no: domestic.building, locum_no: domestic.apartment }
+      : { ...splitStreet(receiver.street), locum_no: "" };
   // Przy podjezdzie adres nadawcy = wybrany adres odbioru paczki.
   const from = opts.pickup ? PICKUP_ADDRESSES[opts.pickup.addressKey] : null;
   const [readyH, readyM] = (opts.pickup?.from ?? "").split(":");
@@ -458,7 +571,7 @@ function buildOrderPayload(
     // ponizej NIE wystepuja nigdzie w getOrderDetails.json ani na etykiecie, mimo
     // wczesniejszego zalozenia ze sa "widoczne w panelu" — zostawione na wszelki
     // wypadek, gdyby jednak cos z nich czytalo, ale package_content to realne zrodlo).
-    package_content: `${KALKMATE_PARCEL.content} ${orderRef}`,
+    package_content: `${kalkmateParcel(opts.quantity).content} ${orderRef}`,
     reference: orderRef,
     description: orderRef,
   };
@@ -493,22 +606,56 @@ function paymentMethod(): string {
   return process.env.BASECOURIER_PAYMENT || "bank";
 }
 
+// Profil nadawcy przed nadaniem: blad tutaj = createOrderV2 NIE zostal wyslany,
+// wiec niezaleznie od przyczyny (takze timeout) to blad PEWNY.
+async function senderForCreate(): Promise<BcProfile> {
+  try {
+    return await bcGetProfile();
+  } catch (e) {
+    if (e instanceof BcRejectedError) throw e;
+    throw new BcRejectedError(
+      `Nie udalo sie pobrac profilu nadawcy (nadanie NIE zostalo wyslane): ${(e as Error)?.message ?? String(e)}`,
+      "getProfile.json",
+      e instanceof BcError ? e.httpStatus : null,
+      { cause: e }
+    );
+  }
+}
+
+// Wspolne wywolanie createOrderV2 z klasyfikacja bledu (patrz BcRejectedError /
+// BcUncertainError). success:false z HTTP < 500 = API odrzucilo zadanie — chyba
+// ze w odpowiedzi mimo to jest id zlecenia / numer listu (wtedy NIEPEWNE).
+async function createOrder(payload: Record<string, unknown>): Promise<BcCreatedShipment> {
+  const endpoint = "createOrderV2.json";
+  const env = await bcCall<Record<string, unknown>>(endpoint, payload, 40000);
+  if (!env.success) {
+    const msg = bcErrorMessage(env);
+    const partial = env.data && typeof env.data === "object" ? parseCreatedShipment(env.data) : null;
+    if (partial && (partial.orderId || partial.trackingNumber)) {
+      throw new BcUncertainError(
+        `Base Courier zwrocil blad, ale odpowiedz zawiera zlecenie (ID ${partial.orderId ?? "?"}, list ${partial.trackingNumber ?? "?"}): ${msg}`,
+        endpoint,
+        null
+      );
+    }
+    throw new BcRejectedError(msg, endpoint, null);
+  }
+  return parseCreatedShipment(env.data ?? {});
+}
+
 export async function bcCreateLockerShipment(
   receiver: BcReceiver,
   orderRef: string,
   opts: BcShipOptions = {}
 ): Promise<BcCreatedShipment> {
-  const sender = await bcGetProfile();
+  const sender = await senderForCreate();
   const order = buildOrderPayload(receiver, sender, orderRef, opts);
 
-  const env = await bcCall<Record<string, unknown>>("createOrderV2.json", {
+  return createOrder({
     CartOrder: { payment: paymentMethod() },
     CourierSearch: courierSearch("paczkomaty", "PL", opts),
     Cart: [{ Order: order }],
-  }, 40000);
-
-  if (!env.success) throw new Error(bcErrorMessage(env));
-  return parseCreatedShipment(env.data ?? {});
+  });
 }
 
 // Nadanie zagraniczne (DE, US, ...) — drzwi-drzwi, wybranym kurierem z listy
@@ -522,19 +669,16 @@ export async function bcCreateInternationalShipment(
   opts: BcShipOptions = {}
 ): Promise<BcCreatedShipment> {
   if (!INTL_COURIER_CANDIDATES.some((c) => c.code === courierCode)) {
-    throw new Error(`Nieznany kurier: ${courierCode}`);
+    throw new BcRejectedError(`Nieznany kurier: ${courierCode}`, "createOrderV2.json", null);
   }
-  const sender = await bcGetProfile();
+  const sender = await senderForCreate();
   const order = buildOrderPayload({ ...receiver, country: normalizeCountryForShipping(countryCode) }, sender, orderRef, opts);
 
-  const env = await bcCall<Record<string, unknown>>("createOrderV2.json", {
+  return createOrder({
     CartOrder: { payment: paymentMethod() },
     CourierSearch: courierSearch(courierCode, normalizeCountryForShipping(countryCode), opts),
     Cart: [{ Order: order }],
-  }, 40000);
-
-  if (!env.success) throw new Error(bcErrorMessage(env));
-  return parseCreatedShipment(env.data ?? {});
+  });
 }
 
 // Etykieta PDF. Kontrakt zweryfikowany na produkcji (2026-09-18, printer_type
@@ -555,9 +699,9 @@ export async function bcCreateInternationalShipment(
 export async function bcGetWaybillPdf(blpaczkaOrderId: string): Promise<{ pdf: Buffer | null; link: string | null; raw: unknown }> {
   const printerType = process.env.BASECOURIER_PRINTER || "LBL";
   const env = await bcCall<unknown>("getWaybill.json", {
-    Order: { id: Number(blpaczkaOrderId), printer_type: printerType },
+    Order: { id: bcNumericId(blpaczkaOrderId, "getWaybill.json"), printer_type: printerType },
   });
-  if (!env.success) throw new Error(bcErrorMessage(env));
+  if (!env.success) throw new BcRejectedError(bcErrorMessage(env), "getWaybill.json", null);
   const d = env.data as Record<string, unknown> | unknown[] | undefined;
 
   // data["0"] (obiekt z kluczem "0") albo data[0] (tablica) — obslugujemy oba.
@@ -610,9 +754,9 @@ export interface BcOrderDetails {
 export async function bcGetOrderDetails(blpaczkaOrderId: string): Promise<BcOrderDetails> {
   const env = await bcCall<{ Order?: Record<string, unknown>; Tracking?: Array<{ TrackingStatus?: Record<string, unknown> }> }>(
     "getOrderDetails.json",
-    { Order: { id: Number(blpaczkaOrderId) } }
+    { Order: { id: bcNumericId(blpaczkaOrderId, "getOrderDetails.json") } }
   );
-  if (!env.success) throw new Error(bcErrorMessage(env));
+  if (!env.success) throw new BcRejectedError(bcErrorMessage(env), "getOrderDetails.json", null);
   const d = env.data ?? {};
   const events: BcTrackingEvent[] = (d.Tracking ?? [])
     .map((t) => t.TrackingStatus)
@@ -653,7 +797,7 @@ export async function bcFindOrder(idOrPrefix: string): Promise<BcOrderLookup | n
   const needle = idOrPrefix.trim();
   for (let page = 1; page <= 5; page++) {
     const env = await bcCall<BcOrderRow[]>("getOrders.json", { Pagination: { page } });
-    if (!env.success) throw new Error(bcErrorMessage(env));
+    if (!env.success) throw new BcRejectedError(bcErrorMessage(env), "getOrders.json", null);
     const rows = env.data ?? [];
     for (const row of rows) {
       const orderId = row.Order?.id;

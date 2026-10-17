@@ -205,15 +205,21 @@ static inline void offlineFmtNum(double v, char* buf, size_t bufSize) {
         buf[bufSize - 1] = '\0';
         return;
     }
-    if (v == (long long)v && fabs(v) < 1e10) {
+    // Najpierw zakres, potem rzutowanie — (long long)v dla |v| > 9.2e18 to UB.
+    if (fabs(v) < 1e10 && v == (long long)v) {
         snprintf(buf, bufSize, "%lld", (long long)v);
         return;
     }
     snprintf(buf, bufSize, "%.6g", v);
+    // Obcinaj zera TYLKO w mantysie (przed 'e') — inaczej "1.5e+10"
+    // zamienialo sie w "1.5e+1". Wykladnik przesuwamy zaraz za mantyse.
     char* dot = strchr(buf, '.');
     if (dot) {
-        char* end = buf + strlen(buf) - 1;
-        while (end > dot && *end == '0') *end-- = '\0';
-        if (end == dot) *end = '\0';
+        char* ex   = strpbrk(buf, "eE");
+        char* mEnd = ex ? ex : buf + strlen(buf);   // koniec mantysy (wylacznie)
+        char* end  = mEnd - 1;
+        while (end > dot && *end == '0') end--;
+        if (end == dot) end--;                      // sama kropka — usun ja tez
+        memmove(end + 1, mEnd, strlen(mEnd) + 1);   // + terminator
     }
 }

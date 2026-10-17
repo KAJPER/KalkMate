@@ -34,6 +34,20 @@ foreach ($b in $bins) {
     Copy-Item $p $fwDst
     Write-Host ("  {0,-16} {1,9} B" -f $b, (Get-Item $p).Length)
 }
+# Wersja firmware dla flashera (GUI + production_log.csv). Flasher sprawdza
+# tez, czy ten napis wystepuje w firmware.bin (ostrzega, gdy bin jest stary).
+$mainCpp = Join-Path $PSScriptRoot "..\..\src\main.cpp"
+$fwVer = $null
+if (Test-Path $mainCpp) {
+    $m = [regex]::Match([System.IO.File]::ReadAllText($mainCpp), '#define\s+FW_VERSION\s+"([^"]+)"')
+    if ($m.Success) { $fwVer = $m.Groups[1].Value }
+}
+if (-not $fwVer) { throw "Nie znaleziono #define FW_VERSION w $mainCpp" }
+if ((Get-Item $mainCpp).LastWriteTime -gt (Get-Item (Join-Path $fwSrc "firmware.bin")).LastWriteTime) {
+    Write-Host "  UWAGA: src\main.cpp nowszy niz firmware.bin - czy na pewno przebudowales (pio run -e esp32s3)?" -ForegroundColor Yellow
+}
+[System.IO.File]::WriteAllText((Join-Path $fwDst "fw_version.txt"), $fwVer + "`n", (New-Object System.Text.UTF8Encoding($false)))
+Write-Host "  fw_version.txt   v$fwVer"
 
 Write-Host "[2/3] PyInstaller" -ForegroundColor Green
 if (Test-Path "dist\KalkMateFlasher") { Remove-Item -Recurse -Force "dist\KalkMateFlasher" }

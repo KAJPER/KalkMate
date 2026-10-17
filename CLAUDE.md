@@ -304,8 +304,11 @@ wpisaniem kodu) przytrzymaj **C/CE przez 5s** → menu potwierdzenia → **OK**
 sprawdziany, powiązanie z kontem), **C/CE** = anuluj. Ten sam zakres co
 „Ustawienia → Reset fabryczny", tylko dostępny zanim jeszcze da się wejść
 do menu — nie trzeba łapać momentu włączania (to była wcześniejsza,
-niewygodna wersja z fw 1.7.0-1.7.1). Patrz `calculator.h`,
-`_calcFactoryResetFlow()` + hold-detection w `runCalculator()`. Nie pomaga
+niewygodna wersja z fw 1.7.0-1.7.1). Patrz `factory_reset.h`
+(`factoryResetRun()`, wspolne dla kalkulatora i Ustawien) + hold-detection
+w `runCalculator()` (`calculator.h`). Od fw 2.0.0 reset czysci tez kolejke
+offline i ustawia flage `unpair` w NVS `kalkid` (token urzadzenia zostaje) —
+przy nastepnej rejestracji serwer odpina urzadzenie od konta. Nie pomaga
 to urządzeniom z firmware sprzed 1.7.0 (nie da się tego dostarczyć wstecz
 na już zablokowany egzemplarz — brak ścieżki USB i OTA).
 

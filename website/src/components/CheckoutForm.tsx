@@ -8,18 +8,73 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { motion } from "framer-motion";
-import type { StripeExpressCheckoutElementConfirmEvent } from "@stripe/stripe-js";
+import type { PaymentIntent } from "@stripe/stripe-js";
+import { type Locale } from "@/lib/i18n";
+import { formatMoney } from "@/lib/content/shop";
+
+export type ConfirmedPayment = { id: string; status: PaymentIntent.Status };
 
 interface CheckoutFormProps {
-  onSuccess: () => void;
+  /** Wynik bez przekierowania (karta/portfel) — status z API Stripe. */
+  onSuccess: (payment?: ConfirmedPayment) => void;
   onError: (message: string) => void;
+  lang?: Locale;
+  /** Kwota do zaplaty w jednostkach minimalnych — z odpowiedzi serwera (K1). */
+  amountCents: number;
+  currency: string;
 }
 
-export default function CheckoutForm({ onSuccess, onError }: CheckoutFormProps) {
+const content: Record<Locale, {
+  // Etykieta przycisku musi jednoznacznie wskazywac obowiazek zaplaty
+  // (art. 17 ust. 3 u.p.k. / § 312j BGB / UK CCR "order with obligation to pay").
+  payButton: (amount: string) => string;
+  processing: string;
+  orPayOther: string;
+  genericError: string;
+}> = {
+  pl: {
+    payButton: (a) => `Zamawiam i płacę – ${a}`,
+    processing: "Przetwarzanie…",
+    orPayOther: "lub zapłać inną metodą",
+    genericError: "Wystąpił błąd. Spróbuj ponownie.",
+  },
+  en: {
+    payButton: (a) => `Order with obligation to pay – ${a}`,
+    processing: "Processing…",
+    orPayOther: "or pay another way",
+    genericError: "Something went wrong. Please try again.",
+  },
+  de: {
+    payButton: (a) => `Zahlungspflichtig bestellen – ${a}`,
+    processing: "Wird verarbeitet…",
+    orPayOther: "oder mit einer anderen Methode bezahlen",
+    genericError: "Ein Fehler ist aufgetreten. Bitte versuche es erneut.",
+  },
+};
+
+// Powrot z przekierowania (Klarna, 3DS, bank) na ten sam landing, ale BEZ
+// starego query (checkout=true itd.) — inaczej po powrocie efekt checkoutu
+// nadpisywal ekran sukcesu formularzem (ryzyko podwojnej platnosci).
+function returnUrl(): string {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+export default function CheckoutForm({ onSuccess, onError, lang = "pl", amountCents, currency }: CheckoutFormProps) {
+  const t = content[lang];
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [showExpress, setShowExpress] = useState(false);
+  const amountLabel = formatMoney(amountCents, currency, lang, { decimals: true });
+
+  const confirm = async () => {
+    if (!stripe || !elements) return null;
+    return stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: returnUrl() },
+      redirect: "if_required",
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,39 +83,27 @@ export default function CheckoutForm({ onSuccess, onError }: CheckoutFormProps) 
 
     setIsProcessing(true);
 
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: window.location.href,
-      },
-      redirect: "if_required",
-    });
+    const result = await confirm();
+    if (!result) { setIsProcessing(false); return; }
 
-    if (error) {
-      onError(error.message ?? "Wystąpił błąd. Spróbuj ponownie.");
+    if (result.error) {
+      onError(result.error.message ?? t.genericError);
       setIsProcessing(false);
     } else {
-      onSuccess();
+      const pi = result.paymentIntent;
+      onSuccess(pi ? { id: pi.id, status: pi.status } : undefined);
     }
   };
 
-  const handleExpressConfirm = async (
-    event: StripeExpressCheckoutElementConfirmEvent
-  ) => {
-    if (!stripe || !elements) return;
+  const handleExpressConfirm = async () => {
+    const result = await confirm();
+    if (!result) return;
 
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: window.location.href,
-      },
-      redirect: "if_required",
-    });
-
-    if (error) {
-      onError(error.message ?? "Wystąpił błąd. Spróbuj ponownie.");
+    if (result.error) {
+      onError(result.error.message ?? t.genericError);
     } else {
-      onSuccess();
+      const pi = result.paymentIntent;
+      onSuccess(pi ? { id: pi.id, status: pi.status } : undefined);
     }
   };
 
@@ -81,11 +124,11 @@ export default function CheckoutForm({ onSuccess, onError }: CheckoutFormProps) 
         />
         <div className="relative my-5">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200 dark:border-[#3F4147]" />
+            <div className="w-full border-t border-[rgba(242,237,227,0.10)]" />
           </div>
           <div className="relative flex justify-center">
-            <span className="bg-white dark:bg-[#2B2D31] px-4 text-xs text-[#1a1a1a]/40 dark:text-[#E0E0E0]/40">
-              lub zapłać kartą / BLIK
+            <span className="bg-[#0B0B0B] px-4 km-mono-eyebrow text-[11px] text-[#F2EDE3]/40">
+              {t.orPayOther}
             </span>
           </div>
         </div>
@@ -98,10 +141,10 @@ export default function CheckoutForm({ onSuccess, onError }: CheckoutFormProps) 
           type="submit"
           disabled={!stripe || isProcessing}
           whileTap={{ scale: 0.98 }}
-          className={`w-full py-3.5 font-medium rounded-full text-white transition-all ${
-            isProcessing
-              ? "bg-[#2563EB]/60 dark:bg-[#3B82F6]/60 cursor-not-allowed"
-              : "bg-[#2563EB] dark:bg-[#3B82F6] hover:bg-[#1d4ed8] dark:hover:bg-[#2563EB]"
+          className={`w-full py-4 px-5 km-mono-eyebrow transition-colors ${
+            !stripe || isProcessing
+              ? "bg-[#D8FF3D]/30 text-[#0B0B0B]/50 cursor-not-allowed"
+              : "bg-[#D8FF3D] text-[#0B0B0B] hover:bg-[#F2EDE3]"
           }`}
         >
           {isProcessing ? (
@@ -125,10 +168,10 @@ export default function CheckoutForm({ onSuccess, onError }: CheckoutFormProps) 
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
-              Przetwarzanie...
+              {t.processing}
             </span>
           ) : (
-            "Zapłać 699 zł"
+            t.payButton(amountLabel)
           )}
         </motion.button>
       </form>

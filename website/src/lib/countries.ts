@@ -37,6 +37,24 @@ export const ALL_COUNTRY_CODES = [
   "ZA","ZM","ZW",
 ] as const;
 
+// === Unia Europejska (27 panstw, kody ISO 3166-1; Grecja = "GR", nie "EL") ===
+// Ten sam zbior co EU_COUNTRIES w lib/checkoutPricing.ts (tam BEZ "PL", bo
+// Polska ma osobna stawke wysylki 0) — zweryfikowane 2026-10-16: 26 + PL, bez
+// rozbieznosci; content/shop.ts i seo.ts maja te same 26 kodow. Celowo BEZ
+// terytoriow z osobnym kodem ISO lezacych poza obszarem celno-VAT UE (AX, GF, GP,
+// MQ, RE, YT, MF, BL, PM...) — cennik liczy je jak "reszte swiata" (3500), a
+// wysylka wymaga dokumentow celnych (basecourier.ts needsCustomsDocs).
+// Plik bez zaleznosci serwerowych — mozna go importowac i w przegladarce.
+export const EU_COUNTRY_CODES: readonly string[] = [
+  "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE",
+  "IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE",
+];
+const EU_SET = new Set(EU_COUNTRY_CODES);
+
+export function isEuCountry(code: string | null | undefined): boolean {
+  return EU_SET.has((code || "").trim().toUpperCase());
+}
+
 // Numer kierunkowy (bez "+"). Kraje NANP (Karaiby itp.) maja "1".
 const DIAL_CODES: Record<string, string> = {
   AD: "376", AE: "971", AF: "93", AG: "1", AI: "1", AL: "355", AM: "374", AO: "244", AR: "54", AS: "1",

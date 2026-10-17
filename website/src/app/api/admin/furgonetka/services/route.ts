@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
     const token = await getFurgonetkaToken();
     const res = await fetch(`${process.env.FURGONETKA_API_URL || "https://api.furgonetka.pl"}/services`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {

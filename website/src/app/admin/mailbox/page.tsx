@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import EmailFrame from "@/components/admin/EmailFrame";
 import { type PendingAttachment, fileToAttachment } from "@/components/admin/imageAttachments";
+import { fmtSize } from "@/components/admin/format";
 
 interface MailAddress {
   name: string;
@@ -54,6 +55,20 @@ interface MessageFull {
   messageId: string | null;
   references: string[];
   attachments: Attachment[];
+  // Naglowek Reply-To (nowsze API) — odpowiedz idzie tutaj, nie na `from`.
+  replyTo?: MailAddress | string | null;
+}
+
+const addrOf = (a: MailAddress | string | null | undefined): string =>
+  (typeof a === "string" ? a : a?.address || "").trim();
+
+// Adres, na ktory pojdzie odpowiedz, gdy rozni sie od nadawcy (inaczej "").
+// Reply-To jest legalnie uzywany (formularz kontaktowy, sklepy), ale tez przez
+// phishing — admin musi to widziec, zanim wysle odpowiedz.
+function differentReplyTo(m: MessageFull | null): string {
+  if (!m) return "";
+  const rt = addrOf(m.replyTo);
+  return rt && rt.toLowerCase() !== addrOf(m.from).toLowerCase() ? rt : "";
 }
 
 const FOLDERS = [
@@ -85,12 +100,6 @@ function fmtAddr(a: MailAddress | null): string {
 function listSender(a: MailAddress | null): string {
   if (!a) return "(brak nadawcy)";
   return a.name || a.address;
-}
-
-function fmtSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 const MAX_ATTACH_TOTAL = 15 * 1024 * 1024;
@@ -265,12 +274,25 @@ export default function MailboxPage() {
     if (replyOpen) replyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [replyOpen]);
 
+  // Aktualny folder + przerywanie starych zapytan: wolna odpowiedz IMAP dla
+  // poprzedniego folderu/maila nie moze nadpisac tego, co jest teraz otwarte
+  // (np. lista "Spam" pod zakladka "Odebrane", tresc innego maila pod
+  // naglowkiem otwartego — i odpowiedz wyslana do zlej osoby).
+  const folderRef = useRef(folder);
+  const listAbortRef = useRef<AbortController | null>(null);
+  const msgAbortRef = useRef<AbortController | null>(null);
+
   const loadList = useCallback(async (f: string) => {
+    listAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    listAbortRef.current = ctrl;
+    const stale = () => ctrl.signal.aborted || folderRef.current !== f;
     setLoadingList(true);
     setListErr("");
     try {
-      const res = await fetch(`/api/admin/mailbox?folder=${encodeURIComponent(f)}&limit=150`);
+      const res = await fetch(`/api/admin/mailbox?folder=${encodeURIComponent(f)}&limit=150`, { signal: ctrl.signal });
       const data = await res.json();
+      if (stale()) return;
       if (!res.ok || !data.ok) {
         setListErr(data.error || "Błąd pobierania listy");
         setMessages([]);
@@ -278,15 +300,24 @@ export default function MailboxPage() {
       }
       setMessages(data.messages || []);
     } catch {
-      setListErr("Błąd sieci");
+      if (!stale()) setListErr("Błąd sieci");
     } finally {
-      setLoadingList(false);
+      if (listAbortRef.current === ctrl) {
+        listAbortRef.current = null;
+        setLoadingList(false);
+      }
     }
   }, []);
 
   useEffect(() => {
+    folderRef.current = folder;
+    // Zmiana folderu = zamkniecie otwartego maila (uid jest unikalny tylko w folderze).
+    selectedUidRef.current = null;
+    msgAbortRef.current?.abort();
     setSelectedUid(null);
     setMessage(null);
+    setMsgErr("");
+    setThread([]);
     setReplyOpen(false);
     setComposeOpen(false);
     loadList(folder);
@@ -306,18 +337,19 @@ export default function MailboxPage() {
     try {
       const res = await fetch(`/api/admin/mailbox/${uid}/thread?folder=${encodeURIComponent(f)}`);
       const data = await res.json();
-      // odpowiedz dla juz zamknietego/zmienionego maila ignorujemy
-      if (selectedUidRef.current !== uid) return;
+      // odpowiedz dla juz zamknietego/zmienionego maila (albo folderu) ignorujemy
+      if (selectedUidRef.current !== uid || folderRef.current !== f) return;
       setThread(res.ok && data.ok ? data.messages || [] : []);
     } catch {
-      if (selectedUidRef.current === uid) setThread([]);
+      if (selectedUidRef.current === uid && folderRef.current === f) setThread([]);
     } finally {
-      if (selectedUidRef.current === uid) setThreadLoading(false);
+      if (selectedUidRef.current === uid && folderRef.current === f) setThreadLoading(false);
     }
   }, []);
 
   // Telefon: wiadomosc zastepuje liste (a nie laduje sie pod nia), wiec wracamy na gore.
   const closeMessage = () => {
+    msgAbortRef.current?.abort();
     selectedUidRef.current = null;
     setSelectedUid(null);
     setMessage(null);
@@ -326,6 +358,7 @@ export default function MailboxPage() {
   };
 
   const startCompose = () => {
+    msgAbortRef.current?.abort();
     selectedUidRef.current = null;
     setSelectedUid(null);
     setMessage(null);
@@ -417,6 +450,11 @@ export default function MailboxPage() {
   };
 
   const openMessage = async (uid: number) => {
+    const f = folder;
+    msgAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    msgAbortRef.current = ctrl;
+    const stale = () => ctrl.signal.aborted || selectedUidRef.current !== uid || folderRef.current !== f;
     window.scrollTo({ top: 0 });
     selectedUidRef.current = uid;
     setComposeOpen(false);
@@ -431,8 +469,9 @@ export default function MailboxPage() {
     setTranslateErr("");
     setLoadingMsg(true);
     try {
-      const res = await fetch(`/api/admin/mailbox/${uid}?folder=${encodeURIComponent(folder)}`);
+      const res = await fetch(`/api/admin/mailbox/${uid}?folder=${encodeURIComponent(f)}`, { signal: ctrl.signal });
       const data = await res.json();
+      if (stale()) return;
       if (!res.ok || !data.ok) {
         setMsgErr(data.error || "Błąd pobierania wiadomości");
         return;
@@ -440,17 +479,24 @@ export default function MailboxPage() {
       setMessage(data.message);
       // lokalnie oznacz jako przeczytana (serwer i tak juz to zrobil w IMAP)
       setMessages((prev) => prev.map((m) => (m.uid === uid ? { ...m, seen: true } : m)));
-      loadThread(uid, folder);
+      loadThread(uid, f);
     } catch {
-      setMsgErr("Błąd sieci");
+      if (!stale()) setMsgErr("Błąd sieci");
     } finally {
-      setLoadingMsg(false);
+      if (msgAbortRef.current === ctrl) {
+        msgAbortRef.current = null;
+        setLoadingMsg(false);
+      }
     }
   };
 
+  // Dla odpowiedzi AI / tlumaczen: wynik dla innego maila niz otwarty — ignoruj.
+  const isCurrentMessage = (uid: number) => selectedUidRef.current === uid;
+
   const startReply = () => {
     if (!message) return;
-    setReplyTo(message.from?.address || "");
+    // Reply-To (jesli jest) ma pierwszenstwo — ostrzezenie pokazujemy obok.
+    setReplyTo(addrOf(message.replyTo) || message.from?.address || "");
     setReplySubject(message.subject.toLowerCase().startsWith("re:") ? message.subject : `Re: ${message.subject}`);
     setReplyText("");
     setSendMsg("");
@@ -517,6 +563,7 @@ export default function MailboxPage() {
     }
     const text = plainTextOf(message);
     if (!text) return;
+    const uid = message.uid;
     setTranslating(true);
     setTranslateErr("");
     try {
@@ -526,6 +573,7 @@ export default function MailboxPage() {
         body: JSON.stringify({ mode: "to-polish", text }),
       });
       const data = await res.json();
+      if (!isCurrentMessage(uid)) return;
       if (!res.ok || !data.ok) {
         setTranslateErr(data.error || "Błąd tłumaczenia");
         return;
@@ -541,6 +589,7 @@ export default function MailboxPage() {
 
   const handleTranslateReply = async () => {
     if (!message || !replyText.trim()) return;
+    const uid = message.uid;
     setTranslatingReply(true);
     setReplyTranslateErr("");
     try {
@@ -550,6 +599,7 @@ export default function MailboxPage() {
         body: JSON.stringify({ mode: "match-language", text: replyText, referenceText: plainTextOf(message) }),
       });
       const data = await res.json();
+      if (!isCurrentMessage(uid)) return;
       if (!res.ok || !data.ok) {
         setReplyTranslateErr(data.error || "Błąd tłumaczenia");
         return;
@@ -573,6 +623,7 @@ export default function MailboxPage() {
     if (!message) return;
     const instruction = replyOpen ? replyText.trim() : "";
     if (!replyOpen) startReply();
+    const uid = message.uid;
     setGeneratingDraft(true);
     setDraftErr("");
     setDraftOrdersFound(null);
@@ -583,6 +634,8 @@ export default function MailboxPage() {
         body: JSON.stringify({ folder, instruction }),
       });
       const data = await res.json();
+      // Szkic dla innego maila niz otwarty — nie wstawiamy (poszedlby do zlej osoby).
+      if (!isCurrentMessage(uid)) return;
       if (!res.ok || !data.ok) {
         setDraftErr(data.error || "Błąd generowania");
         return;
@@ -748,6 +801,7 @@ export default function MailboxPage() {
                 aria-label="Treść wiadomości"
                 value={composeText}
                 onChange={(e) => setComposeText(e.target.value)}
+                readOnly={composeGenerating}
                 onPaste={async (e) => {
                   const imgs = pastedImages(e);
                   if (!imgs.length) return;
@@ -821,6 +875,11 @@ export default function MailboxPage() {
                 <p className="text-xs text-[#E0E0E0]/60 break-words">
                   Od: <span className="text-[#E0E0E0]/90">{fmtAddr(message.from)}</span>
                 </p>
+                {differentReplyTo(message) && (
+                  <p className="text-xs text-amber-300 break-words" title="Nagłówek Reply-To różni się od nadawcy — sprawdź, czy to właściwy adres (formularz kontaktowy: OK; obcy adres: możliwy phishing).">
+                    ⚠ Odpowiedź pójdzie na: <span className="font-medium">{differentReplyTo(message)}</span>
+                  </p>
+                )}
                 <p className="text-xs text-[#E0E0E0]/60 break-words">
                   Do: <span className="text-[#E0E0E0]/90">{message.to.map(fmtAddr).join(", ")}</span>
                 </p>
@@ -957,10 +1016,17 @@ export default function MailboxPage() {
                         className={fieldClass}
                       />
                     </div>
+                    {differentReplyTo(message) && (
+                      <p className="text-xs text-amber-300 break-words">
+                        ⚠ Odpowiedź pójdzie na: <b>{replyTo || differentReplyTo(message)}</b> (nagłówek Reply-To) — nadawca to {addrOf(message.from) || "(brak)"}. Upewnij się, że to właściwy adres.
+                      </p>
+                    )}
                     <textarea
                       aria-label="Treść odpowiedzi"
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
+                      // W trakcie AI/tlumaczenia wynik zastapi tresc — bez dopisywania w tym czasie.
+                      readOnly={generatingDraft || translatingReply}
                       onPaste={async (e) => {
                         const imgs = pastedImages(e);
                         if (!imgs.length) return;

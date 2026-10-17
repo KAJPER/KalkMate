@@ -5,22 +5,35 @@ import { NextRequest } from "next/server";
 
 interface Bucket {
   hits: number[]; // timestampy w ms
+  windowMs: number; // okno ostatniego wywolania — do sprzatania
 }
 
 const store = new Map<string, Bucket>();
 
-// Cleanup co minute zeby Map nie rosla w nieskonczonosc
-setInterval(
-  () => {
-    const cutoff = Date.now() - 60 * 60 * 1000; // 1h wstecz wystarczy
-    for (const [key, b] of store) {
-      const fresh = b.hits.filter((t) => t > cutoff);
-      if (fresh.length === 0) store.delete(key);
-      else b.hits = fresh;
-    }
-  },
-  5 * 60 * 1000, // co 5 min
-);
+// Sprzatanie wygaslych kubelkow. Kazdy kubelek pamieta swoje okno, wiec
+// limity z dluzszym oknem nie sa przedwczesnie zerowane (wczesniej staly
+// cutoff 1h). Uruchamiane z timera (unref — nie trzyma procesu przy zyciu)
+// ORAZ co SWEEP_EVERY wywolan / po przekroczeniu SOFT_MAX kluczy, zeby Mapa
+// nie rosla bez konca nawet gdy timer nie dziala (np. po HMR w dev).
+const SWEEP_EVERY = 1000;
+const SOFT_MAX_KEYS = 20_000;
+let callsSinceSweep = 0;
+
+function sweep(now = Date.now()): void {
+  for (const [key, b] of store) {
+    const cutoff = now - b.windowMs;
+    const fresh = b.hits.filter((t) => t > cutoff);
+    if (fresh.length === 0) store.delete(key);
+    else b.hits = fresh;
+  }
+  callsSinceSweep = 0;
+}
+
+const _g = globalThis as unknown as { __kalkRateLimitTimer?: ReturnType<typeof setInterval> };
+if (!_g.__kalkRateLimitTimer) {
+  _g.__kalkRateLimitTimer = setInterval(() => sweep(), 5 * 60 * 1000); // co 5 min
+  _g.__kalkRateLimitTimer.unref?.();
+}
 
 // Kolejnosc ma znaczenie (audyt 2026-09-17, potwierdzone na nginx):
 // nginx ustawia X-Real-IP z $remote_addr (nie do podrobienia), natomiast
@@ -55,11 +68,13 @@ export function rateLimit(
 ): RateLimitResult {
   const now = Date.now();
   const cutoff = now - windowMs;
+  if (++callsSinceSweep >= SWEEP_EVERY || store.size > SOFT_MAX_KEYS) sweep(now);
   let b = store.get(bucketKey);
   if (!b) {
-    b = { hits: [] };
+    b = { hits: [], windowMs };
     store.set(bucketKey, b);
   }
+  b.windowMs = windowMs;
   // wyrzuc stare
   b.hits = b.hits.filter((t) => t > cutoff);
   if (b.hits.length >= maxHits) {

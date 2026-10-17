@@ -6,6 +6,7 @@ import Link from "next/link";
 import { type Locale } from "@/lib/i18n";
 import { usePanelLang } from "@/lib/usePanelLang";
 import PanelLangSwitcher from "@/components/PanelLangSwitcher";
+import { recallCallback } from "@/app/auth/callback";
 
 const DICT: Record<Locale, {
   noToken: string;
@@ -128,6 +129,14 @@ function VerifyInner() {
   const [state, setState] = useState<"checking" | "valid" | "invalid" | "done" | "already">("checking");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Intencja sprzed rejestracji (np. checkout) zapamietana na /auth/signin —
+  // link "Zaloguj sie" po weryfikacji wraca tam zamiast na /panel.
+  const [signinHref, setSigninHref] = useState("/auth/signin");
+
+  useEffect(() => {
+    const cb = recallCallback();
+    if (cb) setSigninHref(`/auth/signin?callbackUrl=${encodeURIComponent(cb)}`);
+  }, []);
 
   useEffect(() => {
     if (!token) { setState("invalid"); setError(t.noToken); return; }
@@ -224,7 +233,7 @@ function VerifyInner() {
                   <p className="text-sm text-[#FF4D2E]/90 mt-2">{error}</p>
                 </div>
                 <div className="mt-6 pt-4 border-t border-[rgba(242,237,227,0.10)] text-center">
-                  <Link href="/auth/signin" className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
+                  <Link href={signinHref} className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
                     {t.goToSignin}
                   </Link>
                 </div>
@@ -238,7 +247,7 @@ function VerifyInner() {
                   <p className="text-sm text-[#F2EDE3]/80 mt-2">{t.alreadyBody}</p>
                 </div>
                 <div className="mt-6 text-center">
-                  <Link href="/auth/signin" className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
+                  <Link href={signinHref} className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
                     {t.signin}
                   </Link>
                 </div>
@@ -274,7 +283,7 @@ function VerifyInner() {
                   </p>
                 </div>
                 <div className="mt-6 text-center">
-                  <Link href="/auth/signin" className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
+                  <Link href={signinHref} className="km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
                     {t.signin}
                   </Link>
                 </div>

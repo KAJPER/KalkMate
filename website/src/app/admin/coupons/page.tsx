@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
+import { toast } from "@/components/admin/toast";
 
 interface Coupon {
   id: string;
@@ -54,11 +55,31 @@ export default function CouponsPage() {
         const d = await res.json();
         setCoupons(d.coupons || []);
         setStats(d.stats || {});
+      } else {
+        toast(`Nie udało się pobrać kuponów (HTTP ${res.status})`, "error");
       }
     } catch (e) {
       console.error(e);
+      toast("Błąd sieci przy pobieraniu kuponów", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // PATCH/DELETE kuponu z kontrola odpowiedzi — wczesniej blad (np. 401 po
+  // wygasnieciu sesji) byl niewidoczny, a lista po odswiezeniu "cofala" klik.
+  const couponCall = async (url: string, init: RequestInit, failMsg: string) => {
+    try {
+      const res = await fetch(url, init);
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        toast(`${failMsg}: ${d?.error || `HTTP ${res.status}`}`, "error");
+        return false;
+      }
+      return true;
+    } catch {
+      toast(`${failMsg}: błąd sieci`, "error");
+      return false;
     }
   };
 
@@ -95,17 +116,23 @@ export default function CouponsPage() {
   };
 
   const toggleActive = async (c: Coupon) => {
-    await fetch(`/api/admin/coupons?id=${c.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ active: !c.active }),
-    });
+    await couponCall(
+      `/api/admin/coupons?id=${encodeURIComponent(c.id)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !c.active }),
+      },
+      c.active ? "Nie udało się wyłączyć kuponu" : "Nie udało się włączyć kuponu"
+    );
     fetchCoupons();
   };
 
   const deleteCoupon = async (c: Coupon) => {
     if (!confirm(`Usunąć kupon ${c.code}?`)) return;
-    await fetch(`/api/admin/coupons?id=${c.id}`, { method: "DELETE" });
+    if (await couponCall(`/api/admin/coupons?id=${encodeURIComponent(c.id)}`, { method: "DELETE" }, "Nie udało się usunąć kuponu")) {
+      toast(`Usunięto kupon ${c.code}`);
+    }
     fetchCoupons();
   };
 

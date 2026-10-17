@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { getMessage, sendReply, markAnswered } from "@/lib/contactMailbox";
+import { getMessage, sendReply, markAnswered, isMailboxFolder, preferredReplyAddress } from "@/lib/contactMailbox";
 import { parseAttachments, appendInlineImages } from "@/lib/mailAttachments";
 
 // POST /api/admin/mailbox/[uid]/reply
@@ -25,7 +25,8 @@ export async function POST(
   if (!Number.isFinite(uidNum)) return NextResponse.json({ ok: false, error: "Nieprawidlowe uid" }, { status: 400 });
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>));
-  const folder = typeof body?.folder === "string" ? body.folder : "INBOX";
+  const folder = body?.folder === undefined || body?.folder === null || body?.folder === "" ? "INBOX" : body.folder;
+  if (!isMailboxFolder(folder)) return NextResponse.json({ ok: false, error: "Nieznany folder" }, { status: 400 });
   const html = typeof body?.html === "string" ? body.html.trim() : "";
   if (!html) return NextResponse.json({ ok: false, error: "Brak tresci odpowiedzi" }, { status: 400 });
   const att = parseAttachments(body?.attachments);
@@ -35,9 +36,12 @@ export async function POST(
     const original = await getMessage(uidNum, folder);
     if (!original) return NextResponse.json({ ok: false, error: "Nie znaleziono oryginalnej wiadomosci" }, { status: 404 });
 
-    const toAddress = typeof body?.toAddress === "string" && body.toAddress ? body.toAddress : original.from?.address;
+    // Domyslny odbiorca = Reply-To (formularz kontaktowy przychodzi z noreply@,
+    // a adres klienta jest w Reply-To), dopiero potem From.
+    const fallback = preferredReplyAddress(original);
+    const toAddress = typeof body?.toAddress === "string" && body.toAddress ? body.toAddress : fallback?.address;
     if (!toAddress) return NextResponse.json({ ok: false, error: "Brak adresu odbiorcy" }, { status: 400 });
-    const toName = typeof body?.toName === "string" ? body.toName : original.from?.name;
+    const toName = typeof body?.toName === "string" ? body.toName : fallback?.name;
     const subject =
       typeof body?.subject === "string" && body.subject
         ? body.subject

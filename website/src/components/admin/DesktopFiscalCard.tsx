@@ -5,7 +5,7 @@
 // przeglądarce pokazuje krótką informację, skąd drukować.
 
 import { useEffect, useState } from "react";
-import { toast } from "@/components/admin/toast";
+import { toast, toastError } from "@/components/admin/toast";
 import type { DesktopFiscalConfig, DesktopFiscalInfo } from "@/components/admin/AdminShell";
 
 type Bridge = "pending" | "none" | "ok";
@@ -27,8 +27,14 @@ export default function DesktopFiscalCard() {
       Promise.resolve().then(() => setBridge("none"));
       return;
     }
-    api.info(false).then((i) => { setBridge("ok"); apply(i); });
-    const t = setInterval(() => api.info(false).then(setInfo), 15000);
+    // Most aplikacji (IPC) moze odrzucic obietnice — bez catch byl to
+    // nieobsluzony blad, a karta zostawala pusta bez komunikatu.
+    api.info(false)
+      .then((i) => { setBridge("ok"); apply(i); })
+      .catch((e) => { setBridge("ok"); toastError(e, "Nie udało się odczytać ustawień drukarki z aplikacji"); });
+    const t = setInterval(() => {
+      api.info(false).then(setInfo).catch(() => { /* cichy poll — blad pokaze "Sprawdz drukarke" */ });
+    }, 15000);
     return () => clearInterval(t);
   }, []);
 
@@ -39,6 +45,8 @@ export default function DesktopFiscalCard() {
     try {
       const r = await api.configure(patch);
       if (r.ok) { apply(r); toast(okMsg); } else toast(r.error || "Nie udało się zapisać", "error");
+    } catch (e) {
+      toastError(e, "Nie udało się zapisać ustawień drukarki");
     } finally {
       setBusy(false);
     }
@@ -48,7 +56,13 @@ export default function DesktopFiscalCard() {
     const api = window.kalkmateDesktop?.fiscal;
     if (!api) return;
     setBusy(true);
-    try { apply(await api.info(true)); } finally { setBusy(false); }
+    try {
+      apply(await api.info(true));
+    } catch (e) {
+      toastError(e, "Nie udało się sprawdzić drukarki");
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (bridge === "pending") return null;

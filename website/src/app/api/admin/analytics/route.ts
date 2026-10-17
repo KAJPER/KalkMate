@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
+import { cachedStats, lastWarsawDays, warsawDay, warsawDayStartMs } from "../_lib/stats";
 
 // Kurs orientacyjny do zsumowania przychodu w jednej walucie (PLN) na
 // dashboardzie — realny kurs w dniu transakcji nie jest nigdzie zapisywany
@@ -32,71 +33,125 @@ function toPln(amountMinor: number, currency: string): number {
 // Zamiast odpytywac Stripe, liczymy teraz z tabeli Order — tam obie metody
 // platnosci (Stripe + P24) sa juz ujednolicone (status/amount/currency), wiec
 // to jedno miejsce prawdy zamiast ponownego wnioskowania z surowego API.
+//
+// Semantyka (audyt 2026-10-16 — wczesniej przychod liczyl zwrocone zamowienia,
+// a "Zwrocono" liczylo porzucone koszyki):
+//   sprzedaz/przychod = status 'paid' AND fulfillmentStatus <> 'cancelled'
+//   zwroty            = status 'paid' AND fulfillmentStatus = 'cancelled'
+//                       (reczne anulowanie oplaconego = pieniadze oddane)
+//   porzucone         = status 'cancelled' (auto-cleanup nieoplaconych) albo
+//                       'pending' starsze niz 1 dzien — nikt nie zaplacil,
+//                       wiec nic nie oddano (pola abandoned*)
+//   nieudane          = status 'failed'
+// Dzienny przychod: dzien oplacenia (paidAt, fallback createdAt) w strefie
+// Europe/Warsaw. Agregacja w SQL (groupBy), wynik w cache 60 s.
+const ABANDON_AFTER_MS = 24 * 60 * 60 * 1000;
+const SHIPPED = new Set(["shipped", "fulfilled"]);
+
+async function computeAnalytics() {
+  const now = Date.now();
+  const staleBefore = new Date(now - ABANDON_AFTER_MS);
+
+  const [groups, stalePending] = await Promise.all([
+    prisma.order.groupBy({
+      by: ["status", "fulfillmentStatus", "currency"],
+      _count: { _all: true },
+      _sum: { amount: true },
+    }),
+    prisma.order.groupBy({
+      by: ["currency"],
+      where: { status: "pending", createdAt: { lt: staleBefore } },
+      _count: { _all: true },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  let totalOrders = 0;
+  let soldOrders = 0, totalRevenue = 0;
+  let refundedOrders = 0, totalRefunded = 0;
+  let pendingAll = 0;
+  let cancelledUnpaid = 0, cancelledUnpaidAmount = 0;
+  let failedOrders = 0;
+  let fulfilled = 0;
+  for (const g of groups) {
+    const n = g._count._all;
+    const pln = toPln(g._sum.amount ?? 0, g.currency);
+    totalOrders += n;
+    if (g.status === "paid") {
+      if (g.fulfillmentStatus === "cancelled") {
+        refundedOrders += n;
+        totalRefunded += pln;
+      } else {
+        soldOrders += n;
+        totalRevenue += pln;
+        if (SHIPPED.has(g.fulfillmentStatus)) fulfilled += n;
+      }
+    } else if (g.status === "pending") {
+      pendingAll += n;
+    } else if (g.status === "cancelled") {
+      cancelledUnpaid += n;
+      cancelledUnpaidAmount += pln;
+    } else if (g.status === "failed") {
+      failedOrders += n;
+    }
+  }
+  const stalePendingCount = stalePending.reduce((s, g) => s + g._count._all, 0);
+  const stalePendingAmount = stalePending.reduce((s, g) => s + toPln(g._sum.amount ?? 0, g.currency), 0);
+  const abandonedOrders = cancelledUnpaid + stalePendingCount;
+  const abandonedAmount = cancelledUnpaidAmount + stalePendingAmount;
+  const pendingOrders = pendingAll - stalePendingCount; // swieze, jeszcze moga zostac oplacone
+
+  // Dzienny przychod (ostatnie 30 dni czasu warszawskiego), w PLN po przeliczeniu.
+  const days = lastWarsawDays(30, now);
+  const dailyOrders: Record<string, { count: number; revenue: number }> = {};
+  for (const d of days) dailyOrders[d] = { count: 0, revenue: 0 };
+  const since = new Date(warsawDayStartMs(days[0]));
+  const recent = await prisma.order.findMany({
+    where: {
+      status: "paid",
+      NOT: { fulfillmentStatus: "cancelled" },
+      OR: [{ paidAt: { gte: since } }, { paidAt: null, createdAt: { gte: since } }],
+    },
+    select: { amount: true, currency: true, paidAt: true, createdAt: true },
+  });
+  for (const o of recent) {
+    const key = warsawDay(o.paidAt ?? o.createdAt);
+    if (dailyOrders[key]) {
+      dailyOrders[key].count++;
+      dailyOrders[key].revenue += toPln(o.amount, o.currency);
+    }
+  }
+
+  return {
+    totalRevenue,
+    totalRefunded,
+    refundedOrders,
+    totalOrders,
+    // Sprzedane (oplacone i nie zwrocone).
+    succeededOrders: soldOrders,
+    // Oczekujace na platnosc mlodsze niz 1 dzien (starsze sa w abandoned*).
+    pendingOrders,
+    // Wszystko, co nie skonczylo sie sprzedaza: zwroty + porzucone + nieudane.
+    canceledOrders: refundedOrders + abandonedOrders + failedOrders,
+    fulfilledOrders: fulfilled,
+    // Do wysylki: sprzedane, jeszcze nie wyslane (bez anulowanych/zwroconych).
+    unfulfilledOrders: soldOrders - fulfilled,
+    dailyOrders: Object.entries(dailyOrders)
+      .map(([date, data]) => ({ date, ...data }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    // Nowe pola (2026-10-16):
+    abandonedOrders,
+    abandonedAmount,
+    failedOrders,
+    timezone: "Europe/Warsaw",
+    cachedAt: new Date(now).toISOString(),
+  };
+}
+
 export async function GET(request: NextRequest) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   try {
-    const orders = await prisma.order.findMany({
-      select: {
-        status: true,
-        amount: true,
-        currency: true,
-        createdAt: true,
-        fulfillmentStatus: true,
-      },
-    });
-
-    const succeeded = orders.filter((o) => o.status === "paid");
-    const pending = orders.filter((o) => o.status === "pending");
-    const canceled = orders.filter((o) => o.status === "cancelled" || o.status === "failed");
-    // Tylko "cancelled" (nie "failed") — failed = platnosc nigdy sie nie
-    // udala (np. odrzucona karta), wiec nie ma czego zwracac. "cancelled"
-    // wg wlasciciela zawsze oznacza, ze pieniadze zostaly juz oddane klientowi
-    // recznie (Stripe/P24 nie maja tu integracji zwrotow) — patrz
-    // project_cancelled_orders_refunded w pamieci.
-    const cancelledOnly = orders.filter((o) => o.status === "cancelled");
-
-    const totalRevenue = succeeded.reduce((sum, o) => sum + toPln(o.amount, o.currency), 0);
-    const totalRefunded = cancelledOnly.reduce((sum, o) => sum + toPln(o.amount, o.currency), 0);
-
-    // Dzienny przychod (ostatnie 30 dni), w PLN po przeliczeniu.
-    const now = Date.now();
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-    const dailyOrders: Record<string, { count: number; revenue: number }> = {};
-
-    for (let d = 0; d < 30; d++) {
-      const date = new Date(now - d * 24 * 60 * 60 * 1000);
-      const key = date.toISOString().slice(0, 10);
-      dailyOrders[key] = { count: 0, revenue: 0 };
-    }
-
-    succeeded
-      .filter((o) => o.createdAt.getTime() > thirtyDaysAgo)
-      .forEach((o) => {
-        const key = o.createdAt.toISOString().slice(0, 10);
-        if (dailyOrders[key]) {
-          dailyOrders[key].count++;
-          dailyOrders[key].revenue += toPln(o.amount, o.currency);
-        }
-      });
-
-    const fulfilled = succeeded.filter(
-      (o) => o.fulfillmentStatus === "fulfilled" || o.fulfillmentStatus === "shipped"
-    ).length;
-
-    return NextResponse.json({
-      totalRevenue,
-      totalRefunded,
-      refundedOrders: cancelledOnly.length,
-      totalOrders: orders.length,
-      succeededOrders: succeeded.length,
-      pendingOrders: pending.length,
-      canceledOrders: canceled.length,
-      fulfilledOrders: fulfilled,
-      unfulfilledOrders: succeeded.length - fulfilled,
-      dailyOrders: Object.entries(dailyOrders)
-        .map(([date, data]) => ({ date, ...data }))
-        .sort((a, b) => a.date.localeCompare(b.date)),
-    });
+    return NextResponse.json(await cachedStats("analytics", computeAnalytics));
   } catch (error) {
     console.error("Error fetching analytics:", error);
     return NextResponse.json(

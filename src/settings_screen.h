@@ -136,6 +136,30 @@ int8_t  camGetBrightness() { return kalkSettings.camBrightness; }
 // (dalej w tym pliku) mogl to wywolac.
 void _editRemoteHelp(U8G2 &d);
 
+// power.h (auto-sleep w _setBtn) i factory_reset.h wlaczamy DOPIERO TUTAJ —
+// po definicji kalkSettings i T(), z ktorych korzystaja. power.h -> panic.h
+// -> settings_screen.h to cykl, ale #pragma once go przerywa, a wszystko,
+// czego potrzebuja, jest juz zdefiniowane powyzej.
+#include "power.h"
+#include "factory_reset.h"
+#include "offline_queue.h"   // Ustawienia -> Kolejka offline (wyczysc)
+
+// Klawisz panic nie moze byc: cyfra / "00" / kropka (wpisywanie kodu AI
+// i liczb — panic z cyfry kodu blokowal wejscie w tryb AI), "=", C/CE ani
+// klawiszem nawigacji (+ - +/- >). Dozwolone: * / M+ M- MR MC sqrt % MU.
+static bool kalkPanicKeyAllowed(KalkKey k) {
+    if (k == KEY_NONE || k >= KEY_COUNT) return false;
+    switch (k) {
+        case KEY_0: case KEY_1: case KEY_2: case KEY_3: case KEY_4:
+        case KEY_5: case KEY_6: case KEY_7: case KEY_8: case KEY_9:
+        case KEY_00: case KEY_DOT: case KEY_EQ: case KEY_CCE:
+        case KEY_PLUS: case KEY_MINUS: case KEY_PLUSMINUS: case KEY_ARROW:
+            return false;
+        default:
+            return true;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Stale menu — 15 pozycji, ulozone tematycznie:
 //   Preferencje:    Jasnosc, Jezyk, Tryb, Sleep, Kod AI, Panic
@@ -143,7 +167,7 @@ void _editRemoteHelp(U8G2 &d);
 //   System:         Aktualizacje
 //   Diagnostyka:    Test ekranu, Test kamery, Test klawiatury, Skaner, Pin Driver
 // ---------------------------------------------------------------------------
-#define _SET_ITEMS        20
+#define _SET_ITEMS        21
 // --- Preferencje ---
 #define _SET_BRIGHTNESS   0
 #define _SET_ROTATION     1
@@ -161,16 +185,17 @@ void _editRemoteHelp(U8G2 &d);
 // --- System ---
 #define _SET_UPDATE       12
 #define _SET_FACTORY      13
+#define _SET_OQCLEAR      14
 // --- Diagnostyka ---
-#define _SET_SCREENTEST   14
-#define _SET_CAMTEST      15
-#define _SET_KEYTEST      16
-#define _SET_KEYSCAN      17
-#define _SET_PINDRIVER    18
-#define _SET_BATTERY      19
+#define _SET_SCREENTEST   15
+#define _SET_CAMTEST      16
+#define _SET_KEYTEST      17
+#define _SET_KEYSCAN      18
+#define _SET_PINDRIVER    19
+#define _SET_BATTERY      20
 
 // Wspolrzedne Y - 4 widoczne, scrollowanie
-static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
+static const int _SET_ITEM_Y[_SET_ITEMS] = {22, 33, 44, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55};
 
 // ---------------------------------------------------------------------------
 // Debounce — osobne zmienne z prefiksem _set
@@ -185,8 +210,41 @@ static inline void _setPanicCheck() {
     if (inputKeyConsume(pk)) _panicRequested = true;
 }
 
+// Czeka na puszczenie klawiszy nawigacji — max 2 s (zablokowany/zwarty
+// klawisz membrany nie moze zawiesic menu na zawsze).
+static void _setWaitRelease() {
+    unsigned long t0 = millis();
+    while ((inputBtn(BTN_UP)    == LOW ||
+            inputBtn(BTN_DOWN)  == LOW ||
+            inputBtn(BTN_LEFT)  == LOW ||
+            inputBtn(BTN_RIGHT) == LOW ||
+            inputBtn(BTN_OK)    == LOW) &&
+           millis() - t0 < 2000) {
+        delay(10);
+    }
+    _setLastPress = millis();
+}
+
+// Ekrany z wlaczona kamera (podglad) nie moga usypiac — light sleep przy
+// pracujacym esp_camera (DMA/XCLK) nie jest sprawdzony. Ustawiane przez
+// _SetNoSleepGuard na czas takiego ekranu.
+static bool _setNoSleep = false;
+struct _SetNoSleepGuard {
+    _SetNoSleepGuard()  { _setNoSleep = true; }
+    ~_SetNoSleepGuard() { _setNoSleep = false; }
+};
+
 static bool _setBtn(int pin) {
     _setPanicCheck();   // Przy okazji sprawdz panic key
+    // Auto-sleep tez w ustawieniach (jak _wifiBtn w wifi_settings.h) —
+    // wczesniej petle ustawien nigdy nie usypialy ekranu ani radia. Po
+    // wybudzeniu: odswiez ostatnia klatke (bufor u8g2 nadal ja trzyma)
+    // i nie traktuj klawisza budzacego jako akcji.
+    if (!_setNoSleep && powerCheckSleep()) {
+        if (_powerU8g2) _powerU8g2->sendBuffer();
+        _setWaitRelease();
+        return false;
+    }
     if (inputBtn(pin) == LOW) {
         unsigned long now = millis();
         if (now - _setLastPress > _SET_DEBOUNCE_MS) {
@@ -195,17 +253,6 @@ static bool _setBtn(int pin) {
         }
     }
     return false;
-}
-
-static void _setWaitRelease() {
-    while (inputBtn(BTN_UP)    == LOW ||
-           inputBtn(BTN_DOWN)  == LOW ||
-           inputBtn(BTN_LEFT)  == LOW ||
-           inputBtn(BTN_RIGHT) == LOW ||
-           inputBtn(BTN_OK)    == LOW) {
-        delay(10);
-    }
-    _setLastPress = millis();
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +402,13 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         prefix[0] = (cursor == _SET_FACTORY) ? '>' : ' ';
         snprintf(lines[_SET_FACTORY], sizeof(lines[0]), "%s%s",
                  prefix, T("Reset fabryczny", "Factory reset", "Werksreset"));
+    }
+    // Kolejka offline (liczba zadan dopiero po wejsciu — lista rysuje sie
+    // co 20 ms, bez czytania NVS w kazdej klatce)
+    {
+        prefix[0] = (cursor == _SET_OQCLEAR) ? '>' : ' ';
+        snprintf(lines[_SET_OQCLEAR], sizeof(lines[0]), "%s%s",
+                 prefix, T("Wyczysc kolejke offline", "Clear offline queue", "Offline-Warteschl. leeren"));
     }
 
     // === DIAGNOSTYKA ===
@@ -514,6 +568,7 @@ static void _editRotation(U8G2 &d) {
 // paska ostrosci — tu nie jest potrzebny), zeby miec wlasny prawy panel.
 // ---------------------------------------------------------------------------
 static void _editCameraTuning(U8G2 &d) {
+    _SetNoSleepGuard noSleep;   // kamera pracuje — bez auto-sleep na tym ekranie
     uint8_t wbVal = kalkSettings.camWbMode;
     int8_t  brVal = kalkSettings.camBrightness;
     int field = 0; // 0 = balans bieli, 1 = jasnosc
@@ -793,169 +848,6 @@ static void _editAutoSleep(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
-// Edycja: Klucz licencji (klawiatura — 16-znakowy kod)
-// ---------------------------------------------------------------------------
-// Uwaga: klawiatura jest zdefiniowana w wifi_settings.h
-// settings_screen.h jest dolaczany przed wifi_settings.h wiec deklarujemy
-// _runKeyboard jako forward declaration (definicja bedzie pozniej)
-// Zamiast tego robimy wlasna mini-klawiature inline dla 16-znakowego kodu.
-
-static void _editLicense(U8G2 &d) {
-    _setWaitRelease();
-
-    // Wczytaj aktualny klucz
-    static char licBuf[40];
-    wifiLoadLicense(licBuf, sizeof(licBuf));
-    int inputLen = strlen(licBuf);
-
-    // Znaki dozwolone w licencji: a-z, 0-9, -+=% (16 znakow)
-    // Uzyj uproszczonej klawiatury: 3 rzedy
-    static const char* const _LIC_ROWS[3] = {
-        "abcdefghijklmnopqrstuvwxyz",  // 26
-        "0123456789",                   // 10
-        "-+=%",                         // 4
-    };
-    static const int _LIC_COUNTS[3] = {26, 10, 4};
-
-    // Rzad akcji: [BKSP][CAPS][SPC-NIE][OK]
-    // (spacja nie jest dozwolona w kodzie licencji)
-    static const char* _LIC_ACTS[3] = {"BKSP", "CAPS", "SAVE"};
-
-    int curRow = 1; // Zacznij od cyfr
-    int curCol = 0;
-    bool capsMode = false;
-    unsigned long blinkStart = millis();
-
-    while (true) {
-        if (_panicRequested) return;
-        // Rysuj ekran
-        d.clearBuffer();
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 8, T("Klucz licencji:", "License key:", "Lizenzschluessel:"));
-
-        // Pole tekstowe
-        char dispBuf[20] = "";
-        if (inputLen > 0) {
-            int si = inputLen > 16 ? inputLen - 16 : 0;
-            strncpy(dispBuf, licBuf + si, sizeof(dispBuf) - 1);
-        }
-        bool showCur = ((millis() - blinkStart) % 800) < 400;
-        if (showCur && inputLen < 39)
-            strncat(dispBuf, "_", sizeof(dispBuf) - strlen(dispBuf) - 1);
-        d.drawStr(96, 8, dispBuf);
-        d.drawHLine(0, 10, 256);
-
-        // Rzedy znakow
-        for (int row = 0; row < 3; row++) {
-            int count = _LIC_COUNTS[row];
-            for (int col = 0; col < count; col++) {
-                int x = col * 9;
-                int y = 12 + row * 10;
-                char ch = _LIC_ROWS[row][col];
-                if (capsMode && row == 0 && ch >= 'a' && ch <= 'z')
-                    ch = ch - 'a' + 'A';
-                char s[2] = {ch, '\0'};
-                bool sel = (curRow == row && curCol == col);
-                if (sel) {
-                    d.drawBox(x, y, 8, 9);
-                    d.setDrawColor(0);
-                    d.drawStr(x + 1, y + 7, s);
-                    d.setDrawColor(1);
-                } else {
-                    d.drawStr(x + 1, y + 7, s);
-                }
-            }
-        }
-
-        // Rzad akcji (row=3)
-        const int actXs[3] = {0, 60, 170};
-        const int actWs[3] = {58, 58, 85};
-        for (int col = 0; col < 3; col++) {
-            const char* lbl = _LIC_ACTS[col];
-            if (col == 1) lbl = capsMode ? "abc" : "CAPS";
-            bool sel = (curRow == 3 && curCol == col);
-            int x = actXs[col];
-            int w = actWs[col];
-            int y = 43;
-            int tw = strlen(lbl) * 5;
-            int tx = x + (w - tw) / 2;
-            if (sel) {
-                d.drawBox(x, y, w - 1, 9);
-                d.setDrawColor(0);
-                d.drawStr(tx, y + 7, lbl);
-                d.setDrawColor(1);
-            } else {
-                d.drawFrame(x, y, w - 1, 9);
-                d.drawStr(tx, y + 7, lbl);
-            }
-        }
-
-        d.drawHLine(0, 54, 256);
-        d.drawStr(2, 63, T("< anuluj", "< cancel", "< abbrechen"));
-        char lenInfo[12];
-        snprintf(lenInfo, sizeof(lenInfo), "%d/16", inputLen > 16 ? 16 : inputLen);
-        d.drawStr(210, 63, lenInfo);
-
-        d.sendBuffer();
-
-        // Przyciski
-        if (_setBtn(BTN_UP)) {
-            if (curRow > 0) {
-                curRow--;
-                int maxC = (curRow < 3) ? _LIC_COUNTS[curRow] - 1 : 2;
-                if (curCol > maxC) curCol = maxC;
-            }
-        } else if (_setBtn(BTN_DOWN)) {
-            if (curRow < 3) {
-                curRow++;
-                int maxC = (curRow < 3) ? _LIC_COUNTS[curRow] - 1 : 2;
-                if (curCol > maxC) curCol = maxC;
-            }
-        } else if (_setBtn(BTN_LEFT)) {
-            if (curCol > 0) {
-                curCol--;
-            } else {
-                _setWaitRelease();
-                return;  // anuluj
-            }
-        } else if (_setBtn(BTN_RIGHT)) {
-            int maxC = (curRow < 3) ? _LIC_COUNTS[curRow] - 1 : 2;
-            if (curCol < maxC) curCol++;
-        } else if (_setBtn(BTN_OK)) {
-            if (curRow < 3) {
-                // Dodaj znak
-                if (inputLen < 39) {
-                    char ch = _LIC_ROWS[curRow][curCol];
-                    if (capsMode && curRow == 0 && ch >= 'a' && ch <= 'z')
-                        ch = ch - 'a' + 'A';
-                    licBuf[inputLen++] = ch;
-                    licBuf[inputLen] = '\0';
-                    blinkStart = millis();
-                }
-            } else {
-                switch (curCol) {
-                    case 0:  // BKSP
-                        if (inputLen > 0) licBuf[--inputLen] = '\0';
-                        break;
-                    case 1:  // CAPS toggle
-                        capsMode = !capsMode;
-                        break;
-                    case 2:  // SAVE
-                        // Normalizuj: lowercase + trim
-                        for (int i = 0; licBuf[i]; i++)
-                            licBuf[i] = tolower((unsigned char)licBuf[i]);
-                        wifiSaveLicense(licBuf);
-                        _setWaitRelease();
-                        return;
-                }
-            }
-        }
-
-        delay(20);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Edycja: Kod AI (1-11 cyfr)
 // LEFT/RIGHT — zmień pozycję, UP/DOWN — zmień cyfrę 0-9, OK — zapisz, BACK — anuluj
 // ---------------------------------------------------------------------------
@@ -1043,22 +935,32 @@ static void _editPanicKey(U8G2 &d) {
         delay(10);
     }
 
+    uint32_t rejectUntil = 0;   // > millis(): pokazuj komunikat "niedozwolony"
     while (true) {
         if (_panicRequested) return;
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, T("Naciśnij klawisz na panic:",
+        d.drawStr(2, 10, T("Nacisnij klawisz na panic:",
                            "Press key for panic:",
                            "Taste fuer Panik druecken:"));
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 30, T("Aktualny:", "Current:", "Aktuell:"));
         d.setFont(u8g2_font_logisoso22_tn);
         d.drawStr(80, 50, kalkKeyLabel((KalkKey)kalkSettings.panicKey));
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 63, T("C/CE=anuluj", "C/CE=cancel", "C/CE=abbrechen"));
+        d.setFont(u8g2_font_5x7_tf);
+        if ((int32_t)(rejectUntil - millis()) > 0) {
+            d.drawStr(2, 63, T("Niedozwolony! Wybierz: * / M+ M- MR MC sqrt % MU",
+                               "Not allowed! Use: * / M+ M- MR MC sqrt % MU",
+                               "Nicht erlaubt! Nimm: * / M+ M- MR MC sqrt % MU"));
+        } else {
+            d.drawStr(2, 63, T("C/CE=anuluj  (* / M+ M- MR MC sqrt % MU)",
+                               "C/CE=cancel  (* / M+ M- MR MC sqrt % MU)",
+                               "C/CE=abbr.  (* / M+ M- MR MC sqrt % MU)"));
+        }
         d.sendBuffer();
 
         // Anulowanie przez C/CE — ale tylko jeśli aktualny panic to nie C/CE
+        // (stary zapis sprzed walidacji mogl go tak ustawic)
         if (kalkSettings.panicKey != KEY_CCE && inputKeyConsume(KEY_CCE)) {
             _setWaitRelease();
             return;
@@ -1066,10 +968,16 @@ static void _editPanicKey(U8G2 &d) {
 
         KalkKey k = inputAnyKeyConsume();
         if (k != KEY_NONE) {
-            kalkSettings.panicKey = (uint8_t)k;
-            savePanicKey((uint8_t)k);
-            _setWaitRelease();
-            return;
+            if (!kalkPanicKeyAllowed(k)) {
+                // Cyfry (kod AI!), "=", C/CE i nawigacja odrzucone — patrz
+                // kalkPanicKeyAllowed().
+                rejectUntil = millis() + 2000;
+            } else {
+                kalkSettings.panicKey = (uint8_t)k;
+                savePanicKey((uint8_t)k);
+                _setWaitRelease();
+                return;
+            }
         }
         delay(20);
     }
@@ -1383,105 +1291,59 @@ static void _editKeyScan(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
-// Reset fabryczny — kasuje wszystkie zapisane dane i restartuje kalkulator.
-// Co znika:
-//   - NVS namespace "kalkmate" (WiFi SSID/haslo, licencja, kod AI, panic key)
-//   - NVS namespace "kalkhist" (historia AI requestow)
-//   - NVS namespace "kalkmap"  (custom keymap)
-//   - SPIFFS: /notes.json, /tests.json
-//   - kalkSettings -> defaulty
-// Po: ESP.restart()
+// Reset fabryczny — wspolna implementacja w factory_reset.h (ta sama co
+// ratunkowe przytrzymanie C/CE 5 s w kalkulatorze). Co znika i co zostaje:
+// patrz naglowek factory_reset.h. Po potwierdzeniu: ESP.restart().
 // ---------------------------------------------------------------------------
 static void _editFactoryReset(U8G2 &d) {
     _setWaitRelease();
+    factoryResetRun(d, /*honorPanic=*/true);   // wraca tylko po anulowaniu
+    _setWaitRelease();
+}
 
-    // 1. Ekran potwierdzenia
-    bool confirmed = false;
-    while (!confirmed) {
+// ---------------------------------------------------------------------------
+// Kolejka offline — podglad liczby zadan + wyczyszczenie (np. gdy zadanie
+// w kolejce ciagle sie nie wysyla, a uczen nie chce czekac na 3 proby).
+// Ekran rysowany raz (nic sie na nim nie zmienia).
+// ---------------------------------------------------------------------------
+static void _editOfflineQueue(U8G2 &d) {
+    _setWaitRelease();
+    uint8_t n = offlineQueueCount();
+
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 10, T("=== Kolejka offline ===", "=== Offline queue ===", "=== Offline-Warteschl. ==="));
+    d.drawHLine(0, 12, 256);
+    char line[48];
+    snprintf(line, sizeof(line), T("Zadan w kolejce: %u", "Queued tasks: %u", "Aufgaben in Warteschl.: %u"), (unsigned)n);
+    d.drawStr(2, 28, line);
+    d.setFont(u8g2_font_5x7_tf);
+    if (n > 0) {
+        d.drawStr(2, 42, T("Niewyslane zadania przepadna.", "Unsent tasks will be lost.", "Ungesendete Aufgaben gehen verloren."));
+        d.drawStr(2, 62, T("OK = wyczysc   C/CE / < = wstecz", "OK = clear   C/CE / < = back", "OK = leeren   C/CE / < = zurueck"));
+    } else {
+        d.drawStr(2, 42, T("Kolejka jest pusta.", "Queue is empty.", "Warteschlange ist leer."));
+        d.drawStr(2, 62, T("OK / C/CE / < = wstecz", "OK / C/CE / < = back", "OK / C/CE / < = zurueck"));
+    }
+    d.sendBuffer();
+
+    while (true) {
         if (_panicRequested) return;
-
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, "=== Reset fabryczny ===");
-        d.drawHLine(0, 12, 256);
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 24, "Czy na pewno chcesz przywrocic");
-        d.drawStr(2, 33, "ustawienia fabryczne?");
-        d.drawStr(2, 45, "Zniknie: WiFi, kod AI, historia,");
-        d.drawStr(2, 53, "notatki, sprawdziany, konto.");
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 63, "OK = TAK   < = anuluj");
-        d.sendBuffer();
-
-        if (_setBtn(BTN_OK)) { confirmed = true; break; }
-        if (_setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) {
+        if (_setBtn(BTN_OK)) {
+            if (n > 0) {
+                offlineQueueClear();
+                d.clearBuffer();
+                d.setFont(u8g2_font_6x10_tf);
+                d.drawStr(2, 32, T("Kolejka wyczyszczona", "Queue cleared", "Warteschlange geleert"));
+                d.sendBuffer();
+                delay(1200);
+            }
             _setWaitRelease();
             return;
         }
+        if (_setBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) { _setWaitRelease(); return; }
         delay(20);
     }
-    _setWaitRelease();
-
-    // 2. Pokaz progress
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 14, "Reset fabryczny...");
-    d.drawHLine(0, 16, 256);
-    d.drawStr(2, 32, "Kasuje dane, prosze czekac...");
-    d.sendBuffer();
-
-    Serial.println("[FACTORY] start");
-
-    // 3. NVS - skasuj 3 znane namespacy
-    // dev_token to tozsamosc urzadzenia wobec serwera (nie ustawienie
-    // uzytkownika) — jesli go skasujemy, serwer dalej ma STARY token dla
-    // tego MAC-a, a urzadzenie wysle pusty -> 401 "Invalid device token"
-    // na kazdym kolejnym register/account-status (device-auth.ts na
-    // serwerze). Zachowujemy go przez reset.
-    char savedDevToken[68] = "";
-    wifiLoadDeviceToken(savedDevToken, sizeof(savedDevToken));
-    {
-        Preferences p;
-        if (p.begin("kalkmate", false)) {
-            p.clear();
-            if (savedDevToken[0]) p.putString("dev_token", savedDevToken);
-            p.end();
-            Serial.println("[FACTORY] NVS kalkmate cleared (dev_token zachowany)");
-        }
-        if (p.begin("kalkhist", false)) { p.clear(); p.end(); Serial.println("[FACTORY] NVS kalkhist cleared"); }
-        if (p.begin("kalkmap",  false)) { p.clear(); p.end(); Serial.println("[FACTORY] NVS kalkmap cleared"); }
-    }
-
-    // 4. SPIFFS - format calej partycji (wymaze /notes.json, /tests.json, wszystko)
-    if (SPIFFS.begin(true)) {
-        if (SPIFFS.exists("/notes.json")) SPIFFS.remove("/notes.json");
-        if (SPIFFS.exists("/tests.json")) SPIFFS.remove("/tests.json");
-        Serial.println("[FACTORY] SPIFFS files removed");
-    }
-
-    // 5. Reset kalkSettings w RAM (zostana wpisane defaulty przy nastepnym boot
-    // i tak, ale dla porzadku)
-    kalkSettings.brightness   = 8;
-    kalkSettings.language     = 1;
-    kalkSettings.solveMode    = 0;
-    kalkSettings.autoSleep    = true;
-    kalkSettings.sleepMinutes = 4;
-    strcpy(kalkSettings.aiUnlockCode, "1111");
-    kalkSettings.panicKey     = 27;
-
-    Serial.println("[FACTORY] done - restart za 1.5s");
-
-    // 6. Pokaz info i restart
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 14, "=== Gotowe! ===");
-    d.drawHLine(0, 16, 256);
-    d.drawStr(2, 32, "Restartuje kalkulator...");
-    d.sendBuffer();
-    delay(1500);
-    ESP.restart();
-    // niedosiegniete
-    while (true) delay(1000);
 }
 
 // Zywy podglad (mono viewfinder) w tescie kamery — ta sama technika co
@@ -1580,6 +1442,7 @@ static int _setCamPreviewLoop(U8G2 &d, uint32_t shotCount, uint32_t lastSize, in
 // zadania) i pokazuje jego rozmiar/rozdzielczosc, po czym wraca do
 // podgladu. CCE/< = wyjscie (deinit + power off).
 static void _editCamTest(U8G2 &d) {
+    _SetNoSleepGuard noSleep;   // kamera pracuje — bez auto-sleep na tym ekranie
     _setWaitRelease();
 
     uint32_t shotCount = 0, lastSize = 0;
@@ -1754,6 +1617,7 @@ void showSettings(U8G2 &display) {
                 case _SET_PANICKEY:   _editPanicKey(display);   break;
                 case _SET_UPDATE:     _editUpdate(display);     break;
                 case _SET_FACTORY:    _editFactoryReset(display); break;
+                case _SET_OQCLEAR:    _editOfflineQueue(display); break;
                 case _SET_DEVICEID:   showDeviceIdQrScreen(display); break;
                 case _SET_WIFI:       showWifiSettings(display); break;
                 case _SET_SCREENTEST: showScreenTest(display);  break;

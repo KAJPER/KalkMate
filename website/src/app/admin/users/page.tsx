@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import { toast } from "@/components/admin/toast";
@@ -60,34 +60,63 @@ export default function UsersPage() {
   const [purchasesData, setPurchasesData] = useState<PurchaseHistory | null>(null);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
 
+  // Ostatnio otwarta historia zakupow — wolna odpowiedz dla poprzednio
+  // kliknietego uzytkownika nie moze wskoczyc do okna innego.
+  const purchasesForRef = useRef<string | null>(null);
   const openPurchases = async (user: User) => {
+    purchasesForRef.current = user.id;
     setPurchasesUser(user);
     setPurchasesData(null);
     setPurchasesLoading(true);
     try {
       const res = await fetch(`/api/admin/users/${user.id}/purchases`);
-      if (res.ok) setPurchasesData(await res.json());
+      const data = res.ok ? await res.json() : null;
+      if (purchasesForRef.current !== user.id) return;
+      if (data) setPurchasesData(data);
     } catch (error) {
       console.error("Failed to fetch purchases:", error);
     } finally {
-      setPurchasesLoading(false);
+      if (purchasesForRef.current === user.id) setPurchasesLoading(false);
+    }
+  };
+
+  // Licznik zapytan listy: odpowiedz dla starej frazy/strony nie nadpisuje nowej.
+  const listReqRef = useRef(0);
+  const refreshUsers = async () => {
+    const reqId = ++listReqRef.current;
+    try {
+      const res = await fetch(usersUrl(limit, offset));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (reqId !== listReqRef.current) return;
+      setUsers(data.users);
+      setTotal(data.total);
+    } finally {
+      // To zapytanie moglo "przejac" ladowanie z useEffect ponizej.
+      if (reqId === listReqRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    const reqId = ++listReqRef.current;
     const fetchUsers = async () => {
       setLoading(true);
       try {
         const res = await fetch(usersUrl(limit, offset));
+        if (reqId !== listReqRef.current) return;
         if (res.ok) {
           const data = await res.json();
+          if (reqId !== listReqRef.current) return;
           setUsers(data.users);
           setTotal(data.total);
+        } else {
+          toast(`Nie udało się pobrać użytkowników (HTTP ${res.status})`, "error");
         }
       } catch (error) {
         console.error("Failed to fetch users:", error);
+        if (reqId === listReqRef.current) toast("Błąd sieci przy pobieraniu użytkowników", "error");
       } finally {
-        setLoading(false);
+        if (reqId === listReqRef.current) setLoading(false);
       }
     };
 
@@ -108,43 +137,53 @@ export default function UsersPage() {
     setShowEditModal(true);
   };
 
+  // PATCH z kontrola odpowiedzi — rzuca Error z komunikatem serwera.
+  const patchUser = async (userId: string, body: object) => {
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+  };
+
   const saveUser = async () => {
     if (!selectedUser) return;
 
     try {
       // Update user info
-      await fetch(`/api/admin/users/${selectedUser.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "updateUser",
-          data: { name: editForm.name, email: editForm.email },
-        }),
+      await patchUser(selectedUser.id, {
+        action: "updateUser",
+        data: { name: editForm.name, email: editForm.email },
       });
 
-      // Update subscription if changed
-      if (editForm.subscriptionStatus !== selectedUser.subscription?.status) {
-        await fetch(`/api/admin/users/${selectedUser.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+      // Update subscription if changed — tylko gdy uzytkownik ma subskrypcje
+      // (inaczej API zwraca 404, a pole w formularzu i tak jest ukryte).
+      if (selectedUser.subscription && editForm.subscriptionStatus !== selectedUser.subscription.status) {
+        try {
+          await patchUser(selectedUser.id, {
             action: "updateSubscription",
             data: { status: editForm.subscriptionStatus },
-          }),
-        });
+          });
+        } catch (e) {
+          throw new Error(`Dane zapisane, ale subskrypcja nie: ${(e as Error).message}`);
+        }
       }
 
       toast("Zapisano zmiany!");
       setShowEditModal(false);
-
-      // Refresh list
-      const res = await fetch(usersUrl(limit, offset));
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users);
-      }
     } catch (error) {
-      toast("Nie udało się zapisać zmian", "error");
+      toast(`Nie udało się zapisać zmian: ${(error as Error).message}`, "error");
+      console.error(error);
+    }
+
+    // Refresh list (tez po czesciowym bledzie — pokazuje stan z serwera)
+    try {
+      await refreshUsers();
+    } catch (error) {
       console.error(error);
     }
   };
@@ -154,16 +193,14 @@ export default function UsersPage() {
 
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast("Użytkownik usunięty");
-        // Refresh list
-        const refreshRes = await fetch(usersUrl(limit, offset));
-        if (refreshRes.ok) {
-          const data = await refreshRes.json();
-          setUsers(data.users);
-          setTotal(data.total);
-        }
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast(`Nie udało się usunąć użytkownika: ${data?.error || `HTTP ${res.status}`}`, "error");
+        return;
       }
+      toast("Użytkownik usunięty");
+      // Refresh list
+      await refreshUsers();
     } catch (error) {
       toast("Nie udało się usunąć użytkownika", "error");
       console.error(error);

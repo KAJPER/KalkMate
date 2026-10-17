@@ -1,6 +1,9 @@
 import { withAuth } from "next-auth/middleware";
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminCookie } from "@/lib/admin-session";
+// Nazwa cookie z admin-session.ts (Edge-safe) — ta sama stala, ktora
+// lib/admin-auth.ts eksportuje jako COOKIE_NAME. Samego admin-auth nie
+// importujemy: ciagnie Prisme, ktora nie dziala w middleware (Edge runtime).
+import { verifyAdminCookie, ADMIN_COOKIE_NAME } from "@/lib/admin-session";
 
 // Middleware (Edge runtime — bez Prisma/node:crypto). Dla /admin i /api/admin
 // sprawdza PODPIS i DATE WYGASNIECIA cookie sesji admina (WebCrypto HMAC).
@@ -18,10 +21,11 @@ export default withAuth(
     const { pathname } = request.nextUrl;
 
     const isAdminPage = pathname.startsWith("/admin") && !pathname.startsWith("/admin/login");
+    // /api/admin/visits nie jest juz wyjatkiem (publiczny POST usuniety) —
+    // GET wymaga sesji admina jak reszta /api/admin.
     const isAdminApi =
       pathname.startsWith("/api/admin") &&
-      !pathname.startsWith("/api/admin/auth") &&
-      !pathname.startsWith("/api/admin/visits");
+      !pathname.startsWith("/api/admin/auth");
     // /api/track jest całkowicie publiczne — poza tym blokiem
 
     if ((pathname.startsWith("/admin") || isAdminApi) && !ADMIN_HOSTS.has(request.headers.get("host") || "")) {
@@ -31,7 +35,7 @@ export default withAuth(
 
     if (isAdminPage || isAdminApi) {
       const session = await verifyAdminCookie(
-        request.cookies.get("admin_session")?.value,
+        request.cookies.get(ADMIN_COOKIE_NAME)?.value,
         process.env.ADMIN_SESSION_TOKEN
       );
       if (!session) {

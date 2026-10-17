@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { randomUUID } from "crypto";
 
 // Ujednolicony komunikat — anty-enumeracja (czy kod istnieje czy nie).
 const INVALID_CODE_MSG = "Nieprawidlowy lub niedostepny kod licencji";
@@ -10,9 +11,11 @@ const INVALID_CODE_MSG = "Nieprawidlowy lub niedostepny kod licencji";
 // POST /api/user/license/claim
 // Body: { code: string }
 // Wymaga: zalogowany user
-// Logika: jesli licencja istnieje i nie jest zaclaimowana przez innego user'a,
-// przypisuje ja do tego user'a. Wczesniejsze konwersacje z tego device
-// (po claimcie) beda widoczne w panelu.
+// Logika: licencja jest NA STALE zwiazana z pierwszym kontem, ktore jej uzylo
+// (claim tutaj albo /api/subscription/redeem — usedBy). Inne konto nie moze
+// jej przejac, takze po odpieciu (DELETE). Ponowny claim przez to samo konto
+// nie przedluza dostepu: koniec = usedAt + durationDays (K2), nie "teraz + N".
+// Wczesniejsze konwersacje z tego device (po claimcie) beda widoczne w panelu.
 export async function POST(request: NextRequest) {
   try {
     // Rate limit per IP: 5 prob/min — chroni przed brute-force kodow
@@ -57,8 +60,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: INVALID_CODE_MSG }, { status: 400 });
     }
 
-    // Jesli juz zaclaimowana przez kogos innego — ten sam komunikat
-    if (license.claimedByUserId && license.claimedByUserId !== user.id) {
+    // Zaclaimowana albo zrealizowana (redeem) przez kogos innego — ten sam komunikat
+    if (
+      (license.claimedByUserId && license.claimedByUserId !== user.id) ||
+      (license.usedBy && license.usedBy !== user.id)
+    ) {
       return NextResponse.json({ ok: false, error: INVALID_CODE_MSG }, { status: 400 });
     }
 
@@ -77,41 +83,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Claim
+    // Claim — atomowo: warunek w UPDATE, wiec dwa rownolegle zadania z roznych
+    // kont nie przypisza tej samej licencji obu (wygrywa jedno, drugie = 0 wierszy).
     const now = new Date();
-    await prisma.license.update({
-      where: { id: license.id },
+    const claimed = await prisma.license.updateMany({
+      where: {
+        id: license.id,
+        AND: [
+          { OR: [{ claimedByUserId: null }, { claimedByUserId: user.id }] },
+          { OR: [{ usedBy: null }, { usedBy: user.id }] },
+        ],
+      },
       data: {
         claimedByUserId: user.id,
         isUsed: true,
         usedBy: user.id,
+        // Pierwsze uzycie ustala start licencji; ponowny claim go nie przesuwa.
         usedAt: license.usedAt ?? now,
       },
     });
+    if (claimed.count !== 1) {
+      return NextResponse.json({ ok: false, error: INVALID_CODE_MSG }, { status: 400 });
+    }
 
-    // Aktywuj subskrypcje na podstawie czasu z licencji.
-    // Jesli user juz ma aktywna subskrypcje konczaca sie pozniej — zachowaj te dluzsza.
-    const licenseEndsAt = new Date(now.getTime() + license.durationDays * 24 * 60 * 60 * 1000);
-    const existingSub = await prisma.subscription.findUnique({ where: { userId: user.id } });
-    const currentEnd = existingSub ? new Date(existingSub.trialEndsAt) : new Date(0);
-    const newEnd = licenseEndsAt > currentEnd ? licenseEndsAt : currentEnd;
+    const fresh = await prisma.license.findUnique({ where: { id: license.id } });
+    const usedAt = fresh?.usedAt ? new Date(fresh.usedAt) : now;
+    const licenseEndsAt = new Date(usedAt.getTime() + license.durationDays * 24 * 60 * 60 * 1000);
 
-    await prisma.subscription.upsert({
-      where: { userId: user.id },
-      update: {
-        status: "active",
-        trialEndsAt: newEnd,
-        trialDays: license.durationDays,
-      },
-      create: {
-        id: require("crypto").randomUUID(),
-        userId: user.id,
-        status: "active",
-        trialEndsAt: newEnd,
-        trialDays: license.durationDays,
-        updatedAt: new Date(),
-      },
-    });
+    // Aktywuj subskrypcje (K2: status 'active' + currentPeriodEnd = usedAt + durationDays).
+    // Dluzszy istniejacy dostep zostaje; ponowny claim daje ten sam koniec (bez przedluzania).
+    const subscriptionEndsAt = await activateLicenseSubscription(user.id, licenseEndsAt, license.durationDays, now);
+
+    // Self-heal przeniesiony z GET (GET nic nie zapisuje): kalkulator, ktory
+    // rozwiazywal na tej licencji, ale nie jest sparowany z tym kontem (userId
+    // null lub stary wlasciciel sprzed zwiazania licencji na stale) — przejmij.
+    // Licencja = zrodlo prawdy o wlascicielu. Bez tego DELETE /api/user/devices
+    // zwraca 404 (sprawdza userId === user.id).
+    // Jak dawniej w GET: tylko gdy konto nie ma zadnego sparowanego urzadzenia,
+    // i tylko ostatnio widziane urzadzenie z tym kodem.
+    try {
+      const own = await prisma.device.findFirst({ where: { userId: user.id } });
+      if (!own) {
+        const dev = await prisma.device.findFirst({
+          where: { licenseCode: code },
+          orderBy: { lastSeen: "desc" },
+        });
+        if (dev && dev.userId !== user.id) {
+          await prisma.device.update({ where: { id: dev.id }, data: { userId: user.id } });
+        }
+      }
+    } catch (e) {
+      console.error("[user/license/claim] device takeover failed:", e);
+    }
 
     // Linkuj wszystkie poprzednie DeviceSolve z tej licencji do user'a
     // (model moze nie byc jeszcze w schemie — pomin gracefully)
@@ -129,8 +152,8 @@ export async function POST(request: NextRequest) {
       ok: true,
       code: license.code,
       durationDays: license.durationDays,
-      activatedAt: license.usedAt ?? now,
-      subscriptionEndsAt: newEnd,
+      activatedAt: usedAt,
+      subscriptionEndsAt,
     });
   } catch (e) {
     console.error("[user/license/claim]", e);
@@ -152,42 +175,17 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: "Brak konta" }, { status: 401 });
     }
 
-    const license = await prisma.license.findFirst({
-      where: {
-        OR: [
-          { claimedByUserId: user.id },
-          { usedBy: user.id },
-        ],
-      },
-    });
-    // Self-heal claimedByUserId jesli ustawiony jest tylko usedBy
-    if (license && !license.claimedByUserId) {
-      await prisma.license.update({
-        where: { id: license.id },
-        data: { claimedByUserId: user.id },
-      });
-    }
-    let subscription = await prisma.subscription.findUnique({
+    // Najpierw licencja przypieta do konta; dopiero gdy brak — zrealizowana
+    // przez to konto (usedBy, np. /subscription/redeem albo po odpieciu).
+    const license =
+      (await prisma.license.findFirst({ where: { claimedByUserId: user.id } })) ??
+      (await prisma.license.findFirst({ where: { usedBy: user.id } }));
+    // GET niczego nie zapisuje (audyt 2026-10-16). Dawne "self-heale"
+    // (claimedByUserId z usedBy, trial->active z licencji liczone od TERAZ,
+    // przejecie urzadzenia) sa w POST — wystarczy ponowny claim tego kodu.
+    const subscription = await prisma.subscription.findUnique({
       where: { userId: user.id },
     });
-
-    // Self-heal: jesli user ma claimed licencje ale subscription jest na trial,
-    // upgrade do active z czasem z licencji (dla userow ktorzy claimowali przed
-    // wprowadzeniem auto-aktywacji)
-    if (license && subscription && subscription.status === "trial") {
-      const nowH = new Date();
-      const licenseEndsAt = new Date(nowH.getTime() + license.durationDays * 24 * 60 * 60 * 1000);
-      const currentEnd = new Date(subscription.trialEndsAt);
-      const newEnd = licenseEndsAt > currentEnd ? licenseEndsAt : currentEnd;
-      subscription = await prisma.subscription.update({
-        where: { userId: user.id },
-        data: {
-          status: "active",
-          trialEndsAt: newEnd,
-          trialDays: license.durationDays,
-        },
-      });
-    }
 
     // Parowanie kalkulatora jest niezalezne od licencji — kazdy zalogowany user
     // moze sparowac urzadzenie. Licencja/sub kontroluje tylko AI Chat w panelu.
@@ -203,20 +201,11 @@ export async function GET() {
           orderBy: { lastSeen: "desc" },
         });
         if (!device && license) {
+          // Tylko do wyswietlenia — przejecie urzadzenia robi POST claim.
           device = await deviceModel.findFirst({
             where: { licenseCode: license.code },
             orderBy: { lastSeen: "desc" },
           });
-          // Self-heal: jesli kalkulator rozwiazywal na licencji usera (Device.licenseCode pasuje)
-          // ale nie jest sparowany z tym kontem (userId null lub stary wlasciciel licencji),
-          // przejmij go. Licencja = zrodlo prawdy o wlascicielu.
-          // Bez tego DELETE /api/user/devices zwraca 404 (sprawdza userId === user.id).
-          if (device && device.userId !== user.id) {
-            device = await deviceModel.update({
-              where: { id: device.id },
-              data: { userId: user.id },
-            });
-          }
         }
       }
     } catch {
@@ -271,7 +260,9 @@ export async function GET() {
 }
 
 // DELETE /api/user/license/claim — odepnij aktualnie zaclaimowana licencje
-// (NIE usuwa licencji ani danych — pozwala na claim innej)
+// (NIE usuwa licencji ani danych — pozwala temu kontu zaclaimowac inna).
+// Kod NIE wraca do puli: usedBy zostaje = to konto, wiec inne konto nie moze
+// go aktywowac (wczesniej odpiecie pozwalalo "przekazywac" jeden kod dalej).
 export async function DELETE() {
   try {
     const session = await getServerSession(authOptions);
@@ -296,10 +287,16 @@ export async function DELETE() {
       );
     }
 
-    // Odepnij licencje — zostaw rekord (i historie konwersacji), tylko zwolnij claim
+    // Odepnij licencje — zostaw rekord (i historie konwersacji), tylko zwolnij
+    // claim. usedBy/isUsed/usedAt zostaja — kod pozostaje zwiazany z tym kontem.
     await prisma.license.update({
       where: { id: license.id },
-      data: { claimedByUserId: null },
+      data: {
+        claimedByUserId: null,
+        isUsed: true,
+        usedBy: license.usedBy ?? user.id,
+        usedAt: license.usedAt ?? new Date(),
+      },
     });
 
     // Notatki/sprawdziany/konwersacje zostaja przy userze (dane nie znikaja)
@@ -310,4 +307,75 @@ export async function DELETE() {
     console.error("[user/license/claim DELETE]", e);
     return NextResponse.json({ ok: false, error: "Server error" }, { status: 500 });
   }
+}
+
+// Subskrypcja z licencji (K2): status 'active' + currentPeriodEnd
+// (stripeCurrentPeriodEnd) = koniec licencji. trialEndsAt tez = koniec (panel
+// i starsze ekrany licza z niego "dni pozostalo"). Nie skracamy dluzszego
+// dostepu, nie ruszamy subskrypcji zarzadzanej przez Stripe. Zwraca efektywny
+// koniec dostepu.
+async function activateLicenseSubscription(
+  userId: string,
+  licenseEndsAt: Date,
+  durationDays: number,
+  now: Date,
+): Promise<Date> {
+  const existing = await prisma.subscription.findUnique({ where: { userId } });
+  if (!existing) {
+    await prisma.subscription.create({
+      data: {
+        id: randomUUID(),
+        userId,
+        status: "active",
+        trialEndsAt: licenseEndsAt,
+        trialDays: durationDays,
+        stripeCurrentPeriodEnd: licenseEndsAt,
+        updatedAt: new Date(),
+      },
+    });
+    return licenseEndsAt;
+  }
+
+  const curTrialEnd = existing.trialEndsAt ? new Date(existing.trialEndsAt) : new Date(0);
+  const curPeriodEnd = existing.stripeCurrentPeriodEnd ? new Date(existing.stripeCurrentPeriodEnd) : null;
+  const isActive = existing.status === "active" || existing.status === "past_due";
+  const stripeManaged = !!existing.stripeSubscriptionId && isActive && (!curPeriodEnd || curPeriodEnd > now);
+
+  // Licencja juz wygasla — nic nie dajemy (i nic nie psujemy).
+  if (licenseEndsAt <= now) {
+    return [curTrialEnd, curPeriodEnd ?? new Date(0)].reduce((a, b) => (a > b ? a : b));
+  }
+
+  if (stripeManaged) {
+    // Okres rozlicza Stripe — nie nadpisujemy statusu ani stripeCurrentPeriodEnd.
+    if (licenseEndsAt > curTrialEnd) {
+      await prisma.subscription.update({
+        where: { id: existing.id },
+        data: { trialEndsAt: licenseEndsAt, trialDays: durationDays },
+      });
+    }
+    return [licenseEndsAt, curPeriodEnd ?? licenseEndsAt].reduce((a, b) => (a > b ? a : b));
+  }
+
+  // Najdalszy z: koniec licencji, trwajacy trial, trwajacy okres 'active'.
+  const candidates = [licenseEndsAt];
+  if (curTrialEnd > now) candidates.push(curTrialEnd);
+  if (isActive && curPeriodEnd && curPeriodEnd > now) candidates.push(curPeriodEnd);
+  const newEnd = candidates.reduce((a, b) => (a > b ? a : b));
+
+  const unchanged =
+    existing.status === "active" &&
+    curPeriodEnd && curPeriodEnd.getTime() === newEnd.getTime() &&
+    curTrialEnd.getTime() >= newEnd.getTime();
+  if (!unchanged) {
+    await prisma.subscription.update({
+      where: { id: existing.id },
+      data: {
+        status: "active",
+        stripeCurrentPeriodEnd: newEnd,
+        ...(newEnd > curTrialEnd ? { trialEndsAt: newEnd, trialDays: durationDays } : {}),
+      },
+    });
+  }
+  return newEnd;
 }

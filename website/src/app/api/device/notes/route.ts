@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { verifyDeviceAuth } from "@/lib/device-auth";
+import { verifyDeviceAuth, checkDeviceApiKey, isDeviceAuthStrict } from "@/lib/device-auth";
 
 // GET /api/device/notes
 // Headers: x-api-key + (x-device-id + x-device-token [paired] LUB x-license-key [legacy])
 export async function GET(request: NextRequest) {
   try {
-    const apiKey = request.headers.get("x-api-key");
-    if (!apiKey || apiKey !== process.env.CALCULATOR_API_KEY) {
+    if (!checkDeviceApiKey(request)) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
     let userId: string | null = null;
+    let deviceHasToken = false;
 
     const deviceIdHeader = request.headers.get("x-device-id");
     if (deviceIdHeader) {
@@ -24,10 +24,14 @@ export async function GET(request: NextRequest) {
         select: { userId: true },
       });
       if (dev?.userId) userId = dev.userId;
+      deviceHasToken = auth.hasToken;
     }
 
-    // Fallback: license header (legacy — nie wymaga tokenu urządzenia)
-    if (!userId) {
+    // Fallback: license header (legacy — nie wymaga tokenu urządzenia).
+    // Audyt 2026-10-16: tylko dla urzadzen BEZ tokenu w bazie i tylko w trybie
+    // przejsciowym (DEVICE_AUTH_STRICT !== "1") — inaczej sam (publiczny)
+    // api key + kod licencji dawal dostep do notatek wlasciciela licencji.
+    if (!userId && !deviceHasToken && !isDeviceAuthStrict()) {
       const licenseKey = request.headers.get("x-license-key")?.trim().toLowerCase();
       if (licenseKey) {
         const license = await prisma.license.findUnique({ where: { code: licenseKey } });

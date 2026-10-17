@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import { AI_MODELS } from "@/lib/aiModels";
 import { toast } from "@/components/admin/toast";
+import { usePolling } from "@/components/admin/usePolling";
 
 interface UserStat {
   id: string;
@@ -118,9 +119,9 @@ export default function OpenRouterPage() {
 
   useEffect(() => {
     fetchStats();
-    const iv = setInterval(fetchStats, 30000);
-    return () => clearInterval(iv);
   }, []);
+  // Co 30 s, wstrzymane gdy karta jest w tle (kazde odswiezenie odpytuje tez OpenRouter).
+  usePolling(fetchStats, 30000);
 
   const sortedUsers = data
     ? [...data.users]

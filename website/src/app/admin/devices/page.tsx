@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import { toast, toastError } from "@/components/admin/toast";
+import { usePolling } from "@/components/admin/usePolling";
+import { fmtDateTime } from "@/components/admin/format";
 
 interface Device {
   id: string;
@@ -17,6 +19,8 @@ interface Device {
   User: { id: string; email: string; name: string | null } | null;
   rentalUntil: string | null;
   rentalLocked: boolean;
+  // Nowsze API: czy urzadzenie ma zapisany token (bez jego wartosci).
+  hasToken?: boolean;
 }
 
 interface DeviceData {
@@ -30,16 +34,7 @@ interface DeviceData {
   devices: Device[];
 }
 
-function formatDate(s: string) {
-  const d = new Date(s);
-  return d.toLocaleString("pl-PL", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const formatDate = (s: string) => fmtDateTime(s);
 
 function timeAgo(s: string) {
   const ms = Date.now() - new Date(s).getTime();
@@ -75,9 +70,42 @@ export default function DevicesPage() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
   }, []);
+  // Co 30 s, wstrzymane gdy karta jest w tle (document.hidden).
+  usePolling(load, 30000);
+
+  // Starsze API zwracalo surowy rekord (z deviceToken) i NIE zna akcji
+  // reset_token — kazdy PATCH bez action=rental odpinal tam urzadzenie.
+  // Przycisk pokazujemy tylko dla nowego API (bez deviceToken w odpowiedzi).
+  const resetTokenSupported = !!data && !data.devices.some((d) => "deviceToken" in d);
+
+  const resetToken = async (deviceId: string) => {
+    if (!resetTokenSupported) return;
+    if (!confirm(`Unieważnić token urządzenia ${deviceId}?\n\nUrządzenie dostanie nowy token przy następnej rejestracji. Do tego czasu stary token przestaje działać (np. gdy wyciekł albo urządzenie zmieniło właściciela).`)) return;
+    setActionBusy(deviceId);
+    try {
+      const r = await fetch(`/api/admin/devices?deviceId=${encodeURIComponent(deviceId)}&action=reset_token`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset_token" }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        toast(j.error || `Błąd resetu tokenu (HTTP ${r.status})`, "error");
+      } else if (j.action === "unpaired") {
+        // Nie powinno sie zdarzyc (patrz resetTokenSupported), ale gdyby — powiedz wprost.
+        toast("Serwer nie zna resetu tokenu i ODPIĄŁ urządzenie — sprawdź powiązanie.", "error");
+        await load();
+      } else {
+        toast("Token unieważniony — urządzenie dostanie nowy przy następnej rejestracji");
+        await load();
+      }
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setActionBusy(null);
+    }
+  };
 
   const unpairDevice = async (deviceId: string) => {
     if (!confirm(`Odepnac urzadzenie ${deviceId}?\n\nWyzeruje userId i licenseCode. Kalkulator pozostanie w bazie i bedzie mogl byc sparowany ponownie.`)) return;
@@ -449,6 +477,16 @@ export default function DevicesPage() {
                               >
                                 {d.rentalLocked ? "Odblokuj" : "Zablokuj"}
                               </button>
+                              {resetTokenSupported && d.hasToken !== false && (
+                                <button
+                                  onClick={() => resetToken(d.deviceId)}
+                                  disabled={busy}
+                                  className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-400 text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Unieważnij token urządzenia — dostanie nowy przy następnej rejestracji"
+                                >
+                                  Reset tokenu
+                                </button>
+                              )}
                               {(d.userId || d.licenseCode) && (
                                 <button
                                   onClick={() => unpairDevice(d.deviceId)}
@@ -485,6 +523,8 @@ export default function DevicesPage() {
               <span className="text-red-400">Zablokuj</span> / <span className="text-green-400">Odblokuj</span> — natychmiastowa ręczna blokada AI, niezależna od daty (np. brak zwrotu, zgłoszona kradzież).
               <br />
               <span className="text-amber-400">Odepnij</span> — czyści powiązanie z kontem, rekord urządzenia zostaje.
+              <br />
+              <span className="text-purple-400">Reset tokenu</span> — unieważnia token urządzenia; urządzenie dostanie nowy przy następnej rejestracji.
               <br />
               <span className="text-red-400">Usuń</span> — kasuje rekord wraz z historią rozwiązań (nieodwracalne).
             </div>

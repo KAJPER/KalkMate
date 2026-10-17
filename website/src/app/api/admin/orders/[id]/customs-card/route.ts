@@ -5,6 +5,8 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
 import { bcGetProfile } from "@/lib/basecourier";
 import { fillCustomsCard } from "@/lib/customsCard";
+import { customsGoodsValue } from "@/lib/customsInvoice";
+import { readOrderUnits } from "@/lib/orderPersonalization";
 
 // Kopia formularza UPS z Base Courier (basecourier.com/panel/export/docs).
 const TEMPLATE_PATH = path.join(process.cwd(), "assets", "ups", "karta-odprawy-celnej-eksportowej.pdf");
@@ -30,9 +32,16 @@ export async function GET(
 
   const q = request.nextUrl.searchParams;
   const valueParam = parseFloat((q.get("value") || "").replace(",", "."));
-  const value = Number.isFinite(valueParam) && valueParam > 0 ? valueParam : order.amount / 100;
+  // Domyslnie wartosc TOWARU bez wysylki — Karta deklaruje "koszt transportu NIE
+  // wliczony w cene towaru" (dawniej cala kwota zamowienia, z wysylka).
+  const value = Number.isFinite(valueParam) && valueParam > 0 && valueParam < 1_000_000 ? valueParam : customsGoodsValue(order);
   const currency = (order.currency || "eur").toUpperCase();
-  const valueEur = value * (APPROX_TO_EUR[currency] ?? 1);
+  const units = await readOrderUnits(order.id).catch(() => null);
+  const quantity = Math.max(1, Math.floor(Number(units?.quantity) || 1));
+  // Nieznana waluta: NIE zakladamy kursu 1:1 z EUR (moglo zaznaczyc "IE599 nie
+  // jest wymagane" dla wartosci > 1000 EUR) — wtedy pole zostaje do recznej decyzji.
+  const rate = APPROX_TO_EUR[currency];
+  const valueEur = rate !== undefined ? value * rate : Number.POSITIVE_INFINITY;
 
   let profile = { name: "Kacper Popko", vat_company: "KAJPA Kacper Popko", phone: "600580888", email: "kacper@kajpa.pl" };
   try {
@@ -49,9 +58,9 @@ export async function GET(
       trackingNumber: order.trackingNumber || undefined,
       currency,
       description:
-        `Kalkulator elektroniczny KalkMate v3.0, 1 szt. Urządzenie elektroniczne w obudowie z tworzywa sztucznego ` +
+        `Kalkulator elektroniczny KalkMate v3.0, ${quantity} szt. Urządzenie elektroniczne w obudowie z tworzywa sztucznego ` +
         `(klawiatura, wyświetlacz OLED, kamera, moduł WiFi) z wbudowanym akumulatorem litowo-polimerowym 3,7 V / 1500 mAh; ` +
-        `służy do obliczeń matematycznych i pomocy w nauce. Wartość: ${value.toFixed(2).replace(".", ",")} ${currency}.`,
+        `służy do obliczeń matematycznych i pomocy w nauce. Wartość${quantity > 1 ? " łączna" : ""}: ${value.toFixed(2).replace(".", ",")} ${currency}.`,
       senderName: `${profile.name}\n${profile.vat_company}`,
       senderContact: `tel. ${profile.phone}\n${profile.email}`,
       ie599NotRequired: valueEur <= 1000,

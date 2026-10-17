@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "crypto";
 import { syncAllPendingOrders } from "@/lib/inpostTracking";
 import { syncAllPendingBaseCourierOrders } from "@/lib/basecourierTracking";
 import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
@@ -20,14 +21,43 @@ import { ensureDailyBackup } from "@/lib/dbBackup";
 
 const CRON_SECRET = process.env.CRON_SECRET || "";
 
+// Porownanie w stalym czasie (hash wyrownuje dlugosci, wiec timingSafeEqual
+// nie rzuca i nie zdradza dlugosci sekretu).
+function secretMatches(given: string | null): boolean {
+  if (!CRON_SECRET || !given) return false;
+  const a = createHash("sha256").update(given).digest();
+  const b = createHash("sha256").update(CRON_SECRET).digest();
+  return timingSafeEqual(a, b);
+}
+
+// Prosty mutex w pamieci procesu: cron co godzine, ale sledzenie + backup
+// potrafia trwac dlugo (InPost/Base Courier) — drugie uruchomienie w trakcie
+// pierwszego wyslaloby np. podwojne przypomnienia. Zabezpieczenie przed
+// "wiecznym" zamkiem: po LOCK_MAX_MS zamek uznajemy za porzucony.
+const LOCK_MAX_MS = 30 * 60_000;
+let runningSince: number | null = null;
+
 export async function GET(req: NextRequest) {
   // Fail-secure: brak skonfigurowanego sekretu = brak dostepu. Tylko naglowek
   // (nie URL param) — sekrety w URL trafiaja do logow nginx.
-  const secret = req.headers.get("x-cron-secret");
-  if (!CRON_SECRET || secret !== CRON_SECRET) {
+  if (!secretMatches(req.headers.get("x-cron-secret"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (runningSince !== null && Date.now() - runningSince < LOCK_MAX_MS) {
+    return NextResponse.json(
+      { ok: false, error: "Poprzednie uruchomienie crona jeszcze trwa", runningSince: new Date(runningSince).toISOString() },
+      { status: 409 }
+    );
+  }
+  if (runningSince !== null) {
+    console.warn(`[cron/tracking] zamek z ${new Date(runningSince).toISOString()} wyglada na porzucony — uruchamiam mimo to`);
+  }
+  const myRun = Date.now();
+  runningSince = myRun;
+
+  // Kazdy krok osobno: wyjatek jednego nie pomija pozostalych.
+  const errors: string[] = [];
   try {
     // Kopia bazy raz na dobe (lib/dbBackup.ts) — przed reszta, niezaleznie od jej bledow.
     let backup: string | null = null;
@@ -36,6 +66,7 @@ export async function GET(req: NextRequest) {
     } catch (e) {
       console.error("[cron/tracking] database backup failed:", e);
       backup = `ERROR: ${(e as Error).message}`;
+      errors.push(`backup: ${(e as Error).message}`);
     }
 
     let reminders: ReminderResult = { sent: [], skipped: [], failed: [] };
@@ -43,6 +74,7 @@ export async function GET(req: NextRequest) {
       reminders = await sendPaymentReminders();
     } catch (e) {
       console.error("[cron/tracking] payment reminders failed:", e);
+      errors.push(`paymentReminders: ${(e as Error).message}`);
     }
 
     // Najpierw porzucone zamowienia — zeby sledzenie nie odpytywalo InPost
@@ -52,9 +84,16 @@ export async function GET(req: NextRequest) {
       stale = await cancelStaleUnpaidOrders();
     } catch (e) {
       console.error("[cron/tracking] stale order cleanup failed:", e);
+      errors.push(`staleCleanup: ${(e as Error).message}`);
     }
 
-    const results = await syncAllPendingOrders();
+    let results: Awaited<ReturnType<typeof syncAllPendingOrders>> = [];
+    try {
+      results = await syncAllPendingOrders();
+    } catch (e) {
+      console.error("[cron/tracking] inpost sync failed:", e);
+      errors.push(`inpost: ${(e as Error).message}`);
+    }
     const changed = results.filter((r) => r.changed);
 
     let bcResults: Awaited<ReturnType<typeof syncAllPendingBaseCourierOrders>> = [];
@@ -62,6 +101,7 @@ export async function GET(req: NextRequest) {
       bcResults = await syncAllPendingBaseCourierOrders();
     } catch (e) {
       console.error("[cron/tracking] basecourier sync failed:", e);
+      errors.push(`basecourier: ${(e as Error).message}`);
     }
     const bcChanged = bcResults.filter((r) => r.changed);
 
@@ -100,14 +140,19 @@ export async function GET(req: NextRequest) {
         cancelled: stale.cancelled.map((o) => o.orderNumber),
         skippedShipped: stale.skippedShipped.map((o) => o.orderNumber),
       },
+      // Kroki, ktore rzucily wyjatek (reszta wykonala sie normalnie).
+      errors,
     };
     console.log(
       `[cron/tracking] checked=${summary.checked} changed=${summary.changed} emails=${summary.emailsSent} unavailable=${summary.unavailable} ` +
-      `bcChecked=${summary.basecourier.checked} bcChanged=${summary.basecourier.changed} staleCancelled=${stale.cancelled.length} reminders=${reminders.sent.length}`
+      `bcChecked=${summary.basecourier.checked} bcChanged=${summary.basecourier.changed} staleCancelled=${stale.cancelled.length} reminders=${reminders.sent.length}` +
+      (errors.length ? ` errors=${errors.length}` : "")
     );
     return NextResponse.json(summary);
   } catch (e) {
     console.error("[cron/tracking]", e);
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return NextResponse.json({ error: (e as Error).message, errors }, { status: 500 });
+  } finally {
+    if (runningSince === myRun) runningSince = null;
   }
 }

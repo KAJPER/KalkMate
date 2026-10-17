@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 
 // ----------------------------------------------------------------
@@ -355,15 +355,28 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
+  // Szybkie przelaczanie 7/30/90 dni: odpowiedz starszego zapytania nie
+  // nadpisuje danych nowszego okresu (licznik zapytan).
+  const reqIdRef = useRef(0);
+  const [loadErr, setLoadErr] = useState("");
   const fetchData = useCallback(async () => {
+    const reqId = ++reqIdRef.current;
     setLoading(true);
+    setLoadErr("");
     try {
       const res = await fetch(`/api/admin/analytics/visits?days=${days}`);
-      if (res.ok) setData(await res.json());
+      if (reqId !== reqIdRef.current) return;
+      if (res.ok) {
+        const json = await res.json();
+        if (reqId === reqIdRef.current) setData(json);
+      } else {
+        setLoadErr(`Nie udało się pobrać danych (HTTP ${res.status})`);
+      }
     } catch (e) {
       console.error(e);
+      if (reqId === reqIdRef.current) setLoadErr("Błąd sieci");
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) setLoading(false);
     }
   }, [days]);
 
@@ -416,8 +429,9 @@ export default function AnalyticsPage() {
         <div className="text-[#E0E0E0]/40 text-sm py-12 text-center">
           Ładowanie danych...
         </div>
-      ) : !data ? (
-        <div className="text-red-400 text-sm">Błąd ładowania.</div>
+      ) : loadErr || !data ? (
+        // Przy bledzie nie pokazujemy danych poprzedniego okresu pod etykieta nowego.
+        <div className="text-red-400 text-sm">{loadErr || "Błąd ładowania."}</div>
       ) : (
         <div className="space-y-6">
           {/* ---- Stat cards ---- */}

@@ -5,6 +5,10 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 // Inventory NIE jest w Prisma schemie (kolumny tylko w sqlite) — wszystko raw SQL.
 // Tabela: id TEXT PK, name TEXT, count INT, notes TEXT, updatedAt DATETIME.
 
+// Wiersz stanu magazynowego produktu, z ktorego czyta sklep (/api/stock,
+// /api/admin/stock) — nie wolno go usunac z panelu.
+const PROTECTED_IDS = new Set(["kalkmate-v1-stock"]);
+
 interface InventoryRow {
   id: string;
   name: string;
@@ -91,23 +95,32 @@ export async function PATCH(req: NextRequest) {
     }
     const row = existing[0];
 
-    let newCount = row.count;
-    if (Number.isFinite(Number(body?.delta))) {
-      newCount = Math.max(0, row.count + Math.floor(Number(body.delta)));
-    } else if (Number.isFinite(Number(body?.count))) {
-      newCount = Math.max(0, Math.floor(Number(body.count)));
-    }
     const newName = body?.name !== undefined ? String(body.name).trim().slice(0, 100) || row.name : row.name;
     const newNotes = body?.notes !== undefined
       ? (String(body.notes).trim().slice(0, 500) || null)
       : row.notes;
 
-    await prisma.$executeRaw`
-      UPDATE Inventory
-      SET name = ${newName}, count = ${newCount}, notes = ${newNotes}, updatedAt = CURRENT_TIMESTAMP
-      WHERE id = ${id}
-    `;
-    return NextResponse.json({ ok: true, id, count: newCount });
+    if (body?.delta !== undefined && body?.delta !== null && Number.isFinite(Number(body.delta))) {
+      // Atomowo w SQL — dwa szybkie klikniecia +1/-1 (albo dwie karty) nie gubia
+      // zmiany, jak przy "przeczytaj count, policz w JS, zapisz".
+      const delta = Math.trunc(Number(body.delta));
+      await prisma.$executeRaw`
+        UPDATE Inventory
+        SET name = ${newName}, count = MAX(0, count + ${delta}), notes = ${newNotes}, updatedAt = CURRENT_TIMESTAMP
+        WHERE id = ${id}
+      `;
+    } else {
+      const newCount = body?.count !== undefined && body?.count !== null && Number.isFinite(Number(body.count))
+        ? Math.max(0, Math.floor(Number(body.count)))
+        : row.count;
+      await prisma.$executeRaw`
+        UPDATE Inventory
+        SET name = ${newName}, count = ${newCount}, notes = ${newNotes}, updatedAt = CURRENT_TIMESTAMP
+        WHERE id = ${id}
+      `;
+    }
+    const after = await prisma.$queryRaw<{ count: number | bigint }[]>`SELECT count FROM Inventory WHERE id = ${id} LIMIT 1`;
+    return NextResponse.json({ ok: true, id, count: Number(after[0]?.count ?? 0) });
   } catch (e) {
     console.error("[admin/inventory PATCH]", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -120,6 +133,12 @@ export async function DELETE(req: NextRequest) {
   try {
     const id = new URL(req.url).searchParams.get("id");
     if (!id) return NextResponse.json({ ok: false, error: "Brak id" }, { status: 400 });
+    if (PROTECTED_IDS.has(id)) {
+      return NextResponse.json(
+        { ok: false, error: "Tej pozycji nie można usunąć — z niej sklep czyta stan magazynowy produktu." },
+        { status: 400 }
+      );
+    }
     await prisma.$executeRaw`DELETE FROM Inventory WHERE id = ${id}`;
     return NextResponse.json({ ok: true });
   } catch (e) {

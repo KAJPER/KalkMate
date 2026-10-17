@@ -108,11 +108,14 @@ def classify_code(code: int, frame_error: bool = False) -> Category:
 
 class PrinterError(Exception):
     def __init__(self, category: Category, message: str, code: int | None = None,
-                 command: str | None = None) -> None:
+                 command: str | None = None, garbled: bool = False) -> None:
         super().__init__(message)
         self.category = category
         self.code = code
         self.command = command
+        # Odpowiedź nieczytelna (zły CRC / rozjechana ramka) — błąd łącza, a nie
+        # odpowiedź drukarki. Przed trend = ponowienie, po trend = sprawdzenie licznika.
+        self.garbled = garbled
 
     @property
     def retryable(self) -> bool:

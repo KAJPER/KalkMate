@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { registerTransaction, paymentUrl } from "@/lib/przelewy24";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { addPaymentSession, verifyResumeToken } from "@/lib/paymentReminders";
+import { readOrderUnits } from "@/lib/orderPersonalization";
 
 // GET /api/p24/resume?o=<orderId>&t=<podpis> — link "Dokończ płatność" z maila
 // przypominajacego (lib/paymentReminders.ts). Rejestruje NOWA transakcje P24
@@ -64,11 +65,13 @@ export async function GET(request: NextRequest) {
     const sessionId = `km-${randomUUID()}`;
     const currency = (o.currency || "pln").toUpperCase();
     const baseUrl = process.env.NEXTAUTH_URL || "https://kalkmate.pl";
+    // Kwota = o.amount (juz zawiera wszystkie sztuki); ilosc tylko do opisu.
+    const qty = await readOrderUnits(o.id).then((r) => r.quantity).catch(() => 1);
     const token = await registerTransaction({
       sessionId,
       amount: Number(o.amount),
       currency,
-      description: "KalkMate v3.0 - AI Calculator",
+      description: `KalkMate v3.0 - AI Calculator${qty > 1 ? ` x${qty}` : ""}`,
       email: o.customerEmail,
       client: o.customerName,
       phone: o.customerPhone,

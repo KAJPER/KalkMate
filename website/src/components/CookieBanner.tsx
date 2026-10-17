@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { localeFromPathname, type Locale } from "@/lib/i18n";
+import { CONSENT_EVENT, CONSENT_STORAGE_KEY, CONSENT_VERSION } from "@/components/consent";
 
 const content: Record<Locale, {
   ariaLabel: string;
@@ -67,8 +68,10 @@ const content: Record<Locale, {
   },
 };
 
-const STORAGE_KEY = "kalkmate-cookie-consent";
-const VERSION = "1"; // bump zeby wymusic ponowna zgode po istotnej zmianie
+// Wspolne z ClarityAnalytics / BuyNow (components/consent.ts) — bump
+// CONSENT_VERSION, zeby wymusic ponowna zgode po istotnej zmianie.
+const STORAGE_KEY = CONSENT_STORAGE_KEY;
+const VERSION = CONSENT_VERSION;
 
 type Choice = "all" | "essential";
 
@@ -100,7 +103,7 @@ function write(choice: Choice) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
     window.dispatchEvent(
-      new CustomEvent("kalkmate:cookie-consent", { detail: record }),
+      new CustomEvent(CONSENT_EVENT, { detail: record }),
     );
   } catch {
     // localStorage zablokowany (private mode) — nic nie zapisujemy

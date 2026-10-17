@@ -119,8 +119,9 @@ export default function ReklamacjaPage() {
           <div className="border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.06] p-8">
             <p className="km-mono-eyebrow text-[#D8FF3D] mb-2">/ ZGŁOSZENIE WYSŁANE</p>
             <p className="text-[15px] text-[#F2EDE3]/80 leading-[1.6]">
-              Dziękujemy. Potwierdzenie przyjęcia reklamacji wyślemy na podany adres e-mail.
-              Jeśli masz zdjęcia lub nagranie wady — prześlij je w odpowiedzi na tego maila.
+              Dziękujemy. Potwierdzenie przyjęcia reklamacji otrzymasz e-mailem na podany adres.
+              Jeśli masz zdjęcia lub nagranie wady — prześlij je w odpowiedzi na to potwierdzenie
+              (albo bezpośrednio na kontakt@kalkmate.pl, podając swoje imię i nazwisko).
             </p>
             <div className="mt-6 pt-6 border-t border-[#D8FF3D]/20">
               <ShippingInstructions />
@@ -239,7 +240,7 @@ export default function ReklamacjaPage() {
               <p className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ ZAŁĄCZNIKI</p>
               <p className="text-[14px] text-[#F2EDE3]/80 leading-[1.6]">
                 Zdjęcia lub nagranie wady oraz kopię dowodu zakupu prześlij w odpowiedzi na potwierdzenie
-                zgłoszenia, które przyjdzie na podany e-mail.
+                zgłoszenia, które otrzymasz e-mailem na podany adres (lub na kontakt@kalkmate.pl).
               </p>
             </div>
 

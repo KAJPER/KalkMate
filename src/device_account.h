@@ -33,6 +33,11 @@ extern const char* _accGetUnlockCode();
 #define FW_VERSION "0.0.0"
 #endif
 
+// otaConfirmServerOk() — walidacja firmware po OTA (pierwsza odpowiedz 200
+// z kalkmate.pl). W main.cpp ota_update.h jest juz wlaczony wczesniej przez
+// settings_screen.h (pragma once => tu no-op).
+#include "ota_update.h"
+
 // Pomocnik: deviceId (MAC). Zdefiniowany rowniez w solve_screen.h pod
 // taka sama nazwa _solDeviceId — zeby uniknac duplikatu uzywamy lokalnej.
 static inline String _accDeviceId() {
@@ -83,6 +88,10 @@ inline bool accountRegister() {
     wifiLoadDeviceToken(devToken, sizeof(devToken));
     if (devToken[0]) http.addHeader("x-device-token", devToken);
 
+    // K5: po resecie fabrycznym serwer ma odpiac urzadzenie od konta.
+    const bool factoryUnpair = wifiFactoryUnpairPending();
+    if (factoryUnpair) http.addHeader("x-factory-reset", "1");
+
     String body = "{\"deviceId\":\"" + _accDeviceId()
                 + "\",\"unlockCode\":\"" + String(_accGetUnlockCode())
                 + "\",\"firmwareVersion\":\"" + String(FW_VERSION)
@@ -91,6 +100,13 @@ inline bool accountRegister() {
     int code = http.POST(body);
     String resp = http.getString();
     http.end();
+
+    if (code == 200) {
+        otaConfirmServerOk();   // TLS + serwer dzialaja => firmware po OTA OK
+        if (factoryUnpair && wifiClearFactoryUnpair()) {
+            Serial.println("[account] serwer potwierdzil reset fabryczny (unpair)");
+        }
+    }
 
     if (code != 200 || resp.indexOf("\"ok\":true") < 0) return false;
 
@@ -105,8 +121,10 @@ inline bool accountRegister() {
     };
     String newToken = extractStr("deviceToken");
     if (newToken.length() == 64) {
-        wifiSaveDeviceToken(newToken.c_str());
-        Serial.printf("[account] deviceToken zapisany w NVS\n");
+        if (wifiSaveDeviceToken(newToken.c_str())) {
+            Serial.printf("[account] deviceToken zapisany w NVS\n");
+        }
+        // przy bledzie wifiSaveDeviceToken sam loguje (bez wartosci)
     }
 
     return true;
@@ -156,6 +174,7 @@ inline bool accountFetchStatus(AccountStatus& out) {
         out.error = "HTTP " + String(code);
         return false;
     }
+    otaConfirmServerOk();   // TLS + serwer dzialaja => firmware po OTA OK
 
     // Bardzo prosty parser bez ArduinoJson (jak w innych modulach KalkMate).
     out.aiModel = "";

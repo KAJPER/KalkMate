@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
-import { PICKUP_ADDRESSES, bcGetProfile, normalizeCountryForShipping, splitCityState, type PickupAddressKey } from "@/lib/basecourier";
-import { buildCustomsInvoicePdf } from "@/lib/customsInvoice";
+import { PICKUP_ADDRESSES, bcGetProfile, normalizeCountryForShipping, splitCityState, warsawToday, type PickupAddressKey } from "@/lib/basecourier";
+import { buildCustomsInvoicePdf, customsGoodsValue, customsUnitValue, CUSTOMS_UNIT_WEIGHT_KG } from "@/lib/customsInvoice";
+import { readOrderUnits } from "@/lib/orderPersonalization";
 
 // GET /api/admin/orders/[id]/customs-invoice?value=&hs=&origin=&from=
 // Faktura handlowa (PDF) do przesylek poza UE — do wydruku w 3 egzemplarzach
 // przy wersji papierowej dokumentow celnych (patrz basecourier.ts).
-//   value  — laczna wartosc towaru w walucie zamowienia (domyslnie kwota zamowienia)
+//   value  — laczna wartosc towaru w walucie zamowienia (domyslnie kwota zamowienia
+//            BEZ oplaty za wysylke — customsGoodsValue); przy kilku sztukach
+//            dzielona rowno na sztuki (rabat rozlozony proporcjonalnie)
 //   hs     — kod HS towaru (domyslnie 8470.10 — kalkulatory elektroniczne)
 //   origin — kraj pochodzenia, kod ISO (domyslnie PL)
 //   from   — klucz adresu nadawcy (PICKUP_ADDRESSES), domyslnie choroszcz
@@ -24,13 +27,20 @@ export async function GET(
 
   const q = request.nextUrl.searchParams;
   const value = parseFloat((q.get("value") || "").replace(",", "."));
-  const totalValue = Number.isFinite(value) && value > 0 ? value : order.amount / 100;
+  const totalValue = Number.isFinite(value) && value > 0 && value < 1_000_000 ? value : customsGoodsValue(order);
+  // Liczba sztuk (Order.quantity, stare zamowienia = 1).
+  const units = await readOrderUnits(order.id).catch(() => null);
+  const quantity = Math.max(1, Math.floor(Number(units?.quantity) || 1));
+  const unitValue = customsUnitValue(totalValue, quantity);
   const hsRaw = (q.get("hs") || "").trim();
   const hsCode = /^[0-9. ]{4,14}$/.test(hsRaw) ? hsRaw : "8470.10";
   const originRaw = (q.get("origin") || "").trim().toUpperCase();
   const origin = /^[A-Z]{2}$/.test(originRaw) ? originRaw : "PL";
-  const fromKey = (q.get("from") || "choroszcz") as PickupAddressKey;
-  const from = PICKUP_ADDRESSES[fromKey] ?? PICKUP_ADDRESSES.choroszcz;
+  // Tylko wlasne klucze — "constructor"/"__proto__" z URL dawaly obiekt z
+  // prototypu zamiast adresu (na fakturze "undefined undefined").
+  const fromRaw = q.get("from") || "choroszcz";
+  const fromKey: PickupAddressKey = Object.prototype.hasOwnProperty.call(PICKUP_ADDRESSES, fromRaw) ? (fromRaw as PickupAddressKey) : "choroszcz";
+  const from = PICKUP_ADDRESSES[fromKey];
 
   let profile = { name: "Kacper Popko", vat_company: "KAJPA Kacper Popko", phone: "600580888", email: "kacper@kajpa.pl" };
   try {
@@ -40,7 +50,8 @@ export async function GET(
     /* profil to tylko dane kontaktowe — faktura sie wygeneruje ze stalymi */
   }
 
-  const country = normalizeCountryForShipping(order.customerCountry || "");
+  // Puste customerCountry = zamowienie krajowe (konwencja checkoutPricing), nie "US".
+  const country = normalizeCountryForShipping(order.customerCountry || "PL");
   // Poprawki odbiorcy wpisane w panelu przed nadaniem (jeszcze nie zapisane w zamowieniu).
   const pick = (key: string, fallback: string, max: number) => {
     const v = (q.get(key) || "").trim().replace(/\s+/g, " ");
@@ -56,7 +67,7 @@ export async function GET(
   try {
     const pdf = await buildCustomsInvoicePdf({
       invoiceNo: order.orderNumber,
-      date: new Date().toISOString().slice(0, 10),
+      date: warsawToday(), // data w strefie Europe/Warsaw (serwer chodzi w UTC)
       shipper: {
         name: profile.name,
         company: profile.vat_company,
@@ -80,10 +91,10 @@ export async function GET(
         description: "Electronic calculator KalkMate v3.0",
         hsCode,
         originCountry: origin,
-        quantity: 1,
-        unitValue: totalValue,
+        quantity,
+        unitValue,
         currency: (order.currency || "eur").toUpperCase(),
-        weightKg: 1,
+        weightKg: CUSTOMS_UNIT_WEIGHT_KG * quantity,
       },
     });
     return new NextResponse(new Uint8Array(pdf), {

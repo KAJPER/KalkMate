@@ -6,10 +6,7 @@ import { useCart } from "@/components/CartContext";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { localeFromPathname, type Locale } from "@/lib/i18n";
-
-function formatPLN(grosze: number) {
-  return `${(grosze / 100).toLocaleString("pl-PL")} zł`;
-}
+import { formatMoney, MAX_ORDER_QUANTITY } from "@/lib/content/shop";
 
 const content: Record<Locale, {
   heading: string;
@@ -22,9 +19,16 @@ const content: Record<Locale, {
   removeFromCart: string;
   products: string;
   shipping: string;
+  shippingIntl: string;
+  shippingAtCheckout: string;
   free: string;
   total: string;
+  totalPlusShipping: string;
   goToCart: string;
+  quantity: string;
+  limitNote: string;
+  decrease: string;
+  increase: string;
 }> = {
   pl: {
     heading: "/ Koszyk",
@@ -37,9 +41,16 @@ const content: Record<Locale, {
     removeFromCart: "Usuń z koszyka",
     products: "Produkty",
     shipping: "Wysyłka InPost",
+    shippingIntl: "Wysyłka",
+    shippingAtCheckout: "UE 20 € · świat 35 € / zamówienie",
     free: "GRATIS",
     total: "Razem",
+    totalPlusShipping: "Razem + wysyłka",
     goToCart: "Przejdź do koszyka →",
+    quantity: "Ilość",
+    limitNote: `max ${MAX_ORDER_QUANTITY} szt. na zamówienie`,
+    decrease: "Zmniejsz ilość",
+    increase: "Zwiększ ilość",
   },
   en: {
     heading: "/ Cart",
@@ -52,9 +63,16 @@ const content: Record<Locale, {
     removeFromCart: "Remove from cart",
     products: "Products",
     shipping: "InPost shipping",
+    shippingIntl: "Shipping",
+    shippingAtCheckout: "EU €20 · world €35 / order",
     free: "FREE",
     total: "Total",
+    totalPlusShipping: "Total + shipping",
     goToCart: "Go to cart →",
+    quantity: "Qty",
+    limitNote: `max ${MAX_ORDER_QUANTITY} units per order`,
+    decrease: "Decrease quantity",
+    increase: "Increase quantity",
   },
   de: {
     heading: "/ Warenkorb",
@@ -67,9 +85,16 @@ const content: Record<Locale, {
     removeFromCart: "Aus dem Warenkorb entfernen",
     products: "Produkte",
     shipping: "InPost-Versand",
+    shippingIntl: "Versand",
+    shippingAtCheckout: "EU 20 € · Welt 35 € / Bestellung",
     free: "GRATIS",
     total: "Gesamt",
+    totalPlusShipping: "Gesamt + Versand",
     goToCart: "Zum Warenkorb →",
+    quantity: "Menge",
+    limitNote: `max. ${MAX_ORDER_QUANTITY} Stück pro Bestellung`,
+    decrease: "Menge verringern",
+    increase: "Menge erhöhen",
   },
 };
 
@@ -86,6 +111,10 @@ export default function CartDrawer() {
     closeDrawer,
   } = useCart();
   const drawerRef = useRef<HTMLDivElement>(null);
+  // Jeden produkt w koszyku -> jedna waluta. PLN = Polska (darmowy InPost).
+  const cartCurrency = items[0]?.currency ?? "PLN";
+  const isPln = cartCurrency === "PLN";
+  const cartHref = lang === "pl" ? "/koszyk" : `/koszyk?lang=${lang}`;
 
   // Lock scroll when open
   useEffect(() => {
@@ -196,7 +225,7 @@ export default function CartDrawer() {
                             {item.name}
                           </p>
                           <p className="text-sm text-[#F2EDE3]/50 mt-1">
-                            {formatPLN(item.price)} {t.perUnit}
+                            {formatMoney(item.price, item.currency ?? "PLN", lang)} {t.perUnit}
                           </p>
                         </div>
                         <button
@@ -218,32 +247,39 @@ export default function CartDrawer() {
                         </button>
                       </div>
 
-                      {/* Quantity stepper */}
+                      {/* Ilosc 1..MAX_ORDER_QUANTITY (wysylka stala na zamowienie) */}
                       <div className="flex items-center justify-between mt-4 pt-3 border-t border-[rgba(242,237,227,0.08)]">
-                        <div className="flex items-center gap-0">
-                          <button
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity - 1)
-                            }
-                            className="w-8 h-8 border border-[rgba(242,237,227,0.20)] flex items-center justify-center text-[#F2EDE3] hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors km-mono-eyebrow"
-                          >
-                            −
-                          </button>
-                          <span className="w-10 h-8 border-y border-[rgba(242,237,227,0.20)] flex items-center justify-center text-[#F2EDE3] km-mono-eyebrow text-sm">
-                            {item.quantity}
-                          </span>
-                          <button
-                            onClick={() =>
-                              updateQuantity(item.id, item.quantity + 1)
-                            }
-                            disabled={item.quantity >= 3}
-                            className="w-8 h-8 border border-[rgba(242,237,227,0.20)] flex items-center justify-center text-[#F2EDE3] hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors km-mono-eyebrow disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            +
-                          </button>
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <span className="km-mono-eyebrow text-[#F2EDE3]/60 text-[11px]">{t.quantity}</span>
+                            <div className="flex items-center border border-[rgba(242,237,227,0.20)]">
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                disabled={item.quantity <= 1}
+                                aria-label={t.decrease}
+                                className="w-8 h-8 flex items-center justify-center text-[#F2EDE3] hover:bg-[#F2EDE3] hover:text-[#0B0B0B] transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#F2EDE3]"
+                              >
+                                −
+                              </button>
+                              <span className="w-8 text-center km-mono-eyebrow text-[#F2EDE3]" aria-live="polite">
+                                {item.quantity}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                disabled={item.quantity >= MAX_ORDER_QUANTITY}
+                                aria-label={t.increase}
+                                className="w-8 h-8 flex items-center justify-center text-[#F2EDE3] hover:bg-[#F2EDE3] hover:text-[#0B0B0B] transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#F2EDE3]"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          <p className="km-mono-eyebrow text-[#F2EDE3]/35 text-[10px] mt-1.5">{t.limitNote}</p>
                         </div>
                         <span className="km-display text-lg text-[#F2EDE3]">
-                          {formatPLN(item.price * item.quantity)}
+                          {formatMoney(item.price * item.quantity, item.currency ?? "PLN", lang)}
                         </span>
                       </div>
                     </div>
@@ -259,29 +295,31 @@ export default function CartDrawer() {
                   <div className="flex justify-between text-sm">
                     <span className="text-[#F2EDE3]/65">{t.products}</span>
                     <span className="text-[#F2EDE3]">
-                      {formatPLN(totalPrice)}
+                      {formatMoney(totalPrice, cartCurrency, lang)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-[#F2EDE3]/65">
-                      {t.shipping}
+                      {isPln ? t.shipping : t.shippingIntl}
                     </span>
-                    <span className="km-mono-eyebrow text-[#D8FF3D]">
-                      {t.free}
-                    </span>
+                    {isPln ? (
+                      <span className="km-mono-eyebrow text-[#D8FF3D]">{t.free}</span>
+                    ) : (
+                      <span className="text-[#F2EDE3]/65">{t.shippingAtCheckout}</span>
+                    )}
                   </div>
                   <div className="flex justify-between pt-3 border-t border-[rgba(242,237,227,0.10)]">
                     <span className="km-mono-eyebrow text-[#F2EDE3]">
-                      {t.total}
+                      {isPln ? t.total : t.totalPlusShipping}
                     </span>
                     <span className="km-display text-2xl text-[#F2EDE3]">
-                      {formatPLN(totalPrice)}
+                      {formatMoney(totalPrice, cartCurrency, lang)}
                     </span>
                   </div>
                 </div>
 
                 <Link
-                  href="/koszyk"
+                  href={cartHref}
                   onClick={closeDrawer}
                   className="block w-full py-4 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow text-center hover:bg-[#F2EDE3] transition-colors"
                 >

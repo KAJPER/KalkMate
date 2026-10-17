@@ -210,7 +210,7 @@ export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
               {t.panelLogin}
             </a>
             <a
-              href="/koszyk"
+              href={lang === "pl" ? "/koszyk" : `/koszyk?lang=${lang}`}
               onClick={() => setMenuOpen(false)}
               className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow"
             >

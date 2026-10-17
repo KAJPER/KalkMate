@@ -155,19 +155,26 @@ extern void     remoteSendBuffer();        // u8g2.sendBuffer() — wypycha bufo
 // === I2C / MCP23017 ===
 // Legacy (WROVER):  SDA=21, SCL=22
 // v4 (ESP32-S3):    SDA=40, SCL=39
+// To jest JEDYNE zrodlo pinow I2C firmware (battery.h bierze je stad).
+// Definicja z innym pinem gdzie indziej (np. stary include/config.h
+// z pinami WROVER 21/22 na S3) = martwa klawiatura -> blad kompilacji
+// zamiast cichej zamiany pinow.
+#ifdef KALK_HW_LEGACY
+  #define _IN_I2C_SDA_PCB  21
+  #define _IN_I2C_SCL_PCB  22
+#else
+  #define _IN_I2C_SDA_PCB  40
+  #define _IN_I2C_SCL_PCB  39
+#endif
 #ifndef I2C_SDA
-  #ifdef KALK_HW_LEGACY
-    #define I2C_SDA   21
-  #else
-    #define I2C_SDA   40
-  #endif
+  #define I2C_SDA   _IN_I2C_SDA_PCB
+#elif I2C_SDA != _IN_I2C_SDA_PCB
+  #error "I2C_SDA zdefiniowane gdzie indziej z innym pinem niz PCB (input.h)"
 #endif
 #ifndef I2C_SCL
-  #ifdef KALK_HW_LEGACY
-    #define I2C_SCL   22
-  #else
-    #define I2C_SCL   39
-  #endif
+  #define I2C_SCL   _IN_I2C_SCL_PCB
+#elif I2C_SCL != _IN_I2C_SCL_PCB
+  #error "I2C_SCL zdefiniowane gdzie indziej z innym pinem niz PCB (input.h)"
 #endif
 #ifndef MCP_ADDR
 #define MCP_ADDR  0x20
@@ -178,6 +185,7 @@ static const uint8_t _IN_KB_PINS[10] = { 0, 1, 2, 3, 4, 8, 9, 10, 11, 12 };
 
 #define _IN_SCAN_INTERVAL_MS  30
 #define _IN_DEBOUNCE_SCANS    2
+#define _IN_GHOST_HOLD_MS     1500   // patrz inputScan() — zawor dla trwale zwartego klawisza
 
 // Stan wirtualnych przycisków (true = wciśnięty)
 static bool _virtBtn[6] = { false, false, false, false, false, false };
@@ -185,6 +193,8 @@ static bool _virtBtn[6] = { false, false, false, false, false, false };
 // MCP23017 — instancja prywatna modułu
 static Adafruit_MCP23X17 _inMcp;
 static bool              _inMcpReady = false;
+static uint32_t          _inMcpRetryLast = 0;   // ostatnia proba ponownego wykrycia MCP
+#define _IN_MCP_RETRY_MS  1000
 
 // Stan każdej z 45 par; indeks = i*10 + j (i<j)
 static bool    _inStatePair[100];
@@ -192,6 +202,14 @@ static bool    _inRawPrev[100];
 static uint8_t _inStreak[100];
 
 static uint32_t _inLastScan = 0;
+
+// Po wybudzeniu z auto-sleep (power.h) klawisz budzacy NIE moze wywolac
+// akcji (np. dopisac cyfry w kalkulatorze). Dopoki ta flaga jest true,
+// wszystkie wcisniete klawisze sa oznaczane jako skonsumowane, a wirtualne
+// BTN_xx sa puszczone; flaga gasnie, gdy wszystkie klawisze zostana puszczone.
+// inputKeyDown() (poziom) dalej widzi klawisz — panicCheck() dziala, wiec
+// panic key wybudza prosto do kalkulatora jak dotad.
+static bool _inSwallowUntilRelease = false;
 
 // ---------------------------------------------------------------------
 //  Mapowanie pary pinów MCP -> wirtualny BTN
@@ -294,21 +312,9 @@ inline void inputKeyMapGet(KalkKey k, uint8_t& outA, uint8_t& outB) {
 // ---------------------------------------------------------------------
 //  Init: I2C + MCP23017 + matryca w stan idle
 // ---------------------------------------------------------------------
-inline bool inputBegin() {
-    // Zaladuj keymap (z NVS lub defaulty) - zanim cokolwiek innego zacznie
-    // czytac _kalkMap (np. przerwany inputScan, default-constructed array
-    // moglby miec losowe wartosci)
-    inputKeyMapLoad();
-
-    Wire.begin(I2C_SDA, I2C_SCL);
-    Wire.setClock(400000);
-
-    if (!_inMcp.begin_I2C(MCP_ADDR)) {
-        _inMcpReady = false;
-        return false;
-    }
-    _inMcpReady = true;
-
+// Konfiguracja pinow MCP + reset stanu skanu. Wolane po udanym begin_I2C
+// (przy starcie i przy ponownym wykryciu MCP w inputScan()).
+inline void _inMcpSetup() {
     // Wszystkie KB piny -> INPUT_PULLUP w idle (skanowanie zmienia jeden
     // pin na OUTPUT LOW, potem przywraca)
     for (uint8_t i = 0; i < 10; i++) {
@@ -331,11 +337,51 @@ inline bool inputBegin() {
         _inStreak[k] = 0;
     }
     for (uint8_t i = 0; i < 6; i++) _virtBtn[i] = false;
+}
 
-    // Init activity tracker
+inline bool inputBegin() {
+    // Zaladuj keymap (z NVS lub defaulty) - zanim cokolwiek innego zacznie
+    // czytac _kalkMap (np. przerwany inputScan, default-constructed array
+    // moglby miec losowe wartosci)
+    inputKeyMapLoad();
+
+    Wire.begin(I2C_SDA, I2C_SCL);
+    Wire.setClock(400000);
+
+    // Init activity tracker (takze gdy MCP brak — inaczej auto-sleep
+    // liczylby bezczynnosc od 0)
     _inputLastActivity = millis();
+    _inMcpRetryLast = millis();
 
+    if (!_inMcp.begin_I2C(MCP_ADDR)) {
+        _inMcpReady = false;   // inputScan() bedzie probowal ponownie co ~1 s
+        return false;
+    }
+    _inMcpReady = true;
+    _inMcpSetup();
     return true;
+}
+
+// Czy MCP23017 (klawiatura) odpowiada. power.h nie usypia urzadzenia bez
+// klawiatury — nie byloby czym go wybudzic.
+inline bool inputIsReady() { return _inMcpReady; }
+
+// Ponowne wykrycie MCP23017 po nieudanym starcie (np. chwilowy brak
+// zasilania ekspandera / zaklocenie na magistrali przy boot). Nieblokujace:
+// jedna sonda I2C co _IN_MCP_RETRY_MS. Najpierw goly Wire probe, bo kazde
+// begin_I2C() alokuje w bibliotece Adafruit nowy obiekt urzadzenia I2C
+// (wyciek pamieci przy wolaniu w petli) — wolamy je dopiero gdy MCP odpowie.
+inline void _inMcpRetry() {
+    uint32_t now = millis();
+    if (now - _inMcpRetryLast < _IN_MCP_RETRY_MS) return;
+    _inMcpRetryLast = now;
+    Wire.beginTransmission(MCP_ADDR);
+    if (Wire.endTransmission() != 0) return;
+    if (!_inMcp.begin_I2C(MCP_ADDR)) return;
+    _inMcpReady = true;
+    _inMcpSetup();
+    _inputLastActivity = millis();
+    Serial.println("[INPUT] MCP23017 wykryty ponownie — klawiatura aktywna");
 }
 
 // Surowy skan matrycy: dla każdego z 10 pinów -> OUTPUT LOW, reszta
@@ -417,7 +463,6 @@ inline void _inUpdateVirtBtns() {
             any[m.virtBtn] = true;
         }
     }
-    for (uint8_t i = 0; i < 6; i++) _virtBtn[i] = any[i];
 
     // Reset consumer flag gdy klawisz puszczony
     bool anyDown = false;
@@ -426,19 +471,74 @@ inline void _inUpdateVirtBtns() {
         _kalkKeyDown[i] = keyNow[i];
         if (keyNow[i] && i != KEY_NONE) anyDown = true;
     }
+
+    // Klawisz budzacy (patrz _inSwallowUntilRelease): bez zboczy i bez
+    // wirtualnych BTN az do puszczenia wszystkich klawiszy.
+    if (_inSwallowUntilRelease) {
+        if (anyDown) {
+            for (uint8_t i = 0; i < KEY_COUNT; i++) {
+                if (keyNow[i]) _kalkKeyConsumed[i] = true;
+            }
+            for (uint8_t i = 0; i < 6; i++) any[i] = false;
+        } else {
+            _inSwallowUntilRelease = false;
+        }
+    }
+    for (uint8_t i = 0; i < 6; i++) _virtBtn[i] = any[i];
+
     // Reset activity timera (do auto-sleep) gdy ktoryskolwiek klawisz wcisniety
     if (anyDown) _inputLastActivity = millis();
 }
 
+// Ghosting matrycy bez diod: gdy jedna linia jest zwarta z dwiema innymi
+// (np. "6"=0-4 i "+"=0-10), trzecia para (4-10 = "=") tez czyta sie jako
+// zwarta, choc nikt jej nie nacisnal. Kazda grupa >=3 zwartych linii ma
+// linie o stopniu >=2 (zwarta z >=2 innymi), wiec wystarczy policzyc stopnie.
+// Rowniez gdy klawisz zostal domkniety w trakcie skanu (czesc par z jednego,
+// czesc z nastepnego "obrotu") wychodzi linia o stopniu >=2.
+inline bool _inRawHasGhostRisk(const bool raw[100]) {
+    uint8_t deg[10] = { 0 };
+    for (uint8_t i = 0; i < 10; i++) {
+        for (uint8_t j = i + 1; j < 10; j++) {
+            if (raw[i * 10 + j]) {
+                if (++deg[i] >= 2) return true;
+                if (++deg[j] >= 2) return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Pełny skan + debounce. Wywoływać często z loop() (max raz na 30 ms).
+// Gdy MCP23017 nie odpowiadal przy starcie — co ~1 s proba ponownego wykrycia.
 inline void inputScan() {
-    if (!_inMcpReady) return;
+    if (!_inMcpReady) { _inMcpRetry(); return; }
     uint32_t now = millis();
     if (now - _inLastScan < _IN_SCAN_INTERVAL_MS) return;
     _inLastScan = now;
 
     bool raw[100];
     _inRawScan(raw);
+
+    // Mozliwy ghost w tym skanie -> NIE zglaszaj nowych wcisniec (zbocze
+    // puszczony->wcisniety). Klawisze juz trzymane zostaja, puszczenia
+    // przechodza normalnie. Gdy jeden z klawiszy zostanie puszczony, drugi
+    // (jesli dalej trzymany) zostanie zgloszony w nastepnym skanie — szybkie
+    // pisanie "na zakladke" nie gubi znakow, a falszywe "=", "5" itd. nie
+    // powstaja.
+    // Zawor bezpieczenstwa: gdy stan "ghost" trwa nieprzerwanie dluzej niz
+    // _IN_GHOST_HOLD_MS (np. trwale zwarty klawisz w uszkodzonej membranie),
+    // wracamy do starego zachowania — inaczej wszystkie klawisze na liniach
+    // zwartego klawisza bylyby martwe na zawsze (blokada kodu AI). Przy
+    // takim defekcie wystarczy przytrzymac klawisz ~1.5 s.
+    static uint32_t _inGhostStart = 0;
+    bool ghostRisk = _inRawHasGhostRisk(raw);
+    if (ghostRisk) {
+        if (_inGhostStart == 0) _inGhostStart = now ? now : 1;
+        if (now - _inGhostStart >= _IN_GHOST_HOLD_MS) ghostRisk = false;
+    } else {
+        _inGhostStart = 0;
+    }
 
     for (uint8_t i = 0; i < 10; i++) {
         for (uint8_t j = i + 1; j < 10; j++) {
@@ -450,6 +550,7 @@ inline void inputScan() {
             }
             _inRawPrev[idx] = raw[idx];
             if (_inStreak[idx] >= _IN_DEBOUNCE_SCANS) {
+                if (raw[idx] && !_inStatePair[idx] && ghostRisk) continue;
                 _inStatePair[idx] = raw[idx];
             }
         }
@@ -460,6 +561,37 @@ inline void inputScan() {
     // z inputBtn()/_setBtn()/_solBtn() w petli praktycznie kazdego UI.
     // remoteHeartbeatTick() throttluje sie sam (nie robi requestu co 30ms).
     if (_remoteSessionActive) remoteHeartbeatTick();
+}
+
+// Skan dla petli auto-sleep (power.h). Pojedynczy surowy skan BEZ debounce
+// 2 skanow — przy okresie snu ~80 ms debounce wymagal trzymania klawisza
+// ~160 ms, wiec krotkie tapniecie nie budzilo. Gdy jakis zmapowany klawisz
+// jest wcisniety: stan debounce przyjmuje ten skan (klawisz od razu
+// "trzymany") i wlacza polykanie klawisza budzacego (_inSwallowUntilRelease),
+// zeby wybudzenie nie wykonalo akcji. Zwraca true = budzimy.
+inline bool inputWakeScan() {
+    if (!_inMcpReady) return false;
+    bool raw[100];
+    _inRawScan(raw);
+
+    bool any = false;
+    for (uint8_t i = 1; i < KEY_COUNT && !any; i++) {
+        if (_kalkMap[i].pinA == _KALK_MAP_NONE) continue;
+        if (_kalkMap[i].pinB == _KALK_MAP_NONE) continue;
+        uint16_t idx = _inPinIdx(_kalkMap[i].pinA) * 10 + _inPinIdx(_kalkMap[i].pinB);
+        if (raw[idx]) any = true;
+    }
+    if (!any) return false;
+
+    for (uint16_t k = 0; k < 100; k++) {
+        _inStatePair[k] = raw[k];
+        _inRawPrev[k]   = raw[k];
+        _inStreak[k]    = _IN_DEBOUNCE_SCANS;
+    }
+    _inLastScan = millis();
+    _inSwallowUntilRelease = true;
+    _inUpdateVirtBtns();
+    return true;
 }
 
 // ---------------------------------------------------------------------

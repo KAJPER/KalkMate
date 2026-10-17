@@ -2,8 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { AI_MODEL_IDS, getCostMultiplier } from "@/lib/aiModels";
-import { effectiveTokensFromUsage } from "@/lib/aiCost";
+import { AI_MODEL_IDS, getCostMultiplier, modelSupportsVision } from "@/lib/aiModels";
+import {
+  effectiveTokensFromUsage,
+  estimateInputTokens,
+  estimateReservation,
+  reserveTokens,
+  settleTokens,
+  refundTokens,
+  readTokenBalance,
+  isSubscriptionValid,
+} from "@/lib/aiCost";
 import { rateLimit } from "@/lib/rate-limit";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -1220,6 +1229,47 @@ Język
 Odpowiadaj po polsku. Używaj poprawnej terminologii przedmiotowej (polskiej, z łacińską/angielską gdzie przyjęta w nauce).
 `;
 
+// === Limity i komunikaty (K9) ===
+// Obraz <= 2 MB po base64, max 4 obrazy w wiadomosci — za duze ODRZUCAMY
+// (413) zamiast obcinac (obciety base64 = uszkodzony obraz w historii).
+// Typy inne niz image/* -> 415 (model i tak ich nie widzial).
+const MAX_IMAGE_B64_CHARS = 2 * 1024 * 1024;
+const MAX_IMAGES_PER_MESSAGE = 4;
+const MAX_MESSAGE_CHARS = 10_000;
+// Panel (src/app/panel/page.tsx) nadal wysyla cala historie z base64 — stad
+// duzy limit calego body; historie dla modelu i tak budujemy z bazy.
+const MAX_BODY_BYTES = 40 * 1024 * 1024;
+const HISTORY_FROM_DB = 20;
+const HISTORY_FROM_BODY = 10;
+const CHAT_MAX_TOKENS = 4096;
+const UPSTREAM_TIMEOUT_MS = 90_000;
+const UPSTREAM_ERROR_MSG = "Serwis AI chwilowo niedostepny. Sprobuj ponownie za chwile.";
+const DB_ERROR_MSG = "Baza danych chwilowo niedostepna. Sprobuj ponownie za chwile.";
+const IMAGE_PLACEHOLDER = "[obraz]";
+
+const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,/i;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+type IncomingAttachment = { filename: string; mimeType: string; fileSize: number; dataUrl: string };
+
+function errorJson(status: number, error: string) {
+  return NextResponse.json({ error }, { status });
+}
+
+// Polaczenie timeoutu z rozlaczeniem klienta (request.signal) bez
+// AbortSignal.any (kompatybilnosc z typami/Node).
+function linkedSignal(clientSignal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(new Error("timeout")), timeoutMs);
+  t.unref?.();
+  if (clientSignal) {
+    if (clientSignal.aborted) ctrl.abort(new Error("client aborted"));
+    else clientSignal.addEventListener("abort", () => ctrl.abort(new Error("client aborted")), { once: true });
+  }
+  ctrl.signal.addEventListener("abort", () => clearTimeout(t), { once: true });
+  return ctrl.signal;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
@@ -1241,11 +1291,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const len = Number(request.headers.get("content-length") || 0);
+    if (len > MAX_BODY_BYTES) {
+      return errorJson(413, "Zapytanie za duze.");
+    }
+
     // Sprawdź użytkownika i subskrypcję
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: { Subscription: true },
-    });
+    let user;
+    try {
+      user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        include: { Subscription: true },
+      });
+    } catch (e) {
+      console.error("[chat] user read fail:", e);
+      return errorJson(503, DB_ERROR_MSG);
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -1255,6 +1316,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Sprawdź czy użytkownik ma aktywną subskrypcję lub trial
+    // (K2: "active" wazne tylko do konca okresu — stripeCurrentPeriodEnd)
     const subscription = user.Subscription;
     if (!subscription) {
       return NextResponse.json(
@@ -1262,25 +1324,75 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-
-    const now = new Date();
-    const isTrialActive = subscription.status === "trial" && subscription.trialEndsAt && subscription.trialEndsAt > now;
-    const isSubscriptionActive = subscription.status === "active";
-
-    if (!isTrialActive && !isSubscriptionActive) {
+    if (!isSubscriptionValid(subscription)) {
       return NextResponse.json(
         { error: "Twoja subskrypcja wygasła. Odnów dostęp do AI Chat." },
         { status: 403 }
       );
     }
 
-    const { messages, conversationId } = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return errorJson(400, "Nieprawidlowy format zapytania.");
+    }
+    const messages: any[] = Array.isArray(body?.messages) ? body.messages : [];
+    const conversationId: string | null =
+      typeof body?.conversationId === "string" && body.conversationId ? body.conversationId : null;
+
+    // --- Biezaca wiadomosc usera (jedyna, z ktorej bierzemy obrazy) ---
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "user") {
+      return errorJson(400, "Brak wiadomosci uzytkownika.");
+    }
+    const lastText = typeof last.content === "string" ? last.content : "";
+    if (lastText.length > MAX_MESSAGE_CHARS) {
+      return errorJson(413, `Wiadomosc za dluga (max ${MAX_MESSAGE_CHARS} znakow).`);
+    }
+    const rawAtts: any[] = Array.isArray(last.attachments) ? last.attachments : [];
+    if (rawAtts.length > MAX_IMAGES_PER_MESSAGE) {
+      return errorJson(413, `Maksymalnie ${MAX_IMAGES_PER_MESSAGE} zdjecia w jednej wiadomosci.`);
+    }
+    const attachments: IncomingAttachment[] = [];
+    for (const att of rawAtts) {
+      const declared = typeof att?.mimeType === "string" ? att.mimeType.toLowerCase() : "";
+      const data = typeof att?.data === "string" ? att.data : "";
+      if (!declared.startsWith("image/")) {
+        return errorJson(415, "Obslugiwane sa tylko zdjecia");
+      }
+      let mime = declared;
+      let b64 = data;
+      const m = DATA_URL_RE.exec(data);
+      if (m) {
+        mime = m[1].toLowerCase();
+        b64 = data.slice(m[0].length);
+      } else if (data.startsWith("data:")) {
+        return errorJson(415, "Obslugiwane sa tylko zdjecia");
+      }
+      if (!/^image\/[a-z0-9.+-]+$/.test(mime)) {
+        return errorJson(415, "Obslugiwane sa tylko zdjecia");
+      }
+      if (b64.length > MAX_IMAGE_B64_CHARS) {
+        return errorJson(413, "Zdjecie za duze (max 2 MB po zakodowaniu). Zmniejsz je i sprobuj ponownie.");
+      }
+      if (!b64 || !BASE64_RE.test(b64)) {
+        return errorJson(400, "Uszkodzony plik zdjecia.");
+      }
+      attachments.push({
+        filename: String(att?.filename || "obraz").slice(0, 255),
+        mimeType: mime,
+        fileSize: Number.isFinite(Number(att?.fileSize)) ? Math.max(0, Math.floor(Number(att.fileSize))) : 0,
+        dataUrl: `data:${mime};base64,${b64}`,
+      });
+    }
+    if (!lastText.trim() && attachments.length === 0) {
+      return errorJson(400, "Pusta wiadomosc.");
+    }
 
     if (!OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: "OpenRouter API key not configured" },
-        { status: 500 }
-      );
+      console.error("[chat] OPENROUTER_API_KEY not configured");
+      return errorJson(503, UPSTREAM_ERROR_MSG);
     }
 
     // Odczytaj tryb AI i model z ustawień użytkownika
@@ -1293,99 +1405,147 @@ export async function POST(request: NextRequest) {
       if (urows?.[0]?.aiMode === "raw") aiMode = "raw";
       if (urows?.[0]?.aiModel) aiModel = urows[0].aiModel;
     } catch {}
-    const modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
+    let modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
       ? aiModel
       : OPENROUTER_DEFAULT_MODEL;
     const systemPrompt = aiMode === "raw" ? SYSTEM_PROMPT_RAW : SYSTEM_PROMPT;
-    const costMultiplier = getCostMultiplier(aiModel);
+    let costMultiplier = getCostMultiplier(aiModel);
+    if (attachments.length > 0 && !modelSupportsVision(modelToUse)) {
+      modelToUse = OPENROUTER_DEFAULT_MODEL;
+      costMultiplier = getCostMultiplier("default");
+    }
 
-    // Sprawdz saldo tokenow — minimum 1000 efektywnych tokenow w rezerwie
-    const balanceRows = await prisma.$queryRaw<{ tokenBalance: number }[]>`
-      SELECT "tokenBalance" FROM "User" WHERE "id" = ${user.id} LIMIT 1
-    `.catch(() => null);
-    const tokenBalance = Number(balanceRows?.[0]?.tokenBalance ?? 0);
-    if (tokenBalance < 1000) {
-      return NextResponse.json(
-        { error: `Brak tokenów (${tokenBalance}). Odnów subskrypcję w panelu.` },
-        { status: 402 }
-      );
+    // --- Historia dla modelu ---
+    // M8 + audyt 2026-10-16: z konwersacja -> historia Z BAZY (ostatnie N),
+    // nie od klienta (rola assistant byla falszowalna, a klient wysylal cala
+    // historie z base64). Wczesniejsze obrazy -> tekst "[obraz]".
+    // Bez konwersacji -> z body max 10 poprzednich, tylko tekst, bez "system".
+    const history: { role: "user" | "assistant"; content: string }[] = [];
+    let existingConversation: { id: string } | null = null;
+    try {
+      if (conversationId) {
+        existingConversation = await prisma.conversation.findFirst({
+          where: { id: conversationId, userId: user.id },
+          select: { id: true },
+        });
+        if (!existingConversation) {
+          return errorJson(404, "Konwersacja nie istnieje.");
+        }
+        const rows = await prisma.chatMessage.findMany({
+          where: { conversationId },
+          orderBy: { createdAt: "desc" },
+          take: HISTORY_FROM_DB,
+          select: { role: true, content: true, _count: { select: { Attachment: true } } },
+        });
+        for (const row of rows.reverse()) {
+          if (row.role !== "user" && row.role !== "assistant") continue;
+          const marks = row._count.Attachment > 0 ? Array(row._count.Attachment).fill(IMAGE_PLACEHOLDER).join(" ") : "";
+          const content = [row.content || "", marks].filter(Boolean).join("\n");
+          if (content) history.push({ role: row.role as "user" | "assistant", content });
+        }
+      }
+    } catch (e) {
+      console.error("[chat] history read fail:", e);
+      return errorJson(503, DB_ERROR_MSG);
+    }
+    if (!conversationId) {
+      const prior = messages
+        .slice(0, -1)
+        .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m?.content === "string")
+        .slice(-HISTORY_FROM_BODY);
+      for (const m of prior) {
+        const n = Array.isArray(m.attachments) ? m.attachments.length : 0;
+        const marks = n > 0 ? Array(n).fill(IMAGE_PLACEHOLDER).join(" ") : "";
+        const content = [String(m.content).slice(0, MAX_MESSAGE_CHARS), marks].filter(Boolean).join("\n");
+        if (content) history.push({ role: m.role, content });
+      }
     }
 
     // Prepare messages for OpenRouter (OpenAI-compatible format)
-    const openRouterMessages: any[] = [
-      { role: "system", content: systemPrompt },
-    ];
-
-    // M8: tylko role user/assistant od klienta — blokuje prompt injection przez role: "system"
-    const ALLOWED_ROLES = new Set(["user", "assistant"]);
-    messages.forEach((msg: any) => {
-      if (!ALLOWED_ROLES.has(msg.role)) return;
-
-      const content: any[] = [];
-
-      if (msg.content) {
-        content.push({ type: "text", text: msg.content });
-      }
-
-      if (msg.attachments && Array.isArray(msg.attachments)) {
-        msg.attachments.forEach((att: any) => {
-          if (att.mimeType.startsWith("image/")) {
-            const dataUrl = att.data.startsWith("data:") ? att.data : `data:${att.mimeType};base64,${att.data}`;
-            content.push({ type: "image_url", image_url: { url: dataUrl } });
-          } else if (att.mimeType === "application/pdf") {
-            content.push({ type: "text", text: `[Załącznik PDF: ${att.filename}]` });
-          }
-        });
-      }
-
-      openRouterMessages.push({
-        role: msg.role === "user" ? "user" : "assistant",
-        content: content.length === 1 && content[0].type === "text" ? content[0].text : content,
-      });
+    const openRouterMessages: any[] = [{ role: "system", content: systemPrompt }];
+    for (const h of history) openRouterMessages.push(h);
+    const currentContent: any[] = [];
+    if (lastText) currentContent.push({ type: "text", text: lastText });
+    for (const a of attachments) {
+      currentContent.push({ type: "image_url", image_url: { url: a.dataUrl } });
+    }
+    openRouterMessages.push({
+      role: "user",
+      content: currentContent.length === 1 && currentContent[0].type === "text" ? lastText : currentContent,
     });
 
-    const response = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://kalkmate.pl",
-        "X-Title": "KalkMate",
-      },
-      body: JSON.stringify({
-        model: modelToUse,
-        messages: openRouterMessages,
-        temperature: 0.3,
-        max_tokens: 4096,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("OpenRouter API error:", error);
-      return NextResponse.json(
-        { error: "Failed to generate response" },
-        { status: response.status }
-      );
+    // --- Atomowa rezerwacja salda przed wywolaniem (K9: blad DB -> 503) ---
+    const inputChars =
+      systemPrompt.length + lastText.length + history.reduce((s, h) => s + h.content.length, 0);
+    const est = estimateReservation(
+      estimateInputTokens(inputChars, attachments.length),
+      CHAT_MAX_TOKENS,
+      costMultiplier
+    );
+    const rr = await reserveTokens(user.id, est);
+    if (rr === "db_error") return errorJson(503, DB_ERROR_MSG);
+    if (rr === "insufficient") {
+      const bal = await readTokenBalance(user.id);
+      if (bal === null) return errorJson(503, DB_ERROR_MSG);
+      return errorJson(402, `Za mało tokenów (${bal}, potrzeba ok. ${est}). Doładuj tokeny w panelu.`);
     }
 
-    const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content || "Przepraszam, nie mogłem wygenerować odpowiedzi.";
+    // --- Wywolanie upstream: timeout 90 s + przerwanie gdy klient sie rozlaczy ---
+    let data: any = null;
+    try {
+      const response = await fetch(OPENROUTER_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://kalkmate.pl",
+          "X-Title": "KalkMate",
+        },
+        body: JSON.stringify({
+          model: modelToUse,
+          messages: openRouterMessages,
+          temperature: 0.3,
+          max_tokens: CHAT_MAX_TOKENS,
+        }),
+        signal: linkedSignal(request.signal, UPSTREAM_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        console.error(`[chat] OpenRouter ${response.status} (model=${modelToUse}):`, detail.slice(0, 500));
+        await refundTokens(user.id, est);
+        return errorJson(502, UPSTREAM_ERROR_MSG);
+      }
+      data = await response.json();
+    } catch (e) {
+      console.error(`[chat] OpenRouter fetch fail (model=${modelToUse}):`, e);
+      await refundTokens(user.id, est);
+      return errorJson(502, UPSTREAM_ERROR_MSG);
+    }
+
+    const choice = data?.choices?.[0];
+    const aiResponse = typeof choice?.message?.content === "string" ? choice.message.content.trim() : "";
+    if (!aiResponse || choice?.finish_reason === "error") {
+      // Pusta odpowiedz nie jest rozliczana.
+      console.error(`[chat] pusta odpowiedz (model=${modelToUse}, finish=${choice?.finish_reason})`);
+      await refundTokens(user.id, est);
+      return errorJson(502, UPSTREAM_ERROR_MSG);
+    }
     // Preferuje realny koszt zwrocony przez OpenRouter (usage.cost) zamiast
     // szacunku total_tokens * costMultiplier — patrz src/lib/aiCost.ts.
     const { effectiveTokens, source: costSource } = effectiveTokensFromUsage(data.usage, costMultiplier);
     if (costSource === "estimate") {
       console.warn(`[chat] usage.cost brak dla modelu ${modelToUse} — fallback na szacunek (tokens=${data.usage?.total_tokens}, mult=${costMultiplier})`);
     }
+    await settleTokens(user.id, est, effectiveTokens);
+    const tokensLeft = (await readTokenBalance(user.id)) ?? undefined;
 
     // Save messages to database - create conversation if needed
     try {
-      let activeConversationId = conversationId;
+      let activeConversationId = existingConversation?.id ?? null;
 
       // If no conversationId provided, create a new conversation
       if (!activeConversationId) {
-        const lastUserMessage = messages[messages.length - 1];
-        const title = lastUserMessage?.content?.substring(0, 100) || "Nowa konwersacja";
+        const title = lastText.substring(0, 100) || "Nowa konwersacja";
 
         const newConversation = await prisma.conversation.create({
           data: {
@@ -1393,7 +1553,7 @@ export async function POST(request: NextRequest) {
             userId: user.id,
             title: title
               .replace(/<[^>]*>/g, "")
-              .replace(/[^\w\s\u0100-\u017F\u0400-\u04FF?!.,()-]/g, "")
+              .replace(/[^\w\sĀ-ſЀ-ӿ?!.,()-]/g, "")
               .trim() || "Nowa konwersacja",
             updatedAt: new Date(),
           },
@@ -1401,74 +1561,57 @@ export async function POST(request: NextRequest) {
         activeConversationId = newConversation.id;
       }
 
-      // Verify conversation exists and belongs to user
-      const conversation = await prisma.conversation.findFirst({
-        where: { id: activeConversationId, userId: user.id },
+      // Save user message (only the latest one, as previous are already saved)
+      const userMsg = await prisma.chatMessage.create({
+        data: {
+          id: require("crypto").randomUUID(),
+          conversationId: activeConversationId,
+          role: "user",
+          content: lastText,
+        },
       });
 
-      if (conversation) {
-        // Save user message (only the latest one, as previous are already saved)
-        const lastUserMessage = messages[messages.length - 1];
-        if (lastUserMessage?.role === "user") {
-          const userMsg = await prisma.chatMessage.create({
-            data: {
-              id: require("crypto").randomUUID(),
-              conversationId: activeConversationId,
-              role: "user",
-              content: lastUserMessage.content.substring(0, 10000),
-            },
-          });
-
-          // Save attachments if any
-          if (lastUserMessage.attachments && Array.isArray(lastUserMessage.attachments)) {
-            await prisma.attachment.createMany({
-              data: lastUserMessage.attachments.map((att: any) => ({
-                id: require("crypto").randomUUID(),
-                messageId: userMsg.id,
-                filename: att.filename,
-                mimeType: att.mimeType,
-                fileSize: att.fileSize,
-                fileData: att.data.substring(0, 1000000), // Limit to ~1MB base64
-                storageType: "base64",
-              })),
-            });
-          }
-        }
-
-        // Save AI response
-        await prisma.chatMessage.create({
-          data: {
+      // Save attachments if any (pelne dane — za duze odrzucone wyzej)
+      if (attachments.length > 0) {
+        await prisma.attachment.createMany({
+          data: attachments.map((att) => ({
             id: require("crypto").randomUUID(),
-            conversationId: activeConversationId,
-            role: "assistant",
-            content: aiResponse.substring(0, 10000),
-          },
-        });
-
-        // Update conversation timestamp
-        await prisma.conversation.update({
-          where: { id: activeConversationId },
-          data: { updatedAt: new Date() },
+            messageId: userMsg.id,
+            filename: att.filename,
+            mimeType: att.mimeType,
+            fileSize: att.fileSize,
+            fileData: att.dataUrl,
+            storageType: "base64",
+          })),
         });
       }
 
-      // Odejmij tokeny po udanej odpowiedzi (fire-and-forget)
-      prisma.$executeRaw`
-        UPDATE "User" SET "tokenBalance" = MAX(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${user.id}
-      `.catch((e: any) => console.error("[chat] token deduction fail:", e));
+      // Save AI response
+      await prisma.chatMessage.create({
+        data: {
+          id: require("crypto").randomUUID(),
+          conversationId: activeConversationId,
+          role: "assistant",
+          content: aiResponse.substring(0, 20000),
+        },
+      });
+
+      // Update conversation timestamp
+      await prisma.conversation.update({
+        where: { id: activeConversationId },
+        data: { updatedAt: new Date() },
+      });
 
       return NextResponse.json({
         response: aiResponse,
         conversationId: activeConversationId,
         tokensUsed: effectiveTokens,
-        tokensLeft: Math.max(0, tokenBalance - effectiveTokens),
+        tokensLeft,
       });
     } catch (saveError) {
+      // Odpowiedz juz rozliczona — zwracamy ja mimo bledu zapisu historii.
       console.error("Failed to save messages:", saveError);
-      prisma.$executeRaw`
-        UPDATE "User" SET "tokenBalance" = MAX(0, "tokenBalance" - ${effectiveTokens}) WHERE "id" = ${user.id}
-      `.catch(() => {});
-      return NextResponse.json({ response: aiResponse });
+      return NextResponse.json({ response: aiResponse, tokensUsed: effectiveTokens, tokensLeft });
     }
   } catch (error) {
     console.error("Chat API error:", error);

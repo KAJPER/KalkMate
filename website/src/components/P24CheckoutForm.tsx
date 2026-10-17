@@ -1,9 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import type { InPostPoint } from "@/components/InPostGeowidget";
 import { readClientAttribution } from "@/lib/clientAttribution";
+import { type Locale } from "@/lib/i18n";
+import { formatMoney } from "@/lib/content/shop";
+
+// P24 = tylko dostawa do Polski, ale formularz moze otworzyc klient z /en lub
+// /de (wybral Polske jako kraj dostawy) — teksty w jezyku strony.
+const content: Record<Locale, {
+  payment: string; back: string; shipping: string; free: string; coupon: string; total: string;
+  chooseMethod: string; blikSub: string; p24Sub: string;
+  serverError: string; connectionError: string;
+  perUnit: string; shippingPerOrder: string;
+}> = {
+  pl: {
+    payment: "Płatność", back: "← Wstecz", shipping: "Wysyłka", free: "GRATIS", coupon: "Kupon", total: "RAZEM",
+    chooseMethod: "Wybierz metodę płatności",
+    blikSub: "Kod z aplikacji bankowej · Przelewy24",
+    p24Sub: "Karta, Apple Pay, Google Pay, PayPo, raty",
+    serverError: "Błąd serwera.", connectionError: "Błąd połączenia.",
+    perUnit: "/ szt.", shippingPerOrder: "jedna paczka",
+  },
+  en: {
+    payment: "Payment", back: "← Back", shipping: "Shipping", free: "FREE", coupon: "Coupon", total: "TOTAL",
+    chooseMethod: "Choose a payment method",
+    blikSub: "Code from your Polish banking app · Przelewy24",
+    p24Sub: "Card, Apple Pay, Google Pay, PayPo, instalments",
+    serverError: "Server error.", connectionError: "Connection error.",
+    perUnit: "/ ea.", shippingPerOrder: "one parcel",
+  },
+  de: {
+    payment: "Zahlung", back: "← Zurück", shipping: "Versand", free: "GRATIS", coupon: "Gutschein", total: "GESAMT",
+    chooseMethod: "Zahlungsmethode wählen",
+    blikSub: "Code aus deiner polnischen Banking-App · Przelewy24",
+    p24Sub: "Karte, Apple Pay, Google Pay, PayPo, Ratenzahlung",
+    serverError: "Serverfehler.", connectionError: "Verbindungsfehler.",
+    perUnit: "/ Stk.", shippingPerOrder: "ein Paket",
+  },
+};
 
 interface FormData {
   name: string;
@@ -13,8 +49,11 @@ interface FormData {
   postcode: string;
   city: string;
   country: string;
+}
+
+export interface UnitPersonalization {
   unlockCode: string;
-  personalizeName: string;
+  name: string;
 }
 
 interface P24CheckoutFormProps {
@@ -22,7 +61,14 @@ interface P24CheckoutFormProps {
   selectedPoint: InPostPoint | null;
   isPoland: boolean;
   currency: string;
+  /** Cena jednostkowa. */
   productCents: number;
+  /** Liczba sztuk (1..MAX_ORDER_QUANTITY) — wysylka stala na zamowienie. */
+  quantity?: number;
+  /** Cena jednostkowa × ilosc; brak = productCents × quantity. */
+  subtotalCents?: number;
+  /** Personalizacja kazdej sztuki (dlugosc == quantity). */
+  personalizations?: UnitPersonalization[];
   shippingCents: number;
   discountCents: number;
   totalCents: number;
@@ -32,24 +78,34 @@ interface P24CheckoutFormProps {
   onError: (msg: string) => void;
   onBack: () => void;
   footer?: React.ReactNode;
+  lang?: Locale;
+  /** Checkbox personalizacji = swiadoma utrata prawa odstapienia (art. 38 pkt 3 u.p.k.). */
+  personalizeConsent?: boolean;
+  /** Serwer odrzucil kupon (409, K1) — BuyNow usuwa go z formularza; zwraca komunikat. */
+  onCouponRejected?: (data: { error?: string; reason?: string }) => string;
 }
 
 export default function P24CheckoutForm({
   formData, selectedPoint, isPoland,
-  currency, productCents, shippingCents, discountCents, totalCents,
+  currency, productCents, quantity = 1, subtotalCents, personalizations = [],
+  shippingCents, discountCents, totalCents,
   appliedCoupon, couponCode,
   onBack, footer,
+  lang = "pl", personalizeConsent = false, onCouponRejected,
 }: P24CheckoutFormProps) {
+  const t = content[lang];
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMethod, setLoadingMethod] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  // Blokada podwojnego klikniecia — drugie zapytanie stworzyloby druga transakcje.
+  const payingRef = useRef(false);
+  const subtotal = subtotalCents ?? productCents * quantity;
 
-  const fmtMoney = (cents: number) =>
-    currency === "PLN"
-      ? `${(cents / 100).toFixed(2).replace(/\.00$/, "").replace(".", ",")} zł`
-      : `${(cents / 100).toFixed(0)} EUR`;
+  const fmtMoney = (cents: number) => formatMoney(cents, currency, lang);
 
   async function pay(blikMode: boolean) {
+    if (payingRef.current) return;
+    payingRef.current = true;
     setIsLoading(true);
     setLoadingMethod(blikMode ? "blik" : "other");
     setErrorMsg("");
@@ -59,6 +115,12 @@ export default function P24CheckoutForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          // Ilosc + personalizacja kazdej sztuki; unlockCode/personalizeName =
+          // sztuka 1 (zgodnosc ze starszym serwerem).
+          quantity,
+          personalizations,
+          unlockCode: personalizations[0]?.unlockCode ?? "",
+          personalizeName: personalizations[0]?.name ?? "",
           currency,
           shippingCents,
           couponCode: couponCode || null,
@@ -69,14 +131,27 @@ export default function P24CheckoutForm({
               : null,
           blikMode,
           attribution: readClientAttribution(),
+          // Zgody z formularza — do zapisania przy zamowieniu (dowod zgody
+          // na personalizacje / utrate prawa odstapienia).
+          personalizeConsent,
+          withdrawalConsent: personalizeConsent,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Błąd serwera.");
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && onCouponRejected) {
+        throw new Error(onCouponRejected(data));
+      }
+      if (!res.ok) throw new Error(data.error || t.serverError);
+      // Przekierowanie tylko na https (bramka P24) — nigdy javascript:/wzgledne.
+      if (typeof data.redirectUrl !== "string" || !/^https:\/\//i.test(data.redirectUrl)) {
+        throw new Error(t.serverError);
+      }
       window.location.href = data.redirectUrl;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Błąd połączenia.";
+      // TypeError = fetch nie doszedl do serwera (siec) — komunikat w jezyku strony.
+      const msg = err instanceof Error && err.name !== "TypeError" ? err.message : t.connectionError;
       setErrorMsg(msg);
+      payingRef.current = false;
       setIsLoading(false);
       setLoadingMethod(null);
     }
@@ -85,32 +160,39 @@ export default function P24CheckoutForm({
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h3 className="km-display text-3xl text-[#F2EDE3]">Płatność</h3>
+        <h3 className="km-display text-3xl text-[#F2EDE3]">{t.payment}</h3>
         <button onClick={onBack} disabled={isLoading} className="km-mono-eyebrow text-[#D8FF3D] disabled:opacity-40">
-          ← Wstecz
+          {t.back}
         </button>
       </div>
 
       {/* Order summary */}
       <div className="mb-6 border border-[rgba(242,237,227,0.10)] p-4 space-y-1.5 text-sm">
         <div className="flex justify-between">
-          <span className="text-[#F2EDE3]/65">KalkMate v3.0</span>
-          <span className="text-[#F2EDE3]">{fmtMoney(productCents)}</span>
+          <span className="text-[#F2EDE3]/65">
+            KalkMate v3.0{quantity > 1 ? ` × ${quantity}` : ""}
+            {quantity > 1 && (
+              <span className="block text-xs text-[#F2EDE3]/40">{fmtMoney(productCents)} {t.perUnit}</span>
+            )}
+          </span>
+          <span className="text-[#F2EDE3]">{fmtMoney(subtotal)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-[#F2EDE3]/65">Wysyłka</span>
+          <span className="text-[#F2EDE3]/65">
+            {t.shipping}{quantity > 1 && <span className="text-xs text-[#F2EDE3]/40"> · {t.shippingPerOrder}</span>}
+          </span>
           {shippingCents === 0
-            ? <span className="km-mono-eyebrow text-[#D8FF3D]">GRATIS</span>
+            ? <span className="km-mono-eyebrow text-[#D8FF3D]">{t.free}</span>
             : <span className="text-[#F2EDE3]">{fmtMoney(shippingCents)}</span>}
         </div>
         {appliedCoupon && (
           <div className="flex justify-between">
-            <span className="text-[#D8FF3D]">Kupon {appliedCoupon.code}</span>
+            <span className="text-[#D8FF3D]">{t.coupon} {appliedCoupon.code}</span>
             <span className="text-[#D8FF3D]">−{fmtMoney(discountCents)}</span>
           </div>
         )}
         <div className="flex justify-between pt-3 border-t border-[rgba(242,237,227,0.10)] mt-2">
-          <span className="km-mono-eyebrow text-[#F2EDE3]">TOTAL</span>
+          <span className="km-mono-eyebrow text-[#F2EDE3]">{t.total}</span>
           <span className="km-display text-2xl text-[#F2EDE3]">{fmtMoney(totalCents)}</span>
         </div>
       </div>
@@ -122,7 +204,7 @@ export default function P24CheckoutForm({
       )}
 
       <div className="space-y-3">
-        <p className="km-mono-eyebrow text-[#F2EDE3]/55 mb-4">Wybierz metodę płatności</p>
+        <p className="km-mono-eyebrow text-[#F2EDE3]/55 mb-4">{t.chooseMethod}</p>
 
         {/* BLIK via P24 */}
         <motion.button
@@ -138,7 +220,7 @@ export default function P24CheckoutForm({
           </div>
           <div className="text-left">
             <p className="text-sm text-[#F2EDE3] font-medium">BLIK</p>
-            <p className="text-xs text-[#F2EDE3]/45 mt-0.5">Kod z aplikacji bankowej · Przelewy24</p>
+            <p className="text-xs text-[#F2EDE3]/45 mt-0.5">{t.blikSub}</p>
           </div>
           <span className="ml-auto text-[#F2EDE3]/30">→</span>
         </motion.button>
@@ -157,7 +239,7 @@ export default function P24CheckoutForm({
           </div>
           <div className="text-left">
             <p className="text-sm text-[#F2EDE3] font-medium">Przelewy24</p>
-            <p className="text-xs text-[#F2EDE3]/45 mt-0.5">Karta, Apple Pay, Google Pay, PayPo, raty</p>
+            <p className="text-xs text-[#F2EDE3]/45 mt-0.5">{t.p24Sub}</p>
           </div>
           <span className="ml-auto text-[#F2EDE3]/30">→</span>
         </motion.button>

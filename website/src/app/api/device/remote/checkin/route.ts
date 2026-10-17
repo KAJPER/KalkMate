@@ -16,29 +16,44 @@ import { verifyDeviceAuth } from "@/lib/device-auth";
 // jednorazowo) i podstawic falszywy obraz ekranu. Teraz przez
 // verifyDeviceAuth(): token urzadzenia z bazy, jesli zostal juz nadany.
 
+// Audyt 2026-10-16: limit rozmiaru sprawdzany PRZED wczytaniem body
+// (content-length), a kazdy blad serwera zwraca JSON {active:false} —
+// firmware traktuje 401/403/404 oraz active:false jako koniec sesji.
+const MAX_BODY_BYTES = 64 * 1024;
+
 export async function POST(request: NextRequest) {
-  const auth = await verifyDeviceAuth(request);
-  if (!auth.ok) {
-    return NextResponse.json({ active: false, error: auth.error }, { status: auth.status });
-  }
-  const deviceId = auth.deviceId;
-
-  const row = await getRemoteSession(deviceId);
-  if (!isSessionLive(row)) {
-    return NextResponse.json({ active: false, key: null });
-  }
-
-  const body = await request.json().catch(() => null);
-  const frame = typeof body?.frame === "string" ? body.frame : null;
-  if (frame) {
-    // Sanity: 2048 B surowego bufora -> base64 to ok. 2732 znakow. Nie
-    // wymuszamy dokladnej dlugosci (przyszly hardware moze miec inny
-    // rozmiar ekranu) — po prostu ignorujemy jawnie absurdalnie duze payloady.
-    if (frame.length <= 8192) {
-      await setRemoteFrame(deviceId, frame);
+  try {
+    const len = Number(request.headers.get("content-length") || 0);
+    if (len > MAX_BODY_BYTES) {
+      return NextResponse.json({ active: false, key: null, error: "Payload too large" }, { status: 413 });
     }
-  }
 
-  const key = await consumePendingKey(deviceId);
-  return NextResponse.json({ active: true, key });
+    const auth = await verifyDeviceAuth(request);
+    if (!auth.ok) {
+      return NextResponse.json({ active: false, error: auth.error }, { status: auth.status });
+    }
+    const deviceId = auth.deviceId;
+
+    const row = await getRemoteSession(deviceId);
+    if (!isSessionLive(row)) {
+      return NextResponse.json({ active: false, key: null });
+    }
+
+    const body = await request.json().catch(() => null);
+    const frame = typeof body?.frame === "string" ? body.frame : null;
+    if (frame) {
+      // Sanity: 2048 B surowego bufora -> base64 to ok. 2732 znakow. Nie
+      // wymuszamy dokladnej dlugosci (przyszly hardware moze miec inny
+      // rozmiar ekranu) — po prostu ignorujemy jawnie absurdalnie duze payloady.
+      if (frame.length <= 8192) {
+        await setRemoteFrame(deviceId, frame);
+      }
+    }
+
+    const key = await consumePendingKey(deviceId);
+    return NextResponse.json({ active: true, key });
+  } catch (e) {
+    console.error("[device/remote/checkin]", e);
+    return NextResponse.json({ active: false, key: null, error: "Server error" }, { status: 503 });
+  }
 }

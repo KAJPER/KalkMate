@@ -27,7 +27,13 @@
 //       dziala jak prawdziwy klawisz w KAZDYM ekranie, bez zmian w nich.
 //    5. Sesja konczy sie sama po ~10 min (serwer) albo recznie w panelu —
 //       kolejny tick watku sieciowego dostanie active:false, watek UI to
-//       zauwazy i wylaczy flage + WiFi.
+//       zauwazy i wylaczy flage + WiFi. Niezaleznie od serwera: twardy
+//       limit lokalny _REMOTE_MAX_SESSION_MS oraz koniec przy 401/403/404
+//       (urzadzenie nieuprawnione / brak sesji). Przy innych bledach
+//       (siec, 5xx) — backoff 2 s -> 30 s zamiast strumienia co 500 ms.
+//    6. Na czas sesji auto-sleep jest zablokowany (sen wylacza WiFi, czyli
+//       zrywa sesje) — blokada odnawiana co tick (inne ekrany zdejmuja ja
+//       przy wyjsciu) i zdejmowana na koncu sesji.
 //
 //  Wymaga: input.h (remoteSessionActive/SetActive, inputInjectKey,
 //  remoteGetScreenBuffer/remoteSendBuffer), wifi_persist.h, kalkmate_certs.h,
@@ -42,10 +48,15 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
+#include "wifi_persist.h"   // wifiStaOnLimited, wifiLoadSaved, wifiLoadDeviceToken
+#include "power.h"          // powerSetInhibit — bez auto-sleep podczas sesji
 
 #define _REMOTE_CHECKIN_ENDPOINT  KALK_SERVER_URL "/api/device/remote/checkin"
 #define _REMOTE_TICK_MS           500    // co ile odpytujemy serwer podczas sesji
 #define _REMOTE_HTTP_TIMEOUT_MS   4000   // krotki timeout — to tylko heartbeat, nie moze blokowac UI na dlugo
+#define _REMOTE_MAX_SESSION_MS    (15UL * 60UL * 1000UL)   // twardy limit lokalny sesji
+#define _REMOTE_BACKOFF_MIN_MS    2000   // pierwszy odstep po bledzie
+#define _REMOTE_BACKOFF_MAX_MS    30000  // maks. odstep przy ciaglych bledach
 
 // Device ID — MAC ESP32, ta sama definicja co _solDeviceId() w solve_screen.h.
 // Duplikacja celowa (ten sam powod co dithering XBM w camera-test): plik
@@ -114,6 +125,7 @@ static uint8_t  _remoteFrameShared[_REMOTE_BUF_LEN];
 static volatile bool _remoteFrameReady     = false;  // watek UI wpisal nowa klatke do wyslania
 static volatile int  _remotePendingKey     = -1;     // watek siecowy odebral klawisz do wstrzykniecia
 static volatile bool _remoteStopRequested  = false;  // serwer kazal zakonczyc sesje
+static uint32_t      _remoteSessionStartMs = 0;      // start biezacej sesji (watek UI)
 
 // Wykonuje siebie w petli na Core 0. Cale IO sieciowe (w tym pelny
 // handshake TLS przy pierwszym polaczeniu) dzieje sie TU — watek UI
@@ -122,9 +134,12 @@ static void _remoteTaskFn(void* /*arg*/) {
     WiFiClientSecure client;
     HTTPClient http;
     bool clientReady = false;
+    uint32_t backoffMs = 0;   // 0 = brak bledow; potem 2 s -> 30 s
 
     for (;;) {
-        if (!remoteSessionActive()) { vTaskDelay(pdMS_TO_TICKS(200)); continue; }
+        if (!remoteSessionActive()) { backoffMs = 0; vTaskDelay(pdMS_TO_TICKS(200)); continue; }
+        // Stop juz zgloszony — czekaj, az watek UI go odbierze (nie wysylaj dalej)
+        if (_remoteStopRequested) { vTaskDelay(pdMS_TO_TICKS(100)); continue; }
         if (WiFi.status() != WL_CONNECTED) { vTaskDelay(pdMS_TO_TICKS(200)); continue; }
 
         uint8_t localFrame[_REMOTE_BUF_LEN];
@@ -167,26 +182,45 @@ static void _remoteTaskFn(void* /*arg*/) {
 
         String body = String("{\"frame\":\"") + frame + "\"}";
         int httpCode = http.POST(body);
-        if (httpCode == 200) {
-            String resp = http.getString();
-            http.end();
-            if (resp.indexOf("\"active\":false") >= 0) {
-                _remoteStopRequested = true;
-                clientReady = false;
-            } else {
-                int keyIdx = resp.indexOf("\"key\":");
-                if (keyIdx >= 0) {
-                    int val = atoi(resp.c_str() + keyIdx + 6);
-                    if (val > 0 && val < KEY_COUNT) _remotePendingKey = val;
-                }
+        // Odpowiedz czytamy przy KAZDYM kodzie HTTP (nie tylko 200) — serwer
+        // moze zakonczyc sesje ("active":false) takze w odpowiedzi bledu.
+        String resp = (httpCode > 0) ? http.getString() : String();
+        http.end();
+
+        bool stop = (resp.indexOf("\"active\":false") >= 0) ||
+                    httpCode == 401 || httpCode == 403 || httpCode == 404;
+        if (stop) {
+            Serial.printf("[REMOTE] koniec sesji (HTTP %d)\n", httpCode);
+            _remoteStopRequested = true;
+            clientReady = false;
+            backoffMs = 0;
+        } else if (httpCode == 200) {
+            backoffMs = 0;
+            int keyIdx = resp.indexOf("\"key\":");
+            if (keyIdx >= 0) {
+                int val = atoi(resp.c_str() + keyIdx + 6);
+                if (val > 0 && val < KEY_COUNT) _remotePendingKey = val;
             }
         } else {
-            http.end();
             clientReady = false;   // polaczenie moglo padnac — pelny reconnect nastepnym razem
+            backoffMs = backoffMs ? backoffMs * 2 : _REMOTE_BACKOFF_MIN_MS;
+            if (backoffMs > _REMOTE_BACKOFF_MAX_MS) backoffMs = _REMOTE_BACKOFF_MAX_MS;
+            Serial.printf("[REMOTE] HTTP %d — kolejna proba za %lu ms\n", httpCode, (unsigned long)backoffMs);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(_REMOTE_TICK_MS));
+        vTaskDelay(pdMS_TO_TICKS(_REMOTE_TICK_MS + backoffMs));
     }
+}
+
+// Konczy sesje po stronie urzadzenia (watek UI): flaga off, WiFi off,
+// zdjecie blokady auto-sleep.
+static void _remoteEndSession() {
+    remoteSessionSetActive(false);
+    WiFi.mode(WIFI_OFF);   // koniec sesji — oszczedzaj baterie jak wszedzie indziej w projekcie
+    powerSetInhibit(false);
+    // Watku NIE zabijamy — sam sie usypia (remoteSessionActive()==false -> vTaskDelay
+    // 200ms w petli) i obudzi przy nastepnej sesji. Prosciej i bezpieczniej niz
+    // tworzenie/niszczenie tasku za kazdym razem.
 }
 
 // Odbiera wyniki z watku siecowego i aplikuje je (wstrzykniecie klawisza,
@@ -198,12 +232,8 @@ static void _remoteDrainResults() {
         inputInjectKey((KalkKey)key);
     }
     if (_remoteStopRequested) {
+        _remoteEndSession();
         _remoteStopRequested = false;
-        remoteSessionSetActive(false);
-        WiFi.mode(WIFI_OFF);   // koniec sesji — oszczedzaj baterie jak wszedzie indziej w projekcie
-        // Watku NIE zabijamy — sam sie usypia (remoteSessionActive()==false -> vTaskDelay
-        // 200ms w petli) i obudzi przy nastepnej sesji. Prosciej i bezpieczniej niz
-        // tworzenie/niszczenie tasku za kazdym razem.
     }
 }
 
@@ -220,11 +250,24 @@ void remoteHeartbeatTick() {
     }
 
     _remoteDrainResults();   // tanie (kilka porownan) — rob to co kazdy scan, nie tylko co tick
+    if (!remoteSessionActive()) return;
+
+    // Twardy limit lokalny — niezaleznie od tego, co mowi (albo czy w ogole
+    // odpowiada) serwer.
+    if (millis() - _remoteSessionStartMs > _REMOTE_MAX_SESSION_MS) {
+        Serial.println("[REMOTE] limit 15 min — koniec sesji");
+        _remoteEndSession();
+        return;
+    }
 
     static uint32_t lastTick = 0;
     uint32_t now = millis();
     if (now - lastTick < _REMOTE_TICK_MS) return;
     lastTick = now;
+
+    // Blokada auto-sleep odnawiana co tick: notatki/sprawdziany/konto
+    // zdejmuja ja (powerSetInhibit(false)) przy wyjsciu ze swoich ekranow.
+    powerSetInhibit(true);
 
     _remoteStampIndicator();
     remoteSendBuffer();   // krotki "flash" wskaznika na fizycznym OLED — TYLKO watek UI dotyka SPI
@@ -258,8 +301,7 @@ void _editRemoteHelp(U8G2 &d) {
         while (true) {
             if (_panicRequested) return;
             if (_setBtn(BTN_OK)) {
-                remoteSessionSetActive(false);
-                WiFi.mode(WIFI_OFF);
+                _remoteEndSession();
                 _setWaitRelease();
                 return;
             }
@@ -280,10 +322,12 @@ void _editRemoteHelp(U8G2 &d) {
         _solDrawError(d, T("Brak zapisanej sieci WiFi", "No saved WiFi network", "Kein gespeichertes WLAN"), "");
         return;
     }
-    WiFi.mode(WIFI_STA);
+    wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout, jak wszedzie)
     wifiFastBegin(ssid, pass);
+    memset(pass, 0, sizeof(pass));
     unsigned long t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) delay(200);
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000 && !_panicRequested) delay(200);
+    if (_panicRequested) return;
     if (WiFi.status() != WL_CONNECTED) {
         _solDrawError(d, T("Nie polaczono z WiFi", "Could not connect", "Keine WLAN-Verbindung"), "");
         return;
@@ -291,7 +335,10 @@ void _editRemoteHelp(U8G2 &d) {
     wifiSaveBssidChannel();
     accountRegisterOnce();
 
+    _remoteSessionStartMs = millis();
+    _remoteStopRequested  = false;
     remoteSessionSetActive(true);
+    powerSetInhibit(true);   // sen wylaczylby WiFi = zerwana sesja
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
-import { ensureOrderPersonalizationColumns } from "@/lib/orderPersonalization";
-import { applyFulfillmentStatus } from "@/lib/orderFulfillment";
+import { ensureOrderPersonalizationColumns, readOrderUnits } from "@/lib/orderPersonalization";
+import { applyFulfillmentStatus, isFulfillmentStatus, FULFILLMENT_STATUSES } from "@/lib/orderFulfillment";
 import { syncOrderTracking, looksLikeInPostNumber } from "@/lib/inpostTracking";
 import { CHANNEL_LABELS, type Channel, getOrderAttribution } from "@/lib/attribution";
 
@@ -31,6 +31,15 @@ export async function GET(
     { personalizedCode: string | null; personalizedName: string | null }[]
   >`SELECT "personalizedCode", "personalizedName" FROM "Order" WHERE id = ${id} LIMIT 1`;
   const personalization = persRows[0] || { personalizedCode: null, personalizedName: null };
+  // Kilka sztuk w zamowieniu: kod AI + imie dla KAZDEJ sztuki (admin wgrywa je
+  // flasherem do kolejnych egzemplarzy). Blad odczytu = stara para pol (1 szt.).
+  const units = await readOrderUnits(id).catch(() => null);
+  const personalizations = units?.units?.length
+    ? units.units
+    : personalization.personalizedCode || personalization.personalizedName
+      ? [{ code: personalization.personalizedCode || "", name: personalization.personalizedName || "" }]
+      : [];
+  const quantity = Math.max(1, Math.floor(Number(units?.quantity) || 1));
   const attr = await getOrderAttribution(id).catch(() => null);
   const touch = (channel: string | null, source: string | null, campaign: string | null, landing: string | null, at: string | null) =>
     channel ? { channel: CHANNEL_LABELS[channel as Channel] || channel, source, campaign, landing, at } : null;
@@ -61,6 +70,8 @@ export async function GET(
       furgonetka_package_id: order.furgonetkaPackageId || "",
       furgonetka_order_uuid: order.furgonetkaOrderUuid || "",
       furgonetka_status: order.furgonetkaStatus || "",
+      // Nadanie Base Courier w toku / niepewne (patrz basecourier/route.ts).
+      shipment_uncertain: order.furgonetkaStatus === "basecourier_pending",
       invoice_sent_at: order.invoiceSentAt ? order.invoiceSentAt.toISOString() : null,
       invoice_filename: order.invoiceFilename || "",
       payment_provider: order.paymentProvider,
@@ -68,6 +79,8 @@ export async function GET(
       p24_session_id: order.p24SessionId || null,
       personalized_code: personalization.personalizedCode || null,
       personalized_name: personalization.personalizedName || null,
+      quantity,
+      personalizations,
       attribution: attr
         ? {
             method: attr.method,
@@ -85,8 +98,29 @@ export async function PATCH(
 ) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
   const { id } = await params;
-  const body = await request.json();
-  const { fulfillment_status, tracking_number, notes } = body;
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Nieprawidłowe dane" }, { status: 400 });
+  }
+  const { fulfillment_status, tracking_number, notes, expected_fulfillment_status } = body as Record<string, unknown>;
+
+  // K7: status tylko z allowlisty (lib/orderFulfillment.ts).
+  const hasStatus = fulfillment_status !== undefined && fulfillment_status !== null && fulfillment_status !== "";
+  if (hasStatus && !isFulfillmentStatus(fulfillment_status)) {
+    return NextResponse.json(
+      { error: `Nieprawidłowy status realizacji (dozwolone: ${FULFILLMENT_STATUSES.join(", ")})` },
+      { status: 400 }
+    );
+  }
+  if (expected_fulfillment_status !== undefined && expected_fulfillment_status !== null && typeof expected_fulfillment_status !== "string") {
+    return NextResponse.json({ error: "Nieprawidłowy expected_fulfillment_status" }, { status: 400 });
+  }
+  if (tracking_number !== undefined && tracking_number !== null && typeof tracking_number !== "string") {
+    return NextResponse.json({ error: "Nieprawidłowy numer przesyłki" }, { status: 400 });
+  }
+  if (notes !== undefined && notes !== null && typeof notes !== "string") {
+    return NextResponse.json({ error: "Nieprawidłowe notatki" }, { status: 400 });
+  }
 
   const order = await prisma.order.findUnique({ where: { id } });
   if (!order) {
@@ -95,11 +129,20 @@ export async function PATCH(
 
   // Wspolna logika zmiany statusu + maili (src/lib/orderFulfillment.ts) —
   // ta sama, ktorej uzywa automat sledzenia InPost.
-  const result = await applyFulfillmentStatus(id, fulfillment_status || undefined, {
+  // tracking_number: pominiete = bez zmian, "" / null = wyczysc (K7).
+  const result = await applyFulfillmentStatus(id, hasStatus ? (fulfillment_status as Parameters<typeof applyFulfillmentStatus>[1]) : undefined, {
     source: "manual",
-    trackingNumber: tracking_number || undefined,
-    adminNotes: notes !== undefined ? notes : undefined,
+    trackingNumber: tracking_number === undefined ? undefined : (tracking_number as string | null),
+    adminNotes: notes !== undefined ? (notes as string | null) : undefined,
+    expectedStatus: typeof expected_fulfillment_status === "string" ? expected_fulfillment_status : undefined,
   });
+  if (result?.conflict) {
+    const current = (await prisma.order.findUnique({ where: { id }, select: { fulfillmentStatus: true } }))?.fulfillmentStatus || "unfulfilled";
+    return NextResponse.json(
+      { error: "Status zamówienia zmienił się w międzyczasie — odśwież i spróbuj ponownie.", current },
+      { status: 409 }
+    );
+  }
 
   // Nowy numer InPost wpisany recznie -> od razu sprawdz status, zeby admin
   // nie musial czekac na cron (max 1h). Blad InPost nie psuje zapisu.

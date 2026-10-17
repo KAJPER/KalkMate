@@ -23,6 +23,9 @@ async function callTranslate(system: string, user: string, maxTokens = 4000): Pr
       "HTTP-Referer": "https://kalkmate.pl",
       "X-Title": "KalkMate",
     },
+    // Bez limitu zawieszony OpenRouter trzymal request panelu w nieskonczonosc.
+    // Newsletter (do 12k tokenow wyjscia) dostaje wiecej czasu niz zwykly mail.
+    signal: AbortSignal.timeout(maxTokens > 4000 ? 90_000 : 60_000),
     body: JSON.stringify({
       model: TRANSLATE_MODEL,
       messages: [

@@ -3,7 +3,8 @@
 // Wywolanie: showInfo(display);
 //
 // 5 stron: Jak uzywac / Wskazowki / Przedmioty / Status serwera / FAQ
-// Nawigacja: LEFT/RIGHT lub UP/DOWN, BTN_LEFT na stronie 1 = wyjscie
+// Nawigacja: LEFT/RIGHT lub UP/DOWN, BTN_LEFT na stronie 1 = wyjscie,
+// C/CE (BTN_BACK) = wyjscie z dowolnej strony
 
 #include <Arduino.h>
 #include <U8g2lib.h>
@@ -12,21 +13,12 @@
 #include "settings_screen.h"
 #include "power.h"
 
-// === Piny przyciskow (INPUT_PULLUP, LOW = wcisniety) ===
-#ifndef BTN_UP
-#define BTN_UP    26
-#endif
-#ifndef BTN_DOWN
-#define BTN_DOWN  12
-#endif
-#ifndef BTN_LEFT
-#define BTN_LEFT  13
-#endif
-#ifndef BTN_RIGHT
-#define BTN_RIGHT 14
-#endif
-#ifndef BTN_OK
-#define BTN_OK    27
+// === Przyciski: wirtualne BTN_xx z input.h (>=200) ===
+// Dawne fallbacki "#define BTN_UP 26" itp. wskazywaly na piny KAMERY
+// (GPIO 12/13/14/26/27) — usuniete.
+#if !defined(BTN_UP) || !defined(BTN_DOWN) || !defined(BTN_LEFT) || \
+    !defined(BTN_RIGHT) || !defined(BTN_OK) || !defined(BTN_BACK)
+#error "info_screen.h wymaga BTN_xx z input.h"
 #endif
 
 // ---------------------------------------------------------------------------
@@ -51,7 +43,8 @@ static void _infoWaitRelease() {
            inputBtn(BTN_DOWN)  == LOW ||
            inputBtn(BTN_LEFT)  == LOW ||
            inputBtn(BTN_RIGHT) == LOW ||
-           inputBtn(BTN_OK)    == LOW) {
+           inputBtn(BTN_OK)    == LOW ||
+           inputBtn(BTN_BACK)  == LOW) {
         delay(10);
     }
     _infoLastPress = millis();
@@ -142,9 +135,11 @@ static void _infoDrawServerPage(U8G2 &d, int page) {
     if (WiFi.status() == WL_CONNECTED) {
         // WiFi polaczone
         d.drawStr(2, _INFO_CONTENT_Y[0], _infoT("WiFi: Polaczono", "WiFi: Connected", "WiFi: Verbunden"));
-        d.drawStr(2, _INFO_CONTENT_Y[1], _infoT("Serwer: OK (sprawdz w app)",
-                                                  "Server: OK (check in app)",
-                                                  "Server: OK (siehe App)"));
+        // Sam WL_CONNECTED nie dowodzi, ze serwer odpowiada (brak zapytania
+        // HTTPS tutaj, zeby nie blokowac UI) — stad etykieta o WiFi, nie serwerze.
+        d.drawStr(2, _INFO_CONTENT_Y[1], _infoT("WiFi: OK (serwer: sprawdz w app)",
+                                                  "WiFi: OK (server: check in app)",
+                                                  "WiFi: OK (Server: siehe App)"));
 
         // IP
         char ipLine[40];
@@ -306,6 +301,12 @@ void showInfo(U8G2 &display) {
         if (panicTriggered()) return;
 
         bool changed = false;
+
+        // C/CE = wyjscie z dowolnej strony
+        if (_infoBtn(BTN_BACK)) {
+            _infoWaitRelease();
+            return;
+        }
 
         // Nastepna strona: RIGHT lub DOWN
         if (_infoBtn(BTN_RIGHT) || _infoBtn(BTN_DOWN)) {

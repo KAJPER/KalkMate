@@ -83,6 +83,7 @@ void scanAll() {
             Serial.printf("  0x%02X ACK", addr);
             if (addr == 0x20) Serial.print("  <- MCP23017 ✓");
             if (addr == 0x30) Serial.print("  <- OV2640 SCCB ✓");
+            if (addr == 0x36) Serial.print("  <- MAX17048 (fuel gauge) ✓");
             Serial.println();
             found++;
         }
@@ -96,6 +97,7 @@ void targetedProbe() {
     Serial.println("--- Target probe (znane adresy) ---");
     uint8_t targets[] = { 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,   // MCP23017 mozliwe (A0-A2)
                           0x30, 0x3C, 0x3D,                                  // OV2640 / OLED I2C
+                          0x36,                                              // MAX17048 fuel gauge
                           0x50, 0x51, 0x52, 0x53,                            // EEPROM
                           0x68, 0x69                                          // RTC / IMU
                         };

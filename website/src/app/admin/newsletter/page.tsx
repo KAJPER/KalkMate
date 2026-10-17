@@ -161,7 +161,16 @@ export default function NewsletterPage() {
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
+  // Lista odbiorcow musi odpowiadac AKTUALNEMU filtrowi — inaczej potwierdzenie
+  // wysylki pokazaloby liczbe z poprzedniego filtra (wolna odpowiedz starego
+  // zapytania nadpisywala nowa). Licznik zapytan + klucz filtra listy.
+  const filterKey = JSON.stringify([registered, verifiedOnly, buyers, country, consentOnly]);
+  const [recipientsKey, setRecipientsKey] = useState<string | null>(null);
+  const recReqRef = useRef(0);
+
   const loadRecipients = useCallback(async () => {
+    const reqId = ++recReqRef.current;
+    const key = JSON.stringify([registered, verifiedOnly, buyers, country, consentOnly]);
     setRecLoading(true);
     setRecErr("");
     try {
@@ -173,16 +182,21 @@ export default function NewsletterPage() {
         consentOnly: consentOnly ? "1" : "0",
       });
       const res = await fetch(`/api/admin/newsletter/recipients?${q}`);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+      if (reqId !== recReqRef.current) return;
       if (!res.ok || !data.ok) throw new Error(data.error || "Błąd");
       setRecipients(data.recipients);
+      setRecipientsKey(key);
     } catch (e) {
+      if (reqId !== recReqRef.current) return;
       setRecErr((e as Error).message);
       setRecipients([]);
+      setRecipientsKey(null);
     } finally {
-      setRecLoading(false);
+      if (reqId === recReqRef.current) setRecLoading(false);
     }
   }, [registered, verifiedOnly, buyers, country, consentOnly]);
+  const recipientsFresh = !recLoading && recipientsKey === filterKey;
 
   useEffect(() => {
     loadRecipients();
@@ -313,6 +327,10 @@ export default function NewsletterPage() {
   };
 
   const sendAll = async () => {
+    if (!recipientsFresh) {
+      setMsg({ ok: false, text: "Lista odbiorców nie jest aktualna dla wybranego filtra — poczekaj, aż się odświeży." });
+      return;
+    }
     if (!activeCount) return;
     if (!confirm(`Wysłać „${draft.subject}” do ${activeCount} odbiorców (PL ${langCounts.pl} · EN ${langCounts.en} · DE ${langCounts.de})?\n\nTego nie da się cofnąć. Najpierw wyślij test do siebie i sprawdź tłumaczenia w podglądzie.`)) return;
     setSending(true);
@@ -673,7 +691,7 @@ export default function NewsletterPage() {
             <button
               type="button"
               onClick={sendAll}
-              disabled={sending || !canSend || !activeCount || recLoading}
+              disabled={sending || !canSend || !activeCount || recLoading || !recipientsFresh}
               className={`${btn} w-full bg-[#3B82F6] hover:bg-[#2f6fd6] text-white py-3`}
             >
               {sending ? "Uruchamiam…" : `🚀 Wyślij do ${activeCount} odbiorców`}

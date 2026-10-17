@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { readCapture, isSafeFilename } from "@/lib/captures";
+import { readCapture, isSafeFilename, canUserAccessCapture } from "@/lib/captures";
 
-// GET /api/user/captures/[filename] — serwuje JPEG, ale tylko jezeli
-// filename zawiera deviceId sparowany z tym userem.
+// GET /api/user/captures/[filename] — serwuje JPEG, ale tylko gdy zdjecie
+// nalezy do usera wg tabeli Capture (userId = wlasciciel urzadzenia w chwili
+// zdjecia). Pliki legacy bez znanego wlasciciela — jak dotychczas: urzadzenie
+// z nazwy pliku musi byc obecnie sparowane z tym userem.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ filename: string }> },
@@ -22,16 +24,14 @@ export async function GET(
     return new NextResponse("Bad filename", { status: 400 });
   }
 
-  // Wlasciciel filename = drugi segment po _ musi byc deviceId usera
-  const parts = filename.replace(/\.jpg$/, "").split("_");
-  if (parts.length < 2) return new NextResponse("Bad filename", { status: 400 });
-  const fileDeviceId = parts[1];
-
-  const owned = await prisma.device.findFirst({
-    where: { userId: user.id, deviceId: fileDeviceId },
-    select: { id: true },
+  const allowed = await canUserAccessCapture(user.id, filename, async (deviceId) => {
+    const owned = await prisma.device.findFirst({
+      where: { userId: user.id, deviceId },
+      select: { id: true },
+    });
+    return !!owned;
   });
-  if (!owned) return new NextResponse("Forbidden", { status: 403 });
+  if (!allowed) return new NextResponse("Forbidden", { status: 403 });
 
   const buf = await readCapture(filename);
   if (!buf) return new NextResponse("Not found", { status: 404 });

@@ -13,13 +13,28 @@
 // leniwie), jak Order.personalizedCode — nie trzeba `prisma db push`.
 
 import { createHash } from "crypto";
+import type { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { clientIp } from "@/lib/rate-limit";
+
+let _warnedSalt = false;
+function analyticsSalt(): string {
+  if (process.env.ANALYTICS_SALT) return process.env.ANALYTICS_SALT;
+  if (!_warnedSalt) {
+    _warnedSalt = true;
+    console.warn("[attribution] Brak ANALYTICS_SALT — hash IP solony NEXTAUTH_SECRET. Ustaw osobny ANALYTICS_SALT.");
+  }
+  // Stala sol w kodzie (dawny fallback) = hash IP latwy do odwrocenia
+  // slownikiem 2^32 adresow IPv4 — to nadal dane osobowe.
+  return process.env.NEXTAUTH_SECRET || "kalkmate-analytics";
+}
 
 // Ten sam hash IP co w liczniku wizyt (/api/track) — bez cookies.
+// IP jak w lib/rate-limit.clientIp (X-Real-IP z nginx; wczesniej XFF[0],
+// ktory klient ustawia sam — kazde wejscie moglo udawac inny adres).
 export function ipHashFromHeaders(h: Headers): string {
-  const ip = h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip") || "unknown";
-  const salt = process.env.ANALYTICS_SALT || "kalkmate-analytics";
-  return createHash("sha256").update(ip + salt).digest("hex").slice(0, 16);
+  const ip = clientIp({ headers: h } as unknown as NextRequest);
+  return createHash("sha256").update(ip + analyticsSalt()).digest("hex").slice(0, 16);
 }
 
 export type Channel = "search" | "paid" | "social" | "email" | "ai" | "referral" | "direct";
@@ -141,6 +156,32 @@ export async function recordVisit(v: {
     VALUES (${v.id}, ${v.ipHash}, ${v.userAgent}, ${v.referer}, ${v.page}, ${v.host}, ${Date.now()},
             ${v.landing ? 1 : 0}, ${v.touch?.channel ?? null}, ${v.touch?.source ?? null},
             ${v.touch?.medium ?? null}, ${v.touch?.campaign ?? null})`;
+  maybePurgeOldVisits();
+}
+
+// === Retencja wizyt ===
+// Wizyty (hash IP + user agent + strony) to dane osobowe — nie trzymamy ich
+// bez konca. Czyszczenie przy co ~1000. zapisie albo raz na dobe (pierwszy
+// zapis po starcie procesu tez czysci), bez osobnego timera.
+export const VISIT_RETENTION_DAYS = 180;
+let _writesSincePurge = 0;
+let _lastPurgeAt = 0;
+
+function maybePurgeOldVisits(): void {
+  _writesSincePurge++;
+  if (_writesSincePurge < 1000 && Date.now() - _lastPurgeAt < 24 * 60 * 60_000) return;
+  _writesSincePurge = 0;
+  _lastPurgeAt = Date.now();
+  purgeOldVisits().catch((e) => console.error("[attribution] purgeOldVisits failed:", e));
+}
+
+export async function purgeOldVisits(days = VISIT_RETENTION_DAYS): Promise<number> {
+  const cutoffMs = Date.now() - days * 24 * 60 * 60_000;
+  // createdAt bywa INTEGER (ms) albo tekstem — jak paidAt nizej.
+  return prisma.$executeRaw`
+    DELETE FROM "Visit" WHERE
+      (typeof("createdAt") IN ('integer', 'real') AND "createdAt" < ${cutoffMs})
+      OR (typeof("createdAt") = 'text' AND "createdAt" < ${new Date(cutoffMs).toISOString()})`;
 }
 
 export interface LandingVisit { ipHash: string; channel: string | null; source: string | null; campaign: string | null; createdAt: number }
@@ -269,6 +310,8 @@ export async function getOrderAttribution(orderId: string): Promise<OrderAttribu
 }
 
 // Oplacone zamowienia z okresu + ich zrodlo (do raportu w /admin/analytics).
+// Bez anulowanych: zamowienie oznaczane jako cancelled jest zawsze wczesniej
+// recznie zwracane (pieniadze oddane), wiec to nie jest sprzedaz.
 export async function paidOrdersWithAttribution(sinceMs: number) {
   await ensureOrderTable();
   return prisma.$queryRaw<{
@@ -278,7 +321,7 @@ export async function paidOrdersWithAttribution(sinceMs: number) {
   }[]>`
     SELECT o.id, o.amount, o.currency, a."firstChannel", a."firstSource", a."lastChannel", a."lastSource", a."lastCampaign"
     FROM "Order" o LEFT JOIN "OrderAttribution" a ON a."orderId" = o.id
-    WHERE o.status = 'paid' AND (
+    WHERE o.status = 'paid' AND COALESCE(o."fulfillmentStatus", '') != 'cancelled' AND (
       (typeof(o."paidAt") IN ('integer', 'real') AND o."paidAt" >= ${sinceMs})
       OR (typeof(o."paidAt") = 'text' AND o."paidAt" >= ${new Date(sinceMs).toISOString()})
     )`;

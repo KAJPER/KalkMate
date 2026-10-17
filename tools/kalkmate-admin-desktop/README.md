@@ -90,21 +90,42 @@ a potem zaznacz **Drukuj paragony z tego komputera**. Ustawienia zapisują się 
 **Logowanie:** agent łączy się z serwerem sesją admina z aplikacji (bez osobnego
 tokenu). Po wylogowaniu przestaje pobierać paragony, dopóki się nie zalogujesz.
 
-**Kolejka:** zapisywana w `%APPDATA%\kalkmate-admin\fiscal-jobs.json`, więc
-przetrwa zamknięcie aplikacji. Aplikacja drukuje tylko wtedy, gdy jest włączona.
-Paragony dodane przy wyłączonej aplikacji czekają na serwerze. Zamknięcie okna w
-trakcie druku czeka na koniec paragonu (maks. 30 s).
+**Kolejka:** zapisywana w `%APPDATA%\kalkmate-admin\fiscal-jobs.json` (zapis
+atomowy z fsync + kopia `fiscal-jobs.json.bak`), więc przetrwa zamknięcie
+aplikacji. Aplikacja drukuje tylko wtedy, gdy jest włączona. Paragony dodane przy
+wyłączonej aplikacji czekają na serwerze. Zamknięcie okna w trakcie druku czeka na
+koniec paragonu (maks. 30 s). Uszkodzony plik kolejki jest odkładany jako
+`fiscal-jobs.json.corrupt-<czas>`, kolejka odtwarzana z kopii (niedokończone
+zlecenia jako „niepewne”), a drukowanie **wstrzymane** z ostrzeżeniem w karcie
+aplikacji. Po sprawdzeniu drukarki odblokuj je: **Narzędzia → Odblokuj kolejkę
+paragonów…**.
 
-**Bezpiecznik:** domyślnie aplikacja odmawia druku na drukarce w trybie
-**fiskalnym**. Przełącznik „Druk na drukarce w trybie FISKALNYM” odblokowujesz
-dopiero po testach na drukarce niefiskalnej.
+**Identyfikator agenta:** `%APPDATA%\kalkmate-admin\fiscal-agent-state.json`
+(trwały `agentId` i licznik tokenów ramek). Serwer oddaje pobrane zlecenie tylko
+temu samemu agentowi — po skasowaniu tego pliku zlecenia „w drukarce” przekazuje
+się w panelu.
 
-**Testy logiki:** `npm install` i `npm run test:fiscal`. Testy używają symulatora
-drukarki z `fiscal-agent/` i wymagają `python3`.
+**Bezpieczniki:** domyślnie aplikacja odmawia druku na drukarce w trybie
+**fiskalnym** (także gdy drukarka nie podaje trybu). Przełącznik „Druk na drukarce
+w trybie FISKALNYM” odblokowujesz dopiero po testach na drukarce niefiskalnej —
+aplikacja dodatkowo pyta o to we własnym oknie. Adres drukarki spoza sieci
+lokalnej też wymaga potwierdzenia. Limity kwot (domyślnie 4000 zł, 5 pozycji,
+wymagany numer zamówienia) ustawia się tylko lokalnie: klucz `fiscalLimits`
+(`maxTotal` w groszach, `maxItems`, `requireReference`) w `settings.json` albo
+zmienne `KALKMATE_FISCAL_MAX_TOTAL` / `KALKMATE_FISCAL_MAX_ITEMS`.
+
+**Testy logiki:** `npm install` i `npm test` (albo `npm run test:fiscal`). Testy
+używają symulatora drukarki z `fiscal-agent/` i wymagają Pythona 3 — na Windows
+uruchamiany jest `python`, na innych systemach `python3`; inny interpreter:
+zmienna `FISCAL_SIM_PYTHON`.
 
 ## Uwaga o linkach
 
-Linki do `kalkmate.pl` oraz do kurierów (`basecourier.com`, `inpost.pl`, w
-tym subdomeny) otwierają się w oknie aplikacji. Wszystkie inne linki
-(np. do dokumentacji, zewnętrznych serwisów) otwierają się w domyślnej
-przeglądarce systemowej.
+Linki `https://` do `kalkmate.pl` oraz do kurierów (`basecourier.com`,
+`inpost.pl`, w tym subdomeny) otwierają się w oknie aplikacji. Wszystkie inne
+linki (np. do dokumentacji, zewnętrznych serwisów) otwierają się w domyślnej
+przeglądarce systemowej — tylko `http(s):` i `mailto:`, inne schematy
+(`file:`, `ms-*:` itp.) są blokowane. Most `window.kalkmateDesktop`
+(programator, druk etykiet, agent fiskalny) odpowiada wyłącznie stronom
+`https://kalkmate.pl`; strony kurierów nie mogą nim sterować. Strony nie dostają
+uprawnień przeglądarki (kamera, mikrofon, lokalizacja…) poza zapisem do schowka.

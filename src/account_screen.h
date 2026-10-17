@@ -17,6 +17,7 @@
 #include "wifi_persist.h"
 #include "device_account.h"
 #include "panic.h"
+#include "power.h"    // powerCheckSleep / powerSetInhibit
 
 static String _mainDeviceMac() {
     uint8_t mac[6];
@@ -27,10 +28,23 @@ static String _mainDeviceMac() {
     return String(buf);
 }
 
+// Auto-sleep w petlach oczekiwania ekranow konta (wczesniej ekran + radio
+// zostawaly wlaczone bez limitu). Po wybudzeniu: odswiez ostatnia klatke
+// (bufor u8g2 ja trzyma) i nie traktuj klawisza budzacego jako akcji.
+static void _accSleepCheck(U8G2 &d) {
+    if (!powerCheckSleep()) return;
+    d.sendBuffer();
+    inputKeyConsume(KEY_CCE);
+    inputWaitRelease();
+}
+
 // Pokazuje status sparowania urzadzenia z kontem (Settings -> Status konta).
 // Wymaga WiFi. Pyta serwer GET /api/device/account-status.
 inline void showAccountStatusScreen(U8G2 &d) {
     inputWaitRelease();
+    // Bez auto-sleep tylko na czas operacji sieciowych; przed kazda petla
+    // oczekiwania na klawisz zdejmujemy blokade (powerSetInhibit(false)
+    // przy okazji zeruje licznik bezczynnosci po dlugim laczeniu).
     powerSetInhibit(true);
 
     auto exitWait = [&]() {
@@ -62,14 +76,16 @@ inline void showAccountStatusScreen(U8G2 &d) {
             d.setFont(u8g2_font_5x7_tf);
             d.drawStr(2, 62, mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
             d.sendBuffer();
+            powerSetInhibit(false);
             while (true) {
                 if (_panicRequested) { exitWait(); return; }
+                _accSleepCheck(d);
                 if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
                 delay(20);
             }
         }
         drawBusy(mT("Lacze z WiFi...", "Connecting to WiFi...", "Verbinde mit WLAN..."));
-        WiFi.mode(WIFI_STA);
+        wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout)
         WiFi.begin(ssid, pass);
         unsigned long t0 = millis();
         while (WiFi.status() != WL_CONNECTED && millis() - t0 < 12000) delay(150);
@@ -84,8 +100,10 @@ inline void showAccountStatusScreen(U8G2 &d) {
         d.setFont(u8g2_font_5x7_tf);
         d.drawStr(2, 62, mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
         d.sendBuffer();
+        powerSetInhibit(false);
         while (true) {
             if (_panicRequested) { exitWait(); return; }
+            _accSleepCheck(d);
             if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
             delay(20);
         }
@@ -98,10 +116,12 @@ inline void showAccountStatusScreen(U8G2 &d) {
     drawBusy(mT("Pobieram status...", "Fetching status...", "Lade Status..."));
     AccountStatus st;
     bool ok = accountFetchStatus(st);
+    powerSetInhibit(false);
 
     // Render
     while (true) {
         if (_panicRequested) { exitWait(); return; }
+        _accSleepCheck(d);
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus"));
@@ -166,6 +186,7 @@ inline void showAccountStatusScreen(U8G2 &d) {
             accountRegister();
             ok = accountFetchStatus(st);
             inputWaitRelease();
+            inputActivityReset();   // czas operacji sieciowej nie liczy sie do auto-sleep
         }
         delay(30);
     }
@@ -190,7 +211,7 @@ inline void showDeviceIdQrScreen(U8G2 &d) {
             char ssid[33] = "", pass[64] = "";
             wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
             if (ssid[0]) {
-                WiFi.mode(WIFI_STA);
+                wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout)
                 WiFi.begin(ssid, pass);
                 unsigned long t0 = millis();
                 while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) {
@@ -213,8 +234,10 @@ inline void showDeviceIdQrScreen(U8G2 &d) {
     uint8_t qrcodeBytes[qrcode_getBufferSize(4)];
     qrcode_initText(&qrcode, qrcodeBytes, 4, ECC_LOW, url.c_str());
 
+    inputActivityReset();   // laczenie/rejestracja nie liczy sie do auto-sleep
     while (true) {
         if (panicTriggered()) return;
+        _accSleepCheck(d);
         d.clearBuffer();
 
         // Lewa strona: device ID + info

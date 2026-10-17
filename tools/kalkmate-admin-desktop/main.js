@@ -12,9 +12,51 @@ const ERROR_PAGE = path.join(__dirname, 'error.html');
 const STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
 const DEFAULT_BOUNDS = { width: 1400, height: 900 };
 
-// Domeny, do których linki otwierają się WEWNĄTRZ okna aplikacji.
+// Domeny, do których linki otwierają się WEWNĄTRZ okna aplikacji (tylko https).
 // Wszystko inne leci do domyślnej przeglądarki systemowej.
 const ALLOWED_INAPP_DOMAINS = ['kalkmate.pl', 'basecourier.com', 'inpost.pl'];
+
+// === Bezpieczeństwo Electrona ===
+// Jedyne originy, z których wolno wołać most window.kalkmateDesktop (IPC):
+// programator, cichy druk, agent fiskalny. Okno pokazuje też strony kurierów —
+// one NIE mogą sterować aplikacją.
+const TRUSTED_ORIGINS = new Set(['https://kalkmate.pl', 'https://www.kalkmate.pl']);
+// Uprawnienia przeglądarki dla panelu (kopiowanie do schowka). Reszta: odmowa —
+// strona nie dostanie kamery, mikrofonu, lokalizacji, powiadomień itd.
+const ALLOWED_PERMISSIONS = new Set(['clipboard-sanitized-write', 'fullscreen']);
+// Schematy, które wolno oddać systemowi (shell.openExternal). Bez file:, ms-msdt:,
+// search-ms: i innych protokołów Windows — to znany wektor zdalnego wykonania kodu.
+const EXTERNAL_PROTOCOLS = new Set(['https:', 'http:', 'mailto:']);
+
+// Sandbox dla wszystkich rendererów, także okien otwieranych przez window.open.
+app.enableSandbox();
+
+function isTrustedUrl(urlString) {
+  try {
+    return TRUSTED_ORIGINS.has(new URL(String(urlString)).origin);
+  } catch (_) {
+    return false;
+  }
+}
+
+// Wywołanie IPC tylko z ramki kalkmate.pl (https) — nie ze strony kuriera ani error.html.
+function fromKalkmate(event) {
+  return !!(event && event.senderFrame) && isTrustedUrl(event.senderFrame.url);
+}
+
+function safeOpenExternal(urlString) {
+  let parsed;
+  try {
+    parsed = new URL(String(urlString));
+  } catch (_) {
+    return;
+  }
+  if (!EXTERNAL_PROTOCOLS.has(parsed.protocol)) {
+    console.warn(`[security] zablokowano otwarcie adresu ze schematem ${parsed.protocol}`);
+    return;
+  }
+  shell.openExternal(parsed.toString()).catch(() => { /* brak przeglądarki — nic nie robimy */ });
+}
 
 let mainWindow = null;
 let flasherChild = null;
@@ -68,7 +110,9 @@ function launchFlasher() {
 
 // Mostek z panelu WWW: preload.js wystawia window.kalkmateDesktop.openFlasher(),
 // a AdminShell pokazuje przycisk "Programator" tylko gdy ten obiekt istnieje.
-ipcMain.on('kalkmate:open-flasher', () => launchFlasher());
+ipcMain.on('kalkmate:open-flasher', (event) => {
+  if (fromKalkmate(event)) launchFlasher();
+});
 
 // === Ustawienia aplikacji (drukarka etykiet) — userData/settings.json ===
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
@@ -88,7 +132,10 @@ function loadSettings() {
 
 function saveSettings(patch) {
   const next = { ...loadSettings(), ...patch };
-  try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(next, null, 2)); } catch (_) { /* nieistotne */ }
+  try {
+    // Atomowo (tmp + fsync + rename): urwany zapis nie zostawi pół pliku.
+    require('./fiscal/agent').writeFileDurable(SETTINGS_FILE, JSON.stringify(next, null, 2));
+  } catch (_) { /* nieistotne */ }
   return next;
 }
 
@@ -98,7 +145,11 @@ function saveSettings(patch) {
 // przez pdf-to-printer (SumatraPDF w srodku) bez okna dialogu, z ustawieniami
 // jak w oknie systemowym: drukarka etykiet, pionowo, 1 kopia, monochromatycznie,
 // dopasowanie do etykiety 100x150 (PDF z serwera jest juz przyciety do etykiety).
-ipcMain.handle('kalkmate:print-label', async (_event, urlPath) => {
+// Tylko endpointy etykiet zamówień (sesja admina pobiera je bez pytania).
+const LABEL_PATH = /^\/api\/admin\/orders\/[A-Za-z0-9_-]{1,100}\/[a-z0-9-]{1,40}\/label$/;
+
+ipcMain.handle('kalkmate:print-label', async (event, urlPath) => {
+  if (!fromKalkmate(event)) return { ok: false, error: 'Niedostępne' };
   const { print } = require('pdf-to-printer');
   const settings = loadSettings();
   let url;
@@ -107,8 +158,8 @@ ipcMain.handle('kalkmate:print-label', async (_event, urlPath) => {
   } catch (_) {
     return { ok: false, error: 'Nieprawidlowy adres etykiety' };
   }
-  if (!isAllowedInApp(url.toString()) || !url.hostname.endsWith('kalkmate.pl')) {
-    return { ok: false, error: 'Etykiete mozna drukowac tylko z kalkmate.pl' };
+  if (!isTrustedUrl(url.toString()) || !LABEL_PATH.test(url.pathname)) {
+    return { ok: false, error: 'Etykiete mozna drukowac tylko z kalkmate.pl (/api/admin/orders/<id>/<kurier>/label)' };
   }
 
   let tmpFile = null;
@@ -148,42 +199,81 @@ ipcMain.handle('kalkmate:print-label', async (_event, urlPath) => {
 // i drukuje je po TCP. Konfiguracja (IP, port, włączenie) z panelu WWW:
 // /admin/fiscal -> window.kalkmateDesktop.fiscal. Opis: docs/fiskalizacja/README.md.
 const { FiscalAgent } = require('./fiscal/agent');
+const { DEFAULT_LIMITS } = require('./fiscal/printer');
 const ORIGIN = new URL(ADMIN_URL).origin;
 let fiscalAgent = null;
 
-async function platformPost(urlPath, body) {
+/**
+ * POST do API agenta sesją admina. Zwraca { status, body }. Przy allow404
+ * odpowiedź API „nie znam zlecenia” ({ state: 'unknown' }) nie jest błędem —
+ * 404 z innego źródła (proxy, zły adres) nadal rzuca.
+ */
+async function platformPost(urlPath, body, meta = {}, { allow404 = false } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (meta.agentId) headers['x-fiscal-agent-id'] = meta.agentId;
   const res = await session.fromPartition(PARTITION).fetch(ORIGIN + urlPath, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
     cache: 'no-store',
   });
   if (res.status === 401) throw new Error('Zaloguj się do panelu w aplikacji (brak sesji admina)');
+  if (res.status === 404 && allow404) {
+    const j = await res.json().catch(() => null);
+    if (j && j.state === 'unknown') return { status: 404, body: j };
+  }
   if (!res.ok) throw new Error(`Serwer odpowiedział HTTP ${res.status}`);
-  return res.json();
+  return { status: res.status, body: await res.json() };
+}
+
+// Limity kwot agenta — TYLKO z lokalnego settings.json (klucz fiscalLimits) albo
+// zmiennych środowiska, nigdy z panelu WWW (skrypt na stronie nie może ich podnieść).
+function fiscalLimits() {
+  const s = loadSettings().fiscalLimits || {};
+  const posInt = (...vals) => {
+    for (const v of vals) {
+      const n = Number(v);
+      if (v !== undefined && v !== null && v !== '' && Number.isInteger(n) && n > 0) return n;
+    }
+    return undefined;
+  };
+  const env = process.env;
+  const out = {
+    maxTotal: posInt(env.KALKMATE_FISCAL_MAX_TOTAL, s.maxTotal) ?? DEFAULT_LIMITS.maxTotal,
+    maxItems: posInt(env.KALKMATE_FISCAL_MAX_ITEMS, s.maxItems) ?? DEFAULT_LIMITS.maxItems,
+    requireReference: DEFAULT_LIMITS.requireReference,
+  };
+  if (s.requireReference === false || env.KALKMATE_FISCAL_REQUIRE_REFERENCE === '0') out.requireReference = false;
+  return out;
 }
 
 function startFiscalAgent() {
   fiscalAgent = new FiscalAgent({
     dataDir: app.getPath('userData'),
     config: loadSettings().fiscal,
+    limits: fiscalLimits(),
     log: (...a) => console.log(...a),
     platform: {
-      claim: async (printer) => (await platformPost('/api/fiscal/agent/claim', { version: `desktop-${app.getVersion()}`, printer })).job,
-      report: (result) => platformPost(`/api/fiscal/agent/jobs/${encodeURIComponent(result.id)}`, result),
+      claim: async (printer, meta = {}) => (await platformPost('/api/fiscal/agent/claim',
+        { version: `desktop-${app.getVersion()}`, printer, agentId: meta.agentId }, meta)).body.job,
+      report: async (result, meta = {}) => {
+        const r = await platformPost(`/api/fiscal/agent/jobs/${encodeURIComponent(result.id)}`,
+          { ...result, agentId: meta.agentId }, meta, { allow404: true });
+        return r.status === 404 ? { found: false, state: 'unknown', accepted: false } : r.body;
+      },
     },
   });
   fiscalAgent.start();
 }
 
-// Mostek fiskalny wolno wołać tylko ze strony kalkmate.pl (okno może pokazywać też kurierów).
-function fromKalkmate(event) {
-  try {
-    const host = new URL(event.senderFrame ? event.senderFrame.url : '').hostname;
-    return hostMatchesDomain(host, 'kalkmate.pl');
-  } catch (_) {
-    return false;
+// Adres prywatny (RFC 1918, link-local, loopback) albo nazwa w sieci lokalnej.
+function isLanHost(host) {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
   }
+  return !host.includes('.') || /\.(local|lan|home|internal|home\.arpa)$/i.test(host);
 }
 
 ipcMain.handle('kalkmate:fiscal-info', async (event, refresh) => {
@@ -193,13 +283,48 @@ ipcMain.handle('kalkmate:fiscal-info', async (event, refresh) => {
 
 ipcMain.handle('kalkmate:fiscal-config', async (event, patch) => {
   if (!fromKalkmate(event) || !fiscalAgent) return { ok: false, error: 'Niedostępne' };
-  const p = patch || {};
+  const p = patch && typeof patch === 'object' ? patch : {};
   const next = { ...fiscalAgent.config };
   if ('enabled' in p) next.enabled = !!p.enabled;
-  if ('allowFiscal' in p) next.allowFiscal = !!p.allowFiscal;
+  if ('allowFiscal' in p) {
+    const want = !!p.allowFiscal;
+    if (want && !fiscalAgent.config.allowFiscal) {
+      // Odblokowanie PRAWDZIWYCH paragonów potwierdza człowiek w natywnym oknie
+      // aplikacji — skrypt na stronie (np. XSS) nie może go włączyć po cichu.
+      const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'warning',
+        title: 'Druk fiskalny',
+        message: 'Włączyć druk PRAWDZIWYCH paragonów fiskalnych na tym komputerze?',
+        detail: 'Każdy paragon trafi do pamięci fiskalnej i do CRK — nie da się go cofnąć. '
+          + 'Włącz dopiero po testach na drukarce niefiskalnej.',
+        buttons: ['Anuluj', 'Włącz druk fiskalny'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      if (response !== 1) return { ok: false, error: 'Anulowano — druk fiskalny pozostaje zablokowany.' };
+    }
+    next.allowFiscal = want;
+  }
   if ('host' in p) {
     const host = String(p.host).trim();
     if (host && !/^[a-zA-Z0-9.-]{1,253}$/.test(host)) return { ok: false, error: 'Nieprawidłowy adres drukarki' };
+    if (host && host !== fiscalAgent.config.host && !isLanHost(host)) {
+      // Drukarka fiskalna stoi w sieci lokalnej. Adres spoza niej potwierdza człowiek —
+      // fałszywa „drukarka” w internecie mogłaby zwracać zmyślone numery paragonów.
+      const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'warning',
+        title: 'Drukarka fiskalna',
+        message: `Adres ${host} nie wygląda na adres w sieci lokalnej. Na pewno tam stoi drukarka fiskalna?`,
+        buttons: ['Anuluj', 'Tak, zapisz'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      if (response !== 1) return { ok: false, error: 'Anulowano zmianę adresu drukarki.' };
+    }
     next.host = host;
   }
   if ('port' in p) {
@@ -252,11 +377,78 @@ function hostMatchesDomain(hostname, domain) {
 function isAllowedInApp(urlString) {
   try {
     const parsed = new URL(urlString);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    // Tylko https: okno ma cookie sesji admina, a http dałoby się podmienić w sieci.
+    if (parsed.protocol !== 'https:') return false;
     return ALLOWED_INAPP_DOMAINS.some((domain) => hostMatchesDomain(parsed.hostname, domain));
   } catch (err) {
     return false;
   }
+}
+
+// Strażnicy nawigacji dla KAŻDEGO webContents (główne okno i okna z window.open):
+// obce adresy idą do przeglądarki systemowej (tylko bezpieczne schematy),
+// <webview> zablokowany, okna potomne bez Node i z sandboxem.
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-attach-webview', (event) => event.preventDefault());
+
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedInApp(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, webviewTag: false },
+        },
+      };
+    }
+    safeOpenExternal(url);
+    return { action: 'deny' };
+  });
+
+  contents.on('will-navigate', (event, url) => {
+    if (!isAllowedInApp(url)) {
+      event.preventDefault();
+      safeOpenExternal(url);
+    }
+  });
+
+  // Przekierowanie serwera (3xx) w ramce głównej — ta sama lista co dla nawigacji.
+  contents.on('will-redirect', (event, url, _isInPlace, isMainFrame) => {
+    const mainFrame = typeof event.isMainFrame === 'boolean' ? event.isMainFrame : isMainFrame;
+    if (mainFrame && !isAllowedInApp(url)) {
+      event.preventDefault();
+      safeOpenExternal(url);
+    }
+  });
+});
+
+function setupPermissions(ses) {
+  ses.setPermissionRequestHandler((_wc, permission, callback, details) => {
+    callback(ALLOWED_PERMISSIONS.has(permission) && isTrustedUrl(details && details.requestingUrl));
+  });
+  ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) => (
+    ALLOWED_PERMISSIONS.has(permission) && isTrustedUrl(requestingOrigin)
+  ));
+}
+
+// Kolejka paragonów była uszkodzona — agent wstrzymał druk. Odblokowanie tylko
+// tutaj (natywne okno), nie z panelu WWW.
+async function unlockFiscalQueue(win) {
+  if (!fiscalAgent || !fiscalAgent.store.blocked) {
+    dialog.showMessageBox(win, { type: 'info', title: 'Kolejka paragonów', message: 'Kolejka paragonów działa normalnie — nie ma czego odblokowywać.' });
+    return;
+  }
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'warning',
+    title: 'Kolejka paragonów',
+    message: 'Odblokować drukowanie paragonów?',
+    detail: `${fiscalAgent.store.alert}\n\nOdblokuj dopiero po sprawdzeniu na drukarce i w panelu Fiskalizacja, `
+      + 'które paragony już się wydrukowały.',
+    buttons: ['Anuluj', 'Odblokuj'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+  if (response === 1) fiscalAgent.acknowledgeQueueAlert();
 }
 
 function loadWindowState() {
@@ -369,6 +561,10 @@ function buildMenu(win) {
           label: 'Drukarka etykiet…',
           click: () => chooseLabelPrinter(win),
         },
+        {
+          label: 'Odblokuj kolejkę paragonów…',
+          click: () => unlockFiscalQueue(win),
+        },
       ],
     },
   ];
@@ -396,6 +592,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webviewTag: false,
       // Tylko contextBridge + ipcRenderer (bezpieczne z sandbox: true) —
       // wystawia window.kalkmateDesktop dla panelu WWW.
       preload: path.join(__dirname, 'preload.js'),
@@ -427,19 +624,7 @@ function createWindow() {
     });
   });
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isAllowedInApp(url)) return { action: 'allow' };
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
-
-  win.webContents.on('will-navigate', (event, url) => {
-    if (!isAllowedInApp(url)) {
-      event.preventDefault();
-      shell.openExternal(url);
-    }
-  });
-
+  // window.open / will-navigate / will-redirect: app.on('web-contents-created') wyżej.
   return win;
 }
 
@@ -456,13 +641,15 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    setupPermissions(session.fromPartition(PARTITION));
+    setupPermissions(session.defaultSession);
     startFiscalAgent();
     mainWindow = createWindow();
     Menu.setApplicationMenu(buildMenu(mainWindow));
 
     // Ręczny hak testowy — pozwala zweryfikować spawn programatora bez klikania
-    // w menu (headless). Nieszkodliwy w normalnym użyciu (zmienna zwykle nieustawiona).
-    if (process.env.KALKMATE_TEST_FLASHER === '1') {
+    // w menu (headless). Tylko w trybie deweloperskim (npm start), nie w paczce.
+    if (!app.isPackaged && process.env.KALKMATE_TEST_FLASHER === '1') {
       setTimeout(() => {
         try {
           launchFlasher();

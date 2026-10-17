@@ -117,15 +117,36 @@ static bool _solBtn(int pin) {
     return false;
 }
 
+// Czeka na puszczenie klawiszy nawigacji — max 2 s (zablokowany/zwarty
+// klawisz membrany nie moze zawiesic ekranu na zawsze).
 static void _solWaitRelease() {
-    while (inputBtn(BTN_UP)    == LOW ||
-           inputBtn(BTN_DOWN)  == LOW ||
-           inputBtn(BTN_LEFT)  == LOW ||
-           inputBtn(BTN_RIGHT) == LOW ||
-           inputBtn(BTN_OK)    == LOW) {
+    unsigned long t0 = millis();
+    while ((inputBtn(BTN_UP)    == LOW ||
+            inputBtn(BTN_DOWN)  == LOW ||
+            inputBtn(BTN_LEFT)  == LOW ||
+            inputBtn(BTN_RIGHT) == LOW ||
+            inputBtn(BTN_OK)    == LOW) &&
+           millis() - t0 < 2000) {
         delay(10);
     }
     _solLastPress = millis();
+}
+
+// Wspolny "tick" petli UI w tym pliku: skan klawiatury + panic key +
+// auto-sleep, jak w reszcie UI. Wczesniej czesc petli sprawdzala tylko
+// panicTriggered(), a samo wykrywanie klawisza panic (panicCheck) siedzi
+// w powerCheckSleep() — wiec panic i sen tam nie dzialaly.
+// Zwraca true, gdy urzadzenie wlasnie sie obudzilo: wolajacy przerysowuje
+// ekran (klawisz budzacy polyka input.h — nie wywola akcji).
+// NIE wolac przy wlaczonej kamerze (light sleep z esp_camera niesprawdzony).
+static bool _solTick() {
+    inputScan();
+    panicCheck();
+    if (powerCheckSleep()) {
+        _solWaitRelease();
+        return true;
+    }
+    return false;
 }
 
 static const char* _solT(const char* pl, const char* en, const char* de) {
@@ -150,9 +171,12 @@ static void _solDrawLoading(U8G2 &d, const char* msg, int frame) {
 }
 
 // ---------------------------------------------------------------------------
-// Pomocnik: ekran bledu
+// Pomocnik: ekran bledu. line3 (opcjonalna, mniejszy font) — np. co sie
+// stalo z zadaniem (w kolejce / utracone). Wyjscie: OK, <, C/CE, panic;
+// auto-sleep dziala (wczesniej petla czekala tylko na OK/<).
 // ---------------------------------------------------------------------------
-static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
+static void _solDrawError(U8G2 &d, const char* line1, const char* line2, const char* line3 = nullptr) {
+    if (panicTriggered()) return;
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
     d.drawStr(2, 16, _solT("! Blad !", "! Error !", "! Fehler !"));
@@ -160,13 +184,40 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2) {
     // Polskie znaki w komunikatach z serwera -> ASCII (bo font nie ma glyphow)
     String l1 = _solUtf8ToAscii(String(line1 ? line1 : ""));
     String l2 = _solUtf8ToAscii(String(line2 ? line2 : ""));
-    d.drawStr(2, 32, l1.c_str());
-    if (l2.length() > 0) d.drawStr(2, 46, l2.c_str());
+    d.drawStr(2, 31, l1.c_str());
+    if (l2.length() > 0) d.drawStr(2, 43, l2.c_str());
     d.setFont(u8g2_font_5x7_tf);
+    if (line3 && line3[0]) d.drawStr(2, 53, _solUtf8ToAscii(String(line3)).c_str());
     d.drawStr(2, 62, _solT("OK = powrot", "OK = back", "OK = zurueck"));
     d.sendBuffer();
     _solWaitRelease();
-    while (!_solBtn(BTN_OK) && !_solBtn(BTN_LEFT)) delay(20);
+    while (true) {
+        if (_solTick()) d.sendBuffer();   // po wybudzeniu: ta sama klatka
+        if (panicTriggered()) return;
+        if (_solBtn(BTN_OK) || _solBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) break;
+        delay(20);
+    }
+    _solWaitRelease();
+}
+
+// Pomocnik: krotki komunikat informacyjny (OK / < / C/CE albo ms).
+static void _solShowInfo(U8G2 &d, const char* l1, const char* l2, const char* l3, uint32_t ms) {
+    if (panicTriggered()) return;
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    if (l1) d.drawStr(2, 18, l1);
+    if (l2) d.drawStr(2, 32, l2);
+    d.setFont(u8g2_font_5x7_tf);
+    if (l3) d.drawStr(2, 48, l3);
+    d.sendBuffer();
+    _solWaitRelease();
+    uint32_t t0 = millis();
+    while (millis() - t0 < ms) {
+        if (_solTick()) break;
+        if (panicTriggered()) return;
+        if (_solBtn(BTN_OK) || _solBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) break;
+        delay(20);
+    }
     _solWaitRelease();
 }
 
@@ -383,11 +434,181 @@ static void _solFormatMath(const char* src, char* dst, int dstSize) {
 }
 
 // ---------------------------------------------------------------------------
+// JSON bez ArduinoJson (jak w innych modulach), ale z kompletna obsluga
+// stringow: escapowanie tresci zadania w body + dekodowanie odpowiedzi.
+// ---------------------------------------------------------------------------
+// Dopisuje s do out jako zawartosc stringu JSON (bez cudzyslowow). Znaki
+// kontrolne -> \n \r \t albo \u00XX (wczesniej surowy tab/CR psul JSON).
+static void _solJsonEscapeAppend(String& out, const char* s) {
+    for (; *s; s++) {
+        uint8_t c = (uint8_t)*s;
+        switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if (c < 0x20) {
+                    char u[8];
+                    snprintf(u, sizeof(u), "\\u%04x", (unsigned)c);
+                    out += u;
+                } else {
+                    out += (char)c;   // UTF-8 bez zmian (poprawny JSON)
+                }
+                break;
+        }
+    }
+}
+
+static int _solHex4(const char* p) {
+    int v = 0;
+    for (int i = 0; i < 4; i++) {
+        char c = p[i];
+        int dg;
+        if (c >= '0' && c <= '9')      dg = c - '0';
+        else if (c >= 'a' && c <= 'f') dg = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') dg = c - 'A' + 10;
+        else return -1;   // takze NUL — nie czytamy za koncem
+        v = (v << 4) | dg;
+    }
+    return v;
+}
+
+static int _solUtf8Encode(uint32_t cp, char* out) {
+    if (cp < 0x80)    { out[0] = (char)cp; return 1; }
+    if (cp < 0x800)   { out[0] = (char)(0xC0 | (cp >> 6));
+                        out[1] = (char)(0x80 | (cp & 0x3F)); return 2; }
+    if (cp < 0x10000) { out[0] = (char)(0xE0 | (cp >> 12));
+                        out[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                        out[2] = (char)(0x80 | (cp & 0x3F)); return 3; }
+    out[0] = (char)(0xF0 | (cp >> 18));
+    out[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+    out[2] = (char)(0x80 | ((cp >> 6) & 0x3F));
+    out[3] = (char)(0x80 | (cp & 0x3F));
+    return 4;
+}
+
+// Dekoduje string JSON. src = PIERWSZY znak tresci (za otwierajacym '"').
+// Koniec na pierwszym NIEzescapowanym '"' — sekwencje sa zjadane po kolei,
+// wiec `\\"` poprawnie konczy string (stary parser patrzyl tylko na
+// poprzedni bajt i przy `\\"` czytal dalej). Obsluga: \" \\ \/ \n \t (->
+// spacja) \r \b \f (pomijane), \uXXXX z parami surogatow -> UTF-8 (ten sam
+// tor co surowe UTF-8 z serwera: fonty OLED / _solUtf8ToAscii; NUL
+// i niesparowane surogaty -> '?', znaki kontrolne -> spacja).
+// Wynik w dst (max cap-1 bajtow + NUL), bez urwanego znaku wielobajtowego.
+// Zwraca false, gdy tresc obcieto do cap.
+static bool _solJsonUnescape(const char* src, char* dst, size_t cap) {
+    size_t di = 0;
+    bool fit = true;
+    const char* p = src;
+    while (*p && *p != '"') {
+        char tmp[4];
+        int tn = 0;
+        if (*p == '\\') {
+            char e = p[1];
+            if (e == '\0') break;   // urwany JSON
+            p += 2;
+            switch (e) {
+                case 'n': tmp[tn++] = '\n'; break;
+                case 't': tmp[tn++] = ' ';  break;
+                case 'r': case 'b': case 'f': break;
+                case 'u': {
+                    int hi = _solHex4(p);
+                    if (hi < 0) { tmp[tn++] = '?'; break; }
+                    p += 4;
+                    uint32_t cp = (uint32_t)hi;
+                    if (cp >= 0xD800 && cp <= 0xDBFF) {
+                        int lo = (p[0] == '\\' && p[1] == 'u') ? _solHex4(p + 2) : -1;
+                        if (lo >= 0xDC00 && lo <= 0xDFFF) {
+                            cp = 0x10000 + ((cp - 0xD800) << 10) + ((uint32_t)lo - 0xDC00);
+                            p += 6;
+                        } else {
+                            cp = '?';
+                        }
+                    } else if (cp >= 0xDC00 && cp <= 0xDFFF) {
+                        cp = '?';
+                    }
+                    if (cp == 0)        cp = '?';
+                    else if (cp < 0x20) cp = (cp == '\n') ? '\n' : ' ';
+                    tn = _solUtf8Encode(cp, tmp);
+                    break;
+                }
+                default: tmp[tn++] = e; break;   // \" \\ \/ i nieznane: sam znak
+            }
+        } else {
+            tmp[tn++] = *p++;
+        }
+        if (di + (size_t)tn > cap - 1) { fit = false; break; }
+        memcpy(dst + di, tmp, tn);
+        di += tn;
+    }
+    if (!fit) {
+        // Surowe UTF-8 kopiujemy bajt po bajcie — nie zostawiaj urwanego znaku.
+        size_t k = di;
+        while (k > 0 && (((uint8_t)dst[k - 1]) & 0xC0) == 0x80) k--;
+        if (k > 0 && (uint8_t)dst[k - 1] >= 0xC0 &&
+            (int)(di - (k - 1)) < _utf8Len((uint8_t)dst[k - 1])) di = k - 1;
+    }
+    dst[di] = '\0';
+    return fit;
+}
+
+// Znajduje "key": "..." w odpowiedzi i dekoduje wartosc do dst.
+// false = brak klucza (albo wartosc nie jest stringiem).
+static bool _solJsonGetString(const String& resp, const char* key, char* dst, size_t cap,
+                              bool* truncated = nullptr) {
+    String pat = String("\"") + key + "\":";
+    int i = resp.indexOf(pat);
+    if (i < 0) return false;
+    i += pat.length();
+    const int n = (int)resp.length();
+    while (i < n && (resp[i] == ' ' || resp[i] == '\t' || resp[i] == '\r' || resp[i] == '\n')) i++;
+    if (i >= n || resp[i] != '"') return false;
+    bool fit = _solJsonUnescape(resp.c_str() + i + 1, dst, cap);
+    if (truncated) *truncated = !fit;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Bufory rozwiazania — w PSRAM, alokowane raz przy pierwszym uzyciu (bez
+// PSRAM: zwykly malloc). Wczesniej ~96 KB statycznych tablic w wewnetrznym
+// SRAM (_solConverted, _stSolution, _jpSolution, _lines) konkurowalo
+// z mbedTLS. Odpowiedz tekstowa i ze zdjecia dziela jeden bufor (nigdy nie
+// sa uzywane naraz), a linie to tylko offsety w tekscie po konwersji.
+// ---------------------------------------------------------------------------
+#define _SOL_CONV_MAX     (_SOL_SOLUTION_MAX + 4096)   // LaTeX -> UTF-8 bywa nieco dluzsze
+#define _SOL_LINES_MAX    1200  // linii ekranu (wczesniej 150 — dluzsze rozwiazania ucinane po cichu)
+#define _SOL_LINE_LEN     160   // bajty/linie (UTF-8: polskie znaki i symbole 2-3 B)
+#define _SOL_MARK_ROOM    48    // zapas na znacznik obciecia
+
+struct _SolBufs {
+    char     resp[_SOL_SOLUTION_MAX + _SOL_MARK_ROOM];   // rozwiazanie z odpowiedzi serwera
+    char     conv[_SOL_CONV_MAX + _SOL_MARK_ROOM];       // po konwersji LaTeX -> UTF-8
+    uint16_t lineStart[_SOL_LINES_MAX];                  // offset linii w conv
+    uint8_t  lineLen[_SOL_LINES_MAX];                    // dlugosc linii w bajtach
+};
+static _SolBufs* _solBufs = nullptr;
+
+static _SolBufs* _solGetBufs() {
+    if (!_solBufs) {
+        _solBufs = (_SolBufs*)ps_malloc(sizeof(_SolBufs));
+        if (!_solBufs) _solBufs = (_SolBufs*)malloc(sizeof(_SolBufs));
+        if (_solBufs) Serial.printf("[SOL] bufory rozwiazania: %u B\n", (unsigned)sizeof(_SolBufs));
+        else          Serial.println("[SOL] BLAD: brak pamieci na bufory rozwiazania");
+    }
+    return _solBufs;
+}
+
+// Znacznik konca obcietego rozwiazania (ASCII — font OLED nie ma "…").
+static const char* _solTruncMark() {
+    return _solT("...(obcieto)", "...(truncated)", "...(gekuerzt)");
+}
+
+// ---------------------------------------------------------------------------
 // Wyswietlanie rozwiazania (przewijane UP/DOWN, wyjscie LEFT)
 // Tekst jest zawijany reczne co ~40 znakow na linie ekranu 6x10
 // ---------------------------------------------------------------------------
-#define _SOL_LINES_MAX    150   // wiecej linii dla dlugich, szczegolowych rozwiazan
-#define _SOL_LINE_LEN     160   // bajty/linie (UTF-8: polskie znaki i symbole 2-3 B)
 
 // Rysuje linie UTF-8 (font 6x12_te przez drawUTF8 — ma polskie glyphy/greke/
 // symbole) z obsluga poteg: "e^3" -> "e" + "3" malym fontem wyzej. Iteruje po
@@ -446,9 +667,16 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
     return xi - x;
 }
 
+// Czytanie rozwiazania: auto-sleep najwczesniej po 10 min bez klawisza
+// (wczesniej trwala blokada snu — zapomniany kalkulator rozladowywal sie).
+#define _SOL_READ_SLEEP_MS  (10UL * 60UL * 1000UL)
+
 static void _solDisplaySolution(U8G2 &d, const char* solution, const char* headerLabel = "AI") {
-    // Wylacz auto-sleep — user czyta dluzsza odpowiedz, ekran nie ma sie wylaczyc
-    powerSetInhibit(true);
+    _SolBufs* B = _solGetBufs();
+    if (!B) {
+        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!"), "");
+        return;
+    }
 
     // Font 6x10, ekran 256x64
     // Uklad: naglowek y=8 (linia 0-9), separtor y=10
@@ -461,60 +689,69 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
     const int LINE_CHARS = 41;
 
     // Konwersja LaTeX -> UTF-8. Polskie znaki ZACHOWANE (font 6x12_te je ma).
-    static char _solConverted[_SOL_SOLUTION_MAX + 1];
-    _solFormatMath(solution, _solConverted, sizeof(_solConverted));
+    int di = 0;
+    _solLatexEmit(solution, (int)strlen(solution), B->conv, di, _SOL_CONV_MAX);
+    B->conv[di] = '\0';
+    bool truncated = (di >= _SOL_CONV_MAX - 1);   // konwerter doszedl do konca bufora
 
     // Podziel na linie — liczymy KODPUNKTY UTF-8 (nie bajty), zeby nie urwac w
     // srodku znaku wielobajtowego i zawijac po realnej liczbie widocznych znakow.
-    static char _lines[_SOL_LINES_MAX][_SOL_LINE_LEN + 1];
+    // Linia = offset + dlugosc w B->conv (bez kopiowania tekstu).
     int lineCount = 0;
-    int slen = strlen(_solConverted);
+    const int slen = di;
     int pos  = 0;
 
-    while (pos < slen && lineCount < _SOL_LINES_MAX) {
+    while (pos < slen && lineCount < _SOL_LINES_MAX - 1) {   // -1: miejsce na znacznik
         int end = pos;
         int cols = 0;
         int lastSpace = -1;
         while (end < slen && cols < LINE_CHARS) {
-            if (_solConverted[end] == '\n') break;
-            if (_solConverted[end] == ' ') lastSpace = end;
-            end += _utf8Len((uint8_t)_solConverted[end]);
+            if (B->conv[end] == '\n') break;
+            if (B->conv[end] == ' ') lastSpace = end;
+            end += _utf8Len((uint8_t)B->conv[end]);
             cols++;
         }
+        if (end > slen) end = slen;
         // Zawroc do ostatniej spacji jesli urwalismy w srodku slowa
-        if (end < slen && _solConverted[end] != '\n' && cols >= LINE_CHARS && lastSpace > pos)
+        if (end < slen && B->conv[end] != '\n' && cols >= LINE_CHARS && lastSpace > pos)
             end = lastSpace;
         int len = end - pos;
         if (len > _SOL_LINE_LEN) len = _SOL_LINE_LEN;
-        strncpy(_lines[lineCount], _solConverted + pos, len);
-        _lines[lineCount][len] = '\0';
+        B->lineStart[lineCount] = (uint16_t)pos;
+        B->lineLen[lineCount]   = (uint8_t)len;
         lineCount++;
         pos = end;
-        if (pos < slen && (_solConverted[pos] == '\n' || _solConverted[pos] == ' '))
+        if (pos < slen && (B->conv[pos] == '\n' || B->conv[pos] == ' '))
             pos++;
     }
-
-    Serial.printf("[SOL] lineCount=%d\n", lineCount);
-
-    // Czekaj na puszczenie przyciskow
-    while (inputBtn(BTN_UP)    == LOW || inputBtn(BTN_DOWN)  == LOW ||
-           inputBtn(BTN_LEFT)  == LOW || inputBtn(BTN_RIGHT) == LOW ||
-           inputBtn(BTN_OK)    == LOW) {
-        delay(10);
+    if (pos < slen) truncated = true;
+    if (truncated) {
+        // Znacznik za koncem tekstu (zapas _SOL_MARK_ROOM w conv) — wczesniej
+        // dluga odpowiedz byla ucinana po cichu.
+        int mpos = di + 1;
+        strncpy(B->conv + mpos, _solTruncMark(), _SOL_MARK_ROOM - 2);
+        B->conv[mpos + _SOL_MARK_ROOM - 2] = '\0';
+        B->lineStart[lineCount] = (uint16_t)mpos;
+        B->lineLen[lineCount]   = (uint8_t)strlen(B->conv + mpos);
+        lineCount++;
     }
+
+    Serial.printf("[SOL] lineCount=%d%s\n", lineCount, truncated ? " (obcieto)" : "");
+
+    // Czekaj na puszczenie przyciskow (max 2 s)
+    _solWaitRelease();
     delay(200);
     _solLastPress = millis();
 
+    powerSetMinTimeout(_SOL_READ_SLEEP_MS);
     bool needRedraw = true;
     int scroll = 0;
 
     while (true) {
-        // Wymuszaj sprawdzenie panic key — sleep jest tu inhibitowany,
-        // wiec powerCheckSleep() (gdzie zwykle siedzi panicCheck) zwraca
-        // natychmiast i panic nigdy by nie byl wykryty.
-        panicCheck();
+        // panicCheck + sen (po _SOL_READ_SLEEP_MS bez klawisza) w _solTick()
+        if (_solTick()) needRedraw = true;
         if (panicTriggered()) {
-            powerSetInhibit(false);
+            powerSetMinTimeout(0);
             return;
         }
         if (needRedraw) {
@@ -537,7 +774,11 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
             for (int i = 0; i < VISIBLE; i++) {
                 int li = scroll + i;
                 if (li >= lineCount) break;
-                _solDrawMathLine(d, 2, LINE_Y0 + i * LINE_H, _lines[li]);
+                char lb[_SOL_LINE_LEN + 1];
+                int ll = B->lineLen[li];
+                memcpy(lb, B->conv + B->lineStart[li], ll);
+                lb[ll] = '\0';
+                _solDrawMathLine(d, 2, LINE_Y0 + i * LINE_H, lb);
             }
 
             // Stopka
@@ -553,19 +794,16 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
         if (now - _solLastPress > 180UL) {
             if (inputBtn(BTN_UP) == LOW) {
                 _solLastPress = now;
-                Serial.println("[SOL] UP");
                 if (scroll > 0) { scroll--; needRedraw = true; }
             } else if (inputBtn(BTN_DOWN) == LOW) {
                 _solLastPress = now;
-                Serial.println("[SOL] DOWN");
                 if (scroll + VISIBLE < lineCount) { scroll++; needRedraw = true; }
-                else Serial.printf("[SOL] at bottom scroll=%d VISIBLE=%d lineCount=%d\n", scroll, VISIBLE, lineCount);
             } else if (inputBtn(BTN_LEFT) == LOW || inputBtn(BTN_OK) == LOW) {
                 _solLastPress = now;
                 Serial.println("[SOL] EXIT");
-                while (inputBtn(BTN_LEFT) == LOW || inputBtn(BTN_OK) == LOW) delay(10);
+                _solWaitRelease();
                 delay(100);
-                powerSetInhibit(false);   // przywroc auto-sleep przed wyjsciem
+                powerSetMinTimeout(0);   // przywroc zwykly czas auto-sleep
                 return;
             }
         }
@@ -575,7 +813,8 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
 
 // ---------------------------------------------------------------------------
 // Sprawdz WiFi — polacz jesli nie jest polaczony (uzyj zapisanych danych)
-// Zwraca true jesli polaczony
+// Zwraca true jesli polaczony. false takze po C/CE (anuluj) i panic —
+// wolajacy kolejkuje wtedy zadanie jak przy braku WiFi.
 // ---------------------------------------------------------------------------
 // Forward decl z device_account.h (zaimplementowane w main.cpp helperze)
 extern bool accountRegisterOnce();
@@ -599,22 +838,27 @@ static bool _solEnsureWifi(U8G2 &d) {
     }
 
     // Proba polaczenia (z cache BSSID+kanal dla szybszego reconnectu)
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
     char ln[48];
     snprintf(ln, sizeof(ln), _solT("Lacze z: %s", "Connecting: %s", "Verbinde: %s"), ssid);
-    d.drawStr(2, 24, ln);
-    d.drawStr(2, 38, "...");
-    d.sendBuffer();
 
-    WiFi.mode(WIFI_STA);
+    wifiStaOnLimited();         // STA + TxPower 8.5 dBm (anty-brownout; radio po OFF wraca na ~20 dBm)
     wifiFastBegin(ssid, pass);  // cache BSSID+kanal pomija skan (~1-3s)
 
+    (void)inputKeyConsume(KEY_CCE);   // stare zbocze C/CE nie moze od razu anulowac
     unsigned long start = millis();
+    unsigned long lastFrame = 0;
     int frame = 0;
     bool fellBack = false;
     while (WiFi.status() != WL_CONNECTED) {
         unsigned long elapsed = millis() - start;
+        // Panic / C/CE (anuluj) sprawdzane w trakcie czekania — bez snu:
+        // to tylko kilkanascie sekund tuz po nacisnieciu klawisza.
+        inputScan();
+        panicCheck();
+        if (panicTriggered() || inputKeyConsume(KEY_CCE)) {
+            memset(pass, 0, sizeof(pass));
+            return false;
+        }
         // Hint (BSSID+kanal) moze byc nieaktualny nawet dla tej samej sieci
         // (AP zmienil kanal, restart routera). Jesli po 6s wciaz nic — raz
         // sprobuj zwyklego begin bez hinta, zamiast czekac caly timeout i
@@ -627,57 +871,90 @@ static bool _solEnsureWifi(U8G2 &d) {
             WiFi.begin(ssid, pass);
         }
         if (elapsed > 15000) {
+            memset(pass, 0, sizeof(pass));
             _solDrawError(d,
                 _solT("Blad WiFi!", "WiFi failed!", "WLAN Fehler!"),
                 _solT("Sprawdz haslo.", "Check password.", "Passwort pruefen."));
             return false;
         }
-        _solDrawLoading(d, _solT("Laczenie WiFi...", "Connecting WiFi...", "Verbinde WLAN..."), frame++);
-        delay(250);
+        if (lastFrame == 0 || millis() - lastFrame >= 250) {
+            lastFrame = millis();
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 20, ln);
+            const char* frames[] = {"/", "-", "\\", "|"};
+            char anim[4];
+            snprintf(anim, sizeof(anim), "[%s]", frames[frame++ % 4]);
+            d.drawStr(120, 40, anim);
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, _solT("C/CE = anuluj (zadanie do kolejki)", "C/CE = cancel (task to queue)", "C/CE = abbrechen (in Warteschlange)"));
+            d.sendBuffer();
+        }
+        delay(30);
     }
+    memset(pass, 0, sizeof(pass));
     wifiSaveBssidChannel();      // zapisz BSSID+kanal do NVS na nastepny raz
     accountRegisterOnce();       // zarejestruj device po pierwszym polaczeniu
     return true;
 }
 
 // ---------------------------------------------------------------------------
-// _solSendText — wyslij zadanie tekstowe do API i pokaz wynik.
-// Wymaga aktywnego WiFi. Tekst w taskText (C-string).
-// Zwraca true tylko gdy odpowiedz AI faktycznie dotarla i zostala pokazana —
-// wolajacy (live-send i _solProcessQueue) polega na tym, zeby wiedziec czy
-// zadanie mozna bezpiecznie odrzucic, czy trzeba je zachowac do ponowienia.
+// Wysylka zadania do /api/device/solve — JEDNA wspolna sciezka dla tekstu
+// i zdjecia (wczesniej dwie kopie z osobnymi parserami).
+//
+// Wynik:
+//   _SOL_RES_OK    — rozwiazanie dotarlo, zapisane w historii i pokazane,
+//   _SOL_RES_RETRY — blad przejsciowy: transport (httpCode <= 0), 429, 5xx
+//                    -> zadanie moze trafic do kolejki offline,
+//   _SOL_RES_FATAL — blad trwaly: pozostale 4xx (402 tokeny, 403 licencja/
+//                    blokada, 413 za duze...), 200 bez rozwiazania
+//                    -> ponawianie nic nie da, NIE kolejkowac.
+// Bledow nie rysuje (robi to wolajacy — wie, co sie stalo z zadaniem).
+//
+// x-request-id: to samo id przy pierwszej wysylce i przy kazdym ponowieniu
+// z kolejki — serwer w ciagu ~20 min zwraca zapisany wynik bez ponownego
+// pobierania tokenow (np. gdy odpowiedz zginela po stronie sieci).
 // ---------------------------------------------------------------------------
-static bool _solSendText(U8G2 &d, const char* taskText) {
+enum : uint8_t { _SOL_RES_OK = 0, _SOL_RES_RETRY = 1, _SOL_RES_FATAL = 2 };
+#define _SOL_HTTP_NOMEM  (-1000)   // lokalny brak pamieci (nie kod HTTP)
+
+struct _SolSendRes {
+    uint8_t kind;      // _SOL_RES_*
+    int     http;      // kod HTTP (<= 0 = blad transportu, _SOL_HTTP_NOMEM)
+    char    msg[64];   // komunikat bledu z serwera ("error"), moze byc pusty
+};
+
+static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
+                                 const uint8_t* body, size_t bodyLen,
+                                 const char* reqId, const String& histQuestion) {
+    _SolSendRes res;
+    res.kind = _SOL_RES_FATAL;
+    res.http = 0;
+    res.msg[0] = '\0';
+
+    _SolBufs* B = _solGetBufs();
+    if (!B) { res.kind = _SOL_RES_RETRY; res.http = _SOL_HTTP_NOMEM; return res; }
+
     char licKey[40];
     wifiLoadLicense(licKey, sizeof(licKey));
-
-    // Zbuduj JSON body
-    String jsonBody = "{\"mode\":\"text\",\"text\":\"";
-    for (int i = 0; taskText[i]; i++) {
-        char c = taskText[i];
-        if (c == '"')       jsonBody += "\\\"";
-        else if (c == '\\') jsonBody += "\\\\";
-        else if (c == '\n') jsonBody += "\\n";
-        else                jsonBody += c;
-    }
-    jsonBody += "\"}";
 
     WiFiClientSecure client;
     client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(60);
     HTTPClient http;
     http.begin(client, _SOL_SOLVE_ENDPOINT);
-    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Content-Type", contentType);
     http.addHeader("x-api-key", KALK_API_KEY);
     http.addHeader("x-device-id", _solDeviceId());
     http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
     http.addHeader("x-language", kalkSettings.language == 0 ? "pl" : (kalkSettings.language == 2 ? "de" : "en"));
-    { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); }
+    { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); memset(dt,0,sizeof(dt)); }
+    if (reqId && reqId[0]) http.addHeader("x-request-id", reqId);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
 
-    Serial.printf("[SOL] POST text %d B\n", jsonBody.length());
+    Serial.printf("[SOL] POST %u B, req=%s\n", (unsigned)bodyLen, (reqId && reqId[0]) ? reqId : "-");
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
@@ -686,73 +963,54 @@ static bool _solSendText(U8G2 &d, const char* taskText) {
     d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait...", "Bitte warten..."));
     d.sendBuffer();
 
-    int httpCode = http.POST(jsonBody);
+    int httpCode = http.POST((uint8_t*)body, bodyLen);
+    res.http = httpCode;
     if (httpCode <= 0) {
         http.end();
-        _solDrawError(d, _solT("Blad polaczenia", "Connection error", "Verbindungsfehler"), "");
-        return false;
-    }
-    String resp  = http.getString();
-    http.end();
-
-    Serial.printf("[SOL] HTTP %d, resp len=%d\n", httpCode, resp.length());
-
-    if (httpCode == 402) {
-        // Serwer zwraca 402 gdy saldo tokenow < 1000 (skonczyly sie).
-        _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!"),
-                      _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl"));
-        return false;
+        Serial.printf("[SOL] blad transportu %d\n", httpCode);
+        res.kind = _SOL_RES_RETRY;
+        return res;
     }
 
-    if (httpCode != 200) {
-        int errIdx = resp.indexOf("\"error\":\"");
-        char errMsg[64] = "";
-        if (errIdx >= 0) {
-            int s2 = errIdx + 9, e2 = resp.indexOf("\"", s2);
-            if (e2 > s2) strncpy(errMsg, resp.substring(s2, e2).c_str(), sizeof(errMsg)-1);
+    bool hasSol = false, solTrunc = false;
+    {
+        String resp = http.getString();
+        http.end();
+        Serial.printf("[SOL] HTTP %d, resp len=%d\n", httpCode, resp.length());
+        if (httpCode == 200) {
+            hasSol = _solJsonGetString(resp, "solution", B->resp, _SOL_SOLUTION_MAX + 1, &solTrunc);
         } else {
-            snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
+            _solJsonGetString(resp, "error", res.msg, sizeof(res.msg));
         }
-        _solDrawError(d, _solT("Blad API:", "API error:", "API Fehler:"), errMsg);
-        return false;
-    }
+    }   // resp (do ~25 KB) zwolniony przed zapisem historii i wyswietlaniem
 
-    int solIdx = resp.indexOf("\"solution\":\"");
-    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer", "Keine Antwort"), ""); return false; }
-
-    int solStart = solIdx + 12;
-    static char _stSolution[_SOL_SOLUTION_MAX + 1];
-    int spos = 0;
-    for (int i = solStart; i < (int)resp.length() && spos < _SOL_SOLUTION_MAX; i++) {
-        char c = resp[i];
-        if (c == '"' && (i == 0 || resp[i-1] != '\\')) break;
-        if (c == '\\' && i + 1 < (int)resp.length()) {
-            char nx = resp[i+1];
-            if (nx == 'n')       { _stSolution[spos++] = '\n'; i++; }
-            else if (nx == '"')  { _stSolution[spos++] = '"';  i++; }
-            else if (nx == '\\') { _stSolution[spos++] = '\\'; i++; }
-            else                 { _stSolution[spos++] = c; }
-        } else {
-            _stSolution[spos++] = c;
+    if (httpCode == 200) {
+        if (!hasSol) return res;   // FATAL: "Brak odpowiedzi"
+        if (solTrunc) {
+            size_t l = strlen(B->resp);
+            snprintf(B->resp + l, _SOL_MARK_ROOM, "\n%s", _solTruncMark());
         }
+        res.kind = _SOL_RES_OK;
+        if (!historySave(histQuestion, String(B->resp))) Serial.println("[SOL] historia: wpis pominiety");
+        _solDisplaySolution(d, B->resp);
+        return res;
     }
-    _stSolution[spos] = '\0';
-
-    historySave(String(taskText), String(_stSolution));
-    _solDisplaySolution(d, _stSolution);
-    return true;
+    if (httpCode == 429 || (httpCode >= 500 && httpCode <= 599)) res.kind = _SOL_RES_RETRY;
+    return res;
 }
 
-// ---------------------------------------------------------------------------
-// _solSendJpeg — wyslij JPEG do API przez multipart/form-data i pokaz wynik.
-// Wymaga aktywnego WiFi. jpegBuf zarzadzany przez wywolujacego (nie zwalniany tu).
-// Zwraca true tylko gdy odpowiedz AI faktycznie dotarla i zostala pokazana —
-// patrz komentarz przy _solSendText (ten sam kontrakt).
-// ---------------------------------------------------------------------------
-static bool _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
-    char licKey[40];
-    wifiLoadLicense(licKey, sizeof(licKey));
+static _SolSendRes _solSendText(U8G2 &d, const char* taskText, const char* reqId) {
+    String body;
+    body.reserve(strlen(taskText) + 48);
+    body = "{\"mode\":\"text\",\"text\":\"";
+    _solJsonEscapeAppend(body, taskText);
+    body += "\"}";
+    return _solPostSolve(d, "application/json", (const uint8_t*)body.c_str(), body.length(),
+                         reqId, String(taskText));
+}
 
+// jpegBuf zarzadzany przez wywolujacego (nie zwalniany tu).
+static _SolSendRes _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen, const char* reqId) {
     // Zbuduj multipart body w PSRAM
     static const char _mpHdr[] =
         "--KalkMateB\r\n"
@@ -765,91 +1023,76 @@ static bool _solSendJpeg(U8G2 &d, const uint8_t* jpegBuf, size_t jpegLen) {
     size_t bodySize = hdrLen + jpegLen + ftrLen;
     uint8_t* bodyBuf = (uint8_t*)ps_malloc(bodySize);
     if (!bodyBuf) {
-        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!"), "");
-        return false;
+        _SolSendRes r;
+        r.kind = _SOL_RES_RETRY;
+        r.http = _SOL_HTTP_NOMEM;
+        r.msg[0] = '\0';
+        return r;
     }
-    memcpy(bodyBuf,                   _mpHdr, hdrLen);
-    memcpy(bodyBuf + hdrLen,          jpegBuf, jpegLen);
+    memcpy(bodyBuf,                    _mpHdr, hdrLen);
+    memcpy(bodyBuf + hdrLen,           jpegBuf, jpegLen);
     memcpy(bodyBuf + hdrLen + jpegLen, _mpFtr, ftrLen);
 
-    WiFiClientSecure client;
-    client.setCACert(KALKMATE_CA_CERT);
-    client.setTimeout(60);
-    HTTPClient http;
-    http.begin(client, _SOL_SOLVE_ENDPOINT);
-    http.addHeader("Content-Type", "multipart/form-data; boundary=KalkMateB");
-    http.addHeader("x-api-key", KALK_API_KEY);
-    http.addHeader("x-device-id", _solDeviceId());
-    http.addHeader("x-fw-version", FW_VERSION);
-    if (licKey[0]) http.addHeader("x-license-key", licKey);
-    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
-    http.addHeader("x-language", kalkSettings.language == 0 ? "pl" : (kalkSettings.language == 2 ? "de" : "en"));
-    { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); }
-    http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
-
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe"));
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait...", "Bitte warten..."));
-    d.sendBuffer();
-
-    int httpCode = http.POST(bodyBuf, (int)bodySize);
+    _SolSendRes r = _solPostSolve(d, "multipart/form-data; boundary=KalkMateB",
+                                  bodyBuf, bodySize, reqId, String("[Zdjecie]"));
     free(bodyBuf);
+    return r;
+}
 
-    if (httpCode <= 0) {
-        http.end();
-        _solDrawError(d, _solT("Blad polaczenia", "Connection error", "Verbindungsfehler"), "");
-        return false;
+// Ekran bledu wysylki: tytul wg kodu HTTP, komunikat serwera, note = co sie
+// stalo z zadaniem (np. "w kolejce").
+static void _solShowSendError(U8G2 &d, const _SolSendRes& r, const char* note) {
+    if (panicTriggered()) return;
+    const int c = r.http;
+    const char* l1;
+    const char* l2 = r.msg;
+    if (c == _SOL_HTTP_NOMEM)       l1 = _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!");
+    else if (c <= 0)                l1 = _solT("Blad polaczenia", "Connection error", "Verbindungsfehler");
+    else if (c == 200)              l1 = _solT("Brak odpowiedzi", "No answer", "Keine Antwort");
+    else if (c == 402) {            l1 = _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!");
+                                    l2 = _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl"); }
+    else if (c == 403)              l1 = _solT("Brak dostepu (licencja/blokada)", "Access denied (license/lock)", "Kein Zugriff (Lizenz/Sperre)");
+    else if (c == 413)              l1 = _solT("Zadanie za duze", "Request too large", "Anfrage zu gross");
+    else if (c == 429)              l1 = _solT("Limit zapytan - sprobuj pozniej", "Rate limit - try later", "Limit erreicht - spaeter");
+    else if (c >= 500)              l1 = _solT("Blad serwera / AI", "Server / AI error", "Server-/KI-Fehler");
+    else                            l1 = _solT("Blad API:", "API error:", "API Fehler:");
+    char codeBuf[24];
+    if (!l2 || !l2[0]) {
+        codeBuf[0] = '\0';
+        if (c > 0)                               snprintf(codeBuf, sizeof(codeBuf), "HTTP %d", c);
+        else if (c < 0 && c != _SOL_HTTP_NOMEM)  snprintf(codeBuf, sizeof(codeBuf), "(%d)", c);
+        l2 = codeBuf;
     }
+    _solDrawError(d, l1, l2, note);
+}
 
-    String resp = http.getString();
-    http.end();
+// Co sie stalo z zadaniem po probie zakolejkowania (3. linia ekranu bledu).
+static const char* _solQueueNote(uint8_t q) {
+    if (q == OQ_ADDED) return _solT("Zadanie w kolejce - wysle ponownie pozniej",
+                                    "Task queued - will retry later",
+                                    "In Warteschlange - spaeter erneut");
+    if (q == OQ_FULL)  return _solT("Kolejka pelna (3) - zadanie NIE zapisane",
+                                    "Queue full (3) - task NOT saved",
+                                    "Warteschlange voll - NICHT gespeichert");
+    return _solT("Blad zapisu kolejki - zadanie NIE zapisane",
+                 "Queue write error - task NOT saved",
+                 "Speicherfehler - NICHT gespeichert");
+}
 
-    if (httpCode == 402) {
-        // Serwer zwraca 402 gdy saldo tokenow < 1000 (skonczyly sie).
-        _solDrawError(d, _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!"),
-                      _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl"));
-        return false;
+// Po zakolejkowaniu bez WiFi: krotki komunikat; gdy sie nie udalo (pelna
+// kolejka / blad zapisu) — ekran bledu do potwierdzenia (wczesniej cisza).
+static void _solShowQueued(U8G2 &d, uint8_t q, bool photo) {
+    if (panicTriggered()) return;
+    if (q != OQ_ADDED) {
+        _solDrawError(d, _solT("Brak WiFi.", "No WiFi.", "Kein WLAN."), "", _solQueueNote(q));
+        return;
     }
-
-    if (httpCode != 200) {
-        int errIdx = resp.indexOf("\"error\":\"");
-        char errMsg[64] = "";
-        if (errIdx >= 0) {
-            int s2 = errIdx + 9, e2 = resp.indexOf("\"", s2);
-            if (e2 > s2) strncpy(errMsg, resp.substring(s2, e2).c_str(), sizeof(errMsg)-1);
-        } else {
-            snprintf(errMsg, sizeof(errMsg), "HTTP %d", httpCode);
-        }
-        _solDrawError(d, _solT("Blad API:", "API error:", "API Fehler:"), errMsg);
-        return false;
-    }
-
-    int solIdx = resp.indexOf("\"solution\":\"");
-    if (solIdx < 0) { _solDrawError(d, _solT("Brak odpowiedzi", "No answer", "Keine Antwort"), ""); return false; }
-
-    int solStart = solIdx + 12;
-    static char _jpSolution[_SOL_SOLUTION_MAX + 1];
-    int spos = 0;
-    for (int i = solStart; i < (int)resp.length() && spos < _SOL_SOLUTION_MAX; i++) {
-        char c = resp[i];
-        if (c == '"' && (i == 0 || resp[i-1] != '\\')) break;
-        if (c == '\\' && i + 1 < (int)resp.length()) {
-            char nx = resp[i+1];
-            if (nx == 'n')       { _jpSolution[spos++] = '\n'; i++; }
-            else if (nx == '"')  { _jpSolution[spos++] = '"';  i++; }
-            else if (nx == '\\') { _jpSolution[spos++] = '\\'; i++; }
-            else                 { _jpSolution[spos++] = c; }
-        } else {
-            _jpSolution[spos++] = c;
-        }
-    }
-    _jpSolution[spos] = '\0';
-
-    historySave(String("[Zdjecie]"), String(_jpSolution));
-    _solDisplaySolution(d, _jpSolution);
-    return true;
+    _solShowInfo(d,
+        _solT("Brak WiFi.", "No WiFi.", "Kein WLAN."),
+        photo ? _solT("Zdjecie w kolejce.", "Photo queued.", "Foto in Warteschlange.")
+              : _solT("Zadanie w kolejce.", "Task queued.", "Aufgabe in Warteschlange."),
+        _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available.", "Senden nach WLAN-Verbindung."),
+        2500);
 }
 
 // ---------------------------------------------------------------------------
@@ -868,33 +1111,27 @@ static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
     }
 
     // Uzyj klawiatury z wifi_settings.h, zmien tylko naglowek
-    // _runKeyboard rysuje "Haslo:" — tutaj nadpiszemy przez wlasny wrapper
-    // Zamiast kopiowac cala klawiature, skorzystamy z tej samej funkcji
-    // i po prostu akceptujemy naglowek "Haslo:" (jezyk-agnostycznie OK)
     bool saved = _runKeyboard(d, taskText, sizeof(taskText),
                               _solT("Zadanie: ", "Problem: ", "Aufgabe: "));
     if (!saved || taskText[0] == '\0') return;
 
+    // Jedno x-request-id na cale zycie zadania (pierwsza wysylka + ponowienia).
+    char rid[17];
+    offlineMakeRequestId(rid);
+
     if (!_solEnsureWifi(d)) {
-        // Brak WiFi — zakolejkuj zadanie
-        if (offlineQueueAddText(taskText)) {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 18, _solT("Brak WiFi.", "No WiFi.", "Kein WLAN."));
-            d.drawStr(2, 32, _solT("Zadanie w kolejce.", "Task queued.", "Aufgabe in Warteschlange."));
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 48, _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available.", "Senden nach WLAN-Verbindung."));
-            d.sendBuffer();
-            _solWaitRelease();
-            delay(2000);
-        }
+        // Brak WiFi (albo anulowano / panic) — zakolejkuj, nic nie ginie
+        uint8_t q = offlineQueueAddText(taskText, rid, 0);
+        _solShowQueued(d, q, false);
         return;
     }
-    // WiFi bylo "polaczone", ale samo wyslanie moglo mimo to zawiesc
-    // (chwilowy zanik internetu, timeout, blad serwera) — bez tego zdjecie/
-    // zadanie po prostu ginelo bezpowrotnie. Zakolejkuj do ponowienia.
-    if (!_solSendText(d, taskText)) {
-        offlineQueueAddText(taskText);
+    _SolSendRes r = _solSendText(d, taskText, rid);
+    if (r.kind == _SOL_RES_RETRY) {
+        // Blad przejsciowy (siec, 5xx, 429) — do kolejki z TYM SAMYM id
+        uint8_t q = offlineQueueAddText(taskText, rid, 1);
+        _solShowSendError(d, r, _solQueueNote(q));
+    } else if (r.kind == _SOL_RES_FATAL) {
+        _solShowSendError(d, r, nullptr);   // trwaly blad — kolejka nic nie da
     }
 }
 
@@ -916,9 +1153,15 @@ static void _solDrawCorners(U8G2 &d, int x, int y, int w, int h) {
 // Kamera musi byc juz w trybie GRAYSCALE QQVGA (camBeginPreview()). Bierzemy
 // srodkowy pas 160x64 z klatki 160x120, ditherujemy do 1-bit (ordered Bayer
 // 4x4) i rysujemy 1:1 na lewej polowie OLED. Po prawej: pasek ostrosci +
-// podpowiedzi. Zwraca true = rob zdjecie, false = anuluj.
+// podpowiedzi.
+// Zwraca: 1 = rob zdjecie, 0 = anuluj (<, C/CE, panic, bezczynnosc),
+//        -1 = kamera nie daje klatek (wolajacy pokazuje blad PO camEnd()).
+// Bez auto-sleep (kamera pracuje) — po _SOL_PREVIEW_IDLE_MS bez klawisza
+// podglad sie zamyka, a dalej usypia juz zwykly ekran wyboru trybu.
 // ---------------------------------------------------------------------------
-static bool _solPreviewAndConfirm(U8G2 &d) {
+#define _SOL_PREVIEW_IDLE_MS  120000UL
+
+static int _solPreviewAndConfirm(U8G2 &d) {
     static const int PV_W = 160;                 // szerokosc viewfinder = szerokosc QQVGA
     static const int PV_H = 64;                  // wysokosc viewfinder = wysokosc OLED
     static const int XBM_STRIDE = (PV_W + 7) / 8; // 20 B/wiersz
@@ -933,21 +1176,38 @@ static bool _solPreviewAndConfirm(U8G2 &d) {
     };
 
     float sharpMax = 1.0f;   // adaptacyjne maksimum metryki ostrosci (normalizacja paska)
+    uint32_t lastFrameMs = millis();
+    int fails = 0;
 
     _solWaitRelease();
     while (true) {
-        if (panicTriggered()) return false;
+        // Klawisze i panic czytane w KAZDEJ iteracji — wczesniej przy padnietej
+        // kamerze (fb == NULL) petla robila tylko continue i nie dalo sie wyjsc.
+        inputScan();
+        panicCheck();
+        if (panicTriggered()) return 0;
+        if (inputBtn(BTN_LEFT) == LOW || inputKeyConsume(KEY_CCE)) { _solWaitRelease(); return 0; }
+        if (millis() - inputLastActivity() > _SOL_PREVIEW_IDLE_MS) {
+            Serial.println("[SOL] podglad: bezczynnosc — zamykam kamere");
+            return 0;
+        }
 
         camera_fb_t* fb = esp_camera_fb_get();
-        if (!fb) { delay(10); continue; }
-
-        const int sw = fb->width;    // 160
-        const int sh = fb->height;   // 120
-        if (sw < PV_W || sh < PV_H || !fb->buf) {
-            esp_camera_fb_return(fb);
+        if (!fb || !fb->buf || fb->width < PV_W || fb->height < PV_H) {
+            if (fb) esp_camera_fb_return(fb);
+            // Kilka kolejnych porazek i > 3 s bez klatki = kamera nie dziala
+            if (++fails >= 3 && millis() - lastFrameMs > 3000) {
+                Serial.println("[SOL] podglad: brak klatek z kamery");
+                return -1;
+            }
             delay(10);
             continue;
         }
+        fails = 0;
+        lastFrameMs = millis();
+
+        const int sw = fb->width;    // 160
+        const int sh = fb->height;   // 120
         const int row0 = (sh - PV_H) / 2;   // srodkowy pas w pionie (= 28 dla 120)
 
         uint32_t sharp = 0;
@@ -1004,8 +1264,8 @@ static bool _solPreviewAndConfirm(U8G2 &d) {
         // POJEDYNCZE nacisniecie OK/LEFT sie gubilo — trzeba bylo TRZYMAC.
         // Uzywamy inputBtn()==LOW (bez throttle 200ms z _solBtn) dla responsywnosci.
         for (int k = 0; k < 3; k++) {
-            if (inputBtn(BTN_OK)   == LOW) { _solWaitRelease(); return true; }
-            if (inputBtn(BTN_LEFT) == LOW) { _solWaitRelease(); return false; }
+            if (inputBtn(BTN_OK)   == LOW) { _solWaitRelease(); return 1; }
+            if (inputBtn(BTN_LEFT) == LOW) { _solWaitRelease(); return 0; }
             delay(35);
         }
     }
@@ -1021,9 +1281,14 @@ static void _solRunPhotoMode(U8G2 &d) {
     _solDrawLoading(d, _solT("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau..."), 0);
 
     if (camBeginPreview()) {
-        bool go = _solPreviewAndConfirm(d);
+        int pv = _solPreviewAndConfirm(d);
         camEnd();                 // KONIECZNE: zwolnij preview, inaczej camBegin() (JPEG) zrobi early-return
-        if (!go) return;          // anulowano w podgladzie
+        if (pv < 0) {
+            _solDrawError(d, _solT("Kamera nie odpowiada", "Camera not responding", "Kamera antwortet nicht"),
+                          _solT("Brak obrazu z kamery.", "No image from camera.", "Kein Kamerabild."));
+            return;
+        }
+        if (pv == 0) return;      // anulowano w podgladzie
     } else {
         // Fallback (KALK_HW_LEGACY albo blad preview): statyczny ekran jak dawniej
         d.clearBuffer();
@@ -1038,9 +1303,10 @@ static void _solRunPhotoMode(U8G2 &d) {
 
         _solWaitRelease();
         while (true) {
+            if (_solTick()) d.sendBuffer();   // kamera tu wylaczona — sen OK
             if (panicTriggered()) return;
             if (_solBtn(BTN_OK)) break;
-            if (_solBtn(BTN_LEFT)) { _solWaitRelease(); return; }
+            if (_solBtn(BTN_LEFT) || inputKeyConsume(KEY_CCE)) { _solWaitRelease(); return; }
             delay(20);
         }
         _solWaitRelease();
@@ -1080,89 +1346,90 @@ static void _solRunPhotoMode(U8G2 &d) {
     esp_camera_fb_return(fb);
     camEnd();   // OFF kamery PRZED WiFi (anty-interference)
 
+    // Jedno x-request-id na cale zycie zadania (pierwsza wysylka + ponowienia).
+    char rid[17];
+    offlineMakeRequestId(rid);
+
     // Teraz mozemy bezpiecznie wlaczyc WiFi
     if (!_solEnsureWifi(d)) {
-        // Brak WiFi — zakolejkuj zdjecie w SPIFFS
-        if (offlineQueueAddPhoto(jpegBuf, jpegLen)) {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 18, _solT("Brak WiFi.", "No WiFi.", "Kein WLAN."));
-            d.drawStr(2, 32, _solT("Zdjecie w kolejce.", "Photo queued.", "Foto in Warteschlange."));
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 48, _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available.", "Senden nach WLAN-Verbindung."));
-            d.sendBuffer();
-            _solWaitRelease();
-            delay(2000);
-        }
+        // Brak WiFi (albo anulowano / panic) — zakolejkuj zdjecie w SPIFFS
+        uint8_t q = offlineQueueAddPhoto(jpegBuf, jpegLen, rid, 0);
         free(jpegBuf);
+        _solShowQueued(d, q, true);
         return;
     }
 
-    // WiFi bylo "polaczone", ale samo wyslanie moglo mimo to zawiesc
-    // (chwilowy zanik internetu, timeout, blad serwera) — bez tego zdjecie
-    // po prostu ginelo bezpowrotnie mimo ze kamera je zrobila. Zakolejkuj
-    // do ponowienia (offlineQueueAddPhoto kopiuje bajty do SPIFFS od razu,
-    // wiec jpegBuf mozna zwolnic zaraz potem w obu przypadkach).
-    if (!_solSendJpeg(d, jpegBuf, jpegLen)) {
-        offlineQueueAddPhoto(jpegBuf, jpegLen);
-    }
+    // WiFi "polaczone", ale samo wyslanie moze zawiesc. Bledy przejsciowe
+    // (siec, 5xx, 429) -> kolejka z TYM SAMYM id; trwale (4xx) -> komunikat,
+    // bez kolejki (ponawianie nic by nie dalo, a blokowalo kolejke).
+    // offlineQueueAddPhoto kopiuje bajty do SPIFFS od razu.
+    _SolSendRes r = _solSendJpeg(d, jpegBuf, jpegLen, rid);
+    uint8_t q = OQ_ERROR;
+    if (r.kind == _SOL_RES_RETRY) q = offlineQueueAddPhoto(jpegBuf, jpegLen, rid, 1);
     free(jpegBuf);
+    if (r.kind == _SOL_RES_RETRY)      _solShowSendError(d, r, _solQueueNote(q));
+    else if (r.kind == _SOL_RES_FATAL) _solShowSendError(d, r, nullptr);
 }
 
 // ---------------------------------------------------------------------------
 // Ekran wyboru trybu (zdjecie / tekst)
+// Rysowany tylko po zmianie (wczesniej pelne clearBuffer/sendBuffer co 20 ms).
 // ---------------------------------------------------------------------------
 static void _solModeSelect(U8G2 &d, int &mode) {
     // mode: 0 = zdjecie, 1 = tekst, 2 = historia, 3 = offline (lokalne solvery)
     _solWaitRelease();
 
+    bool needRedraw = true;
     while (true) {
+        if (_solTick()) needRedraw = true;
         if (panicTriggered()) return;
-        powerCheckSleep();
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ===", "=== Aufgabe loesen ==="));
-        d.drawHLine(0, 12, 256);
+        if (needRedraw) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ===", "=== Aufgabe loesen ==="));
+            d.drawHLine(0, 12, 256);
 
-        const char* labels[4][3] = {
-            { "  [1] Zdjecie kamery", "  [1] Camera photo", "  [1] Kamerafoto"    },
-            { "  [2] Wpisz tekst",    "  [2] Enter text",   "  [2] Text eingeben" },
-            { "  [3] Historia",       "  [3] History",      "  [3] Verlauf"       },
-            { "  [4] Offline",        "  [4] Offline",      "  [4] Offline"       },
-        };
-        const char* labelsSel[4][3] = {
-            { "> [1] Zdjecie kamery", "> [1] Camera photo", "> [1] Kamerafoto"    },
-            { "> [2] Wpisz tekst",    "> [2] Enter text",   "> [2] Text eingeben" },
-            { "> [3] Historia",       "> [3] History",      "> [3] Verlauf"       },
-            { "> [4] Offline",        "> [4] Offline",      "> [4] Offline"       },
-        };
+            const char* labels[4][3] = {
+                { "  [1] Zdjecie kamery", "  [1] Camera photo", "  [1] Kamerafoto"    },
+                { "  [2] Wpisz tekst",    "  [2] Enter text",   "  [2] Text eingeben" },
+                { "  [3] Historia",       "  [3] History",      "  [3] Verlauf"       },
+                { "  [4] Offline",        "  [4] Offline",      "  [4] Offline"       },
+            };
+            const char* labelsSel[4][3] = {
+                { "> [1] Zdjecie kamery", "> [1] Camera photo", "> [1] Kamerafoto"    },
+                { "> [2] Wpisz tekst",    "> [2] Enter text",   "> [2] Text eingeben" },
+                { "> [3] Historia",       "> [3] History",      "> [3] Verlauf"       },
+                { "> [4] Offline",        "> [4] Offline",      "> [4] Offline"       },
+            };
 
-        const int Y[4] = {13, 23, 33, 43};   // top y kazdej pozycji (4 widoczne)
-        const int TEXT_Y[4] = {22, 32, 42, 52};
-        int lang = kalkSettings.language > 2 ? 0 : kalkSettings.language;
+            const int Y[4] = {13, 23, 33, 43};   // top y kazdej pozycji (4 widoczne)
+            const int TEXT_Y[4] = {22, 32, 42, 52};
+            int lang = kalkSettings.language > 2 ? 0 : kalkSettings.language;
 
-        for (int i = 0; i < 4; i++) {
-            if (mode == i) {
-                d.drawBox(0, Y[i], 256, 10);
-                d.setDrawColor(0);
-                d.drawStr(4, TEXT_Y[i], labelsSel[i][lang]);
-                d.setDrawColor(1);
-            } else {
-                d.drawStr(4, TEXT_Y[i], labels[i][lang]);
+            for (int i = 0; i < 4; i++) {
+                if (mode == i) {
+                    d.drawBox(0, Y[i], 256, 10);
+                    d.setDrawColor(0);
+                    d.drawStr(4, TEXT_Y[i], labelsSel[i][lang]);
+                    d.setDrawColor(1);
+                } else {
+                    d.drawStr(4, TEXT_Y[i], labels[i][lang]);
+                }
             }
+
+            d.drawHLine(0, 53, 256);
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
+                                    "^/v select   OK: start   < back",
+                                    "^/v waehlen  OK: Start  < zurueck"));
+            d.sendBuffer();
+            needRedraw = false;
         }
 
-        d.drawHLine(0, 53, 256);
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
-                                "^/v select   OK: start   < back",
-                                "^/v waehlen  OK: Start  < zurueck"));
-        d.sendBuffer();
-
         if (_solBtn(BTN_UP)) {
-            if (mode > 0) mode--;
+            if (mode > 0) { mode--; needRedraw = true; }
         } else if (_solBtn(BTN_DOWN)) {
-            if (mode < 3) mode++;
+            if (mode < 3) { mode++; needRedraw = true; }
         } else if (_solBtn(BTN_OK)) {
             _solWaitRelease();
             return;
@@ -1178,6 +1445,7 @@ static void _solModeSelect(U8G2 &d, int &mode) {
 // ---------------------------------------------------------------------------
 // Generyczne menu wyboru z listy (uzywane przez podmenu Offline).
 // Zwraca wybrany indeks (0..count-1), albo -1 jesli uzytkownik wyszedl (LEFT).
+// Rysowane tylko po zmianie.
 // ---------------------------------------------------------------------------
 static int _solListMenu(U8G2 &d, const char* title, const char* const* items, int count) {
     _solWaitRelease();
@@ -1186,46 +1454,50 @@ static int _solListMenu(U8G2 &d, const char* title, const char* const* items, in
     const int VISIBLE = 4;   // wiersze widoczne na raz (13..53 / 10px = 4)
     const int ROW_H = 10;
 
+    bool needRedraw = true;
     while (true) {
+        if (_solTick()) needRedraw = true;
         if (panicTriggered()) return -1;
-        powerCheckSleep();
 
-        if (sel < scroll) scroll = sel;
-        if (sel >= scroll + VISIBLE) scroll = sel - VISIBLE + 1;
+        if (needRedraw) {
+            if (sel < scroll) scroll = sel;
+            if (sel >= scroll + VISIBLE) scroll = sel - VISIBLE + 1;
 
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, title);
-        d.drawHLine(0, 12, 256);
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 10, title);
+            d.drawHLine(0, 12, 256);
 
-        for (int row = 0; row < VISIBLE; row++) {
-            int i = scroll + row;
-            if (i >= count) break;
-            int y = 13 + row * ROW_H;
-            int textY = y + ROW_H - 2;
-            if (i == sel) {
-                d.drawBox(0, y, 256, ROW_H);
-                d.setDrawColor(0);
-                d.drawStr(4, textY, items[i]);
-                d.setDrawColor(1);
-            } else {
-                d.drawStr(4, textY, items[i]);
+            for (int row = 0; row < VISIBLE; row++) {
+                int i = scroll + row;
+                if (i >= count) break;
+                int y = 13 + row * ROW_H;
+                int textY = y + ROW_H - 2;
+                if (i == sel) {
+                    d.drawBox(0, y, 256, ROW_H);
+                    d.setDrawColor(0);
+                    d.drawStr(4, textY, items[i]);
+                    d.setDrawColor(1);
+                } else {
+                    d.drawStr(4, textY, items[i]);
+                }
             }
+
+            d.drawHLine(0, 53, 256);
+            d.setFont(u8g2_font_5x7_tf);
+            if (scroll > 0)                  d.drawStr(240, 8, "^");
+            if (scroll + VISIBLE < count)     d.drawStr(248, 8, "v");
+            d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
+                                    "^/v select   OK: start   < back",
+                                    "^/v waehlen  OK: Start  < zurueck"));
+            d.sendBuffer();
+            needRedraw = false;
         }
 
-        d.drawHLine(0, 53, 256);
-        d.setFont(u8g2_font_5x7_tf);
-        if (scroll > 0)                  d.drawStr(240, 8, "^");
-        if (scroll + VISIBLE < count)     d.drawStr(248, 8, "v");
-        d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
-                                "^/v select   OK: start   < back",
-                                "^/v waehlen  OK: Start  < zurueck"));
-        d.sendBuffer();
-
         if (_solBtn(BTN_UP)) {
-            if (sel > 0) sel--;
+            if (sel > 0) { sel--; needRedraw = true; }
         } else if (_solBtn(BTN_DOWN)) {
-            if (sel < count - 1) sel++;
+            if (sel < count - 1) { sel++; needRedraw = true; }
         } else if (_solBtn(BTN_OK)) {
             _solWaitRelease();
             return sel;
@@ -1249,8 +1521,13 @@ static void _numAppendChar(char* buf, size_t bufSize, bool &awaitingFirst, char 
         awaitingFirst = false;
     } else {
         size_t len = strlen(buf);
-        if (len + 1 >= bufSize) return;
         if (c == '.' && strchr(buf, '.')) return;
+        // "0" / "-0" + cyfra -> zastap zero (bez "-05")
+        if (c != '.' && ((len == 1 && buf[0] == '0') || (len == 2 && buf[0] == '-' && buf[1] == '0'))) {
+            buf[len - 1] = c;
+            return;
+        }
+        if (len + 1 >= bufSize) return;
         buf[len] = c;
         buf[len + 1] = '\0';
     }
@@ -1262,6 +1539,7 @@ static void _numAppendChar(char* buf, size_t bufSize, bool &awaitingFirst, char 
 // UP/DOWN inkrementacje jak w _editAiCode. C/CE kasuje biezacy wpis; na
 // nietknietym polu (nic wpisane) wychodzi z calego flow (return false).
 // = (KEY_EQ) zatwierdza pole i przechodzi dalej (return true).
+// Rysowane po zmianie / mrugnieciu kursora (co 400 ms), nie co 15 ms.
 // ---------------------------------------------------------------------------
 static bool _numEditField(U8G2 &d, const char* label, double &outValue) {
     char buf[16] = "0";
@@ -1270,57 +1548,78 @@ static bool _numEditField(U8G2 &d, const char* label, double &outValue) {
 
     uint32_t blink = millis();
     bool blinkOn = true;
+    bool needRedraw = true;
 
     while (true) {
+        if (_solTick()) needRedraw = true;
         if (panicTriggered()) return false;
-        if (millis() - blink > 400) { blinkOn = !blinkOn; blink = millis(); }
+        if (millis() - blink > 400) { blinkOn = !blinkOn; blink = millis(); needRedraw = true; }
 
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, label);
-        d.drawHLine(0, 12, 256);
+        if (needRedraw) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 10, label);
+            d.drawHLine(0, 12, 256);
 
-        d.setFont(u8g2_font_logisoso22_tn);
-        int textW = d.getStrWidth(buf);
-        int x = 256 - textW - 8;
-        if (x < 4) x = 4;
-        d.drawStr(x, 45, buf);
-        if (blinkOn) d.drawBox(x + textW + 2, 32, 10, 3);
+            d.setFont(u8g2_font_logisoso22_tn);
+            int textW = d.getStrWidth(buf);
+            int x = 256 - textW - 8;
+            if (x < 4) x = 4;
+            d.drawStr(x, 45, buf);
+            if (blinkOn) d.drawBox(x + textW + 2, 32, 10, 3);
 
-        d.drawHLine(0, 53, 256);
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, _solT("+/- znak   =: dalej   C: kasuj/wyjdz",
-                                "+/- sign   =: next   C: clear/exit",
-                                "+/- Vorz.  =: weiter  C: loesch/raus"));
-        d.sendBuffer();
+            d.drawHLine(0, 53, 256);
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, _solT("+/- znak   =: dalej   C: kasuj/wyjdz",
+                                    "+/- sign   =: next   C: clear/exit",
+                                    "+/- Vorz.  =: weiter  C: loesch/raus"));
+            d.sendBuffer();
+            needRedraw = false;
+        }
 
-        if (inputKeyConsume(KEY_0))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '0'); continue; }
-        if (inputKeyConsume(KEY_1))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '1'); continue; }
-        if (inputKeyConsume(KEY_2))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '2'); continue; }
-        if (inputKeyConsume(KEY_3))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '3'); continue; }
-        if (inputKeyConsume(KEY_4))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '4'); continue; }
-        if (inputKeyConsume(KEY_5))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '5'); continue; }
-        if (inputKeyConsume(KEY_6))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '6'); continue; }
-        if (inputKeyConsume(KEY_7))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '7'); continue; }
-        if (inputKeyConsume(KEY_8))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '8'); continue; }
-        if (inputKeyConsume(KEY_9))   { _numAppendChar(buf, sizeof(buf), awaitingFirst, '9'); continue; }
+        char add = 0;
+        if      (inputKeyConsume(KEY_0))   add = '0';
+        else if (inputKeyConsume(KEY_1))   add = '1';
+        else if (inputKeyConsume(KEY_2))   add = '2';
+        else if (inputKeyConsume(KEY_3))   add = '3';
+        else if (inputKeyConsume(KEY_4))   add = '4';
+        else if (inputKeyConsume(KEY_5))   add = '5';
+        else if (inputKeyConsume(KEY_6))   add = '6';
+        else if (inputKeyConsume(KEY_7))   add = '7';
+        else if (inputKeyConsume(KEY_8))   add = '8';
+        else if (inputKeyConsume(KEY_9))   add = '9';
+        else if (inputKeyConsume(KEY_DOT)) add = '.';
+        if (add) {
+            _numAppendChar(buf, sizeof(buf), awaitingFirst, add);
+            needRedraw = true;
+            continue;
+        }
         if (inputKeyConsume(KEY_00))  {
             _numAppendChar(buf, sizeof(buf), awaitingFirst, '0');
             _numAppendChar(buf, sizeof(buf), awaitingFirst, '0');
+            needRedraw = true;
             continue;
         }
-        if (inputKeyConsume(KEY_DOT)) { _numAppendChar(buf, sizeof(buf), awaitingFirst, '.'); continue; }
 
         if (inputKeyConsume(KEY_PLUSMINUS)) {
-            double v = atof(buf);
-            offlineFmtNum(-v, buf, sizeof(buf));
+            // Zmiana znaku w tekscie — bez przeformatowania (offlineFmtNum
+            // gubil cyfry, a "Error" nie istnieje w foncie logisoso22_tn).
+            size_t len = strlen(buf);
+            if (buf[0] == '-') {
+                memmove(buf, buf + 1, len);              // razem z NUL
+            } else if (len + 1 < sizeof(buf)) {
+                memmove(buf + 1, buf, len + 1);
+                buf[0] = '-';
+            }
             awaitingFirst = false;
+            needRedraw = true;
             continue;
         }
         if (inputKeyConsume(KEY_CCE)) {
             if (awaitingFirst) { _solWaitRelease(); return false; }  // nietkniete -> wyjscie
             strcpy(buf, "0");
             awaitingFirst = true;
+            needRedraw = true;
             continue;
         }
         if (inputKeyConsume(KEY_EQ)) {
@@ -1334,18 +1633,20 @@ static bool _numEditField(U8G2 &d, const char* label, double &outValue) {
 
 // ---------------------------------------------------------------------------
 // Offline: rownanie liniowe ax+b=0
+// Postac rownania widoczna przy kazdym polu i w wyniku (wczesniej same
+// "a =", "b =" — nie bylo wiadomo, ktory wspolczynnik to ktory).
 // ---------------------------------------------------------------------------
 static void _solOfflineLinear(U8G2 &d) {
     double a, b;
-    if (!_numEditField(d, _solT("Rownanie liniowe: a =", "Linear equation: a =", "Lineare Gleichung: a ="), a)) return;
-    if (!_numEditField(d, "b =", b)) return;
+    if (!_numEditField(d, _solT("Rownanie ax+b=0:   a =", "Linear eq. ax+b=0:   a =", "Lin. Gl. ax+b=0:   a ="), a)) return;
+    if (!_numEditField(d, _solT("Rownanie ax+b=0:   b =", "Linear eq. ax+b=0:   b =", "Lin. Gl. ax+b=0:   b ="), b)) return;
 
     LinearResult r = offlineSolveLinear(a, b);
     char aS[24], bS[24];
     offlineFmtNum(a, aS, sizeof(aS));
     offlineFmtNum(b, bS, sizeof(bS));
 
-    String result = String("a = ") + aS + ", b = " + bS + "\n\n";
+    String result = String("ax+b=0\na = ") + aS + ", b = " + bS + "\n\n";
     if (r.infinite) {
         result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
     } else if (r.none) {
@@ -1356,7 +1657,7 @@ static void _solOfflineLinear(U8G2 &d) {
         result += String("x = ") + xS;
     }
 
-    historySave(String("[Offline] a=") + aS + " b=" + bS, result);
+    historySave(String("[Offline] ax+b=0 a=") + aS + " b=" + bS, result);
     _solDisplaySolution(d, result.c_str(), "OFFLINE");
 }
 
@@ -1365,9 +1666,9 @@ static void _solOfflineLinear(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflineQuadratic(U8G2 &d) {
     double a, b, c;
-    if (!_numEditField(d, _solT("Rown. kwadratowe: a =", "Quadratic equation: a =", "Quadr. Gleichung: a ="), a)) return;
-    if (!_numEditField(d, "b =", b)) return;
-    if (!_numEditField(d, "c =", c)) return;
+    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   a =", "Quadr. ax^2+bx+c=0:   a =", "Quadr. ax^2+bx+c=0:   a ="), a)) return;
+    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   b =", "Quadr. ax^2+bx+c=0:   b =", "Quadr. ax^2+bx+c=0:   b ="), b)) return;
+    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   c =", "Quadr. ax^2+bx+c=0:   c =", "Quadr. ax^2+bx+c=0:   c ="), c)) return;
 
     QuadraticResult r = offlineSolveQuadratic(a, b, c);
     char aS[24], bS[24], cS[24];
@@ -1375,7 +1676,7 @@ static void _solOfflineQuadratic(U8G2 &d) {
     offlineFmtNum(b, bS, sizeof(bS));
     offlineFmtNum(c, cS, sizeof(cS));
 
-    String result = String("a=") + aS + " b=" + bS + " c=" + cS + "\n\n";
+    String result = String("ax^2+bx+c=0\na=") + aS + " b=" + bS + " c=" + cS + "\n\n";
 
     if (r.usedLinear) {
         result += _solT("a=0 -> rownanie liniowe\n", "a=0 -> linear equation\n", "a=0 -> lineare Gleichung\n");
@@ -1410,38 +1711,43 @@ static void _solOfflineQuadratic(U8G2 &d) {
         }
     }
 
-    historySave(String("[Offline] a=") + aS + " b=" + bS + " c=" + cS, result);
+    historySave(String("[Offline] ax^2+bx+c=0 a=") + aS + " b=" + bS + " c=" + cS, result);
     _solDisplaySolution(d, result.c_str(), "OFFLINE");
 }
 
 // ---------------------------------------------------------------------------
 // Offline: uklad 2 rownan liniowych (metoda Cramera)
+//   a1x + b1y = c1
+//   a2x + b2y = c2
 // ---------------------------------------------------------------------------
 static void _solOfflineSystem(U8G2 &d) {
     double a1, b1, c1, a2, b2, c2;
-    if (!_numEditField(d, _solT("Rown.1: a1 =", "Eq.1: a1 =", "Gl.1: a1 ="), a1)) return;
-    if (!_numEditField(d, "b1 =", b1)) return;
-    if (!_numEditField(d, "c1 =", c1)) return;
-    if (!_numEditField(d, _solT("Rown.2: a2 =", "Eq.2: a2 =", "Gl.2: a2 ="), a2)) return;
-    if (!_numEditField(d, "b2 =", b2)) return;
-    if (!_numEditField(d, "c2 =", c2)) return;
+    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   a1 =", "Eq.1 a1x+b1y=c1:   a1 =", "Gl.1 a1x+b1y=c1:   a1 ="), a1)) return;
+    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   b1 =", "Eq.1 a1x+b1y=c1:   b1 =", "Gl.1 a1x+b1y=c1:   b1 ="), b1)) return;
+    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   c1 =", "Eq.1 a1x+b1y=c1:   c1 =", "Gl.1 a1x+b1y=c1:   c1 ="), c1)) return;
+    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   a2 =", "Eq.2 a2x+b2y=c2:   a2 =", "Gl.2 a2x+b2y=c2:   a2 ="), a2)) return;
+    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   b2 =", "Eq.2 a2x+b2y=c2:   b2 =", "Gl.2 a2x+b2y=c2:   b2 ="), b2)) return;
+    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   c2 =", "Eq.2 a2x+b2y=c2:   c2 =", "Gl.2 a2x+b2y=c2:   c2 ="), c2)) return;
 
     System2x2Result r = offlineSolveSystem2x2(a1, b1, c1, a2, b2, c2);
-    String result;
+    char eq[160];
+    snprintf(eq, sizeof(eq), "a1x+b1y=c1, a2x+b2y=c2\na1=%.6g b1=%.6g c1=%.6g\na2=%.6g b2=%.6g c2=%.6g\n\n",
+             a1, b1, c1, a2, b2, c2);
+    String result = eq;
     if (r.infinite) {
-        result = _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
+        result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
     } else if (r.none) {
-        result = _solT("Uklad sprzeczny (brak rozwiazan)", "Inconsistent system (no solution)", "Widerspruechliches System (keine Loesung)");
+        result += _solT("Uklad sprzeczny (brak rozwiazan)", "Inconsistent system (no solution)", "Widerspruechliches System (keine Loesung)");
     } else {
         char xS[24], yS[24];
         offlineFmtNum(r.x, xS, sizeof(xS));
         offlineFmtNum(r.y, yS, sizeof(yS));
-        result = String("x = ") + xS + "\ny = " + yS;
+        result += String("x = ") + xS + "\ny = " + yS;
     }
 
-    char eq[96];
-    snprintf(eq, sizeof(eq), "a1=%.4g b1=%.4g c1=%.4g / a2=%.4g b2=%.4g c2=%.4g", a1, b1, c1, a2, b2, c2);
-    historySave(String("[Offline] ") + eq, result);
+    char hq[96];
+    snprintf(hq, sizeof(hq), "a1=%.4g b1=%.4g c1=%.4g / a2=%.4g b2=%.4g c2=%.4g", a1, b1, c1, a2, b2, c2);
+    historySave(String("[Offline] ") + hq, result);
     _solDisplaySolution(d, result.c_str(), "OFFLINE");
 }
 
@@ -1458,21 +1764,22 @@ static void _solOfflinePercent(U8G2 &d) {
 
     if (sel == 0) {
         double pct, base;
-        if (!_numEditField(d, "X (%) =", pct)) return;
-        if (!_numEditField(d, "Y =", base)) return;
+        if (!_numEditField(d, _solT("X% z Y:   X (%) =", "X% of Y:   X (%) =", "X% von Y:   X (%) ="), pct)) return;
+        if (!_numEditField(d, _solT("X% z Y:   Y =", "X% of Y:   Y =", "X% von Y:   Y ="), base)) return;
         double v = offlinePercentOf(pct, base);
         char pS[24], bS[24], vS[24];
         offlineFmtNum(pct, pS, sizeof(pS));
         offlineFmtNum(base, bS, sizeof(bS));
         offlineFmtNum(v, vS, sizeof(vS));
-        String result = String(pS) + "% z " + bS + " = " + vS;
-        historySave(String("[Offline] ") + pS + "% z " + bS, result);
+        const char* of = _solT("% z ", "% of ", "% von ");   // wczesniej "% z" na sztywno (PL)
+        String result = String(pS) + of + bS + " = " + vS;
+        historySave(String("[Offline] ") + pS + of + bS, result);
         _solDisplaySolution(d, result.c_str(), "OFFLINE");
     } else {
         double a, b, c;
-        if (!_numEditField(d, "a =", a)) return;
-        if (!_numEditField(d, "b =", b)) return;
-        if (!_numEditField(d, "c =", c)) return;
+        if (!_numEditField(d, "a:b=c:x:   a =", a)) return;
+        if (!_numEditField(d, "a:b=c:x:   b =", b)) return;
+        if (!_numEditField(d, "a:b=c:x:   c =", c)) return;
         double x = offlineProportion(a, b, c);
         char aS[24], bS[24], cS[24], xS[24];
         offlineFmtNum(a, aS, sizeof(aS));
@@ -1753,7 +2060,17 @@ static void runOfflineSolver(U8G2 &d) {
 
 // ---------------------------------------------------------------------------
 // Tryb HISTORIA — lokalna lista (do 5) + opcjonalnie z serwera (TODO)
+// Wpis czytany z pamieci i konwertowany TYLKO przy zmianie kursora (wczesniej
+// co 20 ms: ~3,5 KB z NVS + ~35 replace() na Stringu), ekran rysowany po zmianie.
 // ---------------------------------------------------------------------------
+// Wpisy, ktorych nie da sie sensownie wyslac ponownie jako tekst do AI.
+static bool _solHistResendable(const String& q) {
+    if (q.length() == 0) return false;
+    if (q == "[Zdjecie]") return false;          // zdjecie — tekstu zadania nie ma
+    if (q.startsWith("[Offline]")) return false;  // wynik lokalnego solvera
+    return true;
+}
+
 static void _solRunHistoryMode(U8G2 &d) {
     _solWaitRelease();
 
@@ -1766,8 +2083,8 @@ static void _solRunHistoryMode(U8G2 &d) {
         d.drawStr(2, 56, _solT("OK / < = powrot", "OK / < = back", "OK / < = zurueck"));
         d.sendBuffer();
         while (true) {
-        if (panicTriggered()) return;
-            powerCheckSleep();
+            if (_solTick()) d.sendBuffer();
+            if (panicTriggered()) return;
             if (_solBtn(BTN_OK) || _solBtn(BTN_LEFT)) {
                 _solWaitRelease();
                 return;
@@ -1776,47 +2093,63 @@ static void _solRunHistoryMode(U8G2 &d) {
         }
     }
 
-    int cursor = 0;   // 0 = najnowszy
+    int cursor = 0;            // 0 = najnowszy
+    int cachedIdx = -1;        // dla ktorego kursora jest cache (-1 = brak)
+    bool cachedResend = false;
+    String cq, cl1, cl2;       // gotowe do rysowania (ASCII, przyciete)
+    bool needRedraw = true;
+
     while (true) {
+        if (_solTick()) needRedraw = true;
         if (panicTriggered()) return;
-        powerCheckSleep();
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        char hdr[32];
-        snprintf(hdr, sizeof(hdr), _solT("Historia (%d/%d)", "History (%d/%d)", "Verlauf (%d/%d)"),
-                 cursor + 1, count);
-        d.drawStr(2, 10, hdr);
-        d.drawHLine(0, 12, 256);
 
-        HistoryEntry entry;
-        if (historyGet(cursor, entry)) {
-            d.setFont(u8g2_font_6x10_tf);
-            // Polskie znaki UTF-8 -> ASCII (font 6x10/5x7 nie ma glyphow ą/ł/...).
-            // Konwersja PRZED obcieciem, zeby nie urwac w srodku znaku wielobajtowego.
-            String q = _solUtf8ToAscii(entry.question);
-            if (q.length() > 40) q = q.substring(0, 38) + "..";
-            d.drawStr(2, 24, q.c_str());
-
-            d.setFont(u8g2_font_5x7_tf);
-            // Pierwsze 2 linie odpowiedzi
-            String a = _solUtf8ToAscii(entry.answer);
-            int nl = a.indexOf('\n');
-            String l1 = nl >= 0 ? a.substring(0, nl) : a;
-            String rest = nl >= 0 ? a.substring(nl + 1) : "";
-            int nl2 = rest.indexOf('\n');
-            String l2 = nl2 >= 0 ? rest.substring(0, nl2) : rest;
-            if (l1.length() > 50) l1 = l1.substring(0, 48) + "..";
-            if (l2.length() > 50) l2 = l2.substring(0, 48) + "..";
-            d.drawStr(2, 36, l1.c_str());
-            d.drawStr(2, 46, l2.c_str());
+        if (cursor != cachedIdx) {
+            HistoryEntry entry;
+            cq = ""; cl1 = ""; cl2 = "";
+            cachedResend = false;
+            if (historyGet(cursor, entry)) {
+                // Polskie znaki UTF-8 -> ASCII (font 6x10/5x7 nie ma glyphow ą/ł/...).
+                // Konwersja PRZED obcieciem, zeby nie urwac w srodku znaku wielobajtowego.
+                cq = _solUtf8ToAscii(entry.question);
+                if (cq.length() > 40) cq = cq.substring(0, 38) + "..";
+                // Pierwsze 2 linie odpowiedzi
+                String a = _solUtf8ToAscii(entry.answer);
+                int nl = a.indexOf('\n');
+                cl1 = nl >= 0 ? a.substring(0, nl) : a;
+                String rest = nl >= 0 ? a.substring(nl + 1) : "";
+                int nl2 = rest.indexOf('\n');
+                cl2 = nl2 >= 0 ? rest.substring(0, nl2) : rest;
+                if (cl1.length() > 50) cl1 = cl1.substring(0, 48) + "..";
+                if (cl2.length() > 50) cl2 = cl2.substring(0, 48) + "..";
+                cachedResend = _solHistResendable(entry.question);
+            }
+            cachedIdx = cursor;
+            needRedraw = true;
         }
 
-        d.drawHLine(0, 53, 256);
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, _solT("^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
-                                "^/v OK:show  >:edit+resend  <:back",
-                                "^/v OK:zeigen >:bearb+senden <:zurueck"));
-        d.sendBuffer();
+        if (needRedraw) {
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            char hdr[32];
+            snprintf(hdr, sizeof(hdr), _solT("Historia (%d/%d)", "History (%d/%d)", "Verlauf (%d/%d)"),
+                     cursor + 1, count);
+            d.drawStr(2, 10, hdr);
+            d.drawHLine(0, 12, 256);
+
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 24, cq.c_str());
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 36, cl1.c_str());
+            d.drawStr(2, 46, cl2.c_str());
+
+            d.drawHLine(0, 53, 256);
+            d.setFont(u8g2_font_5x7_tf);
+            d.drawStr(2, 62, _solT("^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
+                                    "^/v OK:show  >:edit+resend  <:back",
+                                    "^/v OK:zeigen >:bearb+senden <:zurueck"));
+            d.sendBuffer();
+            needRedraw = false;
+        }
 
         if (_solBtn(BTN_UP)) {
             if (cursor > 0) cursor--;
@@ -1828,16 +2161,34 @@ static void _solRunHistoryMode(U8G2 &d) {
             if (historyGet(cursor, entry)) {
                 _solDisplaySolution(d, entry.answer.c_str());
             }
-            // po wyjsciu — wracamy do listy
+            needRedraw = true;   // po wyjsciu — wracamy do listy
         } else if (_solBtn(BTN_RIGHT)) {
-            // Edytuj pytanie z historii i wyslij ponownie do AI
-            HistoryEntry entry;
-            if (historyGet(cursor, entry)) {
-                _solWaitRelease();
-                _solRunTextMode(d, entry.question.c_str());
-                _solWaitRelease();
+            if (!cachedResend) {
+                // "[Zdjecie]" / "[Offline] ..." to nie tresc zadania — nie
+                // wysylamy tego jako tekstu do AI (marnowalo tokeny).
+                _solShowInfo(d,
+                    _solT("Tego wpisu nie mozna", "This entry cannot", "Dieser Eintrag kann"),
+                    _solT("wyslac ponownie.", "be resent.", "nicht erneut gesendet werden."),
+                    _solT("(zdjecie / wynik offline)", "(photo / offline result)", "(Foto / Offline-Ergebnis)"),
+                    2000);
+                needRedraw = true;
+            } else {
+                // Edytuj pytanie z historii i wyslij ponownie do AI
+                HistoryEntry entry;
+                if (historyGet(cursor, entry)) {
+                    _solWaitRelease();
+                    _solRunTextMode(d, entry.question.c_str());
+                    _solWaitRelease();
+                }
+                if (panicTriggered()) return;
+                // Nowy wpis (jesli doszedl) jest najnowszy — odswiez licznik
+                // i cache (wczesniej licznik z wejscia zostawal nieaktualny).
+                count = historyCount();
+                if (count == 0) return;
+                cursor = 0;
+                cachedIdx = -1;
+                needRedraw = true;
             }
-            // po wyjsciu — wracamy do listy
         } else if (_solBtn(BTN_LEFT)) {
             _solWaitRelease();
             return;
@@ -1847,23 +2198,73 @@ static void _solRunHistoryMode(U8G2 &d) {
 }
 
 // ---------------------------------------------------------------------------
-// _solProcessQueue — wyslij zadania z kolejki offline jesli WiFi dostepne.
-// Wolana na wejsciu showSolveScreen (cicha — brak ekranu blokujacego jesli
-// WiFi niedostepne).
+// _solProcessQueue — wyslij zadania z kolejki offline, gdy WiFi dostepne.
+// Wolana na wejsciu showSolveScreen. Widoczny ekran postepu; C/CE pomija
+// wysylke na _SOL_QUEUE_SKIP_MS (wczesniej: do 8 s cichego laczenia + do
+// 45 s POST bez mozliwosci przerwania przy KAZDYM wejsciu w "Rozwiaz").
+//
+// Zasady (offline_queue.h):
+//   - sukces                 -> usun pozycje,
+//   - blad trwaly (4xx)      -> usun pozycje + komunikat (nie blokuje kolejki),
+//   - blad przejsciowy       -> +1 proba; po _OQ_MAX_ATTEMPTS usun; przerwij
+//                               drain (siec/serwer i tak teraz nie dziala),
+//   - nieczytelna pozycja    -> usun (wczesniej zatrute zadanie blokowalo
+//                               kolejke na zawsze).
+// Kazda proba wysyla zapisany x-request-id pozycji.
 // ---------------------------------------------------------------------------
+#define _SOL_QUEUE_SKIP_MS  (10UL * 60UL * 1000UL)
+static uint32_t _solQueueSkipAt = 0;   // millis() ostatniego "pomin" (0 = brak)
+
+static void _solQueueDraw(U8G2 &d, const char* status, int idx, int total) {
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    char hdr[48];
+    snprintf(hdr, sizeof(hdr), _solT("Kolejka offline: %d zadan", "Offline queue: %d tasks", "Offline-Warteschl.: %d Aufg."), total);
+    d.drawStr(2, 12, hdr);
+    d.drawHLine(0, 15, 256);
+    d.drawStr(2, 32, status);
+    if (idx > 0) {
+        char ln[24];
+        snprintf(ln, sizeof(ln), "%d / %d", idx, total);
+        d.drawStr(2, 46, ln);
+    }
+    d.setFont(u8g2_font_5x7_tf);
+    d.drawStr(2, 62, _solT("C/CE = pomin (na 10 min)", "C/CE = skip (for 10 min)", "C/CE = ueberspringen (10 Min.)"));
+    d.sendBuffer();
+}
+
+// Czeka do ms na C/CE (pomin) albo panic. true = przerwac.
+static bool _solQueueWaitSkip(uint32_t ms) {
+    uint32_t t0 = millis();
+    while (millis() - t0 < ms) {
+        inputScan();
+        panicCheck();
+        if (panicTriggered()) return true;
+        if (inputKeyConsume(KEY_CCE)) return true;
+        delay(20);
+    }
+    return false;
+}
+
 static void _solProcessQueue(U8G2 &d) {
     uint8_t n = offlineQueueCount();
     if (n == 0) return;
+    if (_solQueueSkipAt != 0 && millis() - _solQueueSkipAt < _SOL_QUEUE_SKIP_MS) return;
+    _solQueueSkipAt = 0;
+    if (!SPIFFS.begin(false)) return;   // tresc kolejki niedostepna — niczego nie usuwaj
 
-    // Polacz z WiFi jesli nie jest polaczony (cichy tryb — max 8s)
+    (void)inputKeyConsume(KEY_CCE);     // trzymany C/CE z wczesniej nie liczy sie jako "pomin"
+
+    // Polacz z WiFi jesli nie jest polaczony (max 8s, z ekranem i "pomin")
     if (WiFi.status() != WL_CONNECTED) {
         char ssid[33] = "", pass[64] = "";
         wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
-        if (ssid[0] == '\0') return;
-        WiFi.mode(WIFI_STA);
+        if (ssid[0] == '\0') return;    // brak zapisanej sieci — nie ma jak wyslac
+        _solQueueDraw(d, _solT("Lacze z WiFi...", "Connecting WiFi...", "Verbinde WLAN..."), 0, n);
+        wifiStaOnLimited();             // STA + TxPower 8.5 dBm (anty-brownout)
         wifiFastBegin(ssid, pass);
         unsigned long t = millis();
-        bool fellBack = false;
+        bool fellBack = false, skipped = false;
         while (WiFi.status() != WL_CONNECTED && millis() - t < 8000) {
             if (!fellBack && millis() - t > 4000) {
                 fellBack = true;
@@ -1871,60 +2272,104 @@ static void _solProcessQueue(U8G2 &d) {
                 delay(50);
                 WiFi.begin(ssid, pass);
             }
-            delay(200);
+            if (_solQueueWaitSkip(200)) { skipped = true; break; }
         }
-        if (WiFi.status() != WL_CONNECTED) return;
+        memset(pass, 0, sizeof(pass));
+        if (panicTriggered()) return;
+        if (skipped) { _solQueueSkipAt = millis() | 1; return; }
+        if (WiFi.status() != WL_CONNECTED) return;   // sprobuje przy nastepnym wejsciu
         wifiSaveBssidChannel();
         accountRegisterOnce();
     }
 
-    // Poinformuj uzytkownika
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    char hdr[40];
-    snprintf(hdr, sizeof(hdr), _solT("Kolejka: %d zadan", "Queue: %d tasks", "Warteschl.: %d Aufg."), (int)n);
-    d.drawStr(2, 24, hdr);
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 40, _solT("Wysylam do serwera...", "Sending to server...", "Sende an Server..."));
-    d.sendBuffer();
-    delay(1000);
-
-    // Wyslij FIFO — _solSendText/_solSendJpeg pokazuja wyniki kolejno.
-    // WAZNE: dequeue (offlineQueueRemoveFirst) TYLKO po udanym wyslaniu —
-    // wczesniej byl tu bezwarunkowy dequeue, wiec kazde nieudane zadanie
-    // (chwilowy brak neta, 402 z powodu wyczerpanych tokenow AI, blad 5xx)
-    // znikalo z kolejki i z SPIFFS na zawsze, mimo ze nigdy nie dotarlo do
-    // serwera — dokladnie to zglosil klient ("robi zdjecia, a nie ma ich
-    // na serwerze"). Przy porazce przerywamy caly drain (break) zamiast
-    // proboway kolejnej pozycji — jesli siec/serwer wlasnie nie dziala,
-    // dalsze proby w tej samej petli i tak by sie nie udaly.
+    const int total = n;
+    int idx = 0;
     while (offlineQueueCount() > 0) {
-        OfflineTask task;
-        if (!offlineQueuePeek(0, task)) break;
+        if (panicTriggered()) return;
+        idx++;
+        _solQueueDraw(d, _solT("Wysylam zadanie...", "Sending task...", "Sende Aufgabe..."), idx, total);
+        if (_solQueueWaitSkip(800)) {   // chwila na "pomin" przed kazda pozycja
+            if (!panicTriggered()) _solQueueSkipAt = millis() | 1;
+            return;
+        }
 
-        bool sent;
+        OfflineTask task;
+        if (!offlineQueuePeek(0, task)) {
+            Serial.println("[OQ] nieczytelna pozycja — usuwam");
+            offlineQueueRemoveFirst();
+            continue;
+        }
+
+        _SolSendRes r;
         if (task.type == 0) {
-            sent = _solSendText(d, task.text.c_str());
+            r = _solSendText(d, task.text.c_str(), task.reqId.c_str());
         } else {
             // Wczytaj JPEG z SPIFFS do PSRAM, wyslij, zwolnij
-            if (!SPIFFS.begin(false)) { offlineQueueRemoveFirst(); continue; }
             File f = SPIFFS.open(task.path.c_str(), "r");
-            if (!f)  { offlineQueueRemoveFirst(); continue; }
-            size_t sz  = f.size();
-            uint8_t* buf = (uint8_t*)ps_malloc(sz);
-            if (!buf) { f.close(); offlineQueueRemoveFirst(); continue; }
-            f.read(buf, sz);
-            f.close();
-            sent = _solSendJpeg(d, buf, sz);
+            size_t sz = f ? f.size() : 0;
+            uint8_t* buf = sz ? (uint8_t*)ps_malloc(sz) : nullptr;
+            if (sz > 0 && !buf) {
+                // Brak pamieci to nie wina pozycji — zostaw ja na pozniej
+                f.close();
+                Serial.println("[OQ] brak pamieci na zdjecie — sprobuje pozniej");
+                break;
+            }
+            size_t rd = buf ? f.read(buf, sz) : 0;
+            if (f) f.close();
+            if (!buf || rd != sz) {
+                if (buf) free(buf);
+                Serial.println("[OQ] nieczytelne zdjecie — usuwam");
+                offlineQueueRemoveFirst();
+                continue;
+            }
+            r = _solSendJpeg(d, buf, sz, task.reqId.c_str());
             free(buf);
         }
 
-        if (sent) {
+        if (r.kind == _SOL_RES_OK) {
             offlineQueueRemoveFirst();
-        } else {
-            break;   // zachowaj te i pozostale pozycje, sprobuj przy nastepnym wejsciu
+            continue;
         }
+        if (r.kind == _SOL_RES_FATAL) {
+            offlineQueueRemoveFirst();
+            _solShowSendError(d, r, _solT("Zadanie usuniete z kolejki", "Task removed from queue", "Aufgabe aus Warteschlange entfernt"));
+            continue;
+        }
+        // Blad przejsciowy — licznik prob; po _OQ_MAX_ATTEMPTS pozycja wypada
+        uint8_t att = offlineQueueBumpAttempts();
+        if (att >= _OQ_MAX_ATTEMPTS) {
+            offlineQueueRemoveFirst();
+            _solShowSendError(d, r, _solT("Usuniete po 3 nieudanych probach", "Removed after 3 failed attempts", "Nach 3 Fehlversuchen entfernt"));
+        } else {
+            _solShowSendError(d, r, _solT("Zostaje w kolejce - kolejna proba pozniej", "Stays queued - will retry later", "Bleibt in Warteschlange"));
+        }
+        break;   // siec/serwer wlasnie nie dziala — reszta tez by nie przeszla
     }
+}
+
+// ---------------------------------------------------------------------------
+// SPIFFS dla historii i kolejki offline. Nieuzywana jeszcze partycja (nigdy
+// nie formatowana) wymaga jednorazowego formatu — na 16 MB flash trwa to
+// dlugo, wiec robimy to tu, z komunikatem, a nie po cichu w historySave()
+// tuz po odpowiedzi AI. Raz na uruchomienie.
+// ---------------------------------------------------------------------------
+static bool _solFsFormatTried = false;
+
+static void _solEnsureFs(U8G2 &d) {
+    if (SPIFFS.begin(false)) return;
+    if (_solFsFormatTried) return;
+    _solFsFormatTried = true;
+    d.clearBuffer();
+    d.setFont(u8g2_font_6x10_tf);
+    d.drawStr(2, 20, _solT("Przygotowuje pamiec...", "Preparing storage...", "Speicher wird vorbereitet..."));
+    d.setFont(u8g2_font_5x7_tf);
+    d.drawStr(2, 36, _solT("Jednorazowo, moze potrwac do 1 min.", "One-time, may take up to 1 min.", "Einmalig, dauert bis zu 1 Min."));
+    d.drawStr(2, 46, _solT("Nie wylaczaj kalkulatora.", "Do not switch off.", "Nicht ausschalten."));
+    d.sendBuffer();
+    uint32_t t0 = millis();
+    bool ok = SPIFFS.begin(true);   // format + mount
+    Serial.printf("[SOL] SPIFFS format: %s (%lu ms)\n", ok ? "OK" : "BLAD", (unsigned long)(millis() - t0));
+    inputActivityReset();
 }
 
 // ---------------------------------------------------------------------------
@@ -1937,7 +2382,9 @@ void showSolveScreen(U8G2 &display) {
     // pinMode(BTN_RIGHT, INPUT_PULLUP);
     // pinMode(BTN_OK,    INPUT_PULLUP);
 
-    // Wyslij zadania z kolejki offline jesli WiFi dostepne (cichy tryb)
+    _solEnsureFs(display);
+
+    // Wyslij zadania z kolejki offline jesli WiFi dostepne (ekran + "pomin")
     _solProcessQueue(display);
 
     int mode = 0;  // domyslnie zdjecie (kamera) — najczestszy wybor

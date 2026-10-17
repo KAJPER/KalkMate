@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, useCallback, useRef, use } from "react";
 import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
 import OrderFiscalCard from "@/components/admin/OrderFiscalCard";
+import { fmtDateTime, formatAmount as fmtAmount } from "@/components/admin/format";
 import { splitAddress, splitCityState, needsStateCode } from "@/lib/address";
 
 interface OrderDetail {
@@ -39,14 +40,45 @@ interface OrderDetail {
   p24_session_id: string | null;
   personalized_code: string | null;
   personalized_name: string | null;
+  // Wiele sztuk w zamowieniu (nowsze API) — brak = 1 szt. / stara para pol.
+  quantity?: number;
+  personalizations?: { code: string; name: string }[];
   attribution: {
     method: string;
     first: AttributionTouch | null;
     last: AttributionTouch | null;
   } | null;
+  // Opcjonalne (nowsze API): nadanie Base Courier o niepewnym wyniku.
+  shipment_uncertain?: boolean;
 }
 
 interface AttributionTouch { channel: string; source: string | null; campaign: string | null; landing: string | null; at: string | null }
+
+// Sztuki zamowienia z kodem AI i imieniem — lista z API albo stara para pol.
+function orderUnits(o: { quantity?: number; personalizations?: { code: string; name: string }[]; personalized_code: string | null; personalized_name: string | null }) {
+  const qty = Math.max(1, Math.floor(Number(o.quantity) || 1));
+  const list = o.personalizations?.length
+    ? o.personalizations
+    : o.personalized_code || o.personalized_name
+      ? [{ code: o.personalized_code || "", name: o.personalized_name || "" }]
+      : [];
+  if (!list.length) return [];
+  return Array.from({ length: Math.max(qty, list.length) }, (_, i) => list[i] ?? { code: "", name: "" });
+}
+
+const FULFILLMENT_PL: Record<string, string> = {
+  unfulfilled: "Niezrealizowane",
+  in_progress: "W realizacji",
+  shipped: "Wysłane",
+  fulfilled: "Zrealizowane",
+  cancelled: "Anulowane",
+};
+
+// Niepewne nadanie (timeout / 502 Base Courier — paczka mogla zostac utworzona
+// i oplacona mimo bledu). Tolerancyjnie: flaga z API albo status przesylki
+// "basecourier_pending" (ustawiany przez serwer przed wywolaniem API kuriera).
+const isShipmentUncertain = (o: OrderDetail | null) =>
+  !!o && (!!o.shipment_uncertain || o.furgonetka_status === "basecourier_pending");
 
 // "Wyszukiwarka · google · kampania · /en"
 function describeTouch(t: AttributionTouch | null): string {
@@ -89,18 +121,78 @@ export default function OrderDetailPage({
   const [emailSending, setEmailSending] = useState(false);
   const [emailMsg, setEmailMsg] = useState("");
 
+  // Wartosci pol formularza z chwili zaladowania z serwera. Na ich podstawie:
+  // wysylamy tylko to, co admin zmienil (zapis notatki nie cofa statusu
+  // zmienionego w miedzyczasie przez automat sledzenia), expected_fulfillment_status
+  // do kontroli wyscigu (409) i nie nadpisujemy pol, ktore admin wlasnie edytuje.
+  type FormVals = { fulfillment: string; tracking: string; notes: string };
+  const loadedRef = useRef<FormVals | null>(null);
+  const formRef = useRef<FormVals>({ fulfillment, tracking, notes });
+  useEffect(() => {
+    formRef.current = { fulfillment, tracking, notes };
+  }, [fulfillment, tracking, notes]);
+  // Notatki zmienione na serwerze (np. automatyczna notatka o niepewnym
+  // nadaniu / zwrocie), gdy admin ma niezapisana wlasna wersje.
+  const [serverNotes, setServerNotes] = useState<string | null>(null);
+
+  const applyOrder = useCallback((o: OrderDetail, opts: { resetForm?: boolean; resetFulfillment?: boolean } = {}) => {
+    setOrder(o);
+    setFurgonetkaPackageId(o.furgonetka_package_id || "");
+    setFurgonetkaStatus(o.furgonetka_status || "");
+    const server: FormVals = {
+      fulfillment: o.fulfillment_status || "unfulfilled",
+      tracking: o.tracking_number || "",
+      notes: o.admin_notes || "",
+    };
+    const prev = loadedRef.current;
+    const cur = formRef.current;
+    const isDirty = (k: keyof FormVals) => !opts.resetForm && !!prev && cur[k] !== prev[k];
+    const fulfillmentDirty = !opts.resetFulfillment && isDirty("fulfillment");
+    const trackingDirty = isDirty("tracking");
+    const notesDirty = isDirty("notes");
+    if (!fulfillmentDirty) setFulfillment(server.fulfillment);
+    if (!trackingDirty) setTracking(server.tracking);
+    if (!notesDirty) setNotes(server.notes);
+    setServerNotes(notesDirty && prev && server.notes !== prev.notes ? server.notes : null);
+    loadedRef.current = {
+      // Pole w edycji zachowuje "baze" z chwili rozpoczecia edycji — zapis
+      // zmienionego statusu dostanie wtedy 409, zamiast po cichu nadpisac zmiane.
+      fulfillment: fulfillmentDirty && prev ? prev.fulfillment : server.fulfillment,
+      tracking: trackingDirty && prev ? prev.tracking : server.tracking,
+      notes: notesDirty && prev ? prev.notes : server.notes,
+    };
+  }, []);
+
+  // Numer przesylki zapisany przez serwer (nadanie / powiazanie) — to nie jest
+  // edycja admina, wiec przesuwamy tez "baze" (inaczej zapis notatki wyslalby
+  // numer jako zmieniony).
+  const setServerTracking = (t: string) => {
+    setTracking(t);
+    if (loadedRef.current) loadedRef.current = { ...loadedRef.current, tracking: t };
+  };
+
+  // Swieze dane zamowienia z serwera (po zapisie, nadaniu, zmianie ze sledzenia).
+  const refreshOrder = useCallback(async (opts: { resetForm?: boolean; resetFulfillment?: boolean } = {}) => {
+    try {
+      const res = await fetch(`/api/admin/orders/${id}`, { cache: "no-store" });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data?.order) applyOrder(data.order, opts);
+      return true;
+    } catch (error) {
+      console.error("Failed to refresh order:", error);
+      return false;
+    }
+  }, [id, applyOrder]);
+
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch(`/api/admin/orders/${id}`);
         if (res.ok) {
           const data = await res.json();
-          setOrder(data.order);
-          setFulfillment(data.order.fulfillment_status);
-          setTracking(data.order.tracking_number);
-          setNotes(data.order.admin_notes);
-          setFurgonetkaPackageId(data.order.furgonetka_package_id || "");
-          setFurgonetkaStatus(data.order.furgonetka_status || "");
+          loadedRef.current = null;
+          applyOrder(data.order, { resetForm: true });
           setEmailSubject(`Zamówienie #${data.order.order_number} - KalkMate`);
         }
       } catch (error) {
@@ -110,7 +202,7 @@ export default function OrderDetailPage({
       }
     }
     load();
-  }, [id]);
+  }, [id, applyOrder]);
 
   // Sledzenie przesylki — InPost (Paczkomat) LUB inny kurier nadany przez
   // Base Courier (DPD, GLS, UPS...); serwer sam wybiera zrodlo po numerze/
@@ -131,10 +223,12 @@ export default function OrderDetailPage({
   } | null>(null);
   const [trackingMsg, setTrackingMsg] = useState("");
 
-  const applyTrackingSync = (sync: { changed?: boolean; newStatus?: string; emailSent?: boolean; note?: string } | null) => {
+  const applyTrackingSync = (sync: { changed?: boolean; newStatus?: string; emailSent?: boolean; note?: string } | null, refresh = true) => {
     if (!sync) return;
     if (sync.changed && sync.newStatus) {
-      setFulfillment(sync.newStatus);
+      // Status zmienil serwer — pobierz zamowienie (odznaka, pole statusu,
+      // baza do expected_fulfillment_status), zamiast tylko podmieniac pole.
+      if (refresh) void refreshOrder();
       setTrackingMsg(`Status zamówienia zmieniony na „${sync.newStatus}"${sync.emailSent ? " — mail do klienta wysłany" : ""}`);
     } else if (sync.note === "inpost_unavailable") {
       setTrackingMsg("InPost nie odpowiada / numer nieznany");
@@ -185,7 +279,10 @@ export default function OrderDetailPage({
     pickup?: { addresses: { key: string; label: string }[]; minDate: string; defaultDate: string };
     // Poza UE — wymagane dokumenty celne (wersja papierowa + faktura do wydruku).
     needsCustomsDocs?: boolean;
-    customsDefaults?: { value: number; currency: string; hsCode: string; origin: string };
+    customsDefaults?: { value: number; quantity?: number; currency: string; hsCode: string; origin: string };
+    // Liczba sztuk i parametry paczki (waga/wymiary rosna z iloscia).
+    quantity?: number;
+    parcel?: { weight: number; side_x: number; side_y: number; side_z: number; content: string };
   } | null>(null);
 
   // Odbior przesylki: samodzielne nadanie albo podjazd kuriera z wybranego adresu.
@@ -226,7 +323,9 @@ export default function OrderDetailPage({
       }
       setFurgonetkaStatus("basecourier");
       setFurgonetkaPackageId(String(data.basecourierOrderId));
-      if (data.trackingNumber) setTracking(data.trackingNumber);
+      if (data.trackingNumber) setServerTracking(data.trackingNumber);
+      setBcUncertain("");
+      void refreshOrder();
       setBcMsg(
         `Nadano — powiązano zlecenie ${data.basecourierOrderId}${data.courierName ? ` (${data.courierName})` : ""}` +
           `${data.trackingNumber ? `, numer przesyłki: ${data.trackingNumber}` : ". API nie podaje numeru przesyłki — wpisz go ręcznie w polu „Numer przesyłki” (np. 1Z…) i zapisz"}.` +
@@ -583,6 +682,8 @@ export default function OrderDetailPage({
         needsCustomsDocs: data.needsCustomsDocs,
         customsDefaults: data.customsDefaults,
         needsState: data.needsState,
+        quantity: data.quantity,
+        parcel: data.parcel,
       });
       setBcRecv(
         (prev) =>
@@ -603,6 +704,8 @@ export default function OrderDetailPage({
       if (data.customsDefaults) {
         setCustomsValue((prev) => prev || String(data.customsDefaults.value));
       }
+      // Serwer: poprzednie nadanie w toku / niepewne (basecourier_pending).
+      if (data.pending) setBcUncertain((prev) => prev || "poprzednie nadanie jest w toku albo zakończyło się niepewnie (szczegóły w notatkach zamówienia)");
     } catch {
       setBcMsg("Błąd sieci");
     } finally {
@@ -612,6 +715,48 @@ export default function OrderDetailPage({
 
   // Kurier wybrany do nadania zagranicznego (jeden z bcPreview.quotes).
   const [selectedCourier, setSelectedCourier] = useState<string>("");
+
+  // Niepewne nadanie (502 / timeout po stronie Base Courier albo flaga z
+  // serwera) — paczka MOGLA zostac utworzona i oplacona. Ponowienie tylko po
+  // swiadomym potwierdzeniu (inaczej dwie oplacone paczki).
+  const [bcUncertain, setBcUncertain] = useState("");
+  const uncertainNote =
+    bcUncertain || (isShipmentUncertain(order) ? "nadanie w toku albo zakończone błędem po wysłaniu zlecenia (szczegóły w notatkach zamówienia)" : "");
+  // Ponowienie po niepewnym nadaniu tylko po swiadomym potwierdzeniu — wtedy
+  // serwer dostaje confirmUncertainRetry (bez tego odpowiada 409).
+  // null = admin anulowal; obiekt = dopisz do body POST.
+  const uncertainRetryPayload = (): Record<string, boolean> | null => {
+    if (!uncertainNote) return {};
+    return confirm(
+      `Poprzednia próba nadania zakończyła się NIEPEWNIE:\n${uncertainNote}\n\n` +
+        `Paczka mogła zostać utworzona i opłacona mimo błędu. Sprawdź panel Base Courier (lista zleceń, saldo Skarbonki) i notatki zamówienia. ` +
+        `Jeśli zlecenie tam jest — użyj „Powiąż zlecenie” zamiast nadawać ponownie.\n\n` +
+        `Na pewno nadać PONOWNIE (kolejna płatna paczka)?`
+    )
+      ? { confirmUncertainRetry: true }
+      : null;
+  };
+
+  // Wspolna obsluga nieudanego POST nadania (krajowe i zagraniczne).
+  const handleBcFailure = (status: number, data: { error?: string; adminNotes?: string; uncertain?: boolean }) => {
+    if (status === 409) {
+      // Serwer odmowil: anulowane (zwrot) / juz wyslane / niepewne nadanie — bez kosztu.
+      setBcMsg(`Serwer odmówił nadania: ${data.error || "zamówienie anulowane, już wysłane albo z niepewnym nadaniem"}`);
+      if (data.uncertain) setBcUncertain(data.error || "niepewne nadanie");
+      void refreshOrder();
+      return;
+    }
+    if (status === 502 || status === 504 || data.uncertain) {
+      // adminNotes w odpowiedzi to CALE notatki zamowienia — pokazujemy je
+      // w polu "Notatki" (refreshOrder), a tu tylko blad.
+      const m = data.error || `HTTP ${status}`;
+      setBcUncertain(m);
+      setBcMsg(`NIEPEWNE nadanie: ${m}. Paczka mogła zostać utworzona — sprawdź panel Base Courier, zanim spróbujesz ponownie.`);
+      void refreshOrder();
+      return;
+    }
+    setBcMsg(data.error || "Błąd nadania");
+  };
 
   const handleBcCreate = async () => {
     const price = bcPreview?.valuation?.price?.value;
@@ -630,24 +775,28 @@ export default function OrderDetailPage({
       )
     )
       return;
+    const retry = uncertainRetryPayload();
+    if (!retry) return;
     setBcLoading(true);
     setBcMsg("");
     try {
       const res = await fetch(`/api/admin/orders/${id}/basecourier`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...pickupPayload(), ...receiverPayload() }),
+        body: JSON.stringify({ ...pickupPayload(), ...receiverPayload(), ...retry }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        setBcMsg(data.error || "Błąd nadania");
+        handleBcFailure(res.status, data);
         return;
       }
       applySavedReceiver(data.saved);
       setFurgonetkaStatus("basecourier");
       if (data.basecourierOrderId) setFurgonetkaPackageId(String(data.basecourierOrderId));
-      if (data.trackingNumber) setTracking(data.trackingNumber);
-      applyTrackingSync(data.trackingSync);
+      if (data.trackingNumber) setServerTracking(data.trackingNumber);
+      setBcUncertain("");
+      applyTrackingSync(data.trackingSync, false);
+      void refreshOrder();
       setBcMsg(
         data.trackingNumber
           ? `Nadano. Numer przesyłki: ${data.trackingNumber}`
@@ -682,24 +831,28 @@ export default function OrderDetailPage({
       )
     )
       return;
+    const retry = uncertainRetryPayload();
+    if (!retry) return;
     setBcLoading(true);
     setBcMsg("");
     try {
       const res = await fetch(`/api/admin/orders/${id}/basecourier`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courierCode: selectedCourier, ...pickupPayload(), ...receiverPayload() }),
+        body: JSON.stringify({ courierCode: selectedCourier, ...pickupPayload(), ...receiverPayload(), ...retry }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        setBcMsg(data.error || "Błąd nadania");
+        handleBcFailure(res.status, data);
         return;
       }
       applySavedReceiver(data.saved);
       setFurgonetkaStatus("basecourier");
       if (data.basecourierOrderId) setFurgonetkaPackageId(String(data.basecourierOrderId));
-      if (data.trackingNumber) setTracking(data.trackingNumber);
-      applyTrackingSync(data.trackingSync);
+      if (data.trackingNumber) setServerTracking(data.trackingNumber);
+      setBcUncertain("");
+      applyTrackingSync(data.trackingSync, false);
+      void refreshOrder();
       setBcMsg(
         data.trackingNumber
           ? `Nadano. Numer przesyłki: ${data.trackingNumber}`
@@ -738,6 +891,32 @@ export default function OrderDetailPage({
   };
 
   const handleSave = async () => {
+    const base = loadedRef.current;
+    if (!base) return;
+    // Wysylamy TYLKO pola zmienione przez admina — zapis samej notatki nie
+    // moze cofnac statusu, ktory w miedzyczasie zmienil automat sledzenia.
+    const body: Record<string, string> = {};
+    if (fulfillment !== base.fulfillment) {
+      if (
+        fulfillment === "cancelled" &&
+        !confirm("Anulować zamówienie? Zwrot pieniędzy wykonany? Klient dostanie maila o anulowaniu.")
+      )
+        return;
+      body.fulfillment_status = fulfillment;
+      body.expected_fulfillment_status = base.fulfillment;
+    }
+    if (tracking.trim() !== base.tracking.trim()) {
+      // Pusty numer = usuniecie numeru przesylki z zamowienia.
+      if (!tracking.trim() && !confirm(`Usunąć numer przesyłki ${base.tracking} z zamówienia?`)) return;
+      body.tracking_number = tracking.trim();
+    }
+    if (notes !== base.notes) body.notes = notes;
+    if (!Object.keys(body).length) {
+      setSaveMsg("Brak zmian do zapisania");
+      setTimeout(() => setSaveMsg(""), 3000);
+      return;
+    }
+
     setSaving(true);
     setSaveMsg("");
 
@@ -745,21 +924,25 @@ export default function OrderDetailPage({
       const res = await fetch(`/api/admin/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fulfillment_status: fulfillment,
-          tracking_number: tracking,
-          notes,
-        }),
+        body: JSON.stringify(body),
       });
+      const data = await res.json().catch(() => null);
 
       if (res.ok) {
         setSaveMsg("Zapisano");
         setTimeout(() => setSaveMsg(""), 3000);
-        // Nowy numer InPost -> serwer od razu sprawdzil status
-        const data = await res.json().catch(() => null);
-        if (data?.trackingSync) applyTrackingSync(data.trackingSync);
+        // Swieze dane z serwera: odznaka statusu, numer przesylki (przycisk
+        // "Sprawdz status"), nowa baza do kolejnych zmian.
+        await refreshOrder({ resetForm: true });
+        // Nowy numer InPost -> serwer od razu sprawdzil status (zamowienie
+        // pobrane wyzej juz go uwzglednia — tylko komunikat).
+        if (data?.trackingSync) applyTrackingSync(data.trackingSync, false);
+      } else if (res.status === 409) {
+        const current = data?.current ? FULFILLMENT_PL[data.current] || data.current : "?";
+        setSaveMsg(`Status zmienił się w międzyczasie (teraz: ${current}) — odśwież`);
+        await refreshOrder({ resetFulfillment: true });
       } else {
-        setSaveMsg("Błąd zapisu");
+        setSaveMsg(data?.error ? `Błąd zapisu: ${data.error}` : "Błąd zapisu");
       }
     } catch {
       setSaveMsg("Błąd zapisu");
@@ -791,6 +974,8 @@ export default function OrderDetailPage({
   };
 
   const handleGenerateEmail = async () => {
+    // Wynik AI zastepuje tresc — nie kasujemy po cichu tego, co admin wpisal.
+    if (emailBody.trim() && !confirm("Zastąpić wpisaną treść maila tekstem wygenerowanym przez AI?")) return;
     setEmailGenerating(true);
     setEmailGenError("");
     try {
@@ -814,6 +999,7 @@ export default function OrderDetailPage({
 
   const handleSendEmail = async () => {
     if (!emailSubject.trim() || !emailBody.trim()) return;
+    if (!confirm(`Wysłać maila do klienta?\n\nDo: ${order?.customer_email || "—"}\nTemat: ${emailSubject.trim()}\n\nTego nie da się cofnąć.`)) return;
     setEmailSending(true);
     setEmailMsg("");
     try {
@@ -966,21 +1152,9 @@ export default function OrderDetailPage({
     URL.revokeObjectURL(url);
   };
 
-  const formatDate = (ts: number) =>
-    new Date(ts * 1000).toLocaleString("pl-PL", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-
-  const formatAmount = (amount: number, currency: string) => {
-    const value = (amount / 100).toFixed(2);
-    const symbol = currency?.toLowerCase() === "eur" ? "€" : "zł";
-    return `${value} ${symbol}`;
-  };
+  // Czas polski niezaleznie od strefy komputera (np. aplikacja Electron).
+  const formatDate = (ts: number) => fmtDateTime(ts, { seconds: true });
+  const formatAmount = fmtAmount;
 
   const inputClass =
     "w-full px-3 py-2 rounded-lg border border-[#3F4147] bg-[#2B2D31] text-[#E0E0E0] text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]";
@@ -1047,7 +1221,10 @@ export default function OrderDetailPage({
               </div>
               <div className="flex justify-between gap-3">
                 <span className="text-[#E0E0E0]/50">Produkt</span>
-                <span className="text-[#E0E0E0] break-words text-right min-w-0">{order.product}</span>
+                <span className="text-[#E0E0E0] break-words text-right min-w-0">
+                  {order.product}
+                  {(order.quantity ?? 1) > 1 && <span className="ml-1.5 font-bold text-[#D8FF3D]">×{order.quantity}</span>}
+                </span>
               </div>
 
               {/* Customer data */}
@@ -1106,19 +1283,43 @@ export default function OrderDetailPage({
               {/* Personalizacja — kod AI do wgrania + imie na etykiete, PRZED wyslka.
                   To podstawa wylaczenia prawa odstapienia (art. 38 pkt 3),
                   wiec musi byc realnie wykonana na tej konkretnej sztuce. */}
-              {order.personalized_code && (
+              {orderUnits(order).length > 0 && (
                 <div className="border-t border-[#3F4147] pt-3">
                   <p className="text-xs text-amber-400 uppercase tracking-wider font-medium mb-2">
                     ⚠ Personalizacja — zrób przed wysyłką
+                    {orderUnits(order).length > 1 && ` (${orderUnits(order).length} szt. — każda ma własny kod)`}
                   </p>
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-1">
-                    <p className="text-[#E0E0E0]">
-                      Kod odblokowania AI: <span className="font-mono font-bold">{order.personalized_code}</span>
-                    </p>
-                    <p className="text-[#E0E0E0]">
-                      Imię na etykietę: <span className="font-bold">{order.personalized_name}</span>
-                    </p>
-                  </div>
+                  {orderUnits(order).length === 1 ? (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-1">
+                      <p className="text-[#E0E0E0]">
+                        Kod odblokowania AI: <span className="font-mono font-bold">{orderUnits(order)[0].code || "—"}</span>
+                      </p>
+                      <p className="text-[#E0E0E0]">
+                        Imię na etykietę: <span className="font-bold">{orderUnits(order)[0].name || "—"}</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-[#E0E0E0]/50 border-b border-amber-500/30">
+                            <th className="px-3 py-2 font-medium">Sztuka</th>
+                            <th className="px-3 py-2 font-medium">Kod AI</th>
+                            <th className="px-3 py-2 font-medium">Imię na etykietę</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {orderUnits(order).map((u, i) => (
+                            <tr key={i} className="border-b border-amber-500/10 last:border-0">
+                              <td className="px-3 py-1.5 text-[#E0E0E0]/60 whitespace-nowrap">Sztuka {i + 1}</td>
+                              <td className="px-3 py-1.5 font-mono font-bold text-[#E0E0E0]">{u.code || "—"}</td>
+                              <td className="px-3 py-1.5 font-bold text-[#E0E0E0] break-words">{u.name || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1230,7 +1431,7 @@ export default function OrderDetailPage({
                       </span>
                       {trackingInfo.updatedAt && (
                         <span className="text-[#E0E0E0]/40">
-                          {new Date(trackingInfo.updatedAt).toLocaleString("pl-PL")}
+                          {fmtDateTime(trackingInfo.updatedAt)}
                         </span>
                       )}
                     </div>
@@ -1287,11 +1488,28 @@ export default function OrderDetailPage({
                   className={inputClass + " resize-none"}
                   placeholder="Notatki wewnętrzne..."
                 />
+                {serverNotes !== null && (
+                  <div className="mt-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 space-y-1">
+                    <p>⚠ Notatki zmieniły się na serwerze, gdy je edytowałeś — zapis nadpisze tę zmianę:</p>
+                    <pre className="whitespace-pre-wrap break-words font-sans text-[#E0E0E0]/70 max-h-32 overflow-y-auto">{serverNotes || "(puste)"}</pre>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotes(serverNotes);
+                        if (loadedRef.current) loadedRef.current = { ...loadedRef.current, notes: serverNotes };
+                        setServerNotes(null);
+                      }}
+                      className="text-[#3B82F6] hover:underline"
+                    >
+                      Wczytaj wersję z serwera (porzuć moje zmiany)
+                    </button>
+                  </div>
+                )}
               </div>
 
               {order.shipped_at && (
                 <p className="text-xs text-[#E0E0E0]/40">
-                  Wysłano: {new Date(order.shipped_at).toLocaleString("pl-PL")}
+                  Wysłano: {fmtDateTime(order.shipped_at)}
                 </p>
               )}
 
@@ -1310,7 +1528,7 @@ export default function OrderDetailPage({
                 {saveMsg && (
                   <span
                     className={`text-sm ${
-                      saveMsg === "Zapisano" ? "text-green-400" : "text-red-400"
+                      saveMsg === "Zapisano" ? "text-green-400" : saveMsg.startsWith("Brak zmian") ? "text-[#E0E0E0]/50" : "text-red-400"
                     }`}
                   >
                     {saveMsg}
@@ -1331,10 +1549,24 @@ export default function OrderDetailPage({
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-[#E0E0E0]">Base Courier — nadaj przesyłkę</h2>
-                  <p className="text-xs text-[#E0E0E0]/50">InPost Paczkomat / kurier zagraniczny przez API basecourier.com · pudełko 18×12×4 cm, 1 kg · nadanie samodzielne lub z podjazdem kuriera</p>
+                  <p className="text-xs text-[#E0E0E0]/50">InPost Paczkomat / kurier zagraniczny przez API basecourier.com · {bcPreview?.parcel
+                    ? `${(bcPreview.quantity ?? 1) > 1 ? `${bcPreview.quantity} szt. w jednej paczce · ` : ""}${bcPreview.parcel.side_x}×${bcPreview.parcel.side_y}×${bcPreview.parcel.side_z} cm, ${bcPreview.parcel.weight} kg`
+                    : `pudełko 18×12×4 cm, 1 kg${(order?.quantity ?? 1) > 1 ? ` × ${order?.quantity} szt.` : ""}`} · nadanie samodzielne lub z podjazdem kuriera</p>
                 </div>
               </div>
 
+              {uncertainNote && furgonetkaStatus !== "basecourier" && (
+                <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-xs text-red-300 space-y-1">
+                  <p className="font-semibold">⚠ Niepewne nadanie — paczka mogła zostać utworzona i opłacona</p>
+                  <p className="break-words">{uncertainNote}</p>
+                  <p className="text-red-300/70">Sprawdź panel Base Courier. Jeśli zlecenie istnieje — powiąż je niżej („Powiąż zlecenie”), zamiast nadawać ponownie.</p>
+                </div>
+              )}
+              {order.fulfillment_status === "cancelled" && furgonetkaStatus !== "basecourier" && (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-300">
+                  Zamówienie anulowane (pieniądze zwrócone) — nie nadawaj przesyłki.
+                </p>
+              )}
               {furgonetkaStatus === "basecourier" ? (
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3 space-y-2">
                   <p className="text-sm text-green-400 font-medium">✓ Przesyłka nadana przez Base Courier</p>
@@ -1398,7 +1630,7 @@ export default function OrderDetailPage({
                         ))}
                       </div>
                     ) : (
-                      <p className="text-red-400">Żaden kurier Base Courier nie zwrócił ceny dla tej paczki (1kg, 18×12×4cm) do tego kraju.</p>
+                      <p className="text-red-400">Żaden kurier Base Courier nie zwrócił ceny dla tej paczki ({bcPreview.parcel ? `${bcPreview.parcel.weight}kg, ${bcPreview.parcel.side_x}×${bcPreview.parcel.side_y}×${bcPreview.parcel.side_z}cm` : "1kg, 18×12×4cm"}) do tego kraju.</p>
                     )}
                   </div>
                   {pickupSection}
@@ -1571,7 +1803,7 @@ export default function OrderDetailPage({
               {order.invoice_sent_at && (
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-3">
                   <p className="text-sm text-green-400">
-                    ✓ Wysłano: {new Date(order.invoice_sent_at).toLocaleString("pl-PL")}
+                    ✓ Wysłano: {fmtDateTime(order.invoice_sent_at)}
                     {order.invoice_filename && (
                       <span className="block text-xs text-green-400/70 font-mono mt-0.5">{order.invoice_filename}</span>
                     )}
@@ -1693,6 +1925,8 @@ export default function OrderDetailPage({
                 <textarea
                   value={emailBody}
                   onChange={(e) => setEmailBody(e.target.value)}
+                  // W trakcie generowania AI — zeby wynik nie nadpisal tego, co dopisujesz.
+                  readOnly={emailGenerating}
                   rows={8}
                   placeholder="Treść wiadomości…"
                   className="w-full px-4 py-3 rounded-lg bg-[#2B2D31] border border-[#3F4147] text-base sm:text-sm text-[#E0E0E0] placeholder:text-[#E0E0E0]/30 focus:outline-none focus:border-blue-500/50 resize-y min-h-[200px]"

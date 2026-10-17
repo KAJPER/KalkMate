@@ -17,6 +17,11 @@ class Config:
     printer_timeout: float = field(default_factory=lambda: float(os.environ.get("PRINTER_TIMEOUT", "15")))
     # Bezpiecznik: dopóki 0, agent odmawia druku na drukarce w trybie fiskalnym.
     allow_fiscal: bool = field(default_factory=lambda: _bool("FISCAL_ALLOW_REAL"))
+    # Bezpiecznik kwot: paragon ponad limit / z większą liczbą pozycji / bez
+    # reference jest odrzucany (INVALID) bez drukowania.
+    max_total: int = field(default_factory=lambda: int(os.environ.get("FISCAL_MAX_TOTAL", "400000")))
+    max_items: int = field(default_factory=lambda: int(os.environ.get("FISCAL_MAX_ITEMS", "5")))
+    require_reference: bool = field(default_factory=lambda: _bool("FISCAL_REQUIRE_REFERENCE", True))
 
     api_token: str = field(default_factory=lambda: os.environ.get("AGENT_API_TOKEN", ""))
     db_path: str = field(default_factory=lambda: os.environ.get("AGENT_DB", "fiscal-agent.db"))

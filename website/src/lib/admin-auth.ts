@@ -1,9 +1,12 @@
 import * as OTPAuth from "otpauth";
+import bcrypt from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { buildAdminCookie, randomSessionId, verifyAdminCookie } from "@/lib/admin-session";
+import { ADMIN_COOKIE_NAME, buildAdminCookie, randomSessionId, verifyAdminCookie } from "@/lib/admin-session";
+import { sendMail, CONTACT_EMAIL } from "@/lib/mailer";
+import { adminLockoutAlertEmail } from "@/lib/email-templates";
 
-export const COOKIE_NAME = "admin_session";
+export const COOKIE_NAME = ADMIN_COOKIE_NAME;
 // 180 dni — aplikacja desktopowa (tools/kalkmate-admin-desktop) ma pamietac
 // logowanie miesiacami. Bezpieczne, bo cookie to losowy, podpisany id sesji
 // (nie sekret), odwolywalny pojedynczo — patrz admin-session.ts.
@@ -116,12 +119,19 @@ export async function requireAdminAuth(request: NextRequest): Promise<NextRespon
   return null; // OK
 }
 
-export function validateTOTP(token: string): boolean {
+// ---------------------------------------------------------------------------
+// TOTP
+// ---------------------------------------------------------------------------
+// Zwraca numer kroku TOTP (counter), do ktorego pasuje kod, albo null.
+// Numer kroku sluzy do ochrony przed ponownym uzyciem kodu (consumeTOTPCounter).
+export function matchTOTPCounter(rawToken: string, timestamp = Date.now()): number | null {
   const secret = process.env.ADMIN_2FA_SECRET;
   if (!secret) {
     console.error("ADMIN_2FA_SECRET is not configured");
-    return false;
+    return null;
   }
+  const token = String(rawToken ?? "").replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(token)) return null;
 
   try {
     const totp = new OTPAuth.TOTP({
@@ -131,10 +141,163 @@ export function validateTOTP(token: string): boolean {
       secret: OTPAuth.Secret.fromBase32(secret),
     });
 
-    const delta = totp.validate({ token, window: 1 });
-    return delta !== null;
+    const delta = totp.validate({ token, timestamp, window: 1 });
+    if (delta === null) return null;
+    return totp.counter({ timestamp }) + delta;
   } catch (err) {
     console.error("TOTP validation error", err);
+    return null;
+  }
+}
+
+export function validateTOTP(token: string): boolean {
+  return matchTOTPCounter(token) !== null;
+}
+
+// ---------------------------------------------------------------------------
+// Ochrona logowania admina (audyt 2026-10-16)
+// ---------------------------------------------------------------------------
+// - globalna blokada: LOGIN_FAIL_MAX nieudanych prob w LOGIN_FAIL_WINDOW_MS
+//   z DOWOLNYCH adresow -> logowanie zablokowane na LOGIN_LOCK_MS + mail do
+//   admina (limit per IP nie chronil przed proba z wielu adresow: 6-cyfrowy
+//   kod = 10^6 mozliwosci, okno 90 s);
+// - kod TOTP jednorazowy: zapamietujemy ostatni uzyty krok — przechwycony
+//   (np. podejrzany przez ramie, keylogger) kod nie zadziala drugi raz;
+// - opcjonalnie drugi skladnik: ADMIN_PASSWORD_HASH (bcrypt). Bez tej zmiennej
+//   logowanie dziala jak dotad (sam TOTP), zeby nie zablokowac wlasciciela.
+// Stan w tabelach poza Prisma (tworzone leniwie), przezywa restart procesu.
+
+const LOGIN_FAIL_WINDOW_MS = 15 * 60_000;
+const LOGIN_FAIL_MAX = 10;
+const LOGIN_LOCK_MS = 15 * 60_000;
+
+let _authTablesReady = false;
+async function ensureAdminAuthTables(): Promise<void> {
+  if (_authTablesReady) return;
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "AdminAuthState" (
+      "key"       TEXT PRIMARY KEY,
+      "value"     TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL
+    )
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "AdminLoginFailure" (
+      "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+      "at" INTEGER NOT NULL,
+      "ip" TEXT
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AdminLoginFailure_at_idx" ON "AdminLoginFailure"("at")`);
+  _authTablesReady = true;
+}
+
+async function getAuthState(key: string): Promise<string | null> {
+  await ensureAdminAuthTables();
+  const rows = await prisma.$queryRaw<{ value: string }[]>`SELECT "value" FROM "AdminAuthState" WHERE "key" = ${key} LIMIT 1`;
+  return rows[0]?.value ?? null;
+}
+
+async function setAuthState(key: string, value: string): Promise<void> {
+  await ensureAdminAuthTables();
+  const now = new Date().toISOString();
+  await prisma.$executeRaw`
+    INSERT INTO "AdminAuthState" ("key", "value", "updatedAt") VALUES (${key}, ${value}, ${now})
+    ON CONFLICT("key") DO UPDATE SET "value" = excluded."value", "updatedAt" = excluded."updatedAt"
+  `;
+}
+
+// Zwraca timestamp (ms) konca blokady albo 0, gdy logowanie jest odblokowane.
+export async function adminLoginLockedUntil(): Promise<number> {
+  const v = Number(await getAuthState("loginLockedUntil"));
+  return Number.isFinite(v) && v > Date.now() ? v : 0;
+}
+
+export async function recordAdminLoginFailure(ip: string): Promise<{ locked: boolean }> {
+  await ensureAdminAuthTables();
+  const now = Date.now();
+  const since = now - LOGIN_FAIL_WINDOW_MS;
+  await prisma.$executeRaw`INSERT INTO "AdminLoginFailure" ("at", "ip") VALUES (${now}, ${(ip || "").slice(0, 64)})`;
+  await prisma.$executeRaw`DELETE FROM "AdminLoginFailure" WHERE "at" < ${now - 24 * 60 * 60_000}`;
+  const rows = await prisma.$queryRaw<{ n: number | bigint }[]>`
+    SELECT COUNT(*) AS n FROM "AdminLoginFailure" WHERE "at" >= ${since}
+  `;
+  const failures = Number(rows[0]?.n ?? 0);
+  if (failures < LOGIN_FAIL_MAX) return { locked: false };
+  if (await adminLoginLockedUntil()) return { locked: true };
+
+  await setAuthState("loginLockedUntil", String(now + LOGIN_LOCK_MS));
+  const ipRows = await prisma.$queryRaw<{ ip: string | null }[]>`
+    SELECT DISTINCT "ip" FROM "AdminLoginFailure" WHERE "at" >= ${since}
+  `;
+  // Po blokadzie liczymy od zera — kolejna seria = kolejna blokada i alert.
+  await prisma.$executeRaw`DELETE FROM "AdminLoginFailure" WHERE "at" >= ${since}`;
+  console.warn(`[admin-auth] login lockout: ${failures} failed attempts in ${LOGIN_FAIL_WINDOW_MS / 60_000} min`);
+
+  void sendMail({
+    to: process.env.ADMIN_ALERT_EMAIL || CONTACT_EMAIL,
+    subject: "[KalkMate] Blokada logowania do panelu admina",
+    html: adminLockoutAlertEmail({
+      failures,
+      windowMinutes: LOGIN_FAIL_WINDOW_MS / 60_000,
+      lockMinutes: LOGIN_LOCK_MS / 60_000,
+      ips: ipRows.map((r) => r.ip || "?"),
+      at: new Date(now).toISOString(),
+    }),
+  }).then((r) => {
+    if (!r.ok) console.error("[admin-auth] lockout alert mail failed:", r.error);
+  });
+  return { locked: true };
+}
+
+// Zuzywa krok TOTP. false = ten kod (albo nowszy) byl juz uzyty -> odrzuc.
+export async function consumeTOTPCounter(counter: number): Promise<boolean> {
+  await ensureAdminAuthTables();
+  const now = new Date().toISOString();
+  await prisma.$executeRaw`
+    INSERT OR IGNORE INTO "AdminAuthState" ("key", "value", "updatedAt") VALUES ('totpLastCounter', '0', ${now})
+  `;
+  const updated = await prisma.$executeRaw`
+    UPDATE "AdminAuthState" SET "value" = ${String(counter)}, "updatedAt" = ${now}
+    WHERE "key" = 'totpLastCounter' AND CAST("value" AS INTEGER) < ${counter}
+  `;
+  return updated === 1;
+}
+
+// ADMIN_PASSWORD_HASH: hash bcrypt ("$2a$10$...") albo ten sam hash w base64 —
+// UWAGA: Next.js rozwija "$..." w plikach .env, wiec surowy hash trzeba wpisac
+// z "\$" albo (prosciej) jako base64 calego hasha. Ustawiac dopiero, gdy
+// formularz /admin/login (i aplikacja desktopowa) wysyla pole `password`.
+let _warnedBadHash = false;
+function adminPasswordHash(): string | null {
+  const raw = (process.env.ADMIN_PASSWORD_HASH || "").trim();
+  if (!raw) return null;
+  const isBcrypt = (s: string) => /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(s);
+  if (isBcrypt(raw)) return raw;
+  try {
+    const decoded = Buffer.from(raw, "base64").toString("utf8").trim();
+    if (isBcrypt(decoded)) return decoded;
+  } catch {}
+  if (!_warnedBadHash) {
+    _warnedBadHash = true;
+    // Bledna wartosc NIE blokuje logowania (zostaje sam TOTP) — inaczej
+    // literowka w .env odcinalaby wlasciciela od panelu.
+    console.error("[admin-auth] ADMIN_PASSWORD_HASH ustawione, ale to nie jest poprawny hash bcrypt — haslo NIE jest wymagane");
+  }
+  return null;
+}
+
+export function adminPasswordRequired(): boolean {
+  return adminPasswordHash() !== null;
+}
+
+export async function verifyAdminPassword(password: string): Promise<boolean> {
+  const hash = adminPasswordHash();
+  if (!hash) return true;
+  if (!password) return false;
+  try {
+    return await bcrypt.compare(password.slice(0, 200), hash);
+  } catch {
     return false;
   }
 }

@@ -35,7 +35,14 @@ export async function GET(request: NextRequest) {
       take: 50, // Limit to last 50 conversations
     });
 
-    return NextResponse.json({ conversations });
+    // K8: panel czyta conv._count.messages — mapujemy, zostawiajac tez
+    // stare pole _count.ChatMessage dla kompatybilnosci.
+    return NextResponse.json({
+      conversations: conversations.map((c) => ({
+        ...c,
+        _count: { ...c._count, messages: c._count.ChatMessage },
+      })),
+    });
   } catch (error) {
     console.error("Get conversations error:", error);
     return NextResponse.json(

@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyNotificationSign, verifyTransaction } from "@/lib/przelewy24";
-import { sendMail } from "@/lib/mailer";
-import { purchaseConfirmationEmail } from "@/lib/email-templates";
-import { findTokenPurchaseBySession, markTokenPurchasePaid } from "@/lib/tokenPurchases";
-import { orderIdForPaymentSession } from "@/lib/paymentReminders";
-import { getOrderCoupon, incrementCouponUsage } from "@/lib/coupons";
-import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
+import { findTokenPurchaseBySession, markTokenPurchasePaidAndCredit } from "@/lib/tokenPurchases";
+import { orderIdForPaymentSession, settleP24OrderPayment } from "@/lib/paymentReminders";
+import { alertAdmin, formatMinor } from "@/lib/checkoutPricing";
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
@@ -53,6 +50,19 @@ export async function POST(request: NextRequest) {
       console.log("[P24 WEBHOOK] Token purchase already processed:", tokenPurchase.id);
       return NextResponse.json({ received: true });
     }
+    // Druga linia obrony: kwota/waluta z powiadomienia vs zapisany zakup.
+    // Niezgodnosc = NIE weryfikujemy (P24 zwroci srodki), alert do admina.
+    if (
+      Number(amount) !== Number(tokenPurchase.amount) ||
+      String(currency).toLowerCase() !== String(tokenPurchase.currency || "pln").toLowerCase()
+    ) {
+      await alertAdmin("P24: niezgodna kwota zakupu tokenow", [
+        `Zakup: ${tokenPurchase.id} (sesja ${tokenPurchase.sessionId}), user ${tokenPurchase.userId}`,
+        `P24: ${formatMinor(Number(amount), String(currency))}, zapisane: ${formatMinor(tokenPurchase.amount, tokenPurchase.currency)}`,
+        `Tokenow NIE doliczono, platnosci NIE zweryfikowano.`,
+      ]);
+      return NextResponse.json({ received: true });
+    }
     try {
       await verifyTransaction({
         sessionId: String(sessionId),
@@ -64,39 +74,21 @@ export async function POST(request: NextRequest) {
       console.error("[P24 WEBHOOK] Verify transaction failed (token purchase):", err);
       return NextResponse.json({ error: "Verify failed" }, { status: 500 });
     }
-    await markTokenPurchasePaid(tokenPurchase.id);
-    await prisma.$executeRaw`
-      UPDATE "User" SET "tokenBalance" = COALESCE("tokenBalance", 0) + ${tokenPurchase.tokens} WHERE "id" = ${tokenPurchase.userId}
-    `;
-    console.log(`[P24 WEBHOOK] ✅ Token purchase paid: +${tokenPurchase.tokens} tokenow dla user ${tokenPurchase.userId}`);
+    // pending -> paid i saldo w jednej transakcji; drugi rownolegly webhook nic nie doliczy.
+    const credited = await markTokenPurchasePaidAndCredit(tokenPurchase);
+    if (credited) {
+      console.log(`[P24 WEBHOOK] ✅ Token purchase paid: +${tokenPurchase.tokens} tokenow dla user ${tokenPurchase.userId}`);
+    } else {
+      console.log("[P24 WEBHOOK] Token purchase already processed (race):", tokenPurchase.id);
+    }
     return NextResponse.json({ received: true });
   }
 
-  // Find pending order — po p24SessionId albo po dodatkowej sesji z linku
+  // Find order — po p24SessionId albo po dodatkowej sesji z linku
   // "Dokończ płatność" (lib/paymentReminders.ts, /api/p24/resume).
   const extraOrderId = await orderIdForPaymentSession(String(sessionId));
-  const rows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      status: string;
-      orderNumber: string;
-      customerName: string;
-      customerEmail: string;
-      customerPhone: string;
-      pickupPoint: string;
-      pickupPointAddress: string;
-      amount: number;
-      currency: string | null;
-      customerAddressStreet: string | null;
-      customerAddressPostcode: string | null;
-      customerAddressCity: string | null;
-      customerCountry: string | null;
-      userId: string | null;
-    }>
-  >`
-    SELECT id, status, "orderNumber", "customerName", "customerEmail",
-           "customerPhone", "pickupPoint", "pickupPointAddress", amount, currency,
-           "customerAddressStreet", "customerAddressPostcode", "customerAddressCity", "customerCountry", "userId"
+  const rows = await prisma.$queryRaw<Array<{ id: string; orderNumber: string }>>`
+    SELECT id, "orderNumber"
     FROM "Order"
     WHERE "p24SessionId" = ${String(sessionId)} OR id = ${extraOrderId ?? ""}
     LIMIT 1
@@ -108,93 +100,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  const order = rows[0];
+  // Wspolna sciezka z przypomnieniami/auto-anulowaniem (lib/paymentReminders.ts):
+  // porownanie kwoty, verify, atomowe pending->paid, kupon, trial, paragon, mail,
+  // wplata po anulowaniu -> notatka + alert.
+  const result = await settleP24OrderPayment({
+    orderId: rows[0].id,
+    sessionId: String(sessionId),
+    p24OrderId: Number(orderId),
+    amount: Number(amount),
+    currency: String(currency),
+    source: "webhook",
+  });
 
-  // Idempotency: skip if already paid
-  if (order.status === "paid") {
-    console.log("[P24 WEBHOOK] Already processed:", order.orderNumber);
-    return NextResponse.json({ received: true });
-  }
-
-  // Verify transaction with P24
-  try {
-    await verifyTransaction({
-      sessionId: String(sessionId),
-      orderId: Number(orderId),
-      amount: Number(amount),
-      currency: String(currency).toUpperCase(),
-    });
-  } catch (err) {
-    console.error("[P24 WEBHOOK] Verify transaction failed:", err);
+  if (result === "verify_failed") {
     return NextResponse.json({ error: "Verify failed" }, { status: 500 });
   }
-
-  // Integer ms (nie ISO string!) — Prisma/SQLite trzyma DateTime jako INTEGER,
-  // ISO string tutaj psuloby sortowanie "Order" po createdAt/updatedAt (SQLite
-  // sortuje TEXT i INTEGER w oddzielnych blokach — patrz src/lib/orderDates.ts).
-  const nowMs = Date.now();
-
-  // Update order to paid
-  await prisma.$executeRaw`
-    UPDATE "Order"
-    SET status = 'paid', "paidAt" = ${nowMs}, "updatedAt" = ${nowMs}
-    WHERE id = ${order.id}
-  `;
-
-  // Uzycie kuponu (wczesniej zliczane tylko dla Stripe — lib/coupons.ts).
-  try {
-    const coupon = await getOrderCoupon(order.id);
-    if (coupon) await incrementCouponUsage(coupon.code);
-  } catch (err) {
-    console.error("[P24 WEBHOOK] Coupon usage increment failed:", err);
+  if (result === "already_paid") {
+    console.log("[P24 WEBHOOK] Already processed:", rows[0].orderNumber);
   }
-
-  // Upgrade user subscription to 30 days trial if they have a subscription
-  if (order.userId) {
-    try {
-      const subscription = await prisma.subscription.findUnique({
-        where: { userId: order.userId },
-      });
-      if (subscription) {
-        const newTrialEndsAt = new Date();
-        newTrialEndsAt.setDate(newTrialEndsAt.getDate() + 30);
-        await prisma.subscription.update({
-          where: { id: subscription.id },
-          data: { trialDays: 30, trialEndsAt: newTrialEndsAt, status: "trial" },
-        });
-      }
-    } catch (err) {
-      console.error("[P24 WEBHOOK] Subscription update failed:", err);
-    }
-  }
-
-  console.log(`[P24 WEBHOOK] ✅ Order paid: ${order.orderNumber} for ${order.customerEmail}`);
-
-  // Paragon do kolejki agenta fiskalnego (tylko gdy FISCAL_AUTO_ENQUEUE=1) — lib/fiscal.ts.
-  await autoEnqueueOrderReceipt(order.id);
-
-  // Send confirmation email
-  try {
-    await sendMail({
-      to: order.customerEmail,
-      subject: `Potwierdzenie zamówienia ${order.orderNumber} - KalkMate`,
-      html: purchaseConfirmationEmail({
-        customerName: order.customerName || "Kliencie",
-        customerEmail: order.customerEmail,
-        product: "KalkMate v3.0",
-        amount: order.amount,
-        currency: order.currency || "pln",
-        pickupPoint: order.pickupPoint || "",
-        pickupPointAddress: order.pickupPointAddress || "",
-        deliveryAddress: [order.customerAddressStreet, [order.customerAddressPostcode, order.customerAddressCity].filter(Boolean).join(" "), order.customerCountry]
-          .filter(Boolean).join(", "),
-        orderId: order.orderNumber,
-      }),
-    });
-    console.log(`[P24 WEBHOOK] ✅ Confirmation email sent to ${order.customerEmail}`);
-  } catch (emailErr) {
-    console.error("[P24 WEBHOOK] Email failed:", emailErr);
-  }
-
   return NextResponse.json({ received: true });
 }

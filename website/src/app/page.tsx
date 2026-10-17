@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
-import VisitTracker from "@/components/VisitTracker";
 import { homeJsonLd } from "@/lib/seo";
 import type { Metadata } from "next";
 import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
@@ -46,7 +45,6 @@ export default async function Home() {
           dangerouslySetInnerHTML={{ __html: json }}
         />
       ))}
-      <VisitTracker />
       <Navigation lang={lang} />
       <main className="relative overflow-x-clip">
         <Hero lang={lang} />

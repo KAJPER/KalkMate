@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 // Lista kompletacji do druku — z zaznaczonych zamowien (/admin/orders ->
-// "Lista kompletacji"). Na kazda sztuke: kod AI do wgrania, imie na etykiete,
+// "Lista kompletacji"). Na kazda sztuke (zamowienie moze miec kilka): kod AI do wgrania, imie na etykiete,
 // paczkomat/adres i pola do odhaczenia przy pakowaniu. Bez AdminShell —
 // czysta strona pod drukarke (A4).
 
@@ -21,7 +21,21 @@ interface Order {
   pickup_point_address: string;
   personalized_code: string | null;
   personalized_name: string | null;
+  quantity?: number;
+  personalizations?: { code: string; name: string }[];
   tracking_number: string;
+}
+
+// Sztuki zamowienia: lista z API (wiele sztuk) albo stara para pol (1 szt.).
+function unitsOf(o: Order): { code: string; name: string }[] {
+  const qty = Math.max(1, Math.floor(Number(o.quantity) || 1));
+  const list = o.personalizations?.length
+    ? o.personalizations
+    : o.personalized_code || o.personalized_name
+      ? [{ code: o.personalized_code || "", name: o.personalized_name || "" }]
+      : [];
+  // Brakujace pozycje (np. niespojne dane) pokazujemy jako puste — nie gubimy sztuki.
+  return Array.from({ length: Math.max(qty, list.length) }, (_, i) => list[i] ?? { code: "", name: "" });
 }
 
 export default function PackingListPage() {
@@ -31,13 +45,21 @@ export default function PackingListPage() {
   useEffect(() => {
     const ids = new URLSearchParams(window.location.search).get("ids") || "";
     (ids
-      ? fetch(`/api/admin/orders?limit=200&ids=${encodeURIComponent(ids)}`).then((r) => r.json())
+      ? fetch(`/api/admin/orders?limit=200&ids=${encodeURIComponent(ids)}`).then(async (r) => {
+          const d = await r.json().catch(() => null);
+          // 401 (wygasla sesja) / 500 — inaczej pusta lista wygladala jak "0 zamowien".
+          if (!r.ok || !d) throw new Error(`Błąd ładowania: ${d?.error || `HTTP ${r.status}`}${r.status === 401 ? " — zaloguj się ponownie" : ""}`);
+          return d;
+        })
       : Promise.reject(new Error("Nie zaznaczono zamówień.")))
       .then((d) => {
         const order = ids.split(",");
-        setOrders((d.orders || []).sort((a: Order, b: Order) => order.indexOf(a.id) - order.indexOf(b.id)));
+        const list: Order[] = (d.orders || []).sort((a: Order, b: Order) => order.indexOf(a.id) - order.indexOf(b.id));
+        setOrders(list);
+        const missing = order.length - list.length;
+        if (missing > 0) setErr(`Uwaga: nie znaleziono ${missing} z ${order.length} zaznaczonych zamówień.`);
       })
-      .catch((e: Error) => setErr(ids ? "Błąd ładowania." : e.message));
+      .catch((e: Error) => setErr(e.message || "Błąd ładowania."));
   }, []);
 
   const box = "inline-block w-4 h-4 border-2 border-black align-middle mr-1.5";
@@ -51,7 +73,8 @@ export default function PackingListPage() {
       </div>
       <h1 className="text-xl font-bold mb-1">Lista kompletacji — KalkMate</h1>
       <p className="text-sm text-gray-600 mb-4">
-        {new Date().toLocaleString("pl-PL")} · {orders?.length ?? 0} zamówień
+        {new Date().toLocaleString("pl-PL")} · {orders?.length ?? 0} zamówień ·{" "}
+        {orders?.reduce((n, o) => n + unitsOf(o).length, 0) ?? 0} szt.
       </p>
       {err && <p className="text-red-600">{err}</p>}
       {orders && (
@@ -61,8 +84,8 @@ export default function PackingListPage() {
               <th className="py-2 pr-2">Zamówienie</th>
               <th className="py-2 pr-2">Klient</th>
               <th className="py-2 pr-2">Dostawa</th>
-              <th className="py-2 pr-2">Kod AI</th>
-              <th className="py-2 pr-2">Imię na etykietę</th>
+              <th className="py-2 pr-2">Szt.</th>
+              <th className="py-2 pr-2">Kod AI · imię na etykietę (każda sztuka)</th>
               <th className="py-2">Kontrola</th>
             </tr>
           </thead>
@@ -84,11 +107,20 @@ export default function PackingListPage() {
                     <><b>{o.customer_country}</b> · {o.customer_address}</>
                   )}
                 </td>
-                <td className="py-2.5 pr-2 font-mono text-lg font-bold">{o.personalized_code || "—"}</td>
-                <td className="py-2.5 pr-2 font-semibold">{o.personalized_name || "—"}</td>
+                <td className="py-2.5 pr-2 text-lg font-bold whitespace-nowrap">×{unitsOf(o).length}</td>
+                <td className="py-2.5 pr-2">
+                  {unitsOf(o).map((u, i, all) => (
+                    <div key={i} className="whitespace-nowrap leading-7">
+                      {all.length > 1 && <span className="text-xs text-gray-600 mr-1.5">{i + 1}.</span>}
+                      <span className="font-mono text-lg font-bold">{u.code || "—"}</span>
+                      <span className="font-semibold ml-2">{u.name || "—"}</span>
+                      {all.length > 1 && <span className={`${box} ml-2`} />}
+                    </div>
+                  ))}
+                </td>
                 <td className="py-2.5 text-xs leading-6 whitespace-nowrap">
-                  <span className={box} />kod wgrany<br />
-                  <span className={box} />etykieta z imieniem<br />
+                  <span className={box} />{unitsOf(o).length > 1 ? "wszystkie kody wgrane" : "kod wgrany"}<br />
+                  <span className={box} />{unitsOf(o).length > 1 ? "etykiety z imionami" : "etykieta z imieniem"}<br />
                   <span className={box} />test + spakowane
                 </td>
               </tr>

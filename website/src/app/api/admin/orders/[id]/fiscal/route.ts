@@ -13,7 +13,7 @@ export async function GET(
   const { id } = await params;
   const order = await prisma.order.findUnique({
     where: { id },
-    select: { id: true, orderNumber: true, status: true, amount: true, currency: true, paymentProvider: true },
+    select: { id: true, orderNumber: true, status: true, fulfillmentStatus: true, amount: true, currency: true, paymentProvider: true },
   });
   if (!order) return NextResponse.json({ ok: false, error: "Order not found" }, { status: 404 });
   const jobs = await listJobsForOrder(id);

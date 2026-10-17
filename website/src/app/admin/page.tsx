@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import StatCard from "@/components/admin/StatCard";
@@ -10,6 +10,8 @@ import OrdersChart from "@/components/admin/OrdersChart";
 import GeminiUsageChart from "@/components/admin/GeminiUsageChart";
 import OrdersPieChart from "@/components/admin/OrdersPieChart";
 import { toast } from "@/components/admin/toast";
+import { usePolling } from "@/components/admin/usePolling";
+import { createLicenses, type LicenseDuration } from "@/components/admin/licenseGen";
 
 interface Analytics {
   totalRevenue: number;
@@ -22,6 +24,14 @@ interface Analytics {
   fulfilledOrders: number;
   unfulfilledOrders: number;
   dailyOrders: Array<{ date: string; count: number; revenue: number }>;
+  // Porzucone koszyki (zamowienie zalozone, nigdy nieoplacone) — nowsze API,
+  // nazwy pol tolerancyjnie (kwota w groszach PLN).
+  abandonedOrders?: number;
+  abandonedCount?: number;
+  abandonedAmount?: number;
+  abandonedRevenue?: number;
+  abandonedValue?: number;
+  abandonedTotal?: number;
 }
 
 interface Stats {
@@ -55,10 +65,13 @@ interface GeminiStats {
     assistantMessagesEstimated: number;
     averagePerRequest: number;
   };
-  cost: {
-    totalEstimatedUSD: number;
+  // Szacunek z liczby wiadomosci (nie realny koszt) — nowsze API moze zwrocic
+  // null / deprecated; realne koszty sa w /admin/gemini (konto OpenRouter).
+  cost?: {
+    totalEstimatedUSD: number | null;
     perThousandTokens: number;
-  };
+  } | null;
+  deprecated?: boolean | string;
   topUsers: Array<{
     email: string;
     name: string | null;
@@ -94,10 +107,13 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [generatingCodes, setGeneratingCodes] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
-  const [licenseDuration, setLicenseDuration] = useState<"week" | "month" | "3months">("month");
+  const [licenseDuration, setLicenseDuration] = useState<LicenseDuration>("month");
   const [stockValue, setStockValue] = useState<number | "">("");
   const [stockSaving, setStockSaving] = useState(false);
   const [stockSaved, setStockSaved] = useState(false);
+  const [stockErr, setStockErr] = useState("");
+  // Pole edytowane (niezapisane) — auto-odswiezanie co 30 s go nie nadpisuje.
+  const stockDirtyRef = useRef(false);
   // Ostatnia kopia bazy (lib/dbBackup.ts) — ostrzezenie, gdy cron przestal je robic.
   const [lastBackupAt, setLastBackupAt] = useState<string | null | undefined>(undefined);
 
@@ -132,7 +148,7 @@ export default function AdminDashboard() {
       }
       if (stockRes.ok) {
         const s = await stockRes.json();
-        setStockValue(s.stock);
+        if (!stockDirtyRef.current) setStockValue(s.stock);
       }
     } catch (error) {
       console.error("Failed to fetch:", error);
@@ -145,27 +161,12 @@ export default function AdminDashboard() {
     setGeneratingCodes(true);
     setGeneratedCodes([]);
 
-    const durationDays = licenseDuration === "week" ? 7 : licenseDuration === "month" ? 30 : 90;
-
     try {
-      const res = await fetch("/api/admin/licenses", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ count, durationDays }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setGeneratedCodes(data.codes);
-        fetchData(); // Refresh stats
-      } else {
-        toast("Nie udało się wygenerować licencji", "error");
-      }
+      setGeneratedCodes(await createLicenses(count, licenseDuration));
+      fetchData(); // Refresh stats
     } catch (error) {
       console.error("Failed to generate licenses:", error);
-      toast("Wystąpił błąd", "error");
+      toast((error as Error).message || "Wystąpił błąd", "error");
     } finally {
       setGeneratingCodes(false);
     }
@@ -175,23 +176,33 @@ export default function AdminDashboard() {
     if (stockValue === "" || stockSaving) return;
     setStockSaving(true);
     setStockSaved(false);
+    setStockErr("");
     try {
       const res = await fetch("/api/admin/stock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stock: Number(stockValue) }),
       });
-      if (res.ok) setStockSaved(true);
-    } catch {}
-    setStockSaving(false);
-    setTimeout(() => setStockSaved(false), 3000);
+      if (res.ok) {
+        stockDirtyRef.current = false;
+        setStockSaved(true);
+        setTimeout(() => setStockSaved(false), 3000);
+      } else {
+        const data = await res.json().catch(() => null);
+        setStockErr(`Nie zapisano: ${data?.error || `HTTP ${res.status}`}`);
+      }
+    } catch {
+      setStockErr("Nie zapisano: błąd sieci");
+    } finally {
+      setStockSaving(false);
+    }
   };
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
   }, [fetchData]);
+  // Co 30 s, wstrzymane gdy karta jest w tle (document.hidden).
+  usePolling(fetchData, 30000);
 
   return (
     <AdminShell>
@@ -225,7 +236,13 @@ export default function AdminDashboard() {
           )}
 
           {/* Quick Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {(() => {
+            // Porzucone koszyki — osobno od zwrotow (nikt nie zaplacil, wiec nic nie oddano).
+            const abandonedCount = analytics.abandonedOrders ?? analytics.abandonedCount;
+            const abandonedValue = analytics.abandonedAmount ?? analytics.abandonedRevenue ?? analytics.abandonedValue ?? analytics.abandonedTotal;
+            const hasAbandoned = abandonedCount !== undefined || abandonedValue !== undefined;
+            return (
+          <div className={`grid grid-cols-2 gap-4 ${hasAbandoned ? "lg:grid-cols-3 xl:grid-cols-6" : "lg:grid-cols-5"}`}>
             <StatCard
               title="Przychód"
               value={`${(analytics.totalRevenue / 100).toLocaleString("pl-PL")} zł`}
@@ -235,9 +252,17 @@ export default function AdminDashboard() {
             <StatCard
               title="Zwrócono"
               value={`${(analytics.totalRefunded / 100).toLocaleString("pl-PL")} zł`}
-              subtitle={`${analytics.refundedOrders} anulowanych — pieniądze oddane`}
+              subtitle={`Anulowane po opłaceniu (zwrot): ${analytics.refundedOrders}`}
               color="red"
             />
+            {hasAbandoned && (
+              <StatCard
+                title="Porzucone (nieopłacone)"
+                value={abandonedValue !== undefined ? `${(abandonedValue / 100).toLocaleString("pl-PL")} zł` : abandonedCount ?? 0}
+                subtitle={`${abandonedCount ?? "?"} koszyków bez płatności — bez zwrotu`}
+                color="orange"
+              />
+            )}
             <StatCard
               title="Zamówienia"
               value={analytics.totalOrders}
@@ -259,6 +284,8 @@ export default function AdminDashboard() {
               color="purple"
             />
           </div>
+            );
+          })()}
 
           {/* Stock widget */}
           <motion.div
@@ -284,7 +311,12 @@ export default function AdminDashboard() {
                 min={0}
                 max={9999}
                 value={stockValue}
-                onChange={(e) => { setStockValue(e.target.value === "" ? "" : Number(e.target.value)); setStockSaved(false); }}
+                onChange={(e) => {
+                  stockDirtyRef.current = true;
+                  setStockValue(e.target.value === "" ? "" : Number(e.target.value));
+                  setStockSaved(false);
+                  setStockErr("");
+                }}
                 onKeyDown={(e) => e.key === "Enter" && saveStock()}
                 className="w-32 px-4 py-3 rounded-xl bg-[#2B2D31] border border-[#3F4147] text-[#E0E0E0] text-2xl font-bold text-center focus:outline-none focus:border-[#D8FF3D] transition-colors"
                 placeholder="11"
@@ -302,6 +334,7 @@ export default function AdminDashboard() {
                 {stockSaving ? "Zapisuję..." : stockSaved ? "✓ Zapisano" : "Zapisz"}
               </button>
             </div>
+            {stockErr && <p className="mt-2 text-sm text-red-400">{stockErr}</p>}
           </motion.div>
 
           {/* License Generator Card */}
@@ -446,8 +479,19 @@ export default function AdminDashboard() {
             )}
           </motion.div>
 
-          {/* Gemini API Stats Card */}
-          {geminiStats && (
+          {/* Gemini API Stats Card — koszt z /api/admin/gemini-stats to szacunek
+              z liczby wiadomosci; gdy API go nie podaje (null/deprecated),
+              zamiast fikcyjnej kwoty link do realnych kosztow z OpenRouter. */}
+          {geminiStats && (geminiStats.deprecated || !geminiStats.overview) && (
+            <Link
+              href="/admin/gemini"
+              className="block rounded-2xl border border-[#3F4147] bg-gradient-to-br from-[#313338] to-[#2B2D31] px-6 py-4 text-sm text-[#E0E0E0]/70 hover:border-purple-500/40"
+            >
+              <span className="font-semibold text-[#E0E0E0]">OpenRouter AI</span> — realne zużycie i koszty API:{" "}
+              <span className="text-purple-400">otwórz OpenRouter AI →</span>
+            </Link>
+          )}
+          {geminiStats && !geminiStats.deprecated && geminiStats.overview && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -462,10 +506,13 @@ export default function AdminDashboard() {
                     <line x1="12" y1="22.08" x2="12" y2="12"/>
                   </svg>
                 </div>
-                <div>
+                <div className="flex-1">
                   <h2 className="text-xl font-bold text-[#E0E0E0]">OpenRouter AI</h2>
-                  <p className="text-sm text-[#E0E0E0]/60">Statystyki zużycia i koszty</p>
+                  <p className="text-sm text-[#E0E0E0]/60">Statystyki zużycia</p>
                 </div>
+                <Link href="/admin/gemini" className="text-sm text-purple-400 hover:underline">
+                  Realne koszty →
+                </Link>
               </div>
 
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
@@ -485,10 +532,17 @@ export default function AdminDashboard() {
                   <p className="text-xs text-[#E0E0E0]/60 mb-1">Tokeny</p>
                   <p className="text-2xl font-bold text-purple-400">{((geminiStats.tokens?.totalEstimated || 0) / 1000).toFixed(1)}K</p>
                 </div>
-                <div className="bg-[#2B2D31] rounded-xl p-4 border border-[#3F4147]/50">
-                  <p className="text-xs text-[#E0E0E0]/60 mb-1">Koszt (USD)</p>
-                  <p className="text-2xl font-bold text-purple-400">${(geminiStats.cost?.totalEstimatedUSD || 0).toFixed(2)}</p>
-                </div>
+                {typeof geminiStats.cost?.totalEstimatedUSD === "number" ? (
+                  <div className="bg-[#2B2D31] rounded-xl p-4 border border-[#3F4147]/50" title="Szacunek z liczby wiadomości — realny koszt w OpenRouter AI">
+                    <p className="text-xs text-[#E0E0E0]/60 mb-1">Koszt szac. (USD)</p>
+                    <p className="text-2xl font-bold text-purple-400">~${geminiStats.cost.totalEstimatedUSD.toFixed(2)}</p>
+                  </div>
+                ) : (
+                  <Link href="/admin/gemini" className="bg-[#2B2D31] rounded-xl p-4 border border-[#3F4147]/50 hover:border-purple-500/40 block">
+                    <p className="text-xs text-[#E0E0E0]/60 mb-1">Koszt</p>
+                    <p className="text-sm font-semibold text-purple-400">Realne koszty →</p>
+                  </Link>
+                )}
               </div>
 
               {geminiStats.topUsers && geminiStats.topUsers.length > 0 && (
@@ -535,7 +589,7 @@ export default function AdminDashboard() {
                   <p className="text-sm text-[#E0E0E0]/60">Ostatnio zarejestrowani ({stats?.users.total || 0} total)</p>
                 </div>
                 <a
-                  href="/admin/orders"
+                  href="/admin/users"
                   className="text-sm text-[#3B82F6] hover:underline"
                 >
                   Zobacz wszystkich →

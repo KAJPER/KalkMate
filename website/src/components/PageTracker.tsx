@@ -4,6 +4,24 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { rememberTouch } from "@/lib/clientAttribution";
 
+// Query z sekretami (token weryfikacyjny/resetu hasla, client_secret Stripe,
+// sesja P24, kod AI z /claim) nie powinno trafiac do statystyk wizyt.
+const SECRET_PARAMS = [
+  "token", "payment_intent", "payment_intent_client_secret", "setup_intent",
+  "setup_intent_client_secret", "p24_session", "c", "callbackUrl",
+];
+
+function safeSearch(): string {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    SECRET_PARAMS.forEach((k) => params.delete(k));
+    const s = params.toString();
+    return s ? `?${s}` : "";
+  } catch {
+    return "";
+  }
+}
+
 export default function PageTracker() {
   const pathname = usePathname();
   const lastTracked = useRef<string | null>(null);
@@ -29,7 +47,7 @@ export default function PageTracker() {
       body: JSON.stringify({
         page: pathname,
         referer: landing ? document.referrer : "",
-        search: landing ? window.location.search : "",
+        search: landing ? safeSearch() : "",
         landing,
       }),
       keepalive: true,

@@ -4,7 +4,13 @@
  * Token jest cachowany w pamięci procesu i odświeżany przez refresh_token.
  */
 
+import { randomUUID } from "crypto";
+
 const FURGONETKA_API_URL = process.env.FURGONETKA_API_URL || "https://api.furgonetka.pl";
+// Kazde zapytanie do Furgonetki ma limit czasu — bez niego zawieszone polaczenie
+// blokowalo request panelu (i petle pollingu) w nieskonczonosc.
+const FURGONETKA_TIMEOUT_MS = 30_000;
+const timeout = () => AbortSignal.timeout(FURGONETKA_TIMEOUT_MS);
 const CLIENT_ID     = process.env.FURGONETKA_CLIENT_ID     || "";
 const CLIENT_SECRET = process.env.FURGONETKA_CLIENT_SECRET || "";
 const USERNAME      = process.env.FURGONETKA_USERNAME       || "";
@@ -31,9 +37,12 @@ async function _refreshToken(refreshToken: string): Promise<void> {
       "Authorization": `Basic ${basicAuth()}`,
     },
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
+    signal: timeout(),
+    cache: "no-store",
   });
   if (!res.ok) throw new Error("refresh failed");
   const data = await res.json();
+  if (typeof data?.access_token !== "string" || !data.access_token) throw new Error("refresh: brak access_token");
   _tokenCache = {
     token: data.access_token,
     refreshToken: data.refresh_token || refreshToken,
@@ -41,13 +50,26 @@ async function _refreshToken(refreshToken: string): Promise<void> {
   };
 }
 
-export async function getFurgonetkaToken(): Promise<string> {
-  const now = Date.now();
+// Jedno pobieranie tokenu naraz: rownolegle requesty po wygasnieciu tokenu
+// zuzywaly ten sam refresh_token (rotowany przez serwer OAuth), wiec wszystkie
+// poza pierwszym konczyly sie bledem i spadaly do password grant.
+let _tokenInFlight: Promise<string> | null = null;
 
+export async function getFurgonetkaToken(): Promise<string> {
   // Token wciąż ważny
-  if (_tokenCache && _tokenCache.expiresAt > now + 60_000) {
+  if (_tokenCache && _tokenCache.expiresAt > Date.now() + 60_000) {
     return _tokenCache.token;
   }
+  if (!_tokenInFlight) {
+    _tokenInFlight = _obtainToken().finally(() => {
+      _tokenInFlight = null;
+    });
+  }
+  return _tokenInFlight;
+}
+
+async function _obtainToken(): Promise<string> {
+  const now = Date.now();
 
   // Spróbuj refresh zanim token wygaśnie
   if (_tokenCache?.refreshToken) {
@@ -77,14 +99,19 @@ export async function getFurgonetkaToken(): Promise<string> {
       username: USERNAME,
       password: PASSWORD,
     }),
+    signal: timeout(),
+    cache: "no-store",
   });
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Furgonetka auth failed (${res.status}): ${body}`);
+    throw new Error(`Furgonetka auth failed (${res.status}): ${body.slice(0, 300)}`);
   }
 
   const data = await res.json();
+  if (typeof data?.access_token !== "string" || !data.access_token) {
+    throw new Error("Furgonetka auth: odpowiedz bez access_token");
+  }
   _tokenCache = {
     token: data.access_token,
     refreshToken: data.refresh_token || "",
@@ -167,6 +194,8 @@ export async function createFurgonetkaPackage(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
+    signal: timeout(),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -188,7 +217,7 @@ export async function orderFurgonetkaShipment(packageIds: string[]): Promise<{
   details?: unknown;
 }> {
   const token = await getFurgonetkaToken();
-  const uuid = crypto.randomUUID();
+  const uuid = randomUUID();
 
   const res = await fetch(`${FURGONETKA_API_URL}/create-package-command/${uuid}`, {
     method: "PUT",
@@ -199,6 +228,8 @@ export async function orderFurgonetkaShipment(packageIds: string[]): Promise<{
     body: JSON.stringify({
       packages: packageIds.map((id) => ({ id })),
     }),
+    signal: timeout(),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -219,8 +250,10 @@ export async function getFurgonetkaCommandStatus(uuid: string): Promise<{
 }> {
   const token = await getFurgonetkaToken();
 
-  const res = await fetch(`${FURGONETKA_API_URL}/create-package-command/${uuid}`, {
+  const res = await fetch(`${FURGONETKA_API_URL}/create-package-command/${encodeURIComponent(uuid)}`, {
     headers: { Authorization: `Bearer ${token}` },
+    signal: timeout(),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -236,7 +269,7 @@ export async function getFurgonetkaCommandStatus(uuid: string): Promise<{
  */
 export async function requestFurgonetkaDocuments(packageIds: string[]): Promise<string> {
   const token = await getFurgonetkaToken();
-  const uuid = crypto.randomUUID();
+  const uuid = randomUUID();
 
   const res = await fetch(`${FURGONETKA_API_URL}/documents-command/${uuid}`, {
     method: "PUT",
@@ -249,6 +282,8 @@ export async function requestFurgonetkaDocuments(packageIds: string[]): Promise<
       documents_types: ["labels"],
       label: { page_format: "a4" },
     }),
+    signal: timeout(),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -267,12 +302,17 @@ export async function getFurgonetkaDocumentUrl(
   maxWaitMs = 30_000,
   pollIntervalMs = 2_000
 ): Promise<string> {
-  const token = await getFurgonetkaToken();
   const deadline = Date.now() + maxWaitMs;
 
   while (Date.now() < deadline) {
-    const res = await fetch(`${FURGONETKA_API_URL}/documents-command/${uuid}`, {
+    // Token pobierany w kazdej iteracji (z cache) — przy dlugim pollingu moze wygasnac.
+    const token = await getFurgonetkaToken();
+    // Pojedyncze zapytanie nie dluzej niz pozostaly budzet (min. 5 s).
+    const left = Math.max(5_000, Math.min(FURGONETKA_TIMEOUT_MS, deadline - Date.now()));
+    const res = await fetch(`${FURGONETKA_API_URL}/documents-command/${encodeURIComponent(uuid)}`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(left),
+      cache: "no-store",
     });
 
     if (!res.ok) {

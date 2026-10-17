@@ -3,7 +3,21 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 
-function invoiceHtml(name: string, filename: string) {
+// customerName pochodzi z formularza zamowienia, nazwa pliku od admina —
+// obie ida do HTML maila, wiec escapujemy (lokalnie, zeby nie zalezec od
+// zmian w lib/email-templates.ts).
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function invoiceHtml(rawName: string, rawFilename: string) {
+  const name = escHtml(rawName);
+  const filename = escHtml(rawFilename);
   return `<!DOCTYPE html>
 <html lang="pl">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>

@@ -1,30 +1,38 @@
 #!/usr/bin/env python3
 # =====================================================================
 #  KalkMate Production Flasher — CLI (alternatywa dla GUI gdyby Tkinter
-#  byl zepsuty na Windowsie). Funkcjonalnie to samo co flasher.py.
+#  byl zepsuty na Windowsie). TYLKO tryb DEV.
+#
+#  Audyt 2026-10-16: tryby PROD (--prod-dev / --prod-rel) zostaly z CLI
+#  USUNIETE. Stara implementacja generowala klucz 32 B (espefuse wymaga
+#  64 B dla XTS_AES_256_KEY), wgrywala NIEZASZYFROWANY obraz przed
+#  paleniem eFuse i palila z --do-not-confirm (rowniez w --auto) — kazde
+#  takie urzadzenie bylo zepsute. Flash Encryption robi wylacznie GUI
+#  (flasher.py), ktore ma pelna walidacje klucza i stanu eFuse.
 #
 #  Uzycie:
-#    python flasher_cli.py              # tryb DEV (tylko firmware)
-#    python flasher_cli.py --prod-dev   # firmware + Flash Encryption (dev)
-#    python flasher_cli.py --prod-rel   # firmware + FE Release (PERMANENT!)
-#    python flasher_cli.py --auto       # auto-flash kazdy wykryty chip
+#    python flasher_cli.py              # DEV: flash kazdego nowo podlaczonego
+#    python flasher_cli.py --auto       # DEV: petla, kazda sztuka raz na sesje
+#    python flasher_cli.py --code 1234  # DEV + kod AI klienta (jedna sztuka)
+#
+#  Logika flashowania (czyszczenie NVS+otadata, weryfikacja startu,
+#  prowizjonowanie kodu AI z powtorka, log) jest wspolna z GUI:
+#  flasher_common.py.
 # =====================================================================
 
 import os
 import sys
-import time
-import csv
 import json
+import time
 import argparse
-import subprocess
-from datetime import datetime
 
 try:
-    import serial
-    from serial.tools import list_ports
+    import serial  # noqa: F401  (wymagany przez flasher_common)
 except ImportError:
     print("BLAD: brak pyserial. Zainstaluj: pip install pyserial")
     sys.exit(1)
+
+import flasher_common as fc
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
@@ -32,8 +40,10 @@ CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.json")
 LOG_PATH = os.path.join(SCRIPT_DIR, "production_log.csv")
 KEYS_DIR = os.path.join(SCRIPT_DIR, "keys")
 
-ESP32S3_USB_IDS = [(0x303A, 0x1001), (0x303A, 0x4001)]
-
+# Port musi zniknac na co najmniej tyle sekund, zeby uznac to za odlaczenie
+# (reset urzadzenia po flashu = re-enumeracja USB trwajaca < 2 s — to NIE
+# jest nowe urzadzenie).
+UNPLUG_DEBOUNCE_S = 3.0
 
 # ANSI colors
 C_RST  = "\033[0m"
@@ -43,10 +53,22 @@ C_YEL  = "\033[93m"
 C_BLU  = "\033[94m"
 C_MAG  = "\033[95m"
 C_CYN  = "\033[96m"
+C_GRY  = "\033[90m"
 C_BOLD = "\033[1m"
+
+LEVEL_COLORS = {"info": C_CYN, "ok": C_GRN, "step": C_YEL + C_BOLD, "warn": C_YEL,
+                "err": C_RED, "cmd": C_BLU, "tool": "", "dev": C_GRY}
 
 if sys.platform == "win32":
     os.system("")  # enable VT100 on Windows console
+
+
+def clog(msg, level="info"):
+    color = LEVEL_COLORS.get(level, "")
+    try:
+        print(f"{color}{msg}{C_RST}" if color else msg, flush=True)
+    except UnicodeEncodeError:
+        print(msg.encode("ascii", "replace").decode("ascii"), flush=True)
 
 
 def _autodetect_esptool():
@@ -106,229 +128,135 @@ def _tool_cmd(path):
     return [path]
 
 
-def find_ports():
-    out = []
-    for p in list_ports.comports():
-        vid = p.vid if p.vid is not None else 0
-        pid = p.pid if p.pid is not None else 0
-        if (vid, pid) in ESP32S3_USB_IDS:
-            out.append(p.device)
-    return out
-
-
-def log_event(mac, port, mode, result, error=""):
-    new_file = not os.path.exists(LOG_PATH)
-    with open(LOG_PATH, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        if new_file:
-            w.writerow(["timestamp", "mac", "port", "mode", "result", "error"])
-        w.writerow([datetime.now().isoformat(timespec="seconds"),
-                    mac, port, mode, result, error])
-
-
-def read_mac(cfg, port):
-    """Odczytaj MAC chipa przez esptool chip_id."""
-    cmd = _tool_cmd(cfg["esptool"]) + ["--chip", cfg["chip"],
-           "--port", port, "--baud", "115200", "chip_id"]
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-    out = res.stdout + res.stderr
-    for line in out.splitlines():
-        if "MAC:" in line:
-            return line.split("MAC:")[1].strip().replace(":", "").upper()
-    return None
-
-
-def run_step(cmd, prefix=""):
-    print(f"{C_BLU}  $ {' '.join(cmd)}{C_RST}")
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1)
-    for line in proc.stdout:
-        print(f"  [{prefix}] {line.rstrip()}")
-    proc.wait()
-    if proc.returncode != 0:
-        raise subprocess.CalledProcessError(proc.returncode, cmd)
-
-
-def provision_code(code, mac):
-    """Wysyla KALKPROV:SETCODE:XXXX na natywny port CDC firmware'u (PID
-    0x4001 — INNY port niz ten uzywany do flashowania). Dziala tylko w 3s
-    oknie zaraz po boocie — patrz main.cpp. Niepowodzenie NIE jest bledem
-    flashowania — klient i tak moze wpisac kod recznie w Ustawieniach."""
-    if not (len(code) == 4 and code.isdigit()):
-        print(f"{C_YEL}  [!] Kod '{code}' nie ma 4 cyfr — pomijam personalizacje{C_RST}")
-        return
-    print(f"{C_CYN}[prov] Szukam portu CDC firmware'u (PID 0x4001) dla kodu {code}...{C_RST}")
-    cdc_port = None
-    t0 = time.time()
-    while time.time() - t0 < 6.0:
-        for p in list_ports.comports():
-            if p.vid == 0x303A and p.pid == 0x4001:
-                cdc_port = p.device
-                break
-        if cdc_port:
-            break
-        time.sleep(0.3)
-    if not cdc_port:
-        print(f"{C_YEL}  [!] Nie znaleziono portu CDC firmware'u w 6s — "
-              f"kod NIE zostal wgrany, ustaw recznie w Ustawieniach.{C_RST}")
-        return
-    print(f"{C_CYN}  [prov] Port CDC: {cdc_port}, wysylam komende...{C_RST}")
+def flash_device(cfg, tools, port, client_code=None, flashed_macs=None):
+    """DEV flash jednej sztuki. Zwraca (mac, ok). Wpis w production_log.csv
+    zawsze (OK/FAIL)."""
+    clog(f"\n=== FLASH START: port={port}, mode=DEV ===", "step")
     try:
-        time.sleep(0.4)
-        with serial.Serial(cdc_port, 115200, timeout=1.5) as ser:
-            ser.write(f"KALKPROV:SETCODE:{code}\n".encode("ascii"))
-            ser.flush()
-            deadline = time.time() + 2.0
-            resp = ""
-            while time.time() < deadline:
-                line = ser.readline().decode("ascii", errors="ignore").strip()
-                if line:
-                    resp = line
-                    if resp.startswith("KALKPROV:"):
-                        break
-            if resp == "KALKPROV:OK":
-                print(f"{C_GRN}  [prov] OK — kod {code} wgrany na {mac}{C_RST}")
-            elif resp:
-                print(f"{C_YEL}  [!] Odpowiedz urzadzenia: {resp}{C_RST}")
-            else:
-                print(f"{C_YEL}  [!] Brak odpowiedzi — okno 3s moglo juz minac{C_RST}")
-    except Exception as e:
-        print(f"{C_YEL}  [!] Blad portu szeregowego: {e}{C_RST}")
-
-
-def flash_device(cfg, port, mode, client_code=None):
-    """Wykonaj pelny flash + ewentualne eFuse na konkretnym porcie."""
-    print(f"\n{C_BOLD}=== FLASH START: port={port}, mode={mode} ==={C_RST}")
-
-    # 1. Read MAC
-    mac = read_mac(cfg, port)
+        mac = tools.read_mac(port, after="no_reset")
+    except Exception as e:  # noqa: BLE001
+        clog(f"!!! Nie udalo sie odczytac MAC: {e}", "err")
+        fc.append_production_log(LOG_PATH, {"mac": "?", "port": port, "mode": "DEV",
+                                            "result": "FAIL", "error": f"[mac] {e}", "tool": "cli"})
+        return None, False
     if not mac:
-        raise RuntimeError("Nie udalo sie odczytac MAC")
-    print(f"{C_CYN}  MAC: {mac}{C_RST}")
+        clog("!!! Nie udalo sie odczytac MAC", "err")
+        fc.append_production_log(LOG_PATH, {"mac": "?", "port": port, "mode": "DEV",
+                                            "result": "FAIL", "error": "[mac] brak MAC", "tool": "cli"})
+        return None, False
+    clog(f"  MAC: {mac}", "info")
+    if flashed_macs is not None and mac in flashed_macs:
+        clog(f"[=] {mac} juz obsluzony w tej sesji (wynik: {flashed_macs[mac]}) — pomijam "
+             "(odlacz go). Zeby sflashowac ponownie, uruchom CLI jeszcze raz.", "warn")
+        return mac, None
 
-    # Validate firmware files
-    for f in [cfg["firmware_bin"], cfg["bootloader_bin"],
-              cfg["partitions_bin"]]:
-        if not os.path.exists(f):
-            raise FileNotFoundError(f"Brak pliku: {f}")
-
-    # 2. Flash firmware
-    print(f"{C_YEL}[1/3] Flashuje bootloader + partitions + firmware...{C_RST}")
-    cmd = _tool_cmd(cfg["esptool"]) + [
-        "--chip", cfg["chip"],
-        "--port", port, "--baud", str(cfg["baud"]),
-        "write_flash", "-z",
-        cfg["flash_addr_bootloader"], cfg["bootloader_bin"],
-        cfg["flash_addr_partitions"], cfg["partitions_bin"],
-        cfg["flash_addr_firmware"],   cfg["firmware_bin"],
-    ]
-    run_step(cmd, "esptool")
-
-    # 3. Flash Encryption eFuse
-    if mode in ("PROD_DEV", "PROD_REL"):
-        print(f"{C_YEL}[2/3] Wypalanie Flash Encryption eFuse...{C_RST}")
-        key_file = cfg["fe_key_file"]
-        if not os.path.exists(key_file):
-            os.makedirs(os.path.dirname(key_file), exist_ok=True)
-            print(f"{C_MAG}  Generuje nowy klucz FE: {key_file}")
-            print(f"  *** ZBACKUPUJ TEN PLIK NA OSOBNYM NOSNIKU ***{C_RST}")
-            with open(key_file, "wb") as f:
-                f.write(os.urandom(32))
-        cmd = _tool_cmd(cfg["espefuse"]) + ["--chip", cfg["chip"], "--port", port,
-               "burn_key", "BLOCK_KEY0", key_file, "XTS_AES_256_KEY",
-               "--do-not-confirm"]
-        run_step(cmd, "espefuse")
-        cmd = _tool_cmd(cfg["espefuse"]) + ["--chip", cfg["chip"], "--port", port,
-               "burn_efuse", "SPI_BOOT_CRYPT_CNT", "1", "--do-not-confirm"]
-        run_step(cmd, "espefuse")
-
-    # 4. Release lock
-    if mode == "PROD_REL":
-        print(f"{C_RED}[3/3] FE -> RELEASE mode (PERMANENT)...{C_RST}")
-        cmd = _tool_cmd(cfg["espefuse"]) + ["--chip", cfg["chip"], "--port", port,
-               "burn_efuse", "DIS_DOWNLOAD_MANUAL_ENCRYPT", "1",
-               "--do-not-confirm"]
-        run_step(cmd, "espefuse")
-
-    # Personalizacja klienta (kod AI z /admin/orders) — patrz komentarz
-    # przy provision_code() i w main.cpp ("[PROV]").
-    if client_code:
-        provision_code(client_code, mac)
-
-    print(f"{C_GRN}{C_BOLD}=== SUKCES: {mac} ==={C_RST}\n")
-    log_event(mac, port, mode, "OK")
-    return mac
+    job = fc.FlashJob(cfg, tools, "DEV", port, mac, clog, code=client_code,
+                      wipe_nvs=True, project_root=PROJECT_ROOT, keys_dir=KEYS_DIR,
+                      tool_name="cli")
+    r = fc.run_flash_job(job)
+    where = fc.append_production_log(LOG_PATH, r.log_row())
+    if where != LOG_PATH:
+        clog(f"[!] production_log.csv zablokowany — wpis zapisany w {where}", "warn")
+    if r.ok:
+        clog(f"=== SUKCES: {mac} (v{(r.fw or {}).get('version') or '?'}, start OK"
+             f"{', kod AI OK' if client_code else ''}) ===", "ok")
+        clog("[i] NVS wyczyszczony. Urzadzenie zwrocone od klienta? Panel admina -> "
+             f"urzadzenie {mac} -> 'Reset tokenu'.", "warn")
+    else:
+        clog(f"=== FAIL: {mac} — {r.error} ===", "err")
+    return mac, r.ok
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="KalkMate flasher CLI (tylko DEV)")
     ap.add_argument("--prod-dev", action="store_true",
-                    help="Flash Encryption (Development mode)")
+                    help="WYLACZONE — Flash Encryption tylko przez GUI (flasher.py)")
     ap.add_argument("--prod-rel", action="store_true",
-                    help="Flash Encryption RELEASE mode (PERMANENT!)")
+                    help="WYLACZONE — Flash Encryption tylko przez GUI (flasher.py)")
     ap.add_argument("--auto", action="store_true",
-                    help="Auto-flash kazdy wykryty chip, czekaj na nastepny")
+                    help="Petla: flashuj kazda nowa sztuke (kazdy MAC najwyzej raz na sesje)")
     ap.add_argument("--code", default=None,
                     help="Kod AI klienta (4 cyfry, z /admin/orders) do wgrania "
-                         "przez okno prowizjonowania zaraz po flashu. UWAGA: "
-                         "z --auto ten sam kod poszedlby na KAZDE urzadzenie "
-                         "w petli — uzywaj --code tylko przy flashu pojedynczej sztuki.")
+                         "przez okno prowizjonowania zaraz po flashu. Blad wgrania = FAIL. "
+                         "Nie da sie laczyc z --auto (ten sam kod poszedlby na kazda sztuke).")
     args = ap.parse_args()
 
+    if args.prod_dev or args.prod_rel:
+        clog("BLAD: tryby PROD_DEV/PROD_REL sa wylaczone w CLI (stara implementacja "
+             "psula urzadzenia). Uzyj GUI: python flasher.py", "err")
+        sys.exit(2)
     if args.code and args.auto:
-        print(f"{C_RED}BLAD: --code razem z --auto wgraloby ten sam kod na "
-              f"wszystkie urzadzenia. Uzyj --code bez --auto (jedna sztuka na raz).{C_RST}")
+        clog("BLAD: --code razem z --auto wgraloby ten sam kod na wszystkie "
+             "urzadzenia. Uzyj --code bez --auto (jedna sztuka na raz).", "err")
+        sys.exit(1)
+    if args.code and not (len(args.code) == 4 and args.code.isdigit()):
+        clog("BLAD: --code musi miec dokladnie 4 cyfry.", "err")
         sys.exit(1)
 
-    mode = "DEV"
-    if args.prod_dev:
-        mode = "PROD_DEV"
-    if args.prod_rel:
-        mode = "PROD_REL"
-
     cfg = load_config()
-    print(f"{C_BOLD}=== KalkMate Production Flasher (CLI) ==={C_RST}")
-    print(f"Mode: {C_YEL}{mode}{C_RST}")
-    print(f"Firmware: {cfg['firmware_bin']}")
-    print(f"Log: {LOG_PATH}\n")
+    tools = fc.EspTools(cfg, _tool_cmd, clog)
+    clog("=== KalkMate Production Flasher (CLI, tylko DEV) ===", "step")
+    info = fc.firmware_info(cfg, PROJECT_ROOT)
+    clog(f"Firmware: {cfg['firmware_bin']}  (v{info['version'] or '?'}"
+         f"{', potwierdzona w obrazie' if info['in_image'] else ''})", "info")
+    for w in info["warnings"]:
+        clog(f"[!] {w}", "warn")
+    if info["missing"]:
+        clog("BLAD: brak plikow: " + ", ".join(info["missing"]), "err")
+        sys.exit(1)
+    clog(f"Log: {LOG_PATH}", "info")
+    clog("DEV czysci NVS + otadata przed zapisem (token, WiFi, kod AI, historia).\n", "warn")
 
-    seen_ports = set()
-    print(f"{C_CYN}Oczekuje na podlaczenie ESP32-S3... (Ctrl+C aby zakonczyc){C_RST}")
+    handled = set()          # porty juz obsluzone (do fizycznego odlaczenia)
+    absent_since = {}        # port -> kiedy zniknal
+    # --auto: kazdy MAC (OK albo FAIL) najwyzej raz na sesje — zepsuta sztuka
+    # w petli restartow tez nie bedzie flashowana w kolko.
+    flashed_macs = {} if args.auto else None
+    clog("Oczekuje na podlaczenie ESP32-S3... (Ctrl+C aby zakonczyc)", "info")
 
     while True:
         try:
-            ports = set(find_ports())
-            new_ports = ports - seen_ports
-            disconnected = seen_ports - ports
+            now = time.time()
+            # Porty TinyUSB CDC (0x4001) to zawsze dzialajacy firmware, nigdy
+            # "nowe urzadzenie do flashowania" — pomijamy je calkowicie.
+            ports = {p["port"]: p for p in fc.list_esp_ports(include_tinyusb=False)}
 
-            for p in disconnected:
-                print(f"{C_MAG}[-] Odlaczono {p}{C_RST}")
+            for port in list(handled):
+                if port in ports:
+                    absent_since.pop(port, None)
+                    continue
+                t0 = absent_since.setdefault(port, now)
+                if now - t0 >= UNPLUG_DEBOUNCE_S:
+                    handled.discard(port)
+                    absent_since.pop(port, None)
+                    clog(f"[-] Odlaczono {port}", "info")
 
-            for port in new_ports:
-                print(f"\n{C_GRN}[+] Wykryto urzadzenie na {port}{C_RST}")
-                if mode == "PROD_REL":
-                    ans = input(f"{C_RED}*** PROD_REL — eFuses NIEODWRACALNE. "
-                                f"Wpisz 'TAK' aby kontynuowac: {C_RST}")
-                    if ans.strip() != "TAK":
-                        print("Pomijam.")
-                        continue
-                elif mode == "PROD_DEV" and not args.auto:
-                    input(f"Enter aby flashowac (Ctrl+C aby pominac)...")
-
+            for port, p in ports.items():
+                if port in handled:
+                    continue
+                handled.add(port)
+                sn_mac = fc.mac_from_serial_number(p["serial"])
+                if flashed_macs is not None and sn_mac and sn_mac in flashed_macs:
+                    clog(f"[=] {port}: {sn_mac} juz sflashowany w tej sesji — pomijam", "warn")
+                    continue
+                clog(f"\n[+] Wykryto urzadzenie na {port}", "ok")
                 try:
-                    flash_device(cfg, port, mode, client_code=args.code)
-                    if not args.auto:
-                        print(f"{C_CYN}Odlacz urzadzenie i podlacz nastepne, "
-                              f"lub Ctrl+C aby zakonczyc.{C_RST}")
-                except Exception as e:
-                    print(f"{C_RED}!!! BLAD: {e}{C_RST}")
-                    log_event("?", port, mode, "FAIL", str(e))
+                    mac, ok = flash_device(cfg, tools, port, client_code=args.code,
+                                           flashed_macs=flashed_macs)
+                    if ok is not None and flashed_macs is not None and mac:
+                        flashed_macs[mac] = "OK" if ok else "FAIL"
+                except Exception as e:  # noqa: BLE001
+                    clog(f"!!! BLAD: {e}", "err")
+                    fc.append_production_log(LOG_PATH, {"mac": "?", "port": port, "mode": "DEV",
+                                                        "result": "FAIL", "error": str(e), "tool": "cli"})
+                clog("Odlacz urzadzenie i podlacz nastepne, lub Ctrl+C aby zakonczyc.", "info")
+                # Po flashu port mogl chwile zniknac (reset) — nie licz tego
+                # jako odlaczenia.
+                absent_since.pop(port, None)
 
-            seen_ports = ports
             time.sleep(0.5)
         except KeyboardInterrupt:
-            print(f"\n{C_CYN}Bye.{C_RST}")
+            clog("\nBye.", "info")
             break
 
 

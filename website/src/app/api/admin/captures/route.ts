@@ -1,40 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin-auth";
-import { listAllCaptures } from "@/lib/captures";
+import { listAdminCaptures, parseCapturePage } from "@/lib/captures";
 
 // GET /api/admin/captures — wszystkie zdjecia z wszystkich urzadzen.
 // Auth: middleware sprawdza admin_session (defense-in-depth: sprawdzamy tez tutaj).
-// Query: ?device=AABBCCDDEEFF — filtruj po deviceId
+// Query: ?device=AABBCCDDEEFF — filtruj po deviceId; ?limit=500&before=<ms|ISO> — paginacja.
+// Dane z tabeli Capture (bez skanu katalogu na kazde zadanie).
 export async function GET(req: NextRequest) {
   const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   const url = new URL(req.url);
-  const deviceFilter = (url.searchParams.get("device") || "").trim().toUpperCase();
+  const deviceFilter = (url.searchParams.get("device") || "").trim().toUpperCase() || null;
+  const page = parseCapturePage(url, 500, 2000);
 
-  const all = await listAllCaptures();
-  const filtered = deviceFilter
-    ? all.filter((c) => c.deviceId.toUpperCase() === deviceFilter)
-    : all;
-
-  // Stats: per-device count
-  const byDevice = new Map<string, number>();
-  for (const c of all) {
-    byDevice.set(c.deviceId, (byDevice.get(c.deviceId) || 0) + 1);
+  try {
+    const r = await listAdminCaptures(deviceFilter, page);
+    return NextResponse.json({
+      ok: true,
+      items: r.items,
+      nextBefore: r.nextBefore,
+      hasMore: r.nextBefore !== null,
+      stats: {
+        total: r.total,
+        filtered: deviceFilter ? r.filtered : r.total,
+        totalSizeKB: r.totalSizeKB,
+        uniqueDevices: r.byDevice.length,
+        byDevice: r.byDevice,
+      },
+    });
+  } catch (e) {
+    console.error("[admin/captures]", e);
+    return NextResponse.json({ ok: false, error: "Blad serwera" }, { status: 503 });
   }
-  const deviceStats = Array.from(byDevice.entries())
-    .map(([deviceId, count]) => ({ deviceId, count }))
-    .sort((a, b) => b.count - a.count);
-
-  const totalSizeKB = filtered.reduce((sum, c) => sum + c.sizeKB, 0);
-
-  return NextResponse.json({
-    ok: true,
-    items: filtered,
-    stats: {
-      total: all.length,
-      filtered: filtered.length,
-      totalSizeKB,
-      uniqueDevices: deviceStats.length,
-      byDevice: deviceStats,
-    },
-  });
 }

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { safeCallback } from "@/app/auth/callback";
 
 // /auth/signup — alias do /auth/signin?mode=register
 // Mail z notyfikacja po awarii bazy linkuje na /auth/signup, a faktyczny
@@ -11,6 +12,9 @@ type Props = {
 export default async function SignUpRedirect({ searchParams }: Props) {
   const sp = await searchParams;
   const params = new URLSearchParams({ mode: "register" });
-  if (sp.callbackUrl) params.set("callbackUrl", sp.callbackUrl);
+  // Przekazujemy dalej tylko bezpieczna, lokalna sciezke (signin waliduje
+  // ponownie) — nie forwardujemy javascript:/zewnetrznych adresow.
+  const cb = safeCallback(sp.callbackUrl, "");
+  if (cb) params.set("callbackUrl", cb);
   redirect(`/auth/signin?${params.toString()}`);
 }

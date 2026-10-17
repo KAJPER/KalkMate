@@ -55,16 +55,27 @@ export function parseContent(raw: unknown): { ok: true; content: CampaignContent
   };
 }
 
+// Wysylka takze do osob BEZ zgody marketingowej jest dozwolona wylacznie dla
+// komunikatow serwisowych (informacja o produkcie, ktory odbiorca ma — bez
+// reklamy). Audyt 2026-10-16: samo odznaczenie "tylko ze zgoda" w panelu
+// wystarczalo, zeby newsletter (promocje/kupony) poszedl do wszystkich kont
+// i kupujacych — art. 398 PKE / RODO. Teraz bez zgody wysylamy tylko, gdy
+// zadanie WPROST deklaruje komunikat serwisowy (serviceNotice: true / "1").
+export function isServiceNotice(raw: unknown): boolean {
+  const f = (raw || {}) as Record<string, unknown>;
+  return f.serviceNotice === true || f.serviceNotice === "1";
+}
+
 export function parseFilter(raw: unknown): AudienceFilter {
   const f = (raw || {}) as Record<string, unknown>;
   const country = f.country === "PL" || f.country === "foreign" ? f.country : "all";
+  const wantsAll = f.consentOnly === false || f.consentOnly === "0";
   return {
     registered: f.registered !== false && f.registered !== "0",
     verifiedOnly: f.verifiedOnly === true || f.verifiedOnly === "1",
     buyers: f.buyers !== false && f.buyers !== "0",
     country,
-    // Domyslnie TYLKO ze zgoda — bez niej wolno wysylac wylacznie tresci
-    // informacyjne (wtedy admin swiadomie odznacza).
-    consentOnly: f.consentOnly !== false && f.consentOnly !== "0",
+    // Domyslnie (i zawsze dla tresci marketingowych) TYLKO ze zgoda.
+    consentOnly: !(wantsAll && isServiceNotice(f)),
   };
 }

@@ -26,7 +26,8 @@ def test_paper_out_backoff_then_success(service, sim):
     assert res.state == "queued" and res.category == "paper" and "papieru" in res.error
     assert service.store.next_due() is None  # czeka na backoff
     sim.state.mechanism = 0
-    service.store.requeue(req.id)
+    assert not service.store.requeue(req.id)  # ręczne ponowienie tylko z failed/uncertain
+    service.store._db.execute("UPDATE jobs SET next_attempt_at=0")  # „minął” backoff
     service.process_one()
     assert service.store.get(req.id).state == "printed"
 

@@ -5,6 +5,8 @@ import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import DesktopFiscalCard from "@/components/admin/DesktopFiscalCard";
 import { toast } from "@/components/admin/toast";
+import { usePolling } from "@/components/admin/usePolling";
+import { fmtDateTime, zl } from "@/components/admin/format";
 
 interface PrinterInfo {
   online?: boolean;
@@ -15,11 +17,15 @@ interface PrinterInfo {
   error?: string | null;
 }
 
+// K6: "superseded" = stare nieudane zlecenie zastapione nowym (ponowienie),
+// "cancel_requested" = anulowanie zlecone, czeka az agent je potwierdzi.
+type JobState = "queued" | "sent" | "printed" | "failed" | "uncertain" | "cancelled" | "superseded" | "cancel_requested";
+
 interface Job {
   id: string;
   orderId: string | null;
   orderNumber: string | null;
-  state: "queued" | "sent" | "printed" | "failed" | "uncertain" | "cancelled";
+  state: JobState;
   receiptNumber: number | null;
   error: string | null;
   category: string | null;
@@ -27,57 +33,101 @@ interface Job {
   createdBy: string;
   createdAt: number;
   updatedAt: number;
-  payload: { items: { name: string; unit_price: number; discount?: number }[]; payments: { amount: number }[] };
+  // Nowsze API: `state` zostaje w starym zbiorze wartosci (zgodnosc), a
+  // prawdziwy stan jest w `stateDetail`; claimedBy = agent, ktory pobral zlecenie.
+  stateDetail?: JobState;
+  claimedBy?: string | null;
+  payload: { items: { name: string; quantity?: string; unit_price: number; discount?: number }[]; payments: { amount: number }[] };
 }
 
+type AgentInfo = {
+  id?: string;
+  name?: string | null;
+  lastSeenAt: number | null;
+  online: boolean;
+  version: string | null;
+  printer: PrinterInfo | null;
+  agents?: AgentInfo[];
+};
+
 interface Data {
-  agent: { lastSeenAt: number | null; online: boolean; version: string | null; printer: PrinterInfo | null };
+  agent?: AgentInfo | null;
+  // Kilka agentow (heartbeat kazdego) — w `agent.agents` albo `agents`.
+  agents?: AgentInfo[];
   jobs: Job[];
   configured: boolean;
   autoEnqueue: boolean;
 }
 
-const STATE_LABEL: Record<Job["state"], { text: string; cls: string }> = {
+const STATE_LABEL: Record<JobState, { text: string; cls: string }> = {
   queued: { text: "W kolejce", cls: "bg-blue-500/15 text-blue-300" },
   sent: { text: "U agenta", cls: "bg-yellow-500/15 text-yellow-300" },
   printed: { text: "Wydrukowany", cls: "bg-green-500/15 text-green-400" },
   failed: { text: "Błąd", cls: "bg-red-500/15 text-red-400" },
   uncertain: { text: "Niepewny", cls: "bg-orange-500/20 text-orange-300" },
   cancelled: { text: "Anulowany", cls: "bg-[#E0E0E0]/10 text-[#E0E0E0]/50" },
+  superseded: { text: "Zastąpiony", cls: "bg-[#E0E0E0]/10 text-[#E0E0E0]/40" },
+  cancel_requested: { text: "Anulowanie w toku", cls: "bg-orange-500/15 text-orange-300" },
 };
+const UNKNOWN_STATE = { text: "", cls: "bg-[#E0E0E0]/10 text-[#E0E0E0]/60" };
 
-const zl = (gr: number) => (gr / 100).toLocaleString("pl-PL", { minimumFractionDigits: 2 }) + " zł";
+// Ponowienie moze wydrukowac DRUGI paragon, jesli pierwszy jednak wyszedl:
+// stan niepewny albo blad protokolu (zerwane polaczenie w trakcie druku).
+const mayHavePrinted = (j: Job) =>
+  j.state === "uncertain" || j.state === "cancel_requested" || (j.state === "failed" && j.category === "protocol");
+const PRINTED_RISK_MSG = "Paragon mógł zostać wydrukowany — sprawdź raport drukarki przed ponowieniem.";
 
 export default function FiscalPage() {
   const [data, setData] = useState<Data | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loadErr, setLoadErr] = useState("");
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/fiscal");
-      if (res.ok) setData(await res.json());
-      else toast("Nie udało się pobrać danych fiskalizacji", "error");
+      if (res.ok) {
+        const json: Data = await res.json();
+        // Prawdziwy stan (superseded / cancel_requested) zamiast zgodnosciowego.
+        json.jobs = (json.jobs || []).map((j) => ({ ...j, state: j.stateDetail || j.state }));
+        setData(json);
+        setLoadErr("");
+      } else {
+        setLoadErr(`Nie udało się pobrać danych fiskalizacji (HTTP ${res.status})`);
+      }
     } catch {
-      toast("Błąd sieci", "error");
+      setLoadErr("Błąd sieci przy pobieraniu danych fiskalizacji");
     }
   }, []);
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
   }, [load]);
+  usePolling(load, 15000);
 
-  const act = async (job: Job, action: "retry" | "cancel" | "mark_printed") => {
+  const act = async (job: Job, action: "retry" | "cancel" | "mark_printed" | "reassign") => {
     let receiptNumber: number | undefined;
     if (action === "mark_printed") {
       const v = window.prompt("Numer paragonu wydrukowanego przez drukarkę (sprawdź na wydruku / w kopii elektronicznej):");
       if (!v) return;
       receiptNumber = parseInt(v, 10);
+      if (!Number.isFinite(receiptNumber) || receiptNumber <= 0) {
+        toast("Nieprawidłowy numer paragonu", "error");
+        return;
+      }
     }
-    if (action === "retry" && job.state === "uncertain" &&
-        !confirm("Stan NIEPEWNY: paragon mógł się już wydrukować.\n\nPonów TYLKO jeśli sprawdziłeś drukarkę i kopię elektroniczną i paragonu NIE MA. Inaczej klient dostanie dwa paragony.\n\nPonowić?")) return;
-    if (action === "cancel" && !confirm("Anulować zlecenie paragonu?")) return;
+    if (action === "retry" && mayHavePrinted(job) &&
+        !confirm(`${PRINTED_RISK_MSG}\n\n${job.state === "uncertain" ? "Stan NIEPEWNY" : "Błąd protokołu w trakcie druku"}: ponów TYLKO jeśli sprawdziłeś drukarkę i kopię elektroniczną i paragonu NIE MA. Inaczej klient dostanie dwa paragony.\n\nPonowić?`)) return;
+    if (action === "reassign" &&
+        !confirm(`Oddać zlecenie innemu agentowi?\n\n${PRINTED_RISK_MSG}\nObecny agent${job.claimedBy ? ` (${job.claimedBy})` : ""} mógł już zacząć druk (zlecenie jest „u agenta”). Oddaj je tylko, gdy ten agent/komputer jest wyłączony na stałe.`)) return;
+    if (action === "cancel") {
+      const msg =
+        job.state === "sent"
+          ? "Agent już pobrał to zlecenie — anulowanie poprosi go o porzucenie druku.\n\nJeśli zdążył wydrukować, oznacz później „Wydrukował się”.\n\nAnulować?"
+          : job.state === "cancel_requested"
+            ? `Potwierdzasz, że paragon NIE został wydrukowany?\n\n${PRINTED_RISK_MSG}\n\nZamknąć zlecenie jako anulowane?`
+            : "Anulować zlecenie paragonu?";
+      if (!confirm(msg)) return;
+    }
     setBusy(job.id);
     try {
       const res = await fetch(`/api/admin/fiscal/jobs/${job.id}`, {
@@ -85,18 +135,28 @@ export default function FiscalPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, receiptNumber }),
       });
-      const j = await res.json();
-      if (j.ok) toast(action === "retry" ? "Dodano nowe zlecenie" : "Zapisano");
-      else toast(j.error || "Błąd", "error");
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok) {
+        toast(action === "retry" ? "Dodano nowe zlecenie" : action === "reassign" ? "Zlecenie oddane — weźmie je pierwszy wolny agent" : "Zapisano");
+      } else if (res.status === 409) {
+        toast(j.error || "Zamówienie ma już aktywne zlecenie paragonu — odśwież listę zamiast ponawiać.", "error");
+      } else {
+        toast(j.error || `Błąd (HTTP ${res.status})`, "error");
+      }
       await load();
+    } catch {
+      toast("Błąd sieci — sprawdź stan zlecenia po odświeżeniu, zanim ponowisz.", "error");
     } finally {
       setBusy(null);
     }
   };
 
-  const agent = data?.agent;
-  const printer = agent?.printer;
-  const attention = data?.jobs.filter((j) => j.state === "failed" || j.state === "uncertain").length ?? 0;
+  // Heartbeat: lista agentow (nowe API) albo jeden (stare).
+  const agentList = data?.agents?.length ? data.agents : data?.agent?.agents;
+  const agents: AgentInfo[] = agentList?.length ? agentList : data?.agent && data.agent.lastSeenAt ? [data.agent] : [];
+  const anyOnline = agents.some((a) => a.online);
+  const printers = agents.filter((a) => a.printer);
+  const attention = data?.jobs.filter((j) => j.state === "failed" || j.state === "uncertain" || j.state === "cancel_requested").length ?? 0;
 
   return (
     <AdminShell>
@@ -109,26 +169,45 @@ export default function FiscalPage() {
 
       <DesktopFiscalCard />
 
+      {loadErr && (
+        <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{loadErr}</div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="rounded-xl border border-[#3F4147] bg-[#2B2D31] p-5">
-          <p className="text-xs text-[#E0E0E0]/60 mb-1">Agent</p>
-          <p className={`text-lg font-bold ${agent?.online ? "text-green-400" : "text-red-400"}`}>
-            {agent?.online ? "● Połączony" : "● Brak połączenia"}
+          <p className="text-xs text-[#E0E0E0]/60 mb-1">{agents.length > 1 ? `Agenci (${agents.length})` : "Agent"}</p>
+          <p className={`text-lg font-bold ${anyOnline ? "text-green-400" : "text-red-400"}`}>
+            {anyOnline ? "● Połączony" : "● Brak połączenia"}
           </p>
-          <p className="text-xs text-[#E0E0E0]/50 mt-1">
-            {agent?.lastSeenAt ? `Ostatnio: ${new Date(agent.lastSeenAt).toLocaleString("pl-PL")}` : "Agent jeszcze się nie zgłosił"}
-            {agent?.version ? ` · v${agent.version}` : ""}
-          </p>
+          {agents.length === 0 && <p className="text-xs text-[#E0E0E0]/50 mt-1">Agent jeszcze się nie zgłosił</p>}
+          {agents.map((a, i) => (
+            <p key={a.id || i} className="text-xs text-[#E0E0E0]/50 mt-1 break-words">
+              {agents.length > 1 && (
+                <span className={a.online ? "text-green-400" : "text-red-400"}>● {a.name || a.id || `agent ${i + 1}`} · </span>
+              )}
+              {a.lastSeenAt ? `Ostatnio: ${fmtDateTime(a.lastSeenAt)}` : "jeszcze się nie zgłosił"}
+              {a.version ? ` · v${a.version}` : ""}
+            </p>
+          ))}
         </div>
         <div className="rounded-xl border border-[#3F4147] bg-[#2B2D31] p-5">
-          <p className="text-xs text-[#E0E0E0]/60 mb-1">Drukarka</p>
-          <p className={`text-lg font-bold ${printer?.ready ? "text-green-400" : "text-orange-300"}`}>
-            {printer ? (printer.ready ? "Gotowa" : printer.online ? "Wymaga uwagi" : "Niedostępna") : "—"}
-          </p>
-          <p className="text-xs text-[#E0E0E0]/50 mt-1 break-words">{printer?.description || printer?.error || ""}</p>
-          {printer?.fiscal === false && (
-            <p className="text-xs text-blue-300 mt-1">Tryb niefiskalny — wydruki testowe, bez mocy paragonu.</p>
-          )}
+          <p className="text-xs text-[#E0E0E0]/60 mb-1">{printers.length > 1 ? `Drukarki (${printers.length})` : "Drukarka"}</p>
+          {printers.length === 0 && <p className="text-lg font-bold text-orange-300">—</p>}
+          {printers.map((a, i) => {
+            const printer = a.printer as PrinterInfo;
+            return (
+              <div key={a.id || i} className={i ? "mt-2 pt-2 border-t border-[#3F4147]" : ""}>
+                <p className={`text-lg font-bold ${printer.ready ? "text-green-400" : "text-orange-300"}`}>
+                  {printers.length > 1 && <span className="text-xs font-normal text-[#E0E0E0]/50">{a.name || a.id || `agent ${i + 1}`}: </span>}
+                  {printer.ready ? "Gotowa" : printer.online ? "Wymaga uwagi" : "Niedostępna"}
+                </p>
+                <p className="text-xs text-[#E0E0E0]/50 mt-1 break-words">{printer.description || printer.error || ""}</p>
+                {printer.fiscal === false && (
+                  <p className="text-xs text-blue-300 mt-1">Tryb niefiskalny — wydruki testowe, bez mocy paragonu.</p>
+                )}
+              </div>
+            );
+          })}
         </div>
         <div className="rounded-xl border border-[#3F4147] bg-[#2B2D31] p-5">
           <p className="text-xs text-[#E0E0E0]/60 mb-1">Do wyjaśnienia</p>
@@ -151,8 +230,9 @@ export default function FiscalPage() {
         ) : (
           <div className="divide-y divide-[#3F4147]">
             {data.jobs.map((j) => {
-              const total = j.payload.items.reduce((s, i) => s + i.unit_price - (i.discount || 0), 0);
-              const st = STATE_LABEL[j.state];
+              // Wartosc pozycji = ilosc × cena − rabat (jak w agentach fiskalnych, ROUND_HALF_UP).
+              const total = (j.payload?.items || []).reduce((s, i) => s + Math.round((Number(i.quantity ?? 1) || 1) * i.unit_price) - (i.discount || 0), 0);
+              const st = STATE_LABEL[j.state] || { ...UNKNOWN_STATE, text: j.state };
               return (
                 <div key={j.id} className="p-4 flex flex-col md:flex-row md:items-center gap-3">
                   <div className="flex-1 min-w-0">
@@ -169,21 +249,28 @@ export default function FiscalPage() {
                       {j.receiptNumber && <span className="text-sm text-green-400">paragon nr {j.receiptNumber}</span>}
                     </div>
                     <p className="text-xs text-[#E0E0E0]/50 mt-1">
-                      {new Date(j.createdAt).toLocaleString("pl-PL")} · {j.createdBy === "auto" ? "automatycznie" : "z panelu"}
+                      {fmtDateTime(j.createdAt)} · {j.createdBy === "auto" ? "automatycznie" : "z panelu"}
                       {j.attempts ? ` · prób: ${j.attempts}` : ""}
+                      {j.claimedBy && (j.state === "sent" || j.state === "cancel_requested") ? ` · agent: ${j.claimedBy}` : ""}
                     </p>
-                    {j.error && <p className={`text-xs mt-1 ${j.state === "printed" ? "text-[#E0E0E0]/50" : "text-red-300"}`}>{j.error}</p>}
+                    {j.error && <p className={`text-xs mt-1 ${j.state === "printed" || j.state === "superseded" ? "text-[#E0E0E0]/50" : "text-red-300"}`}>{j.error}</p>}
+                    {mayHavePrinted(j) && <p className="text-xs mt-1 text-orange-300">{PRINTED_RISK_MSG}</p>}
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
                     {(j.state === "failed" || j.state === "uncertain") && (
                       <button disabled={busy === j.id} onClick={() => act(j, "retry")}
                         className="px-3 py-1.5 rounded-lg text-xs bg-[#3B82F6] text-white disabled:opacity-50">Ponów</button>
                     )}
-                    {(j.state === "failed" || j.state === "uncertain") && (
+                    {j.state === "sent" && (
+                      <button disabled={busy === j.id} onClick={() => act(j, "reassign")}
+                        title="Agent trzymający zlecenie nie odpowiada? Oddaj zlecenie innemu agentowi."
+                        className="px-3 py-1.5 rounded-lg text-xs bg-[#2B2D31] hover:bg-[#3F4147] text-[#E0E0E0]">Oddaj innemu agentowi</button>
+                    )}
+                    {(j.state === "failed" || j.state === "uncertain" || j.state === "cancel_requested") && (
                       <button disabled={busy === j.id} onClick={() => act(j, "mark_printed")}
                         className="px-3 py-1.5 rounded-lg text-xs bg-[#2B2D31] hover:bg-[#3F4147] text-[#E0E0E0]">Wydrukował się</button>
                     )}
-                    {(j.state === "queued" || j.state === "failed" || j.state === "uncertain") && (
+                    {(j.state === "queued" || j.state === "failed" || j.state === "uncertain" || j.state === "sent" || j.state === "cancel_requested") && (
                       <button disabled={busy === j.id} onClick={() => act(j, "cancel")}
                         className="px-3 py-1.5 rounded-lg text-xs bg-[#2B2D31] hover:bg-red-500/20 text-[#E0E0E0]/60 hover:text-red-400">Anuluj</button>
                     )}

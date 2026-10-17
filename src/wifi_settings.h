@@ -13,6 +13,7 @@
 #include "input.h"
 #include "settings_screen.h"
 #include "wifi_persist.h"
+#include "power.h"     // powerCheckSleep — auto-sleep tez w menu WiFi
 
 // Pomocnik tlumaczen — zwraca polski, angielski lub niemiecki napis
 // w zaleznosci od kalkSettings.language (0=Polski, 1=English, 2=Deutsch)
@@ -108,8 +109,31 @@ static inline void _wifiPanicCheck() {
     if (inputKeyConsume(pk)) _panicRequested = true;
 }
 
+// Czeka na puszczenie klawiszy nawigacji — max 2 s (zablokowany/zwarty
+// klawisz membrany nie moze zawiesic menu na zawsze).
+static void _wifiWaitRelease() {
+    unsigned long t0 = millis();
+    while ((inputBtn(BTN_UP)    == LOW ||
+            inputBtn(BTN_DOWN)  == LOW ||
+            inputBtn(BTN_LEFT)  == LOW ||
+            inputBtn(BTN_RIGHT) == LOW ||
+            inputBtn(BTN_OK)    == LOW) &&
+           millis() - t0 < 2000) {
+        delay(10);
+    }
+    _wifiLastPress = millis();
+}
+
 static bool _wifiBtn(int pin) {
     _wifiPanicCheck();
+    // Auto-sleep jak w reszcie UI (wczesniej menu WiFi nigdy nie usypialo
+    // ekranu ani radia). Po wybudzeniu: odswiez ostatnia klatke (bufor u8g2
+    // nadal ja trzyma) i nie traktuj klawisza budzacego jako akcji.
+    if (powerCheckSleep()) {
+        if (_powerU8g2) _powerU8g2->sendBuffer();
+        _wifiWaitRelease();
+        return false;
+    }
     if (inputBtn(pin) == LOW) {
         unsigned long now = millis();
         if (now - _wifiLastPress > WIFI_DEBOUNCE_MS) {
@@ -120,15 +144,27 @@ static bool _wifiBtn(int pin) {
     return false;
 }
 
-static void _wifiWaitRelease() {
-    while (inputBtn(BTN_UP)    == LOW ||
-           inputBtn(BTN_DOWN)  == LOW ||
-           inputBtn(BTN_LEFT)  == LOW ||
-           inputBtn(BTN_RIGHT) == LOW ||
-           inputBtn(BTN_OK)    == LOW) {
-        delay(10);
+// Po anulowanym skanie / nieudanym laczeniu: wroc do sieci, z ktora
+// urzadzenie bylo polaczone przed wejsciem w skan. _wifiScanFresh() i
+// _doConnect() rozlaczaja radio — bez tego uczen zostawal bez WiFi.
+// Haslo z listy zapamietanych (siec, z ktora bylismy polaczeni, jest tam
+// praktycznie zawsze; fallback: primary). Laczenie asynchroniczne.
+static void _wifiRestorePrev(const String& prevSsid) {
+    if (prevSsid.length() == 0) return;
+    if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == prevSsid) return;
+    char s[33] = "", p[64] = "";
+    bool found = false;
+    uint8_t cnt = wifiSavedCount();
+    for (uint8_t i = 0; i < cnt && !found; i++) {
+        if (wifiGetSavedNet(i, s, sizeof(s), p, sizeof(p)) && prevSsid == String(s)) found = true;
     }
-    _wifiLastPress = millis();
+    if (!found && wifiLoadSaved(s, sizeof(s), p, sizeof(p)) && prevSsid == String(s)) found = true;
+    if (!found) return;
+    Serial.println("[WiFi] powrot do poprzedniej sieci");
+    WiFi.disconnect(false, false);   // przerwij ewentualna probe laczenia z inna siecia
+    delay(50);
+    wifiStaOnLimited();
+    wifiFastBegin(s, p);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +283,7 @@ static void _drawNetworkList(U8G2 &d, int networks, int scroll, int selected) {
 static int _wifiScanFresh() {
     WiFi.disconnect(true, false);  // odlacz, nie kasuj zapisanych kredentcji w NVS
     delay(120);
-    WiFi.mode(WIFI_STA);
+    wifiStaOnLimited();            // STA + TxPower 8.5 dBm (radio po OFF wraca na ~20 dBm)
     delay(120);
     WiFi.scanDelete();
     // Sync scan, pokazuj rowniez ukryte sieci (false=sync, true=show_hidden)
@@ -344,6 +380,8 @@ static const char* _kbModeLabel(int mode) {
 // ---------------------------------------------------------------------------
 // Rysowanie klawiatury
 // ---------------------------------------------------------------------------
+// mask=true (haslo WiFi): zamiast znakow '*', tylko ostatni wpisany znak
+// widoczny do millis() == revealUntil (1 s po wpisaniu).
 static void _drawKeyboard(U8G2 &d,
                            const char* inputText,
                            int inputLen,
@@ -351,7 +389,9 @@ static void _drawKeyboard(U8G2 &d,
                            int curCol,
                            int mode,
                            unsigned long blinkTimer,
-                           const char* label = nullptr) {
+                           const char* label = nullptr,
+                           bool mask = false,
+                           unsigned long revealUntil = 0) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
 
@@ -369,6 +409,13 @@ static void _drawKeyboard(U8G2 &d,
     if (vl > (int)sizeof(disp) - 2) vl = (int)sizeof(disp) - 2;
     strncpy(disp, inputText + si, vl);
     disp[vl] = '\0';
+    if (mask) {
+        bool showLast = (inputLen > 0) && (millis() < revealUntil);
+        for (int i = 0; i < vl; i++) {
+            if (showLast && si + i == inputLen - 1) continue;   // ostatni znak
+            disp[i] = '*';
+        }
+    }
     bool showCursor = ((millis() - blinkTimer) % 800) < 400;
     if (showCursor && inputLen < WIFI_INPUT_MAX_LEN)
         strncat(disp, "_", sizeof(disp) - strlen(disp) - 1);
@@ -432,7 +479,8 @@ static void _drawKeyboard(U8G2 &d,
 // ---------------------------------------------------------------------------
 // Glowna petla klawiatury
 // ---------------------------------------------------------------------------
-static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label = nullptr) {
+static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label = nullptr,
+                         bool mask = false) {
     // Jezeli outBuf zawiera juz tekst (prefill), zaczynamy od edycji.
     // Inaczej startujemy z pustym buforem.
     int inputLen = 0;
@@ -447,12 +495,14 @@ static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label =
     int curCol   = 0;
     int mode     = _KB_MODE_LOWER;
     unsigned long blinkStart = millis();
+    unsigned long revealUntil = 0;   // mask: do kiedy pokazac ostatni znak
 
     _wifiWaitRelease();
 
     while (true) {
         if (_panicRequested) return false;
-        _drawKeyboard(d, outBuf, inputLen, curRow, curCol, mode, blinkStart, label);
+        _drawKeyboard(d, outBuf, inputLen, curRow, curCol, mode, blinkStart, label,
+                      mask, revealUntil);
 
         const int* counts = _kbGetCounts(mode);
 
@@ -486,12 +536,14 @@ static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label =
                     outBuf[inputLen++] = rows[curRow][curCol];
                     outBuf[inputLen]   = '\0';
                     blinkStart = millis();
+                    revealUntil = millis() + 1000;
                 }
             } else {
                 // Rzad akcji
                 switch (curCol) {
                     case 0: // BKSP
                         if (inputLen > 0) outBuf[--inputLen] = '\0';
+                        revealUntil = 0;
                         break;
                     case 1: // Zmiana trybu: lower→upper→nums→lower
                         mode = (mode + 1) % 3;
@@ -505,6 +557,7 @@ static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label =
                         if (inputLen < bufSize - 1) {
                             outBuf[inputLen++] = ' ';
                             outBuf[inputLen]   = '\0';
+                            revealUntil = millis() + 1000;
                         }
                         break;
                     case 3: // ZAPISZ
@@ -559,7 +612,7 @@ static void _drawConnectOk(U8G2 &d) {
 static bool _doConnect(U8G2 &d, const char* ssid, const char* password) {
     WiFi.disconnect(true);
     delay(100);
-    WiFi.mode(WIFI_STA);
+    wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout)
     WiFi.begin(ssid, password);
 
     unsigned long start = millis();
@@ -649,9 +702,11 @@ static bool _runSavedNetworks(U8G2 &d) {
             _wifiWaitRelease();
             bool ok = _doConnect(d, ssid, pass);
             if (ok) { wifiAddNetwork(ssid, pass); _drawConnectOk(d); return true; }
+            _wifiRestorePrev(curSsid);   // nie zostawiaj urzadzenia bez sieci
             _drawConnectError(d);
             _wifiWaitRelease();
-            while (!_wifiBtn(BTN_OK) && !_wifiBtn(BTN_LEFT)) delay(20);
+            while (!_panicRequested &&
+                   !_wifiBtn(BTN_OK) && !_wifiBtn(BTN_LEFT) && !inputKeyConsume(KEY_CCE)) delay(20);
             _wifiWaitRelease();
         } else if (_wifiBtn(BTN_RIGHT)) {
             wifiForgetNetwork((uint8_t)sel);
@@ -686,20 +741,29 @@ void showWifiSettings(U8G2 &display) {
 
         // Czekaj na OK lub WSTECZ (BTN_LEFT)
         bool goBack = false;
+        bool lastConn = (WiFi.status() == WL_CONNECTED);
         while (true) {
         if (_panicRequested) return;
             if (_wifiBtn(BTN_OK))   { break; }
             if (_wifiBtn(BTN_LEFT)) { goBack = true; break; }
             if (_wifiBtn(BTN_DOWN)) { _runSavedNetworks(display); _drawWifiStatus(display); }
+            // Przerysuj gdy stan polaczenia sie zmieni (np. asynchroniczny
+            // powrot do poprzedniej sieci po anulowanym skanie).
+            bool conn = (WiFi.status() == WL_CONNECTED);
+            if (conn != lastConn) { lastConn = conn; _drawWifiStatus(display); }
             delay(20);
         }
         _wifiWaitRelease();
         if (goBack) return;  // wyjdz z modulu WiFi do menu glownego
 
+        // Siec, z ktora bylismy polaczeni przed skanem — skan ja rozlacza.
+        String prevSsid = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : String("");
+
         // --- 2. Skanowanie i wybor sieci ---
         int netIdx = _runNetworkList(display);
         if (netIdx < 0) {
-            // Anulowano — powrot do statusu
+            // Anulowano — wroc do poprzedniej sieci i do statusu
+            _wifiRestorePrev(prevSsid);
             continue;
         }
 
@@ -710,11 +774,13 @@ void showWifiSettings(U8G2 &display) {
 
         WiFi.scanDelete();  // zwolnij pamiec po skanie
 
-        // --- 3. Klawiatura hasla ---
+        // --- 3. Klawiatura hasla (maskowana — ekran bywa streamowany
+        //        do admina w trybie zdalnej pomocy) ---
         char password[WIFI_INPUT_MAX_LEN + 1] = "";
-        bool saved = _runKeyboard(display, password, sizeof(password));
+        bool saved = _runKeyboard(display, password, sizeof(password), nullptr, /*mask=*/true);
         if (!saved) {
             // Anulowano
+            _wifiRestorePrev(prevSsid);
             continue;
         }
 
@@ -727,9 +793,12 @@ void showWifiSettings(U8G2 &display) {
             _drawConnectOk(display);
             // Petla wróci do ekranu statusu, który pokaze IP
         } else {
+            _wifiRestorePrev(prevSsid);   // zle haslo => wroc do poprzedniej sieci
             _drawConnectError(display);
             _wifiWaitRelease();
-            while (!_wifiBtn(BTN_OK)) {
+            // Wyjscie: OK, "<", C/CE albo panic (wczesniej tylko OK)
+            while (!_panicRequested &&
+                   !_wifiBtn(BTN_OK) && !_wifiBtn(BTN_LEFT) && !inputKeyConsume(KEY_CCE)) {
                 delay(20);
             }
             _wifiWaitRelease();

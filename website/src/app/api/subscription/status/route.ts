@@ -27,7 +27,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user's subscription
-    let subscription = await prisma.subscription.findUnique({
+    // (GET niczego nie zapisuje — dawny "self-heal" trial->active z licencji
+    // liczyl koniec od TERAZ i przedluzal dostep przy kazdym odswiezeniu panelu;
+    // aktywacja z licencji jest teraz tylko w POST /api/user/license/claim.)
+    const subscription = await prisma.subscription.findUnique({
       where: { userId: user.id },
     })
 
@@ -36,33 +39,6 @@ export async function GET(request: NextRequest) {
         { error: "Subscription not found" },
         { status: 404 }
       )
-    }
-
-    // Self-heal: jesli user ma claimed licencje (lub zrealizowal kod) ale
-    // subscription jest na trial, upgrade do active z czasem z licencji
-    if (subscription.status === "trial") {
-      const claimedLicense = await prisma.license.findFirst({
-        where: {
-          OR: [
-            { claimedByUserId: user.id },
-            { usedBy: user.id },
-          ],
-        },
-      })
-      if (claimedLicense) {
-        const nowH = new Date()
-        const licenseEndsAt = new Date(nowH.getTime() + claimedLicense.durationDays * 24 * 60 * 60 * 1000)
-        const currentEnd = new Date(subscription.trialEndsAt)
-        const newEnd = licenseEndsAt > currentEnd ? licenseEndsAt : currentEnd
-        subscription = await prisma.subscription.update({
-          where: { userId: user.id },
-          data: {
-            status: "active",
-            trialEndsAt: newEnd,
-            trialDays: claimedLicense.durationDays,
-          },
-        })
-      }
     }
 
     // Check if user has purchased calculator
@@ -78,6 +54,12 @@ export async function GET(request: NextRequest) {
     const daysRemaining = Math.ceil(
       (subscription.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
     )
+    // K2: 'active' (i 'past_due' — nieudane odnowienie, Stripe jeszcze ponawia)
+    // jest wazne tylko gdy currentPeriodEnd jest null albo w przyszlosci.
+    const periodEnd = subscription.stripeCurrentPeriodEnd
+    const hasActiveSubscription =
+      (subscription.status === "active" || subscription.status === "past_due") &&
+      (!periodEnd || periodEnd > now)
 
     return NextResponse.json({
       status: subscription.status,
@@ -85,8 +67,9 @@ export async function GET(request: NextRequest) {
       trialEndsAt: subscription.trialEndsAt,
       daysRemaining: Math.max(0, daysRemaining),
       trialDays: subscription.trialDays,
-      hasActiveSubscription: subscription.status === "active",
-      canUseChat: isTrialActive || subscription.status === "active",
+      hasActiveSubscription,
+      currentPeriodEnd: periodEnd,
+      canUseChat: isTrialActive || hasActiveSubscription,
       hasPurchasedCalculator, // Czy kupił kalkulator
     })
   } catch (error) {

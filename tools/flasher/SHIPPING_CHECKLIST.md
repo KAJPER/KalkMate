@@ -14,7 +14,8 @@ Po wykonaniu tego checklistu, urządzenie jest na poziomie ochrony 4/4 (z naszej
 
 ## 0. Wymagania jednorazowe (pierwsza partia)
 
-- [ ] Mam zbackupowany **`tools/flasher/keys/flash_encryption_key.bin`** na osobnym nośniku (pendrive, sejf)
+- [ ] Mam zbackupowany **`tools/flasher/keys/flash_encryption_key.bin`** (64 B, XTS-AES-256) na 2 nośnikach offline (pendrive, sejf) i sprawdziłem SHA-256 kopii
+- [ ] **NIE** używam pliku z `tools/flasher/Klucze kalkmate/` — to stary, skompromitowany klucz 32 B, a nie backup (patrz README.txt w tym folderze)
 - [ ] Mam zbackupowany **`firmware_signing.pem`** z serwera `/home/ubuntu/kalkulator/keys/`
 - [ ] Zaktualizowałem `FW_VERSION` w `src/main.cpp` do wersji produkcyjnej (np. `1.5.0-prod`)
 - [ ] `git status` jest czyste (wszystkie zmiany scommitowane)
@@ -72,13 +73,14 @@ python flasher.py
 - [ ] Wybierz **PROD_DEV** (środkowy radio button)
 - [ ] Klik **FLASH**
 - [ ] Popup z ostrzeżeniem → klik "Tak" (Flash Encryption Dev = jeszcze 4× rewrites możliwe)
-- [ ] Czekaj 30-60 sekund (boot + eFuse burning)
+- [ ] Czekaj 30-60 sekund (czyszczenie NVS + zapis + eFuse + weryfikacja startu)
 - [ ] **NIE ODŁĄCZAJ** dopóki nie widzisz zielonego "SUKCES"
 - [ ] Jeśli widzisz "BLAD" → patrz log, nie wpadaj w panikę. eFuse jeszcze nie w Release mode, więc da się ratować.
 
 Po sukcesie:
-- [ ] **PIERWSZY RAZ TYLKO:** sprawdź czy w `tools/flasher/keys/` powstał nowy plik `flash_encryption_key.bin`
-- [ ] **NATYCHMIAST zbackupuj** ten plik na pendrive/dysk poza komputerem. Bez niego nigdy więcej nie sflashujesz żadnej płytki tej serii.
+- [ ] Flasher **NIGDY nie generuje klucza sam** — bez `keys/flash_encryption_key.bin` PROD_DEV/PROD_REL kończą się błędem. Nowy klucz (= nowa seria) tylko przyciskiem „Wygeneruj nowy klucz FE…” + natychmiastowy backup offline.
+- [ ] **PIERWSZY RAZ NA DANYM KOMPUTERZE:** flasher pokaże SHA-256 klucza i zapyta o przypięcie odcisku (`keys/flash_encryption_key.sha256`) — porównaj z SHA-256 kopii na backupie, dopiero wtedy potwierdź. Od tej chwili inny plik klucza = FAIL.
+- [ ] „SUKCES” oznacza: firmware wystartował (log z USB) i — jeśli podano kod AI — urządzenie odpowiedziało `KALKPROV:OK`. Każdy inny wynik = FAIL, nie wysyłaj.
 
 ---
 
@@ -122,7 +124,9 @@ python flasher.py
 - [ ] Klik **FLASH**
 - [ ] Popup **"UWAGA — Operacja NIEODWRACALNA"** → **PRZECZYTAJ uważnie** → klik "Tak"
 - [ ] Czekaj na "SUKCES"
-- [ ] Sprawdź `production_log.csv` — wpis `mode=PROD_REL, result=OK` z MAC płytki
+- [ ] Sprawdź `production_log.csv` — wpis `mode=PROD_REL, result=OK` z MAC płytki (+ `fw_version`, `boot_check=OK`, `prov_result`)
+- [ ] PROD_REL odmówi chipa, który nie przeszedł PROD_DEV (klucz spalony + szyfrowanie włączone). Release jest palony dopiero po poprawnym starcie firmware'u.
+- [ ] Kod AI w PROD_REL wymaga zaznaczenia „wyczyść też NVS + otadata” (okno prowizjonowania działa tylko na świeżym NVS) — flasher sam o to zapyta.
 
 ---
 
@@ -162,6 +166,7 @@ Płytka jest w stanie pośrednim. Skoro nie skończyłeś, eFuses jeszcze nie za
 🚨 **Wszystkie istniejące płytki tej serii są nie do reflashowania.** Mogą działać przez OTA jeśli chip wciąż boot'uje, ale nie sflashujesz nic nowego po USB. Następna seria = nowy klucz.
 
 ### Klient zwrócił urządzenie z problemem?
+- DEV/PROD_DEV czyszczą NVS (token urządzenia, WiFi, kod AI, historia) → po reflashu kliknij w panelu admina **„Reset tokenu”** dla tego MAC, inaczej serwer odrzuci nowy token
 - Sprawdź MAC → którą wersję firmware ma
 - Jeśli przed PROD_REL: można reflashować (dev mode dalej działa)
 - Jeśli po PROD_REL: tylko OTA może go uratować, ALBO wymiana chipa

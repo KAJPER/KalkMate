@@ -22,14 +22,30 @@ pre{white-space:pre-wrap}
 blockquote{margin-left:0;padding-left:12px;border-left:3px solid #ccc}
 `;
 
-function wrapEmailHtml(html: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>${BASE_CSS}</style></head><body>${html}</body></html>`;
+// Zdalne obrazki w mailach to czesto piksele sledzace (nadawca widzi, ze i kiedy
+// mail zostal otwarty, z jakiego IP). Domyslnie CSP w ramce blokuje wszystko
+// poza obrazkami wbudowanymi (data:/cid:) i stylami inline; "Pokaz obrazy"
+// dopuszcza https:. CSP z <meta> musi byc PRZED trescia maila — stad w <head>.
+const CSP_BLOCKED = "default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src data:";
+const CSP_IMAGES = "default-src 'none'; img-src data: cid: https:; style-src 'unsafe-inline'; font-src data:";
+
+function wrapEmailHtml(html: string, showImages: boolean): string {
+  const csp = showImages ? CSP_IMAGES : CSP_BLOCKED;
+  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>${BASE_CSS}</style></head><body>${html}</body></html>`;
 }
+
+// Czy mail w ogole ma zdalne obrazki (<img src=http...>, url(http...) w stylach,
+// background=) — tylko wtedy pokazujemy pasek "Pokaz obrazy".
+const REMOTE_IMG_RE = /<img\b[^>]*\bsrc\s*=\s*["']?\s*(https?:)?\/\/|url\(\s*["']?\s*(https?:)?\/\/|\bbackground\s*=\s*["']?\s*(https?:)?\/\//i;
 
 export default function EmailFrame({ html }: { html: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(240);
-  const srcDoc = useMemo(() => wrapEmailHtml(html), [html]);
+  // Zgoda na obrazy dotyczy TEGO maila — inny mail znowu startuje z blokada.
+  const [imagesFor, setImagesFor] = useState<string | null>(null);
+  const showImages = imagesFor === html;
+  const hasRemote = useMemo(() => REMOTE_IMG_RE.test(html), [html]);
+  const srcDoc = useMemo(() => wrapEmailHtml(html, showImages), [html, showImages]);
 
   const fit = useCallback(() => {
     const frame = ref.current;
@@ -79,14 +95,33 @@ export default function EmailFrame({ html }: { html: string }) {
   };
 
   return (
-    <iframe
-      ref={ref}
-      title="Treść wiadomości"
-      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-      srcDoc={srcDoc}
-      onLoad={onLoad}
-      style={{ height }}
-      className="block w-full bg-white rounded-lg border-0"
-    />
+    <div>
+      {hasRemote && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#3F4147] bg-[#2B2D31] px-3 py-2 text-xs text-[#E0E0E0]/70">
+          <span>
+            {showImages
+              ? "Obrazy z internetu są wyświetlane."
+              : "Obrazy z internetu zablokowane — mogą informować nadawcę, że mail został otwarty."}
+          </span>
+          <button
+            type="button"
+            onClick={() => setImagesFor(showImages ? null : html)}
+            className="px-2.5 py-1 rounded-md bg-[#313338] border border-[#3F4147] text-[#3B82F6] hover:bg-[#3F4147]"
+          >
+            {showImages ? "Ukryj obrazy" : "Pokaż obrazy"}
+          </button>
+        </div>
+      )}
+      {/* Sandbox BEZ allow-scripts — skrypty z maila nigdy sie nie wykonaja. */}
+      <iframe
+        ref={ref}
+        title="Treść wiadomości"
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        srcDoc={srcDoc}
+        onLoad={onLoad}
+        style={{ height }}
+        className="block w-full bg-white rounded-lg border-0"
+      />
+    </div>
   );
 }

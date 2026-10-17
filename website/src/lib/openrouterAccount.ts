@@ -41,6 +41,7 @@ export async function getOpenRouterAccountUsage(): Promise<OpenRouterAccountUsag
     const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
       headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const value = { ok: false as const, error: `OpenRouter ${res.status}` };

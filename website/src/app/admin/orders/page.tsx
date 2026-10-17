@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
+import { csvCell, downloadBlob, fmtDateTime, fmtIsoLocal, formatAmount } from "@/components/admin/format";
 
 interface Order {
   id: string;
@@ -19,10 +20,29 @@ interface Order {
   fulfillment_status: string;
   personalized_code: string | null;
   personalized_name: string | null;
+  // Wiele sztuk w zamowieniu (nowsze API) — brak = 1 szt. / stara para pol.
+  quantity?: number;
+  personalizations?: { code: string; name: string }[];
   customer_country: string;
   customer_address: string;
   tracking_number: string;
   has_shipment: boolean;
+  // Opcjonalne (nowsze API): nadanie Base Courier o niepewnym wyniku (timeout
+  // / 502 — paczka mogla zostac utworzona i oplacona mimo bledu).
+  shipment_uncertain?: boolean;
+  furgonetka_status?: string;
+}
+
+function qtyOf(o: { quantity?: number }): number {
+  return Math.max(1, Math.floor(Number(o.quantity) || 1));
+}
+
+// Kody AI / imiona wszystkich sztuk (stare zamowienia: para pol personalized_*).
+function unitsOf(o: { personalizations?: { code: string; name: string }[]; personalized_code: string | null; personalized_name: string | null }) {
+  if (o.personalizations?.length) return o.personalizations;
+  return o.personalized_code || o.personalized_name
+    ? [{ code: o.personalized_code || "", name: o.personalized_name || "" }]
+    : [];
 }
 
 const FULFILLMENT_LABEL: Record<string, string> = {
@@ -31,16 +51,18 @@ const FULFILLMENT_LABEL: Record<string, string> = {
   fulfilled: "Zrealizowane",
 };
 
-function csvCell(v: string | number | null | undefined): string {
-  const t = String(v ?? "");
-  return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-}
+// Statusy, przy ktorych NIE nadajemy paczki hurtem: anulowane = pieniadze juz
+// zwrocone klientowi, wyslane/zrealizowane = paczka juz poszla.
+const NO_SHIP_FULFILLMENT = new Set(["cancelled", "shipped", "fulfilled"]);
 
-function formatAmount(amount: number, currency: string): string {
-  const value = (amount / 100).toFixed(2);
-  const symbol = currency?.toLowerCase() === "eur" ? "€" : "zł";
-  return `${value} ${symbol}`;
-}
+// Niepewne nadanie — tolerancyjnie: flaga z API albo status przesylki
+// "basecourier_pending" (nadanie w toku / zakonczone bledem po wyslaniu).
+const isShipmentUncertain = (o: Order) =>
+  !!o.shipment_uncertain || o.furgonetka_status === "basecourier_pending";
+
+// Przerywa akcje zbiorcza (np. niepewne nadanie — dalsze proby moglyby
+// nadawac i oplacac kolejne paczki, mimo ze Base Courier ma problem).
+class StopBulk extends Error {}
 
 type View = "to_ship" | "unpaid" | "shipped" | "all";
 const VIEWS: { id: View; label: string }[] = [
@@ -73,8 +95,16 @@ export default function OrdersPage() {
   const [report, setReport] = useState<{ title: string; ok: string[]; errors: string[] } | null>(null);
   const [statusTarget, setStatusTarget] = useState("shipped");
 
+  // Licznik zapytan: odpowiedz starszego zapytania (inna zakladka / fraza,
+  // wolne "Zaladuj wiecej") nie nadpisuje ani nie dokleja sie do nowej listy.
+  const reqIdRef = useRef(0);
+  const [loadErr, setLoadErr] = useState("");
+
   const fetchOrders = useCallback(async (offset = 0) => {
+    const reqId = ++reqIdRef.current;
+    const stale = () => reqId !== reqIdRef.current;
     setLoading(true);
+    setLoadErr("");
     try {
       const url = new URL("/api/admin/orders", window.location.origin);
       url.searchParams.set("limit", "50");
@@ -83,8 +113,10 @@ export default function OrdersPage() {
       if (query.trim()) url.searchParams.set("q", query.trim());
 
       const res = await fetch(url);
+      if (stale()) return;
       if (res.ok) {
         const data = await res.json();
+        if (stale()) return;
         if (offset > 0) {
           setOrders((prev) => [...prev, ...data.orders]);
         } else {
@@ -93,17 +125,27 @@ export default function OrdersPage() {
         setHasMore(data.has_more);
         if (data.counts) setCounts(data.counts);
         setNextOffset(data.next_offset);
+      } else {
+        setLoadErr(`Nie udało się pobrać zamówień (HTTP ${res.status})`);
       }
     } catch (error) {
       console.error("Failed to fetch orders:", error);
+      if (!stale()) setLoadErr("Błąd sieci przy pobieraniu zamówień");
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   }, [view, query]);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Inny widok / fraza = inna lista: zaznaczenie z poprzedniej nie moze
+  // przejsc na akcje zbiorcze (i "Zaladuj wiecej" ze starej listy znika).
+  useEffect(() => {
+    setSelected(new Set());
+    setHasMore(false);
+  }, [view, query]);
 
   // Szukanie po stronie serwera (wszystkie zamowienia), 300 ms po ostatnim znaku.
   useEffect(() => {
@@ -136,6 +178,11 @@ export default function OrdersPage() {
         if (err) errors.push(`${items[i].order_number}: ${err}`); else ok.push(items[i].order_number);
       } catch (e) {
         errors.push(`${items[i].order_number}: ${(e as Error).message}`);
+        if (e instanceof StopBulk) {
+          const rest = items.slice(i + 1).map((o) => o.order_number);
+          if (rest.length) errors.push(`Przerwano — nie wysłano: ${rest.join(", ")}`);
+          break;
+        }
       }
     }
     setBulk(null);
@@ -144,24 +191,53 @@ export default function OrdersPage() {
     fetchOrders();
   };
 
+  // Dlaczego zamowienie NIE nadaje sie do platnego nadania hurtem (null = OK).
+  const shipBlockReason = (o: Order): string | null => {
+    if (o.fulfillment_status === "cancelled") return "anulowane (zwrot)";
+    if (NO_SHIP_FULFILLMENT.has(o.fulfillment_status)) return "już wysłane";
+    if (isShipmentUncertain(o)) return "niepewne nadanie — sprawdź w Base Courier";
+    if (o.has_shipment) return "już nadane";
+    if ((o.tracking_number || "").trim()) return "ma już numer przesyłki";
+    if (o.status !== "succeeded") return "nieopłacone";
+    if ((o.customer_country || "PL").toUpperCase() !== "PL") return "zagraniczne — nadaj ręcznie z wyborem kuriera";
+    if (!o.pickup_point) return "brak paczkomatu";
+    return null;
+  };
+
   const bulkShipInpost = async () => {
-    const eligible = selectedOrders.filter(
-      (o) => o.status === "succeeded" && !o.has_shipment && (o.customer_country || "PL").toUpperCase() === "PL" && o.pickup_point
-    );
-    const skipped = selectedOrders.length - eligible.length;
+    const eligible = selectedOrders.filter((o) => shipBlockReason(o) === null);
+    const skipped = selectedOrders
+      .filter((o) => shipBlockReason(o) !== null)
+      .map((o) => `${o.order_number} (${shipBlockReason(o)})`);
     if (!eligible.length) {
-      setReport({ title: "Nadanie InPost", ok: [], errors: ["Żadne z zaznaczonych nie nadaje się do nadania hurtem (musi być opłacone, z Polski, z paczkomatem i jeszcze nienadane)."] });
+      setReport({
+        title: "Nadanie InPost",
+        ok: [],
+        errors: ["Żadne z zaznaczonych nie nadaje się do nadania hurtem (musi być opłacone, z Polski, z paczkomatem, jeszcze nienadane i nieanulowane).", ...skipped],
+      });
       return;
     }
+    const list = eligible.map((o) => o.order_number);
     if (!confirm(
-      `Nadać ${eligible.length} paczek InPost Paczkomat przez Base Courier?\n\n` +
+      `Nadać ${eligible.length} ${eligible.length === 1 ? "paczkę" : "paczek"} InPost Paczkomat przez Base Courier?\n\n` +
+      `${list.slice(0, 30).join(", ")}${list.length > 30 ? ` … (+${list.length - 30})` : ""}\n\n` +
       `To PŁATNE nadanie (jak przycisk w zamówieniu), bez zamawiania kuriera — paczki nadajesz sam w paczkomacie.` +
-      (skipped ? `\n\nPominięte: ${skipped} (zagraniczne — nadaj ręcznie z wyborem kuriera, nieopłacone albo już nadane).` : "")
+      (skipped.length ? `\n\nPominięte (${skipped.length}):\n${skipped.slice(0, 15).join("\n")}${skipped.length > 15 ? "\n…" : ""}` : "")
     )) return;
     await runBulk("Nadanie InPost", eligible, async (o) => {
       const res = await fetch(`/api/admin/orders/${o.id}/basecourier`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const data = await res.json().catch(() => ({}));
-      return res.ok && data.ok ? null : data.error || `HTTP ${res.status}`;
+      if (res.ok && data.ok) return null;
+      // 409 = serwer odmowil (anulowane / juz wyslane / niepewne nadanie) — bez kosztu.
+      if (res.status === 409) return `pominięte przez serwer — ${data.error || "zamówienie nie nadaje się do nadania"}`;
+      // 502 = blad po stronie Base Courier; paczka MOGLA zostac utworzona. Nie
+      // nadajemy dalej hurtem — kazde kolejne nadanie to realny koszt.
+      if (res.status === 502 || res.status === 504) {
+        throw new StopBulk(
+          `NIEPEWNE nadanie (HTTP ${res.status}) — ${data.error || "błąd Base Courier"}. Sprawdź panel Base Courier i notatki zamówienia, NIE ponawiaj bez sprawdzenia.`
+        );
+      }
+      return data.error || `HTTP ${res.status}`;
     });
   };
 
@@ -178,10 +254,19 @@ export default function OrdersPage() {
         setReport({ title: "Etykiety", ok: [], errors: [data.error || `HTTP ${res.status}`, ...(data.skipped || [])] });
         return;
       }
-      const skipped: string[] = JSON.parse(decodeURIComponent(res.headers.get("X-Skipped") || "%5B%5D"));
-      const url = URL.createObjectURL(await res.blob());
-      window.open(url, "_blank");
-      setReport({ title: "Etykiety (otwarte w nowej karcie)", ok: selectedOrders.filter((o) => !skipped.some((s) => s.startsWith(o.order_number))).map((o) => o.order_number), errors: skipped });
+      let skipped: string[] = [];
+      try {
+        skipped = JSON.parse(decodeURIComponent(res.headers.get("X-Skipped") || "%5B%5D"));
+      } catch {
+        /* uszkodzony naglowek — po prostu bez listy pominietych */
+      }
+      // <a download> zamiast window.open(blob:) — w aplikacji Electron
+      // window.open trafia do shell.openExternal (nic sie nie otwiera),
+      // a w przegladarce bywa blokowane jako popup.
+      downloadBlob(await res.blob(), `etykiety-${fmtIsoLocal(Date.now(), false)}.pdf`);
+      setReport({ title: "Etykiety (pobrano 1 PDF)", ok: selectedOrders.filter((o) => !skipped.some((s) => s.startsWith(o.order_number))).map((o) => o.order_number), errors: skipped });
+    } catch (e) {
+      setReport({ title: "Etykiety", ok: [], errors: [`Błąd sieci: ${(e as Error).message}`] });
     } finally {
       setBulk(null);
     }
@@ -189,44 +274,53 @@ export default function OrdersPage() {
 
   const bulkStatus = async () => {
     const label = FULFILLMENT_LABEL[statusTarget];
-    if (!confirm(`Zmienić status realizacji ${selectedOrders.length} zamówień na „${label}”?\n\nKażdy klient dostanie maila o zmianie statusu (tak jak przy zmianie ręcznej).`)) return;
-    await runBulk(`Status: ${label}`, selectedOrders, async (o) => {
+    // Anulowane = pieniadze zwrocone klientowi — zmiana statusu hurtem (i mail
+    // "wyslane") bylaby pomylka; takie zamowienia zmieniasz recznie.
+    const targets = selectedOrders.filter((o) => o.fulfillment_status !== "cancelled");
+    const skippedCancelled = selectedOrders.length - targets.length;
+    if (!targets.length) {
+      setReport({ title: `Status: ${label}`, ok: [], errors: ["Zaznaczone zamówienia są anulowane (zwrot) — zmień status ręcznie w zamówieniu, jeśli to celowe."] });
+      return;
+    }
+    if (!confirm(
+      `Zmienić status realizacji ${targets.length} zamówień na „${label}”?\n\nKażdy klient dostanie maila o zmianie statusu (tak jak przy zmianie ręcznej).` +
+      (skippedCancelled ? `\n\nPominięte: ${skippedCancelled} anulowanych (zwrot).` : "")
+    )) return;
+    await runBulk(`Status: ${label}`, targets, async (o) => {
       const res = await fetch(`/api/admin/orders/${o.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fulfillment_status: statusTarget }),
+        // expected_* — serwer odrzuci (409), jesli status zmienil sie od zaladowania listy.
+        body: JSON.stringify({ fulfillment_status: statusTarget, expected_fulfillment_status: o.fulfillment_status }),
       });
-      return res.ok ? null : `HTTP ${res.status}`;
+      if (res.ok) return null;
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409) return `status zmienił się w międzyczasie (teraz: ${data.current || "?"}) — odśwież`;
+      return data.error || `HTTP ${res.status}`;
     });
   };
 
   const openPacking = () => window.open(`/admin/orders/packing?ids=${selectedOrders.map((o) => o.id).join(",")}`, "_blank");
 
   const exportCsv = () => {
-    const head = ["Numer", "Data", "Klient", "E-mail", "Telefon", "Kraj", "Paczkomat", "Adres", "Kwota", "Waluta", "Płatność", "Realizacja", "Nr przesyłki", "Kod AI", "Imię na etykietę"];
+    const head = ["Numer", "Data", "Klient", "E-mail", "Telefon", "Kraj", "Paczkomat", "Adres", "Kwota", "Waluta", "Płatność", "Realizacja", "Nr przesyłki", "Ilość", "Kod AI", "Imię na etykietę"];
+    // csvCell: ochrona przed formula injection + numery/kody jako tekst;
+    // daty w czasie polskim (nie UTC).
     const rows = selectedOrders.map((o) => [
-      o.order_number, new Date(o.created * 1000).toISOString().slice(0, 16).replace("T", " "), o.customer_name, o.customer_email,
-      o.customer_phone, o.customer_country, o.pickup_point, o.customer_address, (o.amount / 100).toFixed(2).replace(".", ","),
-      (o.currency || "pln").toUpperCase(), o.status, o.fulfillment_status, o.tracking_number, o.personalized_code, o.personalized_name,
+      csvCell(o.order_number, { text: true }), csvCell(fmtIsoLocal(o.created)), csvCell(o.customer_name), csvCell(o.customer_email),
+      csvCell(o.customer_phone, { text: true }), csvCell(o.customer_country), csvCell(o.pickup_point), csvCell(o.customer_address),
+      csvCell((o.amount / 100).toFixed(2).replace(".", ",")), csvCell((o.currency || "pln").toUpperCase()), csvCell(o.status),
+      csvCell(o.fulfillment_status), csvCell(o.tracking_number, { text: true }), csvCell(qtyOf(o)),
+      // Kilka sztuk: kody/imiona w kolejnosci sztuk, rozdzielone " | ".
+      csvCell(unitsOf(o).map((u) => u.code).join(" | "), { text: true }), csvCell(unitsOf(o).map((u) => u.name).join(" | ")),
     ]);
     // Srednik + BOM — Excel w polskich ustawieniach otwiera to poprawnie.
-    const csv = "\uFEFF" + [head, ...rows].map((r) => r.map(csvCell).join(";")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    a.download = `zamowienia-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
+    const csv = "\uFEFF" + [head, ...rows].map((r) => r.join(";")).join("\n");
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `zamowienia-${fmtIsoLocal(Date.now(), false)}.csv`);
   };
 
-  const formatDate = (ts: number) => {
-    const d = new Date(ts * 1000);
-    return d.toLocaleDateString("pl-PL", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // Czas polski niezaleznie od strefy komputera (np. aplikacja Electron).
+  const formatDate = (ts: number) => fmtDateTime(ts);
 
   return (
     <AdminShell>
@@ -323,18 +417,23 @@ export default function OrdersPage() {
                   <p className="text-[#E0E0E0] font-medium truncate">{order.customer_name || "—"}</p>
                   <p className="text-xs text-[#E0E0E0]/40 truncate">{order.order_number} · {order.customer_email || "—"}</p>
                 </div>
-                <p className="text-[#E0E0E0] font-semibold whitespace-nowrap">{formatAmount(order.amount, order.currency)}</p>
+                <p className="text-[#E0E0E0] font-semibold whitespace-nowrap">
+                  {qtyOf(order) > 1 && <span className="mr-1.5 text-xs font-bold text-[#D8FF3D]">×{qtyOf(order)}</span>}
+                  {formatAmount(order.amount, order.currency)}
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <OrderStatusBadge status={order.status} type="payment" />
                 <OrderStatusBadge status={order.fulfillment_status} type="fulfillment" />
                 <span className="ml-auto text-xs text-[#E0E0E0]/40">{formatDate(order.created)}</span>
               </div>
-              {(order.pickup_point || order.personalized_code) && (
+              {(order.pickup_point || unitsOf(order).length > 0) && (
                 <p className="text-xs text-[#E0E0E0]/50 break-words">
                   {order.pickup_point ? `Paczkomat: ${order.pickup_point}` : ""}
-                  {order.pickup_point && order.personalized_code ? " · " : ""}
-                  {order.personalized_code ? `Kod: ${order.personalized_code}${order.personalized_name ? ` (${order.personalized_name})` : ""}` : ""}
+                  {order.pickup_point && unitsOf(order).length > 0 ? " · " : ""}
+                  {unitsOf(order).length > 0
+                    ? `${unitsOf(order).length > 1 ? "Kody" : "Kod"}: ${unitsOf(order).map((u) => `${u.code || "—"}${u.name ? ` (${u.name})` : ""}`).join(", ")}`
+                    : ""}
                 </p>
               )}
             </button>
@@ -403,10 +502,14 @@ export default function OrdersPage() {
                     {order.pickup_point || "—"}
                   </td>
                   <td className="px-4 py-3 hidden lg:table-cell">
-                    {order.personalized_code ? (
-                      <div className="text-xs">
-                        <p className="text-[#E0E0E0] font-mono">Kod: {order.personalized_code}</p>
-                        <p className="text-[#E0E0E0]/50">{order.personalized_name}</p>
+                    {unitsOf(order).length > 0 ? (
+                      <div className="text-xs space-y-0.5">
+                        {unitsOf(order).map((u, i) => (
+                          <p key={i} className="whitespace-nowrap">
+                            <span className="text-[#E0E0E0] font-mono">Kod: {u.code || "—"}</span>
+                            {u.name && <span className="ml-1.5 text-[#E0E0E0]/50">{u.name}</span>}
+                          </p>
+                        ))}
                       </div>
                     ) : (
                       <span className="text-xs text-[#E0E0E0]/30">—</span>
@@ -414,6 +517,9 @@ export default function OrdersPage() {
                   </td>
                   <td className="px-4 py-3 text-[#E0E0E0] font-medium whitespace-nowrap">
                     {formatAmount(order.amount, order.currency)}
+                    {qtyOf(order) > 1 && (
+                      <span className="ml-1.5 rounded bg-[#D8FF3D]/15 px-1.5 py-0.5 text-xs font-bold text-[#D8FF3D]">×{qtyOf(order)}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <OrderStatusBadge status={order.status} type="payment" />
@@ -443,6 +549,13 @@ export default function OrdersPage() {
         {loading && (
           <div className="px-4 py-6 text-center text-[#E0E0E0]/40 text-sm">
             Ładowanie...
+          </div>
+        )}
+
+        {loadErr && !loading && (
+          <div className="px-4 py-3 border-t border-[#3F4147] text-sm text-red-400 flex items-center gap-3">
+            {loadErr}
+            <button onClick={() => fetchOrders()} className="text-[#3B82F6] hover:underline">Spróbuj ponownie</button>
           </div>
         )}
 

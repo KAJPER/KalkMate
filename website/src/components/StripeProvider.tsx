@@ -1,75 +1,72 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Elements } from "@stripe/react-stripe-js";
 import { type StripeElementsOptions } from "@stripe/stripe-js";
 import getStripe from "@/lib/getStripe";
+import { type Locale } from "@/lib/i18n";
 
 interface StripeProviderProps {
   clientSecret: string;
   children: React.ReactNode;
+  /** Jezyk strony — etykiety i komunikaty Stripe Elements w tym samym jezyku. */
+  lang?: Locale;
 }
+
+// Modal zamowienia (BuyNow) jest zawsze ciemny — Elements w tej samej palecie
+// zamiast jasnego/systemowego motywu, ktory gryzl sie z reszta formularza.
+const appearance: StripeElementsOptions["appearance"] = {
+  theme: "night",
+  variables: {
+    colorPrimary: "#D8FF3D",
+    colorBackground: "#0B0B0B",
+    colorText: "#F2EDE3",
+    colorTextSecondary: "rgba(242, 237, 227, 0.55)",
+    colorTextPlaceholder: "rgba(242, 237, 227, 0.30)",
+    colorDanger: "#FF4D2E",
+    fontFamily: "var(--font-geist), Inter, system-ui, -apple-system, sans-serif",
+    borderRadius: "0px",
+  },
+  rules: {
+    ".Input": {
+      border: "1px solid rgba(242, 237, 227, 0.18)",
+      backgroundColor: "#0B0B0B",
+      color: "#F2EDE3",
+      boxShadow: "none",
+      padding: "10px 16px",
+      fontSize: "14px",
+    },
+    ".Input:focus": {
+      border: "1px solid #D8FF3D",
+      boxShadow: "none",
+    },
+    ".Label": {
+      fontSize: "13px",
+      fontWeight: "500",
+      color: "rgba(242, 237, 227, 0.55)",
+    },
+    ".Tab": {
+      border: "1px solid rgba(242, 237, 227, 0.18)",
+      backgroundColor: "#0B0B0B",
+    },
+    ".Tab--selected": {
+      border: "1px solid #D8FF3D",
+      backgroundColor: "#0E0E0E",
+    },
+    ".Tab:hover": {
+      border: "1px solid #D8FF3D",
+    },
+  },
+};
 
 export default function StripeProvider({
   clientSecret,
   children,
+  lang = "pl",
 }: StripeProviderProps) {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    setIsDark(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-
   const options: StripeElementsOptions = {
     clientSecret,
-    appearance: {
-      theme: "flat",
-      variables: {
-        colorPrimary: isDark ? "#3B82F6" : "#2563EB",
-        colorBackground: isDark ? "#313338" : "#ffffff",
-        colorText: isDark ? "#E0E0E0" : "#1a1a1a",
-        colorDanger: "#ef4444",
-        fontFamily: "Inter, system-ui, -apple-system, sans-serif",
-        borderRadius: "8px",
-      },
-      rules: {
-        ".Input": {
-          border: isDark ? "1px solid #3F4147" : "1px solid #e5e7eb",
-          backgroundColor: isDark ? "#313338" : "#ffffff",
-          color: isDark ? "#E0E0E0" : "#1a1a1a",
-          boxShadow: "none",
-          padding: "10px 16px",
-          fontSize: "14px",
-        },
-        ".Input:focus": {
-          border: isDark ? "1px solid #3B82F6" : "1px solid #2563EB",
-          boxShadow: isDark
-            ? "0 0 0 2px rgba(59, 130, 246, 0.2)"
-            : "0 0 0 2px rgba(37, 99, 235, 0.2)",
-        },
-        ".Label": {
-          fontSize: "14px",
-          fontWeight: "500",
-          color: isDark ? "rgba(224, 224, 224, 0.7)" : "rgba(26, 26, 26, 0.7)",
-        },
-        ".Tab": {
-          border: isDark ? "1px solid #3F4147" : "1px solid #e5e7eb",
-          backgroundColor: isDark ? "#2B2D31" : "#ffffff",
-        },
-        ".Tab--selected": {
-          border: isDark ? "1px solid #3B82F6" : "1px solid #2563EB",
-          backgroundColor: isDark ? "#313338" : "#ffffff",
-        },
-        ".Tab:hover": {
-          border: isDark ? "1px solid #3B82F6" : "1px solid #2563EB",
-        },
-      },
-    },
-    locale: "pl",
+    appearance,
+    locale: lang,
   };
 
   return (
