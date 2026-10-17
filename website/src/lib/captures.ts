@@ -57,7 +57,7 @@ export async function ensureCaptureTable(): Promise<void> {
       "filename"  TEXT PRIMARY KEY,
       "deviceId"  TEXT NOT NULL,
       "userId"    TEXT,
-      "createdAt" INTEGER NOT NULL,
+      "createdAt" BIGINT NOT NULL,
       "size"      INTEGER NOT NULL DEFAULT 0,
       "legacy"    INTEGER NOT NULL DEFAULT 0
     )
