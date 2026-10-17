@@ -62,6 +62,43 @@ const INDEXES: [string, string, string[]][] = [
   ["Visit_createdAt_idx", "Visit", ["createdAt"]],
 ];
 
+// Tabele z prisma/schema.prisma, ktore NIGDY nie przeszly przez migracje (brak
+// pliku w prisma/migrations/) — dodane 2026-10-16 wraz z /panel (Note, Test),
+// ale dbInit.ts tworzyl dotad tylko kolumny w istniejacych tabelach. Bez tego
+// prisma.note.findMany()/prisma.test.findMany() rzuca P2021 "table does not
+// exist" (zweryfikowane na produkcji po przelaczeniu wersji 2026-10-17).
+// DDL zgodny ze stylem istniejacych migracji (patrz np. 20260222005742_add_conversations).
+const TABLES: [name: string, createSql: string, indexes: [string, string][]][] = [
+  [
+    "Note",
+    `CREATE TABLE "Note" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "userId" TEXT NOT NULL,
+      "title" TEXT NOT NULL DEFAULT '',
+      "content" TEXT NOT NULL DEFAULT '',
+      "position" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL,
+      CONSTRAINT "Note_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )`,
+    [["Note_userId_position_idx", `"userId", "position"`]],
+  ],
+  [
+    "Test",
+    `CREATE TABLE "Test" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "userId" TEXT NOT NULL,
+      "title" TEXT NOT NULL DEFAULT '',
+      "content" TEXT NOT NULL DEFAULT '',
+      "position" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL,
+      CONSTRAINT "Test_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )`,
+    [["Test_userId_position_idx", `"userId", "position"`]],
+  ],
+];
+
 async function tableColumns(table: string): Promise<Set<string> | null> {
   const rows = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("${table}")`);
   if (!rows.length) return null; // tabela nie istnieje
@@ -111,6 +148,20 @@ async function runEnsureSchema(): Promise<void> {
       } catch (e) {
         console.error(`[dbInit] ALTER ${table}.${column} fail:`, e);
       }
+    }
+  }
+
+  for (const [table, createSql, indexes] of TABLES) {
+    const have = await tableColumns(table);
+    if (have) continue; // tabela juz istnieje — nic do zrobienia
+    try {
+      await prisma.$executeRawUnsafe(createSql);
+      console.log(`[dbInit] utworzono tabele ${table}`);
+      for (const [idxName, cols] of indexes) {
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "${idxName}" ON "${table}" (${cols})`);
+      }
+    } catch (e) {
+      console.error(`[dbInit] CREATE TABLE ${table} fail:`, e);
     }
   }
 
