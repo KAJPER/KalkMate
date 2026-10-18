@@ -21,6 +21,7 @@
 #include "settings_screen.h"
 #include "wifi_persist.h"
 #include "kalkmate_certs.h"
+#include "event_log.h"      // logEvent* — bufor zdarzen wysylany do serwera
 #include "wifi_settings.h"  // klawiatura (_runKeyboard, itp.)
 #include "panic.h"
 #include "power.h"
@@ -873,6 +874,7 @@ static bool _solEnsureWifi(U8G2 &d) {
         }
         if (elapsed > 15000) {
             memset(pass, 0, sizeof(pass));
+            logEvent("WIFI", "connect timeout 15s");
             _solDrawError(d,
                 _solT("Blad WiFi!", "WiFi failed!", "WLAN Fehler!"),
                 _solT("Sprawdz haslo.", "Check password.", "Passwort pruefen."));
@@ -978,6 +980,7 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
     if (httpCode <= 0) {
         http.end();
         Serial.printf("[SOL] blad transportu %d\n", httpCode);
+        logEventf("SOL", "transport %d (body %u B)", httpCode, (unsigned)bodyLen);
         res.kind = _SOL_RES_RETRY;
         return res;
     }

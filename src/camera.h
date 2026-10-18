@@ -31,6 +31,7 @@
 #include <Arduino.h>
 #include <esp_camera.h>
 #include "input.h"   // _inMcp (MCP23017) dla PWDN/RESET
+#include "event_log.h"   // logEvent* — bufor zdarzen wysylany do serwera
 
 // kalkSettings jest zdefiniowany dopiero w settings_screen.h, ktory jest
 // includowany PO camera.h — analogicznie do otaGetLanguage()/_accGetUnlockCode().
@@ -195,6 +196,7 @@ inline bool camBegin() {
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         Serial.printf("[CAM] esp_camera_init failed: 0x%x\n", err);
+        logEventf("CAM", "init UXGA failed 0x%x", err);
         _camPowerOff();
         return false;
     }

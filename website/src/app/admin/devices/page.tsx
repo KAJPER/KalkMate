@@ -23,6 +23,15 @@ interface Device {
   hasToken?: boolean;
 }
 
+interface DeviceLogEntry {
+  id: number;
+  deviceId: string;
+  deviceTs: number | null;
+  receivedAt: number;
+  tag: string;
+  message: string;
+}
+
 interface DeviceData {
   ok: boolean;
   stats: {
@@ -53,6 +62,30 @@ export default function DevicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "paired" | "unpaired">("all");
+  const [logsDeviceId, setLogsDeviceId] = useState<string | null>(null);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsData, setLogsData] = useState<DeviceLogEntry[] | null>(null);
+
+  const openLogs = async (deviceId: string) => {
+    setLogsDeviceId(deviceId);
+    setLogsData(null);
+    setLogsLoading(true);
+    try {
+      const r = await fetch(`/api/admin/devices/${encodeURIComponent(deviceId)}/logs`);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        toast(j.error || `Błąd pobierania logów (HTTP ${r.status})`, "error");
+        setLogsDeviceId(null);
+      } else {
+        setLogsData(j.logs);
+      }
+    } catch (e) {
+      toastError(e);
+      setLogsDeviceId(null);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -477,6 +510,14 @@ export default function DevicesPage() {
                               >
                                 {d.rentalLocked ? "Odblokuj" : "Zablokuj"}
                               </button>
+                              <button
+                                onClick={() => openLogs(d.deviceId)}
+                                disabled={busy}
+                                className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 border border-slate-500/30 text-slate-300 text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Ostatnie zdarzenia zglaszane przez urzadzenie (bledy WiFi/TLS, reset, awarie kamery)"
+                              >
+                                Logi
+                              </button>
                               {resetTokenSupported && d.hasToken !== false && (
                                 <button
                                   onClick={() => resetToken(d.deviceId)}
@@ -526,9 +567,48 @@ export default function DevicesPage() {
               <br />
               <span className="text-purple-400">Reset tokenu</span> — unieważnia token urządzenia; urządzenie dostanie nowy przy następnej rejestracji.
               <br />
+              <span className="text-slate-300">Logi</span> — ostatnie zdarzenia zgłoszone przez urządzenie (błędy WiFi/TLS, powód resetu, awarie kamery), dołączane do każdej automatycznej rejestracji.
+              <br />
               <span className="text-red-400">Usuń</span> — kasuje rekord wraz z historią rozwiązań (nieodwracalne).
             </div>
           </>
+        )}
+
+        {logsDeviceId && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setLogsDeviceId(null)}
+          >
+            <div
+              className="bg-[#2B2D31] border border-[#3F4147] rounded-xl max-w-2xl w-full max-h-[80vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-[#3F4147]">
+                <h3 className="font-semibold text-[#E0E0E0]">Logi — {logsDeviceId}</h3>
+                <button
+                  onClick={() => setLogsDeviceId(null)}
+                  className="text-[#E0E0E0]/50 hover:text-[#E0E0E0] text-xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="overflow-y-auto p-4 space-y-1.5">
+                {logsLoading ? (
+                  <p className="text-sm text-[#E0E0E0]/50">Ładowanie…</p>
+                ) : !logsData || logsData.length === 0 ? (
+                  <p className="text-sm text-[#E0E0E0]/50">Brak zgłoszonych zdarzeń.</p>
+                ) : (
+                  logsData.map((l) => (
+                    <div key={l.id} className="text-xs font-mono flex gap-2 border-b border-[#3F4147]/50 pb-1.5">
+                      <span className="text-[#E0E0E0]/40 whitespace-nowrap">{fmtDateTime(new Date(l.receivedAt).toISOString())}</span>
+                      <span className="text-blue-400 whitespace-nowrap">[{l.tag}]</span>
+                      <span className="text-[#E0E0E0]/80 break-words">{l.message}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </AdminShell>

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { ensureCaptureTable, ensureCapturesIndexed, purgeOldCaptures, captureRetentionDays } from "@/lib/captures";
 import { ensureDailyUsageTable, purgeOldDailyUsage } from "@/lib/aiCost";
 import { ensureDeviceTokenHashColumn } from "@/lib/device-auth";
+import { ensureDeviceLogTable } from "@/lib/deviceLog";
 
 // Inicjalizacja bazy przy starcie serwera (wolane z src/instrumentation.ts).
 //
@@ -181,6 +182,7 @@ async function runEnsureSchema(): Promise<void> {
   await ensureDeviceTokenHashColumn();
   await ensureCaptureTable();
   await ensureDailyUsageTable();
+  await ensureDeviceLogTable();
 }
 
 // --- Zadania okresowe (raz na dobe) ---------------------------------------

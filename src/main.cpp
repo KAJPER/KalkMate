@@ -74,6 +74,7 @@ bool btnPressed(int pin) {
 }
 
 #include "wifi_persist.h"      // NVS WiFi + licencja
+#include "event_log.h"         // logEvent* — bufor zdarzen wysylany do serwera
 #include "wifi_settings.h"     // WiFi UI + klawiatura ekranowa
 #include "about_screen.h"
 #include "info_screen.h"
@@ -250,6 +251,9 @@ void setup() {
         }
         Serial.printf("[BOOT] reset=%s\n", rname);
         Serial.flush();
+        // PANIC/BROWNOUT szczegolnie warte zobaczenia zdalnie — urzadzenie
+        // samo sie wtedy nie poskarzy, dopoki nie zapytasz wlasciciela.
+        logEventf("BOOT", "v%s reset=%s", FW_VERSION, rname);
     }
 
     // WiFi.begin() domyslnie (persistent=true) zapisuje SSID+haslo do

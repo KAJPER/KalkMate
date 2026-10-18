@@ -14,6 +14,7 @@
 #include <HTTPClient.h>
 #include "wifi_persist.h"    // wifiSaveLicense, wifiSaveDeviceToken
 #include "kalkmate_certs.h"  // KALKMATE_CA_CERT
+#include "event_log.h"       // logEvent* / logEventRead / logEventClear
 
 // Forward decl struktury kalkSettings — definicja w settings_screen.h, ale
 // nie includujemy go zeby uniknac cyklu. Wymagamy tylko pola aiUnlockCode.
@@ -92,9 +93,26 @@ inline bool accountRegister() {
     const bool factoryUnpair = wifiFactoryUnpairPending();
     if (factoryUnpair) http.addHeader("x-factory-reset", "1");
 
+    // Doczep zaleglosci z event_log.h (bledy/resety od ostatniej udanej
+    // rejestracji) — prosty JSON-escape (" \ i nowa linia -> \n), reszta
+    // bajtow juz jest "czysta" (logEvent() nie wpuszcza | ani \n do srodka).
+    char evlog[_EVLOG_MAX_BYTES + 1];
+    size_t evlogLen = logEventRead(evlog, sizeof(evlog));
+    String logsEscaped;
+    if (evlogLen) {
+        logsEscaped.reserve(evlogLen + 16);
+        for (size_t i = 0; i < evlogLen; i++) {
+            char c = evlog[i];
+            if (c == '"' || c == '\\') { logsEscaped += '\\'; logsEscaped += c; }
+            else if (c == '\n') logsEscaped += "\\n";
+            else if ((uint8_t)c >= 0x20) logsEscaped += c;
+        }
+    }
+
     String body = "{\"deviceId\":\"" + _accDeviceId()
                 + "\",\"unlockCode\":\"" + String(_accGetUnlockCode())
                 + "\",\"firmwareVersion\":\"" + String(FW_VERSION)
+                + "\",\"logs\":\"" + logsEscaped
                 + "\"}";
 
     int code = http.POST(body);
@@ -103,6 +121,7 @@ inline bool accountRegister() {
 
     if (code == 200) {
         otaConfirmServerOk();   // TLS + serwer dzialaja => firmware po OTA OK
+        if (evlogLen) logEventClear();   // serwer potwierdzil odbior (200) — wyczysc
         if (factoryUnpair && wifiClearFactoryUnpair()) {
             Serial.println("[account] serwer potwierdzil reset fabryczny (unpair)");
         }

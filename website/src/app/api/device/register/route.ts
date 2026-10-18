@@ -11,6 +11,7 @@ import {
   hashDeviceToken,
   isDeviceAuthStrict,
 } from "@/lib/device-auth";
+import { storeDeviceLogs } from "@/lib/deviceLog";
 
 // POST /api/device/register
 // Headers: x-api-key, x-device-token (wymagany gdy device ma token w DB),
@@ -31,7 +32,7 @@ import {
 //  - lastSeen zapisywany przez Prisme (DateTime = INTEGER ms, jak reszta bazy;
 //    wczesniej CURRENT_TIMESTAMP dawal TEXT).
 
-const MAX_BODY_BYTES = 4096;
+const MAX_BODY_BYTES = 8192; // + pole "logs" (src/event_log.h, max ~3KB surowe + JSON-escape)
 const FW_VERSION_RE = /^[0-9A-Za-z.+_-]{1,32}$/;
 
 export async function POST(request: NextRequest) {
@@ -66,6 +67,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Bad firmwareVersion" }, { status: 400 });
     }
     const firmwareVersion = fwRaw || null;
+
+    // Logi zdarzen z event_log.h — niekrytyczne, nie blokuja rejestracji
+    // przy bledzie zapisu (urzadzenie i tak czysci swoj bufor dopiero po 200).
+    if (typeof body?.logs === "string" && body.logs) {
+      storeDeviceLogs(deviceId, body.logs).catch((e) => console.error("[device/register] storeDeviceLogs fail:", e));
+    }
 
     const rlDev = rateLimit(`devreg:dev:${deviceId}`, 10, 10 * 60_000);
     if (!rlDev.ok) {
