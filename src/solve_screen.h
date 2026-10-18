@@ -16,6 +16,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include "esp_heap_caps.h"
 #include "input.h"
 #include "settings_screen.h"
 #include "wifi_persist.h"
@@ -938,6 +939,14 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
 
     char licKey[40];
     wifiLoadLicense(licKey, sizeof(licKey));
+
+    // Diagnostyka start_ssl_client: -1 (2026-10-17) — TLS po 2x camera init/deinit
+    // bywa failuje; sprawdzamy czy to faktycznie brak pamieci DMA-zdolnej (internal),
+    // nie PSRAM (oba bufory, kamery i solve, juz sa w PSRAM).
+    Serial.printf("[SOL] heap free=%u largest_internal=%u psram_free=%u\n",
+        (unsigned)ESP.getFreeHeap(),
+        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+        (unsigned)ESP.getFreePsram());
 
     WiFiClientSecure client;
     client.setCACert(KALKMATE_CA_CERT);
