@@ -30,6 +30,8 @@
 
 #include <Arduino.h>
 #include <esp_camera.h>
+#include <driver/ledc.h>
+#include <driver/gpio.h>
 #include "input.h"   // _inMcp (MCP23017) dla PWDN/RESET
 #include "event_log.h"   // logEvent* — bufor zdarzen wysylany do serwera
 
@@ -38,39 +40,21 @@
 extern uint8_t camGetWbMode();      // 0=Auto,1=Sloneczny,2=Pochmurno,3=Biuro,4=Dom
 extern int8_t  camGetBrightness();  // -2..2
 
-#ifdef KALK_HW_LEGACY
-  // Stary PCB nie ma kamery — wszystkie pinout-y do -1, camBegin zwraca false
-  #define CAM_PIN_VSYNC     -1
-  #define CAM_PIN_HREF      -1
-  #define CAM_PIN_PCLK      -1
-  #define CAM_PIN_XCLK      -1
-  #define CAM_PIN_D0        -1
-  #define CAM_PIN_D1        -1
-  #define CAM_PIN_D2        -1
-  #define CAM_PIN_D3        -1
-  #define CAM_PIN_D4        -1
-  #define CAM_PIN_D5        -1
-  #define CAM_PIN_D6        -1
-  #define CAM_PIN_D7        -1
-  #define CAM_PIN_SIOD      -1
-  #define CAM_PIN_SIOC      -1
-#else
-  // PCB v4 (ESP32-S3) — wg schematu
-  #define CAM_PIN_VSYNC      5
-  #define CAM_PIN_HREF       6
-  #define CAM_PIN_PCLK      10
-  #define CAM_PIN_XCLK       7
-  #define CAM_PIN_D0        14   // Y2 - LSB
-  #define CAM_PIN_D1        13   // Y3
-  #define CAM_PIN_D2        21   // Y4
-  #define CAM_PIN_D3        12   // Y5
-  #define CAM_PIN_D4         9   // Y6
-  #define CAM_PIN_D5         8   // Y7
-  #define CAM_PIN_D6        17   // Y8
-  #define CAM_PIN_D7        16   // Y9 - MSB
-  #define CAM_PIN_SIOD      40   // SDA
-  #define CAM_PIN_SIOC      39   // SCL
-#endif
+// PCB v4 (ESP32-S3) — wg schematu
+#define CAM_PIN_VSYNC      5
+#define CAM_PIN_HREF       6
+#define CAM_PIN_PCLK      10
+#define CAM_PIN_XCLK       7
+#define CAM_PIN_D0        14   // Y2 - LSB
+#define CAM_PIN_D1        13   // Y3
+#define CAM_PIN_D2        21   // Y4
+#define CAM_PIN_D3        12   // Y5
+#define CAM_PIN_D4         9   // Y6
+#define CAM_PIN_D5         8   // Y7
+#define CAM_PIN_D6        17   // Y8
+#define CAM_PIN_D7        16   // Y9 - MSB
+#define CAM_PIN_SIOD      40   // SDA
+#define CAM_PIN_SIOC      39   // SCL
 
 // PWDN i RESET — przez ekspander MCP23017 (wg schematu PCB v4)
 #define CAM_MCP_PWDN       6    // MCP GPA6 (pin 8 FFC)
@@ -170,9 +154,6 @@ static void _camApplyCommonSensor() {
 inline bool camBegin() {
     if (_camReady) return true;
 
-#ifdef KALK_HW_LEGACY
-    return false;   // stary PCB bez kamery
-#else
     if (!_inMcpReady) {
         Serial.println("[CAM] MCP not ready - call inputBegin() first");
         return false;
@@ -193,6 +174,7 @@ inline bool camBegin() {
     config.fb_count     = 1;
     config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
 
+    ledc_timer_resume(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0);   // camEnd() go pauzuje (XCLK vs WiFi)
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         Serial.printf("[CAM] esp_camera_init failed: 0x%x\n", err);
@@ -210,7 +192,6 @@ inline bool camBegin() {
     _camReady = true;
     Serial.println("[CAM] OK JPEG/UXGA (AEC/AGC/AWB enabled)");
     return true;
-#endif
 }
 
 // Inicjalizacja kamery w trybie PODGLADU: grayscale QQVGA (160x120), 1 B/px,
@@ -221,9 +202,6 @@ inline bool camBegin() {
 inline bool camBeginPreview() {
     if (_camReady) return true;
 
-#ifdef KALK_HW_LEGACY
-    return false;   // stary PCB bez kamery
-#else
     if (!_inMcpReady) {
         Serial.println("[CAM] MCP not ready - call inputBegin() first");
         return false;
@@ -239,6 +217,7 @@ inline bool camBeginPreview() {
     config.fb_count     = 1;
     config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
 
+    ledc_timer_resume(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0);   // camEnd() go pauzuje (XCLK vs WiFi)
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         Serial.printf("[CAM] preview init failed: 0x%x\n", err);
@@ -251,7 +230,6 @@ inline bool camBeginPreview() {
     _camReady = true;
     Serial.println("[CAM] OK GRAYSCALE/QQVGA (preview)");
     return true;
-#endif
 }
 
 // Zwolnij kamere (deinit + power off).
@@ -259,6 +237,22 @@ inline void camEnd() {
     if (!_camReady) return;
     esp_camera_deinit();
     _camPowerOff();
+    // Diagnoza 2026-10-18 (tcpdump na VPS, takze na fw 1.9.7): po uzyciu kamery
+    // radio WiFi gubi pakiety w obie strony az do restartu. esp_camera_deinit()
+    // zatrzymuje tylko KANAL LEDC (ledc_stop) — timer 10 MHz (XCLK) dalej
+    // chodzi, a jego harmoniczne trafiaja w pasmo 2.4 GHz (np. 246 x 10 MHz =
+    // 2460 MHz = kanal 10). Zatrzymaj timer i odepnij piny kamery (wejscia bez
+    // podciagania) — camBegin()/esp_camera_init() i tak skonfiguruje je od nowa.
+    ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0);
+    ledc_timer_rst(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0);
+    const int camPins[] = { CAM_PIN_XCLK, CAM_PIN_PCLK, CAM_PIN_VSYNC, CAM_PIN_HREF,
+                            CAM_PIN_D0, CAM_PIN_D1, CAM_PIN_D2, CAM_PIN_D3,
+                            CAM_PIN_D4, CAM_PIN_D5, CAM_PIN_D6, CAM_PIN_D7 };
+    for (int pin : camPins) {
+        gpio_reset_pin((gpio_num_t)pin);
+        gpio_set_direction((gpio_num_t)pin, GPIO_MODE_INPUT);
+        gpio_set_pull_mode((gpio_num_t)pin, GPIO_FLOATING);
+    }
     _camReady = false;
     Serial.println("[CAM] deinit");
 }

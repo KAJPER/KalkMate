@@ -5,14 +5,14 @@ import { prisma } from "@/lib/db";
 import { checkDeviceApiKey, normalizeDeviceId } from "@/lib/device-auth";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
-// GET /api/device/firmware/download/<version>[?hw=legacy]
+// GET /api/device/firmware/download/<version>
 // Headers wymagane:
 //   x-api-key:   KALK_API_KEY (taki sam jak inne endpointy device)
 //   x-device-id: MAC urzadzenia (12 hex)
 //
 // Plik .bin lezy POZA /public (`/home/ubuntu/kalkulator/firmware-private/`)
-// zeby nie byl dostepny bez autoryzacji przez bezposredni URL. Wariant
-// sprzetu "legacy" (K4) — osobny podkatalog `firmware-private/legacy/`.
+// zeby nie byl dostepny bez autoryzacji przez bezposredni URL. Jedyny
+// wariant sprzetu to ESP32-S3 (parametr ?hw jest ignorowany).
 //
 // Audyt 2026-10-16: endpoint NIE tworzy juz rekordow Device dla dowolnego
 // MAC (wczesniej auto-rejestracja = kazdy z publicznym api key mogl zalozyc
@@ -55,10 +55,8 @@ export async function GET(
     return new NextResponse("Invalid version format", { status: 400 });
   }
 
-  const hw = new URL(request.url).searchParams.get("hw") === "legacy" ? "legacy" : "s3";
-  const baseDir = hw === "legacy" ? path.join(FIRMWARE_DIR, "legacy") : FIRMWARE_DIR;
   const filename = `v${version}.bin`;
-  const filepath = path.join(baseDir, filename);
+  const filepath = path.join(FIRMWARE_DIR, filename);
 
   // Dodatkowa sanityzacja - upewnij sie ze nie wyjdziemy poza FIRMWARE_DIR
   const resolved = path.resolve(filepath);
@@ -69,7 +67,7 @@ export async function GET(
   try {
     const data = await readFile(filepath);
     console.log(
-      `[firmware] dl: device=${deviceId} hw=${hw} v=${version} size=${data.length}B`
+      `[firmware] dl: device=${deviceId} v=${version} size=${data.length}B`
     );
     // Bumpuj lastSeen na okazji (tylko istniejacy rekord — bez tworzenia)
     if (device) {

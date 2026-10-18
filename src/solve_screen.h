@@ -83,7 +83,7 @@ inline String _solUtf8ToAscii(String s) {
     return s;
 }
 #define _SOL_SOLUTION_MAX    24576  // max znakow odpowiedzi AI (24 KB, RAM)
-#define _SOL_HTTP_TIMEOUT_MS 45000  // 45s timeout HTTP
+#define _SOL_HTTP_TIMEOUT_MS 65000  // max HTTPClient (uint16); Gemini 2.5 Pro bywa >45s (2026-10-18: 71s)
 
 // ---------------------------------------------------------------------------
 // Piny przyciskow
@@ -823,10 +823,57 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
 // Forward decl z device_account.h (zaimplementowane w main.cpp helperze)
 extern bool accountRegisterOnce();
 
+// "Lacze z serwerem..." z kreconym [/-\|] — rejestracja (HTTPS, do kilkunastu
+// sekund przy slabym lacu) biegnie w osobnym zadaniu na Core 0, a watek UI
+// w tym czasie odswieza animacje. Wczesniej accountRegisterOnce() blokowalo
+// petle UI i znaczek stal w miejscu (zgloszenie wlasciciela 2026-10-18).
+struct _SolRegCtx { volatile bool done; };
+static void _solRegTaskFn(void* arg) {
+    accountRegisterOnce();
+    ((_SolRegCtx*)arg)->done = true;
+    vTaskDelete(nullptr);
+}
+static void _solRegisterWithSpinner(U8G2 &d) {
+    const char* msg = _solT("Lacze z serwerem...", "Contacting server...", "Verbinde mit Server...");
+    _SolRegCtx ctx;
+    ctx.done = false;
+    TaskHandle_t t = nullptr;
+    if (xTaskCreatePinnedToCore(_solRegTaskFn, "solReg", 16384, &ctx, 1, &t, 0) != pdPASS) {
+        _solDrawLoading(d, msg, 0);
+        accountRegisterOnce();   // brak pamieci na zadanie — po staremu (blokujaco)
+        return;
+    }
+    int frame = 0;
+    uint32_t last = 0;
+    while (!ctx.done) {
+        panicCheck();
+        if (last == 0 || millis() - last >= 150) {
+            last = millis();
+            _solDrawLoading(d, msg, frame++);
+        }
+        delay(10);
+    }
+}
+
+// Ustawiane przez _solNetTaskFn gdy wysylka nie dostala zadnej odpowiedzi HTTP
+// (-1) — patrz komentarz tam. Kasowane po swiezym polaczeniu.
+static volatile bool _solLinkSuspect = false;
+
 static bool _solEnsureWifi(U8G2 &d) {
     if (WiFi.status() == WL_CONNECTED) {
-        accountRegisterOnce();
-        return true;
+        const bool hasIp = WiFi.localIP() != IPAddress(0, 0, 0, 0);
+        if (hasIp && !_solLinkSuspect) {
+            _solRegisterWithSpinner(d);
+            return true;
+        }
+        // WL_CONNECTED, ale brak IP albo poprzednia wysylka padla na transporcie:
+        // zerwij skojarzenie i polacz od nowa (nizej, normalna sciezka).
+        Serial.printf("[WiFi] lacze podejrzane (ip=%d suspect=%d) -> reconnect\n", (int)hasIp, (int)_solLinkSuspect);
+        logEventf("WIFI", "reconnect: ip=%d suspect=%d rssi=%d", (int)hasIp, (int)_solLinkSuspect, WiFi.RSSI());
+        WiFi.disconnect(false, false);
+        for (int i = 0; i < 40 && WiFi.status() == WL_CONNECTED; i++) delay(25);   // begin() jest no-op, dopoki status==CONNECTED
+        _solLinkSuspect = false;
+        _wifiBeginAt = 0;   // swiadome rozlaczenie — nowy begin MA sie wykonac (nie "laczenie trwa")
     }
 
     // Sprobuj zaladowac zapisane dane
@@ -845,11 +892,19 @@ static bool _solEnsureWifi(U8G2 &d) {
     char ln[48];
     snprintf(ln, sizeof(ln), _solT("Lacze z: %s", "Connecting: %s", "Verbinde: %s"), ssid);
 
-    wifiStaOnLimited();         // STA + TxPower 8.5 dBm (anty-brownout; radio po OFF wraca na ~20 dBm)
-    wifiFastBegin(ssid, pass);  // cache BSSID+kanal pomija skan (~1-3s)
+    // Auto-connect z loop() (3 s po wejsciu w menu) moze wlasnie trwac —
+    // drugi WiFi.begin zerwalby swiezo nawiazane skojarzenie (ASSOC_LEAVE) i
+    // hotspot iPhone odrzucalby kolejne proby przez kilkanascie sekund.
+    const bool joining = wifiJoinInProgress();
+    if (joining) {
+        Serial.println("[WiFi] dolaczam do trwajacego laczenia (bez nowego begin)");
+    } else {
+        wifiStaOnLimited();         // STA + TxPower (KALK_WIFI_TX_POWER)
+        wifiFastBegin(ssid, pass);  // cache BSSID+kanal pomija skan (~1-3s)
+    }
 
     (void)inputKeyConsume(KEY_CCE);   // stare zbocze C/CE nie moze od razu anulowac
-    unsigned long start = millis();
+    unsigned long start = joining ? (unsigned long)_wifiBeginAt : millis();
     unsigned long lastFrame = 0;
     int frame = 0;
     bool fellBack = false;
@@ -867,16 +922,19 @@ static bool _solEnsureWifi(U8G2 &d) {
         // (AP zmienil kanal, restart routera). Jesli po 6s wciaz nic — raz
         // sprobuj zwyklego begin bez hinta, zamiast czekac caly timeout i
         // oddawac "zle haslo" mimo poprawnych danych.
-        if (!fellBack && elapsed > 6000) {
+        // Tylko gdy hint faktycznie byl uzyty — bez niego fallback to tylko
+        // zbedny disconnect+begin, ktory drazni AP.
+        if (!fellBack && _wifiHintUsed && elapsed > 6000) {
             fellBack = true;
             Serial.println("[WiFi] fast begin nie polaczyl w 6s, fallback bez hinta");
             WiFi.disconnect(false, false);
             delay(50);
             WiFi.begin(ssid, pass);
+            _wifiHintUsed = false;
         }
-        if (elapsed > 15000) {
+        if (elapsed > 20000) {
             memset(pass, 0, sizeof(pass));
-            logEvent("WIFI", "connect timeout 15s");
+            logEvent("WIFI", "connect timeout 20s");
             _solDrawError(d,
                 _solT("Blad WiFi!", "WiFi failed!", "WLAN Fehler!"),
                 _solT("Sprawdz haslo.", "Check password.", "Passwort pruefen."));
@@ -899,8 +957,8 @@ static bool _solEnsureWifi(U8G2 &d) {
     }
     memset(pass, 0, sizeof(pass));
     wifiSaveBssidChannel();      // zapisz BSSID+kanal do NVS na nastepny raz
-    wifiApplyDnsFallback();      // niektore AP maja wadliwy wlasny DNS
-    accountRegisterOnce();       // zarejestruj device po pierwszym polaczeniu
+    wifiApplyDnsFallback();      // zapasowy DNS (slot 1), DHCP nietkniete
+    _solRegisterWithSpinner(d);  // zarejestruj device po pierwszym polaczeniu
     return true;
 }
 
@@ -941,12 +999,34 @@ struct _SolNetTaskCtx {
     const uint8_t* body;
     size_t bodyLen;
     volatile bool done;
+    volatile bool abort;   // panic — przerwij miedzy probami DNS
     int httpCode;
 };
 
 static void _solNetTaskFn(void* arg) {
     _SolNetTaskCtx* ctx = (_SolNetTaskCtx*)arg;
-    ctx->httpCode = ctx->http->POST((uint8_t*)ctx->body, ctx->bodyLen);
+    // Najpierw realny DNS (z 3 strategiami) — wczesniej "-1 connection
+    // refused" bralo sie z "hostByName(): DNS Failed" w srodku HTTPClient::POST
+    // po ~13 s; teraz gdy DNS naprawde nie dziala, od razu oddajemy blad
+    // transportu (zadanie idzie do kolejki) zamiast czekac drugi raz.
+    // Do 2 prob polaczenia: -1 oznacza, ze nic jeszcze nie poszlo do serwera
+    // (timeout polaczenia / TLS), wiec powtorka nie dubluje zadania. Przy
+    // slabym lacu (hotspot z telefonu, RSSI -60..-70) pierwsze SYN-y gina.
+    int code = -1;
+    for (int attempt = 0; attempt < 2 && !ctx->abort; attempt++) {
+        if (!wifiEnsureDns(KALKMATE_HOST, &ctx->abort)) break;
+        if (ctx->abort) break;
+        code = ctx->http->POST((uint8_t*)ctx->body, ctx->bodyLen);
+        if (code != -1) break;
+        Serial.printf("[SOL] polaczenie nieudane (proba %d/2)\n", attempt + 1);
+        logEventf("SOL", "connect fail try %d/2 rssi=%d", attempt + 1, WiFi.RSSI());
+    }
+    // Zero odpowiedzi HTTP mimo WL_CONNECTED = lacze prawdopodobnie martwe
+    // (polowiczne skojarzenie, brak IP po DHCP). Oznacz, zeby nastepne
+    // _solEnsureWifi() zerwalo i odnowilo polaczenie zamiast ufac fladze
+    // WL_CONNECTED — wczesniej siec zostawala martwa do restartu.
+    if (code == -1 && !ctx->abort) _solLinkSuspect = true;
+    ctx->httpCode = code;
     ctx->done = true;
     vTaskDelete(nullptr);
 }
@@ -988,6 +1068,7 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
     { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); memset(dt,0,sizeof(dt)); }
     if (reqId && reqId[0]) http.addHeader("x-request-id", reqId);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
+    http.setConnectTimeout(12000);   // domyslnie 5000 ms -> "start_ssl_client: -1" na slabym lacu
 
     Serial.printf("[SOL] POST %u B, req=%s\n", (unsigned)bodyLen, (reqId && reqId[0]) ? reqId : "-");
 
@@ -1000,9 +1081,25 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
     ctx.body = body;
     ctx.bodyLen = bodyLen;
     ctx.done = false;
+    ctx.abort = false;
     ctx.httpCode = 0;
     TaskHandle_t netTask = nullptr;
-    xTaskCreatePinnedToCore(_solNetTaskFn, "solPost", 12288, &ctx, 1, &netTask, 0);
+    // 12288 B (jak w remote_session.h) wystarcza na malutka ramke (~2.7KB) —
+    // tu TLS obsluguje payload do ~190KB (zdjecie), duzo wiecej wewnetrznego
+    // buforowania w HTTPClient/mbedTLS. 12KB realnie przepelnialo stos i
+    // korumpowalo pamiec (Guru Meditation "Stack canary watchpoint triggered
+    // (loopTask)", zdjecie 2026-10-18, zero zwiazku z panic — crash przy
+    // normalnym solve). Dajemy duzy zapas, ESP32-S3 ma na to miejsce.
+    BaseType_t taskOk = xTaskCreatePinnedToCore(_solNetTaskFn, "solPost", 32768, &ctx, 1, &netTask, 0);
+    if (taskOk != pdPASS) {
+        // Brak pamieci na zadanie (bardzo malo prawdopodobne, ale bez tego
+        // ponizsza petla czekalaby na ctx.done w nieskonczonosc) — wracamy
+        // do zwyklego, blokujacego POST na tym samym watku.
+        Serial.println("[SOL] xTaskCreate failed — fallback na blokujacy POST");
+        logEvent("SOL", "xTaskCreate failed, fallback blocking POST");
+        ctx.httpCode = wifiEnsureDns() ? http.POST((uint8_t*)body, bodyLen) : -1;
+        ctx.done = true;
+    }
 
     bool panicAborted = false;
     uint32_t lastFrame = 0;
@@ -1011,7 +1108,8 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
         panicCheck();
         if (panicTriggered() && !panicAborted) {
             panicAborted = true;
-            client.stop();   // odblokuje http.POST() w tasku prawie od razu
+            ctx.abort = true;   // przerwie petle prob DNS miedzy strategiami
+            client.stop();      // odblokuje http.POST() w tasku prawie od razu
         }
         if (!panicAborted && millis() - lastFrame >= 400) {
             lastFrame = millis();
@@ -1042,8 +1140,11 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
             Serial.println("[SOL] przerwano przyciskiem panic");
             logEvent("SOL", "aborted by panic");
         } else {
-            Serial.printf("[SOL] blad transportu %d\n", httpCode);
-            logEventf("SOL", "transport %d (body %u B)", httpCode, (unsigned)bodyLen);
+            // RSSI dolaczony do diagnozy "start_ssl_client: -1" (2026-10-18) —
+            // slaby sygnal to jeden z podejrzanych o powtarzalne zrywanie
+            // polaczenia TLS mimo ze WiFi pokazuje "polaczone".
+            Serial.printf("[SOL] blad transportu %d, RSSI=%d\n", httpCode, WiFi.RSSI());
+            logEventf("SOL", "transport %d (body %u B) RSSI=%d", httpCode, (unsigned)bodyLen, WiFi.RSSI());
         }
         res.kind = _SOL_RES_RETRY;
         return res;
@@ -1353,6 +1454,21 @@ static int _solPreviewAndConfirm(U8G2 &d) {
 // Tryb ZDJECIE: zrob zdjecie → wyslij do API → pokaz wynik
 // ---------------------------------------------------------------------------
 static void _solRunPhotoMode(U8G2 &d) {
+    // WiFi OFF na czas pracy kamery (CLAUDE.md: kamera OFF -> WiFi ON).
+    // Diagnoza 2026-10-18 (tcpdump na VPS + log serial): gdy STA bylo
+    // skojarzone w trakcie preview/zdjecia, po camEnd() radio przestawalo
+    // ODBIERAC (SYN wychodzil, SYN-ACK serwera nie docieral) na >1 min —
+    // "Blad polaczenia", a potem nic do restartu. Gdy WiFi laczylo sie
+    // dopiero PO wylaczeniu kamery, wysylka zawsze przechodzila.
+    // _solEnsureWifi() polaczy od nowa po camEnd() (cache BSSID, ~1-3 s).
+    if (WiFi.getMode() != WIFI_OFF) {
+        WiFi.disconnect(true, false);
+        WiFi.mode(WIFI_OFF);
+        _wifiBeginAt = 0;          // swiadome wylaczenie — to nie "laczenie w toku"
+        _solLinkSuspect = false;
+        delay(50);
+    }
+
     // === Faza 1: podglad na zywo (mono viewfinder) ===
     // Kamera w trybie GRAYSCALE QQVGA — uzytkownik kadruje zadanie i ustawia
     // odleglosc (pasek ostrosci pomaga trafic w sweet-spot stalej ostrosci).
@@ -1368,7 +1484,7 @@ static void _solRunPhotoMode(U8G2 &d) {
         }
         if (pv == 0) return;      // anulowano w podgladzie
     } else {
-        // Fallback (KALK_HW_LEGACY albo blad preview): statyczny ekran jak dawniej
+        // Fallback (blad preview): statyczny ekran jak dawniej
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 16, _solT("Tryb: Zdjecie", "Mode: Photo", "Modus: Foto"));
@@ -2334,22 +2450,36 @@ static void _solProcessQueue(U8G2 &d) {
 
     (void)inputKeyConsume(KEY_CCE);     // trzymany C/CE z wczesniej nie liczy sie jako "pomin"
 
+    // WL_CONNECTED bez IP albo po nieudanej wysylce = martwe lacze (patrz
+    // _solEnsureWifi) — zerwij, zeby ponizszy blok polaczyl od nowa.
+    if (WiFi.status() == WL_CONNECTED &&
+        (_solLinkSuspect || WiFi.localIP() == IPAddress(0, 0, 0, 0))) {
+        Serial.println("[WiFi] kolejka: lacze podejrzane -> reconnect");
+        WiFi.disconnect(false, false);
+        for (int i = 0; i < 40 && WiFi.status() == WL_CONNECTED; i++) delay(25);
+        _solLinkSuspect = false;
+        _wifiBeginAt = 0;
+    }
+
     // Polacz z WiFi jesli nie jest polaczony (max 8s, z ekranem i "pomin")
     if (WiFi.status() != WL_CONNECTED) {
         char ssid[33] = "", pass[64] = "";
         wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
         if (ssid[0] == '\0') return;    // brak zapisanej sieci — nie ma jak wyslac
         _solQueueDraw(d, _solT("Lacze z WiFi...", "Connecting WiFi...", "Verbinde WLAN..."), 0, n);
-        wifiStaOnLimited();             // STA + TxPower 8.5 dBm (anty-brownout)
-        wifiFastBegin(ssid, pass);
+        if (!wifiJoinInProgress()) {    // nie restartuj trwajacego laczenia (patrz _solEnsureWifi)
+            wifiStaOnLimited();         // STA + TxPower (KALK_WIFI_TX_POWER)
+            wifiFastBegin(ssid, pass);
+        }
         unsigned long t = millis();
         bool fellBack = false, skipped = false;
-        while (WiFi.status() != WL_CONNECTED && millis() - t < 8000) {
-            if (!fellBack && millis() - t > 4000) {
+        while (WiFi.status() != WL_CONNECTED && millis() - t < 12000) {
+            if (!fellBack && _wifiHintUsed && millis() - t > 5000) {
                 fellBack = true;
                 WiFi.disconnect(false, false);
                 delay(50);
                 WiFi.begin(ssid, pass);
+                _wifiHintUsed = false;
             }
             if (_solQueueWaitSkip(200)) { skipped = true; break; }
         }
@@ -2359,7 +2489,7 @@ static void _solProcessQueue(U8G2 &d) {
         if (WiFi.status() != WL_CONNECTED) return;   // sprobuje przy nastepnym wejsciu
         wifiSaveBssidChannel();
         wifiApplyDnsFallback();
-        accountRegisterOnce();
+        _solRegisterWithSpinner(d);
     }
 
     const int total = n;

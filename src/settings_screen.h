@@ -1524,7 +1524,7 @@ static void _editBattery(U8G2 &d) {
         d.drawHLine(0, 12, 256);
 
         if (!batteryIsAvailable()) {
-            d.drawStr(2, 30, T("Brak czujnika (legacy HW)", "No sensor (legacy HW)", "Kein Sensor (alte HW)"));
+            d.drawStr(2, 30, T("Brak czujnika", "No sensor", "Kein Sensor"));
         } else {
             uint16_t mv   = batteryReadMillivolts();
             uint8_t  pct  = batteryReadPercent();

@@ -85,8 +85,7 @@ inline void showAccountStatusScreen(U8G2 &d) {
             }
         }
         drawBusy(mT("Lacze z WiFi...", "Connecting to WiFi...", "Verbinde mit WLAN..."));
-        wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout)
-        WiFi.begin(ssid, pass);
+        wifiConnectStart(ssid, pass);   // STA + TxPower; nie restartuje trwajacego laczenia
         unsigned long t0 = millis();
         while (WiFi.status() != WL_CONNECTED && millis() - t0 < 12000) delay(150);
     }
@@ -211,8 +210,7 @@ inline void showDeviceIdQrScreen(U8G2 &d) {
             char ssid[33] = "", pass[64] = "";
             wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
             if (ssid[0]) {
-                wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout)
-                WiFi.begin(ssid, pass);
+                wifiConnectStart(ssid, pass);   // STA + TxPower; nie restartuje trwajacego laczenia
                 unsigned long t0 = millis();
                 while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000) {
                     delay(150);

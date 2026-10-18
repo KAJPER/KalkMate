@@ -322,7 +322,7 @@ void _editRemoteHelp(U8G2 &d) {
         _solDrawError(d, T("Brak zapisanej sieci WiFi", "No saved WiFi network", "Kein gespeichertes WLAN"), "");
         return;
     }
-    wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout, jak wszedzie)
+    wifiStaOnLimited();   // STA + TxPower (KALK_WIFI_TX_POWER)
     wifiFastBegin(ssid, pass);
     memset(pass, 0, sizeof(pass));
     unsigned long t0 = millis();

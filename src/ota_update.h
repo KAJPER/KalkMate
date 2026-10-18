@@ -57,11 +57,7 @@
 
 // K4: wariant sprzetu wysylany do serwera przy sprawdzaniu aktualizacji,
 // zeby nie dostac binarki z innego PCB.
-#ifdef KALK_HW_LEGACY
-  #define _OTA_HW_VARIANT "legacy"
-#else
-  #define _OTA_HW_VARIANT "s3"
-#endif
+#define _OTA_HW_VARIANT "s3"
 
 // Zdefiniowane nizej (sekcja rollback) — otaCheck() wola przy HTTP 200.
 inline void otaConfirmServerOk();
@@ -436,7 +432,7 @@ inline void otaBootCheck() {
 
 // ---------------------------------------------------------------------
 //  Bramka baterii przed OTA: >= 3.7 V albo ladowanie / USB wpiete.
-//  0 mV = brak pomiaru (legacy PCB) i < 500 mV = brak baterii (zasilanie
+//  0 mV = brak pomiaru i < 500 mV = brak baterii (zasilanie
 //  z USB) — wtedy nie blokujemy (tak samo traktuje to wczesny test w setup()).
 // ---------------------------------------------------------------------
 static bool _otaBatteryOk(U8G2 &d) {

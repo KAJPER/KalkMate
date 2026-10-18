@@ -16,6 +16,10 @@
 // =====================================================================
 
 #include <Arduino.h>
+// loopTask domyslnie 8 KB — za malo: sciezka solve -> _solEnsureWifi -> accountRegister
+// (HTTPClient + WiFiClientSecure + handshake mbedTLS + bufory) przepelnia go i daje
+// "Stack canary watchpoint triggered (loopTask)" (log 2026-10-18, reset=PANIC).
+SET_LOOP_TASK_STACK_SIZE(24 * 1024);
 #include <U8g2lib.h>
 #include <SPI.h>
 #include <WiFi.h>
@@ -35,7 +39,7 @@
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "2.0.1"
+#define FW_VERSION "2.0.2"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -96,17 +100,10 @@ bool btnPressed(int pin) {
 const char* _accGetUnlockCode() { return kalkSettings.aiUnlockCode; }
 
 // === OLED — piny PCB v4 (ESP32-S3) ===
-//   Legacy (WROVER):  SCK=18, MOSI=23, CS=15, DC=2, RST=4
-//   S3 (nowy PCB):    SCK=18, MOSI=11, CS=15, DC=2, RST=4
+//   SCK=18, MOSI=11, CS=15, DC=2, RST=4
 // U8g2 hardware SPI uzywa domyslnego SPI peripheral. Na ESP32-S3 musimy
 // zmusic SPI.begin() do wlasciwych pinow PRZED u8g2.begin() — patrz setup().
-#ifdef KALK_HW_LEGACY
-  // Stary PCB: MOSI=23
-  #define OLED_PIN_MOSI 23
-#else
-  // Nowy PCB v4: MOSI=11
-  #define OLED_PIN_MOSI 11
-#endif
+#define OLED_PIN_MOSI 11
 #define OLED_PIN_SCK   18
 #define OLED_PIN_CS    15
 #define OLED_PIN_DC     2
@@ -123,13 +120,8 @@ uint8_t* remoteGetScreenBuffer() { return u8g2.getBufferPtr(); }
 void     remoteSendBuffer()      { u8g2.sendBuffer(); }
 
 // === Boost MT3608 EN ===
-//   Legacy: MCP23017 GPA7 (przez ekspander)
-//   v4:     GPIO47 ESP32-S3 (bezposrednio)
-#ifdef KALK_HW_LEGACY
-  #define KALK_BOOST_EN_PIN -1   // sterowane przez MCP (input.h)
-#else
-  #define KALK_BOOST_EN_PIN 47
-#endif
+//   GPIO47 ESP32-S3 (bezposrednio)
+#define KALK_BOOST_EN_PIN 47
 // power.h ma wlasna kopie pinu (dolaczany przed ta definicja) — musza byc zgodne.
 static_assert(KALK_BOOST_EN_PIN == _PWR_BOOST_EN_PIN, "power.h: _PWR_BOOST_EN_PIN != KALK_BOOST_EN_PIN");
 
@@ -268,7 +260,6 @@ void setup() {
     // cache w wifi_persist.h (NVS "kalkmate").
     WiFi.persistent(false);
 
-#if KALK_BOOST_EN_PIN >= 0
     // === EARLY BATTERY CHECK — przed włączeniem boost (12V/~150mA) ===
     // Boost ssie spory pradu i razem z reszta moze przyciagnac LiPo
     // ponizej progu pracy chipu => brownout/POWERON loop.
@@ -336,7 +327,6 @@ void setup() {
     pinMode(KALK_BOOST_EN_PIN, OUTPUT);
     digitalWrite(KALK_BOOST_EN_PIN, HIGH);
     delay(20);  // MT3608 startup ~10ms, zapas
-#endif
 
     // === FAZA 1: tylko to co trzeba zeby pokazac "0" na ekranie ===
     // ESP32-S3: musimy zainicjalizowac SPI z konkretnymi pinami przed u8g2.begin()
@@ -500,7 +490,7 @@ void setup() {
     // Auto-WiFi: laczy sie do zapisanej sieci z 3-sekundowym opoznieniem
     // PO drawMenu (delay daje OLED + boost czas na ustabilizowanie,
     // co eliminuje brownout). Sama proba laczenia w _wifiAutoConnectLazy
-    // robi WiFi.setTxPower(8.5dBm) zeby zmniejszyc peak pradu radia.
+    // ustawia moc radia (KALK_WIFI_TX_POWER, wifi_persist.h).
     delay(50);  // chwila zeby OLED dokonczyl ostatni refresh po splash AI
     resetActivity();
     drawMenu();
@@ -523,7 +513,7 @@ static void _wifiAutoConnectLazy() {
     }
     Serial.println("[WiFi-auto] lacze z zapisanymi danymi");
     Serial.flush();
-    wifiStaOnLimited();  // WIFI_STA + TxPower 8.5 dBm (anty-brownout)
+    wifiStaOnLimited();  // WIFI_STA + TxPower (KALK_WIFI_TX_POWER)
     delay(50);
     wifiFastBegin(ssid, pass);  // uzywa cache BSSID+kanal jesli dostepny
     // Nie blokujemy - async connect w tle. _solEnsureWifi w solve_screen
@@ -552,7 +542,6 @@ static void handlePanicIfRequested() {
 // niestabilne 12V (i nie spalic VDD ESP).
 static uint32_t _vbatWatchdogLast = 0;
 static void _vbatWatchdogLoop() {
-#ifndef KALK_HW_LEGACY
     if (millis() - _vbatWatchdogLast < 2000) return;
     _vbatWatchdogLast = millis();
 
@@ -576,13 +565,10 @@ static void _vbatWatchdogLoop() {
 
         u8g2.sleepOn();
         delay(20);
-#if KALK_BOOST_EN_PIN >= 0
         digitalWrite(KALK_BOOST_EN_PIN, LOW);
-#endif
         delay(20);
         esp_deep_sleep_start();
     }
-#endif
 }
 
 // OTA walidacja: firmware po OTA jest zatwierdzany dopiero po pierwszej
@@ -629,6 +615,27 @@ static void _dnsFallbackLoop() {
     wifiApplyDnsFallback();
 }
 
+// Rozgrzewka DNS w tle. Na hotspocie z telefonu pierwsze zapytania DNS po
+// skojarzeniu gina przez kilkanascie-kilkadziesiat sekund (log 2026-10-18:
+// 13 s + 14 s timeoutu, potem 0.6 s). Wczesniej uzytkownik czekal na to
+// dopiero w trakcie rozwiazywania zadania. Teraz robi to osobne zadanie zaraz
+// po uzyskaniu IP, zanim ktokolwiek zrobi zdjecie; wifiEnsureDns() jest
+// serializowane, wiec wysylka z UI po prostu poczeka/trafi w cache lwIP.
+static volatile bool _dnsWarmRunning = false;
+static bool _dnsWarmDone = false;
+static void _dnsWarmTask(void*) {
+    wifiEnsureDns();
+    _dnsWarmRunning = false;
+    vTaskDelete(nullptr);
+}
+static void _dnsWarmLoop() {
+    if (WiFi.status() != WL_CONNECTED) { _dnsWarmDone = false; return; }   // nowe skojarzenie = nowa rozgrzewka
+    if (_dnsWarmDone || _dnsWarmRunning) return;
+    _dnsWarmDone = true;
+    _dnsWarmRunning = true;
+    if (xTaskCreate(_dnsWarmTask, "dnsWarm", 8192, nullptr, 1, nullptr) != pdPASS) _dnsWarmRunning = false;
+}
+
 void loop() {
     inputScan();        // skanuj matrycę co iterację (max raz na 30 ms)
     panicCheck();       // sprawdz panic key, ustaw flagę gdy nacisnięty
@@ -638,6 +645,7 @@ void loop() {
     _otaValidateLoop();     // OTA health-check: po OTA raz HTTPS do kalkmate.pl (walidacja)
     _timeSyncLoop();        // NTP (TLS od tego nie zalezy — patrz komentarz przy _timeSyncLoop)
     _dnsFallbackLoop();     // DNS 8.8.8.8/1.1.1.1 — niektore AP maja wadliwy wlasny DNS
+    _dnsWarmLoop();         // rozgrzewka DNS w tle (osobne zadanie) po uzyskaniu IP
     if (powerCheckSleep()) {
         // Po wybudzeniu — przerysuj menu
         drawMenu();

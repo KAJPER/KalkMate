@@ -283,7 +283,7 @@ static void _drawNetworkList(U8G2 &d, int networks, int scroll, int selected) {
 static int _wifiScanFresh() {
     WiFi.disconnect(true, false);  // odlacz, nie kasuj zapisanych kredentcji w NVS
     delay(120);
-    wifiStaOnLimited();            // STA + TxPower 8.5 dBm (radio po OFF wraca na ~20 dBm)
+    wifiStaOnLimited();            // STA + TxPower (KALK_WIFI_TX_POWER)
     delay(120);
     WiFi.scanDelete();
     // Sync scan, pokazuj rowniez ukryte sieci (false=sync, true=show_hidden)
@@ -612,7 +612,7 @@ static void _drawConnectOk(U8G2 &d) {
 static bool _doConnect(U8G2 &d, const char* ssid, const char* password) {
     WiFi.disconnect(true);
     delay(100);
-    wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout)
+    wifiStaOnLimited();   // STA + TxPower (KALK_WIFI_TX_POWER)
     WiFi.begin(ssid, password);
 
     unsigned long start = millis();

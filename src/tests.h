@@ -766,8 +766,7 @@ inline void showTestsScreen(U8G2 &d) {
         if (WiFi.status() != WL_CONNECTED) {
             char ssid[33] = "", pass[64] = "";
             if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
-                wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout)
-                WiFi.begin(ssid, pass);
+                wifiConnectStart(ssid, pass);   // STA + TxPower; nie restartuje trwajacego laczenia
                 uint32_t t0 = millis();
                 while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) delay(100);
             }

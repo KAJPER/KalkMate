@@ -26,21 +26,6 @@
 // =====================================================================
 
 #include <Arduino.h>
-
-#ifdef KALK_HW_LEGACY
-  // Stary PCB nie ma dzielnika baterii — wszystkie funkcje zwracaja "unknown"
-  inline bool     batteryInit()             { return false; }
-  inline uint16_t batteryReadMillivolts()   { return 0; }
-  inline uint8_t  batteryReadPercent()      { return 100; }   // bez pomiaru => "OK"
-  inline bool     batteryIsCritical()       { return false; }
-  inline bool     batteryIsLow()            { return false; }
-  inline bool     batteryIsAvailable()      { return false; }
-  inline bool     batteryIsUsbPresent()     { return false; }
-  inline bool     batteryIsChargeComplete() { return false; }
-  inline const char* batterySourceName()    { return "-"; }
-  inline void     batteryTick()             {}
-#else
-
 #include <Wire.h>
 #include "input.h"      // I2C_SDA / I2C_SCL — ta sama magistrala co MCP23017
 
@@ -309,21 +294,11 @@ inline void batteryTick() {
     (void)batteryIsCharging();
 }
 
-#endif // !KALK_HW_LEGACY
-
-#ifdef KALK_HW_LEGACY
-inline bool batteryIsCharging() { return false; }
-#endif
-
 // ---------------------------------------------------------------------
 // Rysowanie ikonki baterii na ekranie OLED.
 // Wymaga U8G2&. Rysuje w prawym gornym rogu (x=237, y=0, rozmiar 18×8 px).
 // ---------------------------------------------------------------------
 inline void batteryDrawIcon(class U8G2 &d) {
-#ifdef KALK_HW_LEGACY
-    (void)d;
-    return;
-#else
     if (!batteryIsAvailable()) return;
 
     const int X = 237;       // pozycja X (prawo gorny rog)
@@ -371,5 +346,4 @@ inline void batteryDrawIcon(class U8G2 &d) {
             d.drawStr(X + 5, Y + 7, "!");
         }
     }
-#endif
 }

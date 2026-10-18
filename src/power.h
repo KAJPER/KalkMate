@@ -35,14 +35,8 @@
 // Pin EN boosta MT3608 (12V dla OLED). MUSI byc rowny KALK_BOOST_EN_PIN
 // z main.cpp — tamto makro jest definiowane dopiero PO wszystkich include,
 // wiec power.h go nie widzi.
-//   Legacy (WROVER): boost przez MCP GPA7 — w uspieniu nie ruszamy (brak
-//                    sprawdzonej sekwencji wylaczania na tym PCB).
-//   PCB v4 (S3):     GPIO47 bezposrednio.
-#ifdef KALK_HW_LEGACY
-  #define _PWR_BOOST_EN_PIN  -1
-#else
-  #define _PWR_BOOST_EN_PIN  47
-#endif
+//   PCB v4 (S3): GPIO47 bezposrednio.
+#define _PWR_BOOST_EN_PIN  47
 
 static bool     _powerInhibit    = false;
 static U8G2*    _powerU8g2       = nullptr;
@@ -91,7 +85,6 @@ inline void powerSetMinTimeout(uint32_t ms) {
 //  przy 2 kolejnych odczytach < BATTERY_SHUTDOWN_MV -> bezpieczne wylaczenie
 //  (ta sama sekwencja co w main.cpp: OLED off -> boost off -> deep sleep).
 // =====================================================================
-#ifndef KALK_HW_LEGACY
 #define _PWR_VBAT_CHECK_MS    30000UL
 #define _PWR_VBAT_CONFIRM_MS  6000UL    // > BATTERY_CACHE_MS, zeby drugi odczyt byl swiezy
 static uint32_t _powerVbatLast     = 0;
@@ -117,9 +110,7 @@ static void _powerCriticalShutdown(uint16_t mv, bool displayOn) {
 
     if (_powerU8g2) _powerU8g2->setPowerSave(1);
     delay(20);
-#if _PWR_BOOST_EN_PIN >= 0
     digitalWrite(_PWR_BOOST_EN_PIN, LOW);
-#endif
     delay(20);
     // Timer z petli light sleep jest nadal uzbrojony — bez tego deep sleep
     // obudzilby uklad po 80 ms (restart zamiast wylaczenia).
@@ -144,7 +135,6 @@ static void _powerVbatTick(bool displayOn) {
         _powerVbatLowCount = 0;
     }
 }
-#endif // !KALK_HW_LEGACY
 
 // Sprawdza czy nadszedl czas snu. Jesli tak:
 //   - Wylacza OLED (+ boost na PCB v4) i WiFi
@@ -152,9 +142,7 @@ static void _powerVbatTick(bool displayOn) {
 //   - Po klawiszu: budzi OLED, zwraca true (caller przerysowuje ekran)
 inline bool powerCheckSleep() {
     panicCheck();
-#ifndef KALK_HW_LEGACY
     _powerVbatTick(true);   // takze gdy auto-sleep wylaczony / zablokowany
-#endif
     batteryTick();          // probki do detekcji ladowania (wariant ADC)
     if (!_powerU8g2) return false;
     if (!kalkSettings.autoSleep) return false;
@@ -176,12 +164,10 @@ inline bool powerCheckSleep() {
     const bool wifiWasOn = (WiFi.getMode() & WIFI_STA) != 0;
 
     _powerU8g2->setPowerSave(1);   // AEh: display OFF (RAM ekranu zostaje)
-#if _PWR_BOOST_EN_PIN >= 0
     // Ta sama kolejnosc co sprawdzona sekwencja w main.cpp (niska bateria):
     // najpierw display OFF, potem odciecie VCC (boost EN LOW).
     delay(20);
     digitalWrite(_PWR_BOOST_EN_PIN, LOW);
-#endif
 
     // WiFi off — oszczednosc ~80mA.
     if (WiFi.getMode() != WIFI_OFF) {
@@ -205,19 +191,15 @@ inline bool powerCheckSleep() {
         // a klawisz budzacy jest polykany (nie wykona akcji).
         if (inputWakeScan()) break;
         if (panicTriggered()) break;
-#ifndef KALK_HW_LEGACY
         _powerVbatTick(false);   // ekran wylaczony — bez komunikatu
-#endif
     }
 
     // Uspienie trwalo — timer budzacy nie jest juz potrzebny.
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
 
     // === Wybudzenie ===
-#if _PWR_BOOST_EN_PIN >= 0
     digitalWrite(_PWR_BOOST_EN_PIN, HIGH);
     delay(30);   // MT3608 soft-start — VCC OLED stabilne zanim AFh (display ON)
-#endif
     _powerU8g2->setPowerSave(0);
     inputActivityReset();
 

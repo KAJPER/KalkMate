@@ -69,6 +69,7 @@ struct AccountStatus {
 // i wysylamy przy kazdej kolejnej probie (weryfikacja tozsamosci urzadzenia).
 inline bool accountRegister() {
     if (WiFi.status() != WL_CONNECTED) return false;
+    if (!wifiEnsureDns()) return false;   // realny DNS (3 strategie) zamiast czekac na timeout w HTTPClient
 
     WiFiClientSecure client;
     client.setCACert(KALKMATE_CA_CERT);
@@ -77,6 +78,7 @@ inline bool accountRegister() {
     HTTPClient http;
     http.setReuse(false);
     http.setTimeout(8000);
+    http.setConnectTimeout(12000);   // domyslnie 5000 ms zrywalo polaczenie na slabym lacu (RSSI -60..-70)
 
     String url = String(KALK_SERVER_URL) + "/api/device/register";
     if (!http.begin(client, url)) return false;
@@ -96,7 +98,7 @@ inline bool accountRegister() {
     // Doczep zaleglosci z event_log.h (bledy/resety od ostatniej udanej
     // rejestracji) — prosty JSON-escape (" \ i nowa linia -> \n), reszta
     // bajtow juz jest "czysta" (logEvent() nie wpuszcza | ani \n do srodka).
-    char evlog[_EVLOG_MAX_BYTES + 1];
+    static char evlog[_EVLOG_MAX_BYTES + 1];   // static: 3 KB na stosie loopTask + TLS = przepelnienie
     size_t evlogLen = logEventRead(evlog, sizeof(evlog));
     String logsEscaped;
     if (evlogLen) {
@@ -162,6 +164,10 @@ inline bool accountFetchStatus(AccountStatus& out) {
         out.error = "Brak WiFi";
         return false;
     }
+    if (!wifiEnsureDns()) {
+        out.error = "Brak DNS";
+        return false;
+    }
 
     WiFiClientSecure client;
     client.setCACert(KALKMATE_CA_CERT);
@@ -170,6 +176,7 @@ inline bool accountFetchStatus(AccountStatus& out) {
     HTTPClient http;
     http.setReuse(false);
     http.setTimeout(8000);
+    http.setConnectTimeout(12000);   // domyslnie 5000 ms zrywalo polaczenie na slabym lacu (RSSI -60..-70)
 
     String url = String(KALK_SERVER_URL) + "/api/device/account-status";
     if (!http.begin(client, url)) {

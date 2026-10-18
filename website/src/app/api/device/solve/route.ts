@@ -330,6 +330,7 @@ export async function POST(request: NextRequest) {
     // jego brakiem).
     const auth = await verifyDeviceAuth(request);
     if (!auth.ok) {
+      console.warn(`[solve] odrzucone ${auth.status} ${auth.error} device=${request.headers.get("x-device-id")} fw=${request.headers.get("x-fw-version")} tok=${request.headers.get("x-device-token") ? "tak" : "brak"}`);
       return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
     }
     const deviceId = auth.deviceId;
@@ -381,7 +382,10 @@ export async function POST(request: NextRequest) {
 }
 
 async function processSolve(request: NextRequest, deviceId: string): Promise<SolveResult> {
-  const fail = (status: number, error: string): SolveResult => ({ status, body: { ok: false, error } });
+  const fail = (status: number, error: string): SolveResult => {
+    console.warn(`[solve] odrzucone ${status} ${error} device=${deviceId}`);
+    return { status, body: { ok: false, error } };
+  };
 
   // Weryfikacja klucza licencyjnego — opcjonalny, patrz fallback
   // subskrypcyjny nizej (dla userow z AI Chat ale bez fizycznej licencji).

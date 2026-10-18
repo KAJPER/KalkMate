@@ -483,8 +483,8 @@ static inline bool _kalkWriteEntries(File& f, const char* b, const std::vector<_
 
 // Zapis "atomowy": najpierw plik tymczasowy, podmiana (remove+rename) dopiero
 // gdy calosc zapisana i rozmiar sie zgadza. Ucieta synchronizacja nie kasuje
-// starych danych. Gdy na druga kopie brak miejsca (legacy: min_spiffs
-// ~192 KB) — dane sa juz kompletne i zwalidowane w RAM, wiec zapis wprost.
+// starych danych. Gdy na druga kopie brak miejsca (np. mala partycja
+// SPIFFS) — dane sa juz kompletne i zwalidowane w RAM, wiec zapis wprost.
 template <typename Writer>
 static inline bool _kalkSpiffsWriteAtomic(const char* path, const char* tmpPath,
                                           size_t expected, Writer writer) {
@@ -770,8 +770,7 @@ inline void showNotesScreen(U8G2 &d) {
         if (WiFi.status() != WL_CONNECTED) {
             char ssid[33] = "", pass[64] = "";
             if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
-                wifiStaOnLimited();   // STA + TxPower 8.5 dBm (anty-brownout)
-                WiFi.begin(ssid, pass);
+                wifiConnectStart(ssid, pass);   // STA + TxPower; nie restartuje trwajacego laczenia
                 uint32_t t0 = millis();
                 while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
                     delay(100);

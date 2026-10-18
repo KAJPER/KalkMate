@@ -17,14 +17,9 @@
 #error "about_screen.h wymaga BTN_xx z input.h"
 #endif
 
-// Dane sprzetowe strony "Wersja" — zalezne od PCB
-#ifdef KALK_HW_LEGACY
-  #define _ABOUT_CHIP_LINE   "Chip: ESP32-WROVER-E"
-  #define _ABOUT_MEM_LINE    "Flash: 4MB, PSRAM: 8MB"
-#else
-  #define _ABOUT_CHIP_LINE   "Chip: ESP32-S3 (N16R8)"
-  #define _ABOUT_MEM_LINE    "Flash: 16MB, PSRAM: 8MB"
-#endif
+// Dane sprzetowe strony "Wersja" (PCB v4)
+#define _ABOUT_CHIP_LINE   "Chip: ESP32-S3 (N16R8)"
+#define _ABOUT_MEM_LINE    "Flash: 16MB, PSRAM: 8MB"
 
 // ---------------------------------------------------------------------------
 // showAboutScreen — wyswietla ekran "O programie" (3 strony, nawigacja przyciskami)

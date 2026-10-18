@@ -6,6 +6,8 @@
 
 #include <Preferences.h>
 #include <WiFi.h>
+#include <lwip/dns.h>
+#include "event_log.h"   // logEventf — diagnostyka DNS trafia tez do panelu admina
 
 #define _WP_NS        "kalkmate"   // przestrzen nazw NVS
 #define _WP_SSID      "wifi_ssid"
@@ -19,14 +21,74 @@
 #define _WP_ID_NS     "kalkid"
 #define _WP_UNPAIR    "unpair"
 
-// Wlacza tryb STA z ograniczona moca nadawania. Na PCB v4 radio przy
-// domyslnych ~20 dBm potrafi razem z boostem OLED przeciagnac LiPo do
-// brownoutu. Wolac zamiast samego WiFi.mode(WIFI_STA) — kazde wylaczenie
-// radia (WiFi.disconnect(true) / WIFI_OFF) przywraca domyslna moc, wiec
-// limit trzeba ustawic po kazdym ponownym wlaczeniu STA.
+// Moc nadawania radia STA. Domyslnie pelna (19.5 dBm) — tak urzadzenie
+// faktycznie pracowalo w fw <= 1.9.x i 2.0.x na zimnym starcie.
+//
+// Historia (2026-10-18): audyt 2026-10-17 zamienil WiFi.mode(WIFI_STA) na
+// wifiStaOnLimited() ze limitem 8.5 dBm we WSZYSTKICH sciezkach (solve,
+// Status konta, notatki...). Ale setTxPower() po WiFi.mode() przegrywa wyscig
+// z asynchronicznym STA_START ("setTxPower(): Neither AP or STA has been
+// started" w logach), wiec limit dzialal losowo: na zimnym starcie NIE, a w
+// ponownych probach polaczenia (radio juz wystartowane) TAK. Efekt: jedno
+// uruchomienie ma 19.5 dBm i dziala, kolejne 8.5 dBm i slaby uplink do AP
+// (hotspot iPhone, RSSI -70) = AUTH_EXPIRE, timeouty DNS/TCP, "Blad polaczenia
+// (-1)". Teraz moc jest ustawiana deterministycznie (czeka na STA_START) i
+// jest jedna stala. Jesli kiedys wroci brownout przy nadawaniu, obniz ja TU
+// (np. -DKALK_WIFI_TX_POWER=WIFI_POWER_15dBm) zamiast limitowac tylko czesc
+// sciezek.
+// 8.5 dBm jak w 1.9.x. Diagnoza 2026-10-18 (tcpdump na VPS): przy 19.5 dBm
+// kalkulatory GUBILY WLASNE NADAWANE PAKIETY (SYN/ACK/upload zdjecia), odbior
+// dzialal — spadki napiecia przy peaku TX radia, a brownout detector jest
+// wylaczony (main.cpp), wiec zamiast resetu radio nadaje smieci. NIE PODNOSIC
+// bez pomiaru zasilania pod obciazeniem WiFi.
+#ifndef KALK_WIFI_TX_POWER
+#define KALK_WIFI_TX_POWER WIFI_POWER_8_5dBm
+#endif
+
+// Wlacza tryb STA i ustawia moc nadawania (KALK_WIFI_TX_POWER). Wolac zamiast
+// samego WiFi.mode(WIFI_STA) — kazde wylaczenie radia (WiFi.disconnect(true) /
+// WIFI_OFF) przywraca domyslna moc, wiec ustawienie trzeba powtorzyc po
+// kazdym ponownym wlaczeniu STA.
 static void wifiStaOnLimited() {
     WiFi.mode(WIFI_STA);
-    WiFi.setTxPower(WIFI_POWER_8_5dBm);
+    // setTxPower() zwraca false dopoki nie przyszedl event STA_START —
+    // poczekaj (max ~600 ms) zamiast cicho zostawic radio na innej mocy.
+    bool applied = false;
+    for (int i = 0; i < 30 && !applied; i++) {
+        applied = WiFi.setTxPower(KALK_WIFI_TX_POWER);
+        if (!applied) delay(20);
+    }
+    Serial.printf("[WiFi] TX power: %s (cel=%d, jedn. 0.25 dBm, get=%d)\n",
+                  applied ? "OK" : "NIE USTAWIONA", (int)KALK_WIFI_TX_POWER, (int)WiFi.getTxPower());
+}
+
+// millis() ostatniego WiFi.begin (0 = jeszcze nie bylo) — do wykrywania, ze
+// laczenie JUZ trwa. Drugi WiFi.begin w trakcie zrywa swiezo nawiazane
+// skojarzenie (ASSOC_LEAVE), a hotspot iPhone potem odrzuca kolejne proby
+// (AUTH_EXPIRE, 4WAY_HANDSHAKE_TIMEOUT, TIMEOUT) — burza z logu 2026-10-18:
+// auto-connect z loop() dostal STA_CONNECTED i w tej samej sekundzie
+// _solEnsureWifi() (status jeszcze != CONNECTED, bo brak GOT_IP) zrobil
+// kolejny begin.
+static uint32_t _wifiBeginAt = 0;
+static bool _wifiHintUsed = false;   // czy ostatni begin mial hint BSSID+kanal
+
+static bool wifiJoinInProgress(uint32_t windowMs = 20000) {
+    if (_wifiBeginAt == 0) return false;
+    if ((WiFi.getMode() & WIFI_MODE_STA) == 0) return false;
+    if (WiFi.status() == WL_CONNECTED) return false;
+    return (millis() - _wifiBeginAt) < windowMs;
+}
+
+// STA + moc + WiFi.begin(ssid, pass) — chyba ze laczenie juz trwa.
+static void wifiConnectStart(const char* ssid, const char* pass) {
+    if (wifiJoinInProgress()) {
+        Serial.println("[WiFi] laczenie juz trwa — nie restartuje");
+        return;
+    }
+    wifiStaOnLimited();
+    WiFi.begin(ssid, pass);
+    _wifiBeginAt = millis() | 1;
+    _wifiHintUsed = false;
 }
 
 // Zapisz SSID i haslo WiFi do NVS
@@ -323,17 +385,112 @@ static bool wifiLoadBssidChannel(const char* ssidWanted, uint8_t* bssidOut, int3
     return false;
 }
 
-// Fallback DNS po polaczeniu — niektore routery/AP maja wlasny DNS forwarder
-// ktory czasem po prostu nie odpowiada (widziano w logu: "hostByName(): DNS
-// Failed for kalkmate.pl" mimo WL_CONNECTED i poprawnego hasla — WiFi/
-// handshake byly OK, padal tylko DNS). lwIP na ESP32 uzywa WYLACZNIE serwera
-// z DHCP i nie ma zadnego fallbacku z definicji. WiFi.config z local_ip=0
-// zostawia DHCP (adres/gateway/maska) bez zmian, nadpisuje tylko DNS1/DNS2.
-// Tania operacja — bezpiecznie wolac po kazdym udanym polaczeniu.
+#ifndef KALKMATE_HOST
+#define KALKMATE_HOST "kalkmate.pl"
+#endif
+
+static void _wifiSetDns(const IPAddress& a, const IPAddress& b) {
+    ip_addr_t d;
+    IP_ADDR4(&d, a[0], a[1], a[2], a[3]);
+    dns_setserver(0, &d);
+    IP_ADDR4(&d, b[0], b[1], b[2], b[3]);
+    dns_setserver(1, &d);
+}
+
+// Zapasowy serwer DNS (8.8.8.8) w DRUGIM slocie lwIP — serwer z DHCP (slot 0)
+// zostaje bez zmian, a lwIP przechodzi na zapasowy sam, gdy pierwszy nie
+// odpowiada. Wolac po kazdym udanym polaczeniu; tania i NIE dotyka DHCP.
+//
+// BYLO (commit 3385862, 2026-10-17): WiFi.config(0,0,0,8.8.8.8,1.1.1.1).
+// W core 2.0.17 to NIE jest "tylko ustaw DNS" — set_esp_interface_ip() zatrzymuje
+// klienta DHCP, zeruje IP (0.0.0.0) i startuje DHCP od nowa, a do tego ustawia
+// _useStaticIp. Wolane tuz po WL_CONNECTED i tuz przed pierwszym HTTPS
+// (_solEnsureWifi -> accountRegisterOnce) powodowalo okno bez adresu IP:
+// DNS 13 s timeout, TCP connect -1, a gdy DHCP sie nie powtorzyl (hotspot
+// iPhone) siec byla martwa do restartu mimo WL_CONNECTED.
 static void wifiApplyDnsFallback() {
-    bool ok = WiFi.config((uint32_t)0, (uint32_t)0, (uint32_t)0,
-                           IPAddress(8, 8, 8, 8), IPAddress(1, 1, 1, 1));
-    Serial.printf("[WiFi] DNS fallback (8.8.8.8/1.1.1.1): %s\n", ok ? "OK" : "FAIL");
+    ip_addr_t cur = *dns_getserver(1);
+    if (!ip_addr_isany(&cur)) {   // slot 1 juz zajety (np. DHCP podal 2 serwery)
+        Serial.println("[WiFi] DNS: zapasowy serwer juz ustawiony");
+        return;
+    }
+    ip_addr_t d;
+    IP_ADDR4(&d, 8, 8, 8, 8);
+    dns_setserver(1, &d);
+    Serial.println("[WiFi] DNS: zapasowy 8.8.8.8 w slocie 1 (DHCP nietkniete)");
+}
+
+// Czeka az interfejs STA faktycznie dostanie adres IP. WL_CONNECTED w Arduino
+// to tylko flaga zdarzenia — po rozlaczeniu/DHCP-u bywa nieaktualna. Zwraca
+// true gdy IP != 0.0.0.0 (od razu, jesli juz jest).
+static bool wifiWaitForIp(uint32_t timeoutMs = 8000, volatile bool* abortFlag = nullptr) {
+    uint32_t t0 = millis();
+    while (WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
+        if (abortFlag && *abortFlag) return false;
+        if (millis() - t0 >= timeoutMs) {
+            Serial.printf("[WiFi] brak IP po %lu ms (status=%d RSSI=%d)\n",
+                          (unsigned long)(millis() - t0), (int)WiFi.status(), WiFi.RSSI());
+            logEventf("WIFI", "brak IP po %lums st=%d rssi=%d", (unsigned long)(millis() - t0),
+                      (int)WiFi.status(), WiFi.RSSI());
+            return false;
+        }
+        delay(50);
+    }
+    return true;
+}
+
+// PRAWDZIWE sprawdzenie DNS (2026-10-18). wifiApplyDnsFallback() tylko USTAWIA
+// adresy i loguje "OK" niezaleznie od tego, czy cokolwiek sie rozwiaze —
+// w logu bylo "DNS fallback OK", a zaraz potem "hostByName(): DNS Failed for
+// kalkmate.pl" (13 s timeoutu lwIP, potem "connection refused (-1)"). Tu
+// faktycznie rozwiazujemy nazwe, z trzema strategiami po kolei:
+//   0) serwery DNS tak jak sa teraz (DHCP albo wczesniejszy fallback),
+//   1) brama (przy hotspocie z telefonu to wlasnie jego relay DNS) + 8.8.8.8,
+//   2) publiczne 8.8.8.8 / 1.1.1.1 wpisane wprost do lwIP.
+// Udany lookup zostaje w cache lwIP, wiec zaraz potem HTTPClient trafia w
+// cache zamiast pytac jeszcze raz. abortFlag (opcjonalny) pozwala przerwac
+// miedzy probami (panic).
+static bool _wifiEnsureDnsImpl(const char* host, volatile bool* abortFlag) {
+    // Bez adresu IP kazdy lookup konczy sie 13-14 s timeoutem — wczesniej to
+    // wygladalo jak "zepsuty DNS", a naprawde interfejs nie mial IP.
+    if (!wifiWaitForIp(8000, abortFlag)) return false;
+    wifiApplyDnsFallback();   // drugi serwer (8.8.8.8) zawsze obecny — idempotentne, DHCP nietkniete
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (abortFlag && *abortFlag) return false;
+        // Log 2026-10-18 (hotspot iPhone, RSSI -71): DHCP/brama 172.20.10.1
+        // padla 2x po 13 s, publiczne 8.8.8.8 odpowiedzialo za 6 s — publiczne
+        // idzie przed brama.
+        if (attempt == 1) _wifiSetDns(IPAddress(8, 8, 8, 8), IPAddress(1, 1, 1, 1));
+        else if (attempt == 2) _wifiSetDns(WiFi.gatewayIP(), IPAddress(8, 8, 8, 8));
+        IPAddress ip;
+        uint32_t t0 = millis();
+        if (WiFi.hostByName(host, ip)) {
+            Serial.printf("[DNS] %s -> %s (%lu ms, strategia %d)\n", host, ip.toString().c_str(),
+                          (unsigned long)(millis() - t0), attempt);
+            if (attempt > 0) logEventf("DNS", "ok po strategii %d (%lu ms)", attempt, (unsigned long)(millis() - t0));
+            return true;
+        }
+        String d0 = WiFi.dnsIP(0).toString(), d1 = WiFi.dnsIP(1).toString(), gw = WiFi.gatewayIP().toString();
+        Serial.printf("[DNS] strategia %d NIEUDANA (%lu ms) dns0=%s dns1=%s gw=%s RSSI=%d\n", attempt,
+                      (unsigned long)(millis() - t0), d0.c_str(), d1.c_str(), gw.c_str(), WiFi.RSSI());
+        logEventf("DNS", "fail s%d dns0=%s dns1=%s gw=%s rssi=%d", attempt, d0.c_str(), d1.c_str(), gw.c_str(), WiFi.RSSI());
+    }
+    return false;
+}
+
+// Jedno rozwiazywanie na raz: zadanie rozgrzewajace w tle (main.cpp) i
+// wysylka z UI nie moga jednoczesnie przestawiac serwerow DNS. Drugi
+// wolajacy czeka i zwykle trafia juz w cache lwIP.
+static volatile uint32_t _wifiDnsBusy = 0;
+static bool wifiEnsureDns(const char* host = KALKMATE_HOST, volatile bool* abortFlag = nullptr) {
+    uint32_t w0 = millis();
+    while (__sync_lock_test_and_set(&_wifiDnsBusy, 1)) {
+        if ((abortFlag && *abortFlag) || millis() - w0 > 50000) return false;
+        delay(50);
+    }
+    bool ok = _wifiEnsureDnsImpl(host, abortFlag);
+    __sync_lock_release(&_wifiDnsBusy);
+    return ok;
 }
 
 // WiFi.begin z hint BSSID+kanal gdy dostepny dla TEJ sieci — pomija skan,
@@ -345,9 +502,12 @@ static void wifiFastBegin(const char* ssid, const char* pass) {
         // Bez BSSID w logu (M9) — identyfikuje konkretny router/lokalizacje.
         Serial.printf("[WiFi] fast begin ch=%d (hint BSSID)\n", (int)ch);
         WiFi.begin(ssid, pass, ch, bssid);
+        _wifiHintUsed = true;
     } else {
         WiFi.begin(ssid, pass);
+        _wifiHintUsed = false;
     }
+    _wifiBeginAt = millis() | 1;
 }
 
 // kalkSaveSettings / kalkLoadSettings zdefiniowane w settings_screen.h

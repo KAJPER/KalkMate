@@ -94,9 +94,19 @@ export async function storeDeviceLogs(deviceId: string, raw: string | undefined 
 
 export async function listDeviceLogs(deviceId: string, limit = 200): Promise<DeviceLogEntry[]> {
   await ensureDeviceLogTable();
-  return prisma.$queryRaw<DeviceLogEntry[]>`
+  // $queryRaw zwraca kolumny BIGINT jako JS BigInt — JSON.stringify (a wiec
+  // i NextResponse.json w route.ts) nie umie ich serializowac. Rzutujemy na
+  // Number (bezpieczne: to epoch w ms, daleko ponizej Number.MAX_SAFE_INTEGER).
+  const rows = await prisma.$queryRaw<
+    { id: number; deviceId: string; deviceTs: bigint | number | null; receivedAt: bigint | number; tag: string; message: string }[]
+  >`
     SELECT "id", "deviceId", "deviceTs", "receivedAt", "tag", "message"
     FROM "DeviceLog" WHERE "deviceId" = ${deviceId}
     ORDER BY "receivedAt" DESC LIMIT ${limit}
   `;
+  return rows.map((r) => ({
+    ...r,
+    deviceTs: r.deviceTs === null ? null : Number(r.deviceTs),
+    receivedAt: Number(r.receivedAt),
+  }));
 }

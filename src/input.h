@@ -153,19 +153,13 @@ extern uint8_t* remoteGetScreenBuffer();   // u8g2.getBufferPtr() — 2048 B, 25
 extern void     remoteSendBuffer();        // u8g2.sendBuffer() — wypycha bufor na ekran
 
 // === I2C / MCP23017 ===
-// Legacy (WROVER):  SDA=21, SCL=22
 // v4 (ESP32-S3):    SDA=40, SCL=39
 // To jest JEDYNE zrodlo pinow I2C firmware (battery.h bierze je stad).
 // Definicja z innym pinem gdzie indziej (np. stary include/config.h
-// z pinami WROVER 21/22 na S3) = martwa klawiatura -> blad kompilacji
+// ze starymi pinami 21/22) = martwa klawiatura -> blad kompilacji
 // zamiast cichej zamiany pinow.
-#ifdef KALK_HW_LEGACY
-  #define _IN_I2C_SDA_PCB  21
-  #define _IN_I2C_SCL_PCB  22
-#else
-  #define _IN_I2C_SDA_PCB  40
-  #define _IN_I2C_SCL_PCB  39
-#endif
+#define _IN_I2C_SDA_PCB  40
+#define _IN_I2C_SCL_PCB  39
 #ifndef I2C_SDA
   #define I2C_SDA   _IN_I2C_SDA_PCB
 #elif I2C_SDA != _IN_I2C_SDA_PCB
@@ -321,15 +315,8 @@ inline void _inMcpSetup() {
         _inMcp.pinMode(_IN_KB_PINS[i], INPUT_PULLUP);
     }
 
-#ifdef KALK_HW_LEGACY
-    // === Legacy PCB v3 (WROVER): GPA7 = MT3608 boost EN ===
-    // BEZ tego pin floatuje, palec wzbudza go pojemnosciowo i ekran
-    // odpala sie tylko po dotknieciu.
-    _inMcp.pinMode(7, OUTPUT);
-    _inMcp.digitalWrite(7, HIGH);
-#endif
-    // PCB v4 (ESP32-S3): boost EN przeniesiony na GPIO47, sterowany
-    // bezposrednio w main.cpp setup(). GPA7 nieuzywane.
+    // Boost EN jest na GPIO47, sterowany bezposrednio w main.cpp setup().
+    // GPA7 nieuzywane.
 
     for (uint16_t k = 0; k < 100; k++) {
         _inStatePair[k] = false;
@@ -605,7 +592,7 @@ inline int inputBtn(int pin) {
     if (pin >= 200 && pin < 206) {
         return _virtBtn[pin - 200] ? LOW : HIGH;
     }
-    return digitalRead(pin);   // dla "prawdziwych" GPIO (legacy)
+    return digitalRead(pin);   // dla "prawdziwych" GPIO
 }
 
 
