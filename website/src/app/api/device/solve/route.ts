@@ -429,7 +429,18 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
       subscriptionActive = isSubscriptionValid(subscription);
     }
     if (!subscriptionActive) {
-      return fail(403, "Nieprawidlowy klucz licencji");
+      // Trzy rozne przyczyny tego samego 403 — rozne komunikaty, zeby klient
+      // wiedzial co realnie zrobic (zamiast mylacego "zly klucz" gdy w ogole
+      // nie ma zadnego konta/klucza). Audyt 2026-10-18: zgloszenie klienta,
+      // ktory widzial "Nieprawidlowy klucz licencji" mimo ze nigdy zadnego
+      // klucza nie mial — kalkulator po prostu nie byl podpiety do konta.
+      if (licenseKey) {
+        return fail(403, "Nieprawidlowy klucz licencji");
+      }
+      if (!pairedDevice?.userId) {
+        return fail(403, "Konto nie jest podpiete do tego urzadzenia");
+      }
+      return fail(403, "Brak aktywnej subskrypcji AI");
     }
   }
 
