@@ -16,6 +16,8 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "esp_heap_caps.h"
 #include "input.h"
 #include "settings_screen.h"
@@ -928,6 +930,27 @@ struct _SolSendRes {
     char    msg[64];   // komunikat bledu z serwera ("error"), moze byc pusty
 };
 
+// Kontekst dla _solNetTaskFn — http.POST() biegnie na Core 0, zeby petla UI
+// (Core 1, main.cpp) mogla sprawdzac panic w trakcie najdluzszego czekania
+// (serwer generuje odpowiedz AI — bywa to kilka-kilkanascie sekund). Watek
+// glowny ZAWSZE czeka na ctx.done przed wyjsciem z _solPostSolve (zero
+// wspoldzielonych buforow po powrocie — body/http/client zyja tylko
+// wewnatrz tej funkcji, nigdy nie "uciekaja" do tla po jej zakonczeniu).
+struct _SolNetTaskCtx {
+    HTTPClient* http;
+    const uint8_t* body;
+    size_t bodyLen;
+    volatile bool done;
+    int httpCode;
+};
+
+static void _solNetTaskFn(void* arg) {
+    _SolNetTaskCtx* ctx = (_SolNetTaskCtx*)arg;
+    ctx->httpCode = ctx->http->POST((uint8_t*)ctx->body, ctx->bodyLen);
+    ctx->done = true;
+    vTaskDelete(nullptr);
+}
+
 static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
                                  const uint8_t* body, size_t bodyLen,
                                  const char* reqId, const String& histQuestion) {
@@ -968,19 +991,60 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
 
     Serial.printf("[SOL] POST %u B, req=%s\n", (unsigned)bodyLen, (reqId && reqId[0]) ? reqId : "-");
 
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe"));
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 40, _solT("Prosze czekac...", "Please wait...", "Bitte warten..."));
-    d.sendBuffer();
+    // POST na Core 0 — watek UI tu nizej tylko czeka i co ~30ms sprawdza
+    // panic + odswieza animacje, zamiast siedziec zablokowany w http.POST()
+    // (poprzednio: panic byl martwy przez caly czas generowania odpowiedzi
+    // AI, czesto najdluzszy moment calego dzialania kalkulatora).
+    _SolNetTaskCtx ctx;
+    ctx.http = &http;
+    ctx.body = body;
+    ctx.bodyLen = bodyLen;
+    ctx.done = false;
+    ctx.httpCode = 0;
+    TaskHandle_t netTask = nullptr;
+    xTaskCreatePinnedToCore(_solNetTaskFn, "solPost", 12288, &ctx, 1, &netTask, 0);
 
-    int httpCode = http.POST((uint8_t*)body, bodyLen);
+    bool panicAborted = false;
+    uint32_t lastFrame = 0;
+    int frame = 0;
+    while (!ctx.done) {
+        panicCheck();
+        if (panicTriggered() && !panicAborted) {
+            panicAborted = true;
+            client.stop();   // odblokuje http.POST() w tasku prawie od razu
+        }
+        if (!panicAborted && millis() - lastFrame >= 400) {
+            lastFrame = millis();
+            d.clearBuffer();
+            d.setFont(u8g2_font_6x10_tf);
+            d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe"));
+            d.setFont(u8g2_font_5x7_tf);
+            const char* frames[] = {".", "..", "...", ""};
+            char ln[32];
+            snprintf(ln, sizeof(ln), "%s%s", _solT("Prosze czekac", "Please wait", "Bitte warten"), frames[frame++ % 4]);
+            d.drawStr(2, 40, ln);
+            d.sendBuffer();
+        }
+        delay(30);
+    }
+    // UWAGA: petla czeka na ctx.done BEZ WYJATKU (zaden "safety break") —
+    // ctx jest na stosie tej funkcji; task pisze do niej az do vTaskDelete().
+    // Przedwczesny return zostawilby wskaznik-zombie dla wciaz dzialajacego
+    // taska = realna korupcja stosu. client.stop() w praktyce odblokowuje
+    // blokujace gniazdo lwIP niemal od razu; w najgorszym razie i tak czeka
+    // sie nie dluzej niz standardowy timeout HTTPClienta sprzed tej zmiany.
+
+    int httpCode = ctx.httpCode;
     res.http = httpCode;
     if (httpCode <= 0) {
         http.end();
-        Serial.printf("[SOL] blad transportu %d\n", httpCode);
-        logEventf("SOL", "transport %d (body %u B)", httpCode, (unsigned)bodyLen);
+        if (panicAborted) {
+            Serial.println("[SOL] przerwano przyciskiem panic");
+            logEvent("SOL", "aborted by panic");
+        } else {
+            Serial.printf("[SOL] blad transportu %d\n", httpCode);
+            logEventf("SOL", "transport %d (body %u B)", httpCode, (unsigned)bodyLen);
+        }
         res.kind = _SOL_RES_RETRY;
         return res;
     }
@@ -1142,6 +1206,7 @@ static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
     if (r.kind == _SOL_RES_RETRY) {
         // Blad przejsciowy (siec, 5xx, 429) — do kolejki z TYM SAMYM id
         uint8_t q = offlineQueueAddText(taskText, rid, 1);
+        if (panicTriggered()) return;   // nie blokuj powrotu ekranem bledu
         _solShowSendError(d, r, _solQueueNote(q));
     } else if (r.kind == _SOL_RES_FATAL) {
         _solShowSendError(d, r, nullptr);   // trwaly blad — kolejka nic nie da
@@ -1380,6 +1445,7 @@ static void _solRunPhotoMode(U8G2 &d) {
     uint8_t q = OQ_ERROR;
     if (r.kind == _SOL_RES_RETRY) q = offlineQueueAddPhoto(jpegBuf, jpegLen, rid, 1);
     free(jpegBuf);
+    if (panicTriggered()) return;   // nie blokuj powrotu ekranem bledu
     if (r.kind == _SOL_RES_RETRY)      _solShowSendError(d, r, _solQueueNote(q));
     else if (r.kind == _SOL_RES_FATAL) _solShowSendError(d, r, nullptr);
 }
@@ -2339,6 +2405,8 @@ static void _solProcessQueue(U8G2 &d) {
             r = _solSendJpeg(d, buf, sz, task.reqId.c_str());
             free(buf);
         }
+
+        if (panicTriggered()) return;   // nie blokuj powrotu ekranem bledu
 
         if (r.kind == _SOL_RES_OK) {
             offlineQueueRemoveFirst();
