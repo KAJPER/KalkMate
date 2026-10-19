@@ -88,6 +88,10 @@ export default function NewsletterPage() {
   const [country, setCountry] = useState<"all" | "PL" | "foreign">("all");
   // Domyslnie tylko osoby ze zgoda marketingowa — patrz ostrzezenie przy wysylce.
   const [consentOnly, setConsentOnly] = useState(true);
+  // Bez zgody serwer wysyla TYLKO z jawna deklaracja komunikatu serwisowego
+  // (newsletterInput.ts isServiceNotice) — samo odznaczenie nie wystarcza.
+  const [serviceNotice, setServiceNotice] = useState(false);
+  const notice = !consentOnly && serviceNotice;
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recLoading, setRecLoading] = useState(true);
   const [recErr, setRecErr] = useState("");
@@ -164,13 +168,13 @@ export default function NewsletterPage() {
   // Lista odbiorcow musi odpowiadac AKTUALNEMU filtrowi — inaczej potwierdzenie
   // wysylki pokazaloby liczbe z poprzedniego filtra (wolna odpowiedz starego
   // zapytania nadpisywala nowa). Licznik zapytan + klucz filtra listy.
-  const filterKey = JSON.stringify([registered, verifiedOnly, buyers, country, consentOnly]);
+  const filterKey = JSON.stringify([registered, verifiedOnly, buyers, country, consentOnly, notice]);
   const [recipientsKey, setRecipientsKey] = useState<string | null>(null);
   const recReqRef = useRef(0);
 
   const loadRecipients = useCallback(async () => {
     const reqId = ++recReqRef.current;
-    const key = JSON.stringify([registered, verifiedOnly, buyers, country, consentOnly]);
+    const key = JSON.stringify([registered, verifiedOnly, buyers, country, consentOnly, notice]);
     setRecLoading(true);
     setRecErr("");
     try {
@@ -180,6 +184,7 @@ export default function NewsletterPage() {
         buyers: buyers ? "1" : "0",
         country,
         consentOnly: consentOnly ? "1" : "0",
+        serviceNotice: notice ? "1" : "0",
       });
       const res = await fetch(`/api/admin/newsletter/recipients?${q}`);
       const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
@@ -195,7 +200,7 @@ export default function NewsletterPage() {
     } finally {
       if (reqId === recReqRef.current) setRecLoading(false);
     }
-  }, [registered, verifiedOnly, buyers, country, consentOnly]);
+  }, [registered, verifiedOnly, buyers, country, consentOnly, notice]);
   const recipientsFresh = !recLoading && recipientsKey === filterKey;
 
   useEffect(() => {
@@ -331,6 +336,10 @@ export default function NewsletterPage() {
       setMsg({ ok: false, text: "Lista odbiorców nie jest aktualna dla wybranego filtra — poczekaj, aż się odświeży." });
       return;
     }
+    if (!consentOnly && !serviceNotice) {
+      setMsg({ ok: false, text: "Aby wysłać do osób bez zgody, zaznacz „To jest komunikat serwisowy”." });
+      return;
+    }
     if (!activeCount) return;
     if (!confirm(`Wysłać „${draft.subject}” do ${activeCount} odbiorców (PL ${langCounts.pl} · EN ${langCounts.en} · DE ${langCounts.de})?\n\nTego nie da się cofnąć. Najpierw wyślij test do siebie i sprawdź tłumaczenia w podglądzie.`)) return;
     setSending(true);
@@ -341,7 +350,7 @@ export default function NewsletterPage() {
       const res = await fetch("/api/admin/newsletter/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: payloadContent(tr), filter: { registered, verifiedOnly, buyers, country, consentOnly } }),
+        body: JSON.stringify({ content: payloadContent(tr), filter: { registered, verifiedOnly, buyers, country, consentOnly, serviceNotice: notice } }),
       });
       const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
       if (!data.ok) {
@@ -609,6 +618,19 @@ export default function NewsletterPage() {
               </span>
             </span>
           </label>
+          {!consentOnly && (
+            <label className="flex items-start gap-2 text-sm text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5">
+              <input type="checkbox" className="mt-0.5" checked={serviceNotice} onChange={(e) => setServiceNotice(e.target.checked)} />
+              <span>
+                To jest komunikat serwisowy (bez reklamy)
+                <span className="block text-[11px] text-amber-200/60">
+                  {serviceNotice
+                    ? "Lista obejmuje też osoby bez zgody."
+                    : "Bez tego potwierdzenia serwer wysyła tylko do osób ze zgodą."}
+                </span>
+              </span>
+            </label>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-[#E0E0E0]/60">Kraj zamówienia:</span>
             {([["all", "Wszyscy"], ["PL", "Polska"], ["foreign", "Zagranica"]] as const).map(([v, l]) => (
