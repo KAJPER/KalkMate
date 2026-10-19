@@ -784,7 +784,14 @@ class EspTools:
 
     def erase_ranges(self, port, ranges):
         for off, size in ranges:
-            self.run(self._esptool(port, ["erase_region", f"0x{off:X}", f"0x{size:X}"]),
+            # esptool >= 4.6 odmawia erase na chipie z aktywnym Flash Encryption
+            # bez --force. Kasujemy wylacznie NVS/otadata (0x9000..0xFFFF) —
+            # bootloader (0x0), tablica partycji (0x8000) i aplikacja (0x10000)
+            # nietkniete, wiec --force jest tu bezpieczne. Twarda blokada
+            # zakresu, zeby --force nigdy nie objelo niczego innego.
+            if off < 0x9000 or off + size > 0x10000:
+                raise RuntimeError(f"erase_region poza NVS/otadata (0x{off:X}+0x{size:X}) - odmowa")
+            self.run(self._esptool(port, ["erase_region", "--force", f"0x{off:X}", f"0x{size:X}"]),
                      "esptool-erase", timeout=QUICK_TIMEOUT)
 
     def write_flash(self, port, pairs, force=False):
