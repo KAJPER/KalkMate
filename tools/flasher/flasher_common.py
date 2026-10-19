@@ -580,9 +580,12 @@ _FW_VER_RE = re.compile(r"^\[FW\] v(\S+)")
 _DEEP_SLEEP_RE = re.compile(r"^\[EARLY\].*deep sleep", re.I)
 
 
+LANG_CODES = ("pl", "en", "de")   # KALKPROV:SETLANG - jezyk interfejsu kalkulatora
+
+
 def boot_check_and_provision(mac, code, log, port_hint=None,
                              port_timeout=PORT_TIMEOUT, boot_timeout=BOOT_LOG_TIMEOUT,
-                             max_dev_lines=80):
+                             max_dev_lines=80, lang=None):
     """Wolac ZARAZ po resecie urzadzenia (esptool --after hard_reset).
 
     Czeka na port USB (max port_timeout), otwiera go i czyta log firmware'u.
@@ -595,8 +598,11 @@ def boot_check_and_provision(mac, code, log, port_hint=None,
     NO_PORT | NO_BOOT | SKIPPED), detail, fw_seen (wersja z "[FW] v..."), port.
     Kod AI nigdy nie trafia do logu.
     """
-    res = {"boot": False, "prov": "SKIPPED" if not code else None,
-           "detail": "", "fw_seen": None, "port": None}
+    if lang is not None and lang not in LANG_CODES:
+        raise ValueError(f"nieznany jezyk {lang!r} (dozwolone: {', '.join(LANG_CODES)})")
+    want = bool(code or lang)   # cokolwiek do prowizjonowania (kod AI i/lub jezyk)
+    res = {"boot": False, "prov": "SKIPPED" if not want else None,
+           "lang": None, "detail": "", "fw_seen": None, "port": None}
     t_reset = time.time()
     time.sleep(0.7)   # stara instancja portu znika po resecie USB
     ser = None
@@ -611,10 +617,16 @@ def boot_check_and_provision(mac, code, log, port_hint=None,
     def _send():
         nonlocal sent_at
         try:
-            ser.write(b"KALKPROV:SETCODE:" + code.encode("ascii") + b"\n")
+            # Jezyk PRZED kodem: firmware zamyka okno zaraz po udanym SETCODE.
+            if lang:
+                ser.write(b"KALKPROV:SETLANG:" + lang.encode("ascii") + b"\n")
+            if code:
+                ser.write(b"KALKPROV:SETCODE:" + code.encode("ascii") + b"\n")
             ser.flush()
             sent_at = time.time()
-            log("  [prov] wyslano komende ustawienia kodu AI", "cmd")
+            what = " + ".join(x for x in (f"jezyka {lang}" if lang else "",
+                                          "kodu AI" if code else "") if x)
+            log(f"  [prov] wyslano komende ustawienia {what}", "cmd")
         except (serial.SerialException, OSError) as e:
             log(f"  [prov] blad wysylania: {e}", "warn")
 
@@ -654,17 +666,17 @@ def boot_check_and_provision(mac, code, log, port_hint=None,
                 res["detail"] = (f"urzadzenie nie wystartowalo: brak logu firmware'u "
                                  f"{boot_timeout:.0f} s po otwarciu portu")
                 break
-            if not code and res["boot"]:
+            if not want and res["boot"]:
                 # chwile dluzej, zeby zlapac "[FW] v..." (kontrola wersji)
                 if t_boot is None:
                     t_boot = now
                 if res["fw_seen"] or now > t_boot + 2.0:
                     break
-            if code and res["prov"] is not None:
+            if want and res["prov"] is not None:
                 break
-            if code and sent_at is None and now > t_open + BLIND_SEND_AFTER:
+            if want and sent_at is None and now > t_open + BLIND_SEND_AFTER:
                 _send()
-            if code and sent_at is not None and now > sent_at + PROV_RESPONSE_TIMEOUT:
+            if want and sent_at is not None and now > sent_at + PROV_RESPONSE_TIMEOUT:
                 res["prov"] = "NO_WINDOW" if (saw_late and not saw_banner) else "NO_RESPONSE"
                 break
 
@@ -705,11 +717,22 @@ def boot_check_and_provision(mac, code, log, port_hint=None,
                     saw_late = True
                 if _DEEP_SLEEP_RE.match(line):
                     res["detail"] = "urzadzenie przeszlo w deep sleep (niska bateria?)"
-                if line.startswith("KALKPROV:"):
+                if line.startswith("KALKPROV:LANG:"):
+                    res["boot"] = True
+                    res["lang"] = ("OK" if line == "KALKPROV:LANG:OK"
+                                   else "LANG_" + line[len("KALKPROV:LANG:"):][:30])
+                    if res["lang"] != "OK" and res["prov"] is None:
+                        res["prov"] = res["lang"]          # blad jezyka = FAIL
+                    elif not code and res["prov"] is None:
+                        res["prov"] = "OK"                 # tylko jezyk - gotowe
+                elif line.startswith("KALKPROV:"):
                     res["boot"] = True
                     if code and res["prov"] is None:
                         res["prov"] = "OK" if line == "KALKPROV:OK" else line[len("KALKPROV:"):][:40]
-                if code and res["prov"] is None and res["boot"]:
+                        # kod OK, ale jezyk wyslany i niepotwierdzony = FAIL
+                        if res["prov"] == "OK" and lang and res["lang"] != "OK":
+                            res["prov"] = res["lang"] or "LANG_NO_RESPONSE"
+                if want and res["prov"] is None and res["boot"]:
                     if saw_late and not saw_banner:
                         res["prov"] = "NO_WINDOW"     # okno minelo / flaga done juz w NVS
                     elif saw_late and saw_banner and sent_at is not None:
@@ -725,7 +748,7 @@ def boot_check_and_provision(mac, code, log, port_hint=None,
             except Exception:
                 pass
 
-    if code and res["prov"] is None:
+    if want and res["prov"] is None:
         res["prov"] = "NO_PORT" if t_open is None else ("NO_BOOT" if not res["boot"] else "NO_RESPONSE")
     if not res["boot"]:
         if err_hint:
@@ -834,13 +857,21 @@ class EspTools:
 class FlashJob:
     def __init__(self, cfg, tools, mode, port, mac, log, code=None, wipe_nvs=True,
                  key_sha=None, project_root=None, keys_dir=None, tool_name="gui",
-                 status=None):
+                 status=None, lang=None):
         if mode not in MODES:
             raise ValueError(f"nieznany tryb {mode}")
         self.cfg, self.tools, self.mode, self.port, self.mac = cfg, tools, mode, port, mac
         self.log, self.code, self.wipe_nvs, self.key_sha = log, code or None, wipe_nvs, key_sha
         self.project_root, self.keys_dir, self.tool_name = project_root, keys_dir, tool_name
         self.status = status or (lambda text: None)
+        if lang is not None and lang not in LANG_CODES:
+            raise ValueError(f"nieznany jezyk {lang!r}")
+        self.lang = lang or None
+
+    @property
+    def wants_prov(self):
+        """Kod AI i/lub jezyk do wgrania w oknie prowizjonowania."""
+        return bool(self.code or self.lang)
 
 
 class FlashResult:
@@ -857,7 +888,7 @@ class FlashResult:
         self.efuse = None
 
     def prov_summary(self):
-        if not self.job.code:
+        if not self.job.wants_prov:
             return "SKIPPED"
         return "|".join(self.prov) if self.prov else "NOT_RUN"
 
@@ -884,9 +915,9 @@ class FlashResult:
 
 def _boot_and_provision(job, r, attempt_label=""):
     log = job.log
-    res = boot_check_and_provision(job.mac, job.code, log, port_hint=job.port)
+    res = boot_check_and_provision(job.mac, job.code, log, port_hint=job.port, lang=job.lang)
     r.boot_check = "OK" if res["boot"] else "FAIL"
-    if job.code:
+    if job.wants_prov:
         r.prov.append(res["prov"])
     fw_ver = (r.fw or {}).get("version")
     if res["fw_seen"]:
@@ -901,7 +932,7 @@ def _boot_and_provision(job, r, attempt_label=""):
         log(f"  [start] OK - firmware wystartowal{attempt_label}", "ok")
     else:
         log(f"  [!] {res['detail']}{attempt_label}", "err")
-    if job.code:
+    if job.wants_prov:
         lvl = "ok" if res["prov"] == "OK" else "err"
         log(f"  [prov] wynik: {res['prov']}{attempt_label}", lvl)
     elif res["detail"] and res["boot"]:
@@ -1001,16 +1032,16 @@ def _run_job(job, r):
 
     # --- 6. reset + weryfikacja startu + kod AI (z jedna powtorka) ---
     r.step = "start"
-    job.status("START / KOD AI..." if job.code else "WERYFIKACJA STARTU...")
+    job.status("START / PROWIZJONOWANIE..." if job.wants_prov else "WERYFIKACJA STARTU...")
     log("[5/6] Reset i weryfikacja startu firmware'u"
-        + (" + prowizjonowanie kodu AI" if job.code else "") + "...", "step")
+        + ((" + prowizjonowanie" + (" kodu AI" if job.code else "") + (f" jezyka {job.lang}" if job.lang else "")) if job.wants_prov else "") + "...", "step")
     t.reset(port, job.mac)
     res = _boot_and_provision(job, r)
-    ok = res["boot"] and (not job.code or res["prov"] == "OK")
+    ok = res["boot"] and (not job.wants_prov or res["prov"] == "OK")
     if not ok:
         log("  [!] Automatyczna powtorka: reset urzadzenia i ponowna proba...", "warn")
         erase_port = res.get("port") or port
-        if job.code and res["prov"] in ("NO_RESPONSE", "NO_WINDOW") and job.wipe_nvs:
+        if job.wants_prov and res["prov"] in ("NO_RESPONSE", "NO_WINDOW") and job.wipe_nvs:
             # Okno prowizjonowania moglo sie zamknac bez komendy (flaga done
             # zapisana) - czyscimy sam NVS, zeby otworzylo sie ponownie.
             nvs_only = nvs_otadata_ranges(cfg["partitions_bin"], include_otadata=False)
@@ -1018,11 +1049,11 @@ def _run_job(job, r):
             t.erase_ranges(erase_port, nvs_only)
         t.reset(erase_port, job.mac)
         res = _boot_and_provision(job, r, " (powtorka)")
-        ok = res["boot"] and (not job.code or res["prov"] == "OK")
+        ok = res["boot"] and (not job.wants_prov or res["prov"] == "OK")
     if not res["boot"]:
         raise RuntimeError(res["detail"] or "urzadzenie nie wystartowalo")
-    if job.code and res["prov"] != "OK":
-        raise RuntimeError(f"Prowizjonowanie kodu AI nieudane ({r.prov_summary()}) - "
+    if job.wants_prov and res["prov"] != "OK":
+        raise RuntimeError(f"Prowizjonowanie (kod AI / jezyk) nieudane ({r.prov_summary()}) - "
                            "urzadzenie zostaloby z kodem 1111. NIE WYSYLAJ, powtorz flash.")
 
     # --- 7. PROD_REL: zamkniecie (po udanym starcie - zly klucz nie przejdzie) ---

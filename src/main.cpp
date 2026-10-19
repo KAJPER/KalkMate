@@ -398,6 +398,10 @@ void setup() {
     // Protokol (linia tekstowa zakonczona \n):
     //   PC wysyla:  KALKPROV:SETCODE:1234
     //   ESP32 odp:  KALKPROV:OK   albo  KALKPROV:ERR:BADCODE / KALKPROV:ERR:NVS
+    //   PC wysyla:  KALKPROV:SETLANG:pl|en|de   (opcjonalnie, PRZED SETCODE)
+    //   ESP32 odp:  KALKPROV:LANG:OK  albo  KALKPROV:LANG:ERR:BADLANG / KALKPROV:LANG:ERR:NVS
+    //   (osobny prefiks LANG:, zeby flasher nie wzial odpowiedzi jezyka za
+    //   odpowiedz na kod)
     // Gate na fladze "done" w NVS ("kalkprov") — dziala TYLKO przy
     // pierwszym boocie po flashu (swiezy NVS). Dla kazdego kolejnego bootu
     // (czyli realnie caly czas u klienta) ten blok jest pomijany calkowicie,
@@ -417,12 +421,37 @@ void setup() {
             String provLine = "";
             bool provGotCmd = false;   // przyszla jakakolwiek komenda SETCODE
             bool provOk     = false;   // kod zapisany w NVS
+            bool provBad    = false;   // bledna komenda SETLANG (okno zostaje na nastepny boot)
             while (!provOk && millis() - provT0 < 3000) {
                 while (!provOk && Serial.available()) {
                     char c = (char)Serial.read();
                     if (c == '\n') {
                         provLine.trim();
-                        if (provLine.startsWith(kProvPrefix)) {
+                        if (provLine.startsWith("KALKPROV:SETLANG:")) {
+                            // Jezyk interfejsu (kalkSettings.language: 0=PL, 1=EN, 2=DE).
+                            // Zapis prosto do NVS "kalkmate"/"lang" — kalkLoadSettings()
+                            // nizej wczyta go jak kazde inne ustawienie.
+                            String lg = provLine.substring(17);
+                            lg.trim();
+                            lg.toLowerCase();
+                            int lv = (lg == "pl" || lg == "0") ? 0
+                                   : (lg == "en" || lg == "1") ? 1
+                                   : (lg == "de" || lg == "2") ? 2 : -1;
+                            if (lv < 0) {
+                                provBad = true;
+                                Serial.println("KALKPROV:LANG:ERR:BADLANG");
+                            } else {
+                                Preferences lp;
+                                bool okw = lp.begin("kalkmate", false) && lp.putUChar("lang", (uint8_t)lv) == 1;
+                                lp.end();
+                                if (okw) {
+                                    Serial.println("KALKPROV:LANG:OK");
+                                } else {
+                                    provBad = true;
+                                    Serial.println("KALKPROV:LANG:ERR:NVS");
+                                }
+                            }
+                        } else if (provLine.startsWith(kProvPrefix)) {
                             provGotCmd = true;
                             String code = provLine.substring(kProvPrefixLen);
                             code.trim();
@@ -447,7 +476,7 @@ void setup() {
                 }
                 delay(5);
             }
-            if (provOk || !provGotCmd) {
+            if (!provBad && (provOk || !provGotCmd)) {
                 if (!provPrefs.putBool("done", true)) {
                     Serial.println("[PROV] BLAD zapisu flagi done");
                 }

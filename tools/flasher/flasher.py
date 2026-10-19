@@ -325,6 +325,18 @@ class FlasherApp:
                  font=("Consolas", 12, "bold"), justify="center").pack(side=tk.LEFT)
         tk.Label(row, text="  puste = zostaw domyślny 1111; podany kod musi sie wgrac, inaczej FAIL",
                  bg=BG, fg="#888", font=("Arial", 8)).pack(side=tk.LEFT, padx=5)
+        # Jezyk interfejsu kalkulatora (KALKPROV:SETLANG). "bez zmian" = firmware
+        # zostawia domyslny (English) / wartosc z NVS.
+        lrow = tk.Frame(prov_frame, bg=BG)
+        lrow.pack(fill=tk.X, padx=10, pady=(0, 4))
+        tk.Label(lrow, text="Jezyk kalkulatora:", bg=BG,
+                 fg=FG, width=22, anchor="w").pack(side=tk.LEFT)
+        self._lang_choices = {"bez zmian (domyslny EN)": None, "Polski": "pl",
+                              "English": "en", "Deutsch": "de"}
+        self.client_lang_var = tk.StringVar(value="Polski")
+        tk.OptionMenu(lrow, self.client_lang_var, *self._lang_choices.keys()).pack(side=tk.LEFT)
+        tk.Label(lrow, text="  wgrywany razem z kodem; blad = FAIL (wymaga czystego NVS)",
+                 bg=BG, fg="#888", font=("Arial", 8)).pack(side=tk.LEFT, padx=5)
 
         # === Firmware (ktore biny zostana wgrane) ===
         fw_frame = self._frame(" Firmware ")
@@ -696,11 +708,12 @@ class FlasherApp:
         if code and not (len(code) == 4 and code.isdigit()):
             messagebox.showerror("Kod AI", "Kod AI musi miec dokladnie 4 cyfry (albo zostaw pole puste).")
             return
+        lang = self._lang_choices.get(self.client_lang_var.get())
         wipe = mode in ("DEV", "PROD_DEV") or bool(self.wipe_rel_var.get())
-        if mode == "PROD_REL" and code and not wipe:
+        if mode == "PROD_REL" and (code or lang) and not wipe:
             if not messagebox.askyesno(
-                    "Kod AI w PROD_REL",
-                    "Okno prowizjonowania kodu AI otwiera sie tylko przy pierwszym boocie na "
+                    "Kod AI / jezyk w PROD_REL",
+                    "Okno prowizjonowania (kod AI, jezyk) otwiera sie tylko przy pierwszym boocie na "
                     "swiezym NVS. W PROD_REL NVS nie jest domyslnie czyszczony, wiec kod by sie "
                     "nie wgral (= FAIL).\n\nWyczyscic NVS + otadata dla tej sztuki? (kasuje token "
                     "urzadzenia, WiFi z QC, ustawienia)"):
@@ -742,7 +755,7 @@ class FlasherApp:
         self.busy = True
         self.flash_btn.config(state=tk.DISABLED)
         tools = fc.EspTools(self.cfg, _tool_cmd, self.flog, _SUBPROCESS_FLAGS)
-        job = fc.FlashJob(self.cfg, tools, mode, port, mac, self.flog, code=code or None,
+        job = fc.FlashJob(self.cfg, tools, mode, port, mac, self.flog, code=code or None, lang=lang,
                           wipe_nvs=wipe, key_sha=key_sha,
                           project_root=None if FROZEN else PROJECT_ROOT,
                           keys_dir=KEYS_DIR, tool_name="gui",
@@ -756,6 +769,7 @@ class FlasherApp:
             self.set_status("FLASHUJE...", "#FFA500")
             self.log(f"\n=== FLASH START: {job.mac} na {job.port}, tryb={job.mode}"
                      f"{', kod AI: TAK' if job.code else ''}"
+                     f"{', jezyk: ' + job.lang if job.lang else ''}"
                      f"{', NVS+otadata: czyszczone' if job.wipe_nvs else ''} ===", "#D8FF3D")
             r = fc.run_flash_job(job)
         except Exception as e:  # noqa: BLE001 — run_flash_job nie rzuca, ale na wszelki wypadek
@@ -772,7 +786,8 @@ class FlasherApp:
             if r is not None and r.ok:
                 ver = (r.fw or {}).get("version") or "?"
                 self.log(f"=== FLASH SUKCES: {job.mac} (v{ver}, start: OK"
-                         f"{', kod AI: OK' if job.code else ''}) ===", "#0F0")
+                         f"{', kod AI: OK' if job.code else ''}"
+                         f"{', jezyk: ' + job.lang if job.lang else ''}) ===", "#0F0")
                 if r.nvs_erased:
                     self.log("[i] NVS wyczyszczony. Jesli to urzadzenie zwrocone od klienta / bylo juz "
                              f"sparowane: panel admina -> urzadzenie {job.mac} -> „Reset tokenu”.", "#FA0")

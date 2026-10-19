@@ -128,7 +128,7 @@ def _tool_cmd(path):
     return [path]
 
 
-def flash_device(cfg, tools, port, client_code=None, flashed_macs=None):
+def flash_device(cfg, tools, port, client_code=None, flashed_macs=None, lang=None):
     """DEV flash jednej sztuki. Zwraca (mac, ok). Wpis w production_log.csv
     zawsze (OK/FAIL)."""
     clog(f"\n=== FLASH START: port={port}, mode=DEV ===", "step")
@@ -150,7 +150,7 @@ def flash_device(cfg, tools, port, client_code=None, flashed_macs=None):
              "(odlacz go). Zeby sflashowac ponownie, uruchom CLI jeszcze raz.", "warn")
         return mac, None
 
-    job = fc.FlashJob(cfg, tools, "DEV", port, mac, clog, code=client_code,
+    job = fc.FlashJob(cfg, tools, "DEV", port, mac, clog, code=client_code, lang=lang,
                       wipe_nvs=True, project_root=PROJECT_ROOT, keys_dir=KEYS_DIR,
                       tool_name="cli")
     r = fc.run_flash_job(job)
@@ -159,7 +159,7 @@ def flash_device(cfg, tools, port, client_code=None, flashed_macs=None):
         clog(f"[!] production_log.csv zablokowany — wpis zapisany w {where}", "warn")
     if r.ok:
         clog(f"=== SUKCES: {mac} (v{(r.fw or {}).get('version') or '?'}, start OK"
-             f"{', kod AI OK' if client_code else ''}) ===", "ok")
+             f"{', kod AI OK' if client_code else ''}{', jezyk ' + lang if lang else ''}) ===", "ok")
         clog("[i] NVS wyczyszczony. Urzadzenie zwrocone od klienta? Panel admina -> "
              f"urzadzenie {mac} -> 'Reset tokenu'.", "warn")
     else:
@@ -179,6 +179,9 @@ def main():
                     help="Kod AI klienta (4 cyfry, z /admin/orders) do wgrania "
                          "przez okno prowizjonowania zaraz po flashu. Blad wgrania = FAIL. "
                          "Nie da sie laczyc z --auto (ten sam kod poszedlby na kazda sztuke).")
+    ap.add_argument("--lang", choices=list(fc.LANG_CODES), default=None,
+                    help="Jezyk interfejsu kalkulatora (pl/en/de) wgrywany w oknie "
+                         "prowizjonowania. Brak = domyslny firmware'u (en). Blad = FAIL.")
     args = ap.parse_args()
 
     if args.prod_dev or args.prod_rel:
@@ -241,7 +244,7 @@ def main():
                     continue
                 clog(f"\n[+] Wykryto urzadzenie na {port}", "ok")
                 try:
-                    mac, ok = flash_device(cfg, tools, port, client_code=args.code,
+                    mac, ok = flash_device(cfg, tools, port, client_code=args.code, lang=args.lang,
                                            flashed_macs=flashed_macs)
                     if ok is not None and flashed_macs is not None and mac:
                         flashed_macs[mac] = "OK" if ok else "FAIL"
