@@ -65,7 +65,7 @@ const content: Record<Locale, {
     copyright: "© 2026 KAJPA Kacper Popko · KalkMate. Wyprodukowano w Polsce.",
   },
   en: {
-    tagline: "Polish AI calculator · 2026",
+    tagline: "AI calculator made in Poland · 2026",
     product: "Product",
     account: "Account",
     legal: "Legal",
@@ -97,7 +97,7 @@ const content: Record<Locale, {
     copyright: "© 2026 KAJPA Kacper Popko · KalkMate. Made in Poland.",
   },
   de: {
-    tagline: "Polnischer KI-Rechner · 2026",
+    tagline: "KI-Rechner aus Polen · 2026",
     product: "Produkt",
     account: "Konto",
     legal: "Rechtliches",

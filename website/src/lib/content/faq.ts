@@ -39,6 +39,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
       q: "Jaka jest gwarancja?",
       a: "24 miesiące gwarancji producenta na wszystkie elementy. Naprawiamy lub wymieniamy urządzenie w razie usterki.",
     },
+    {
+      q: "Czy KalkMate działa po angielsku lub niemiecku?",
+      a: "Tak. Kalkulator działa po polsku, angielsku i niemiecku — język zmieniasz w Ustawieniach → Język. AI odpowiada wtedy w wybranym języku, nawet jeśli zadanie na zdjęciu jest w innym. Sklep i panel użytkownika też są dostępne w tych trzech językach.",
+    },
   ],
   en: [
     {
@@ -73,6 +77,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
       q: "What's the warranty?",
       a: "A 24-month manufacturer's warranty on all components. We repair or replace the device in case of a fault.",
     },
+    {
+      q: "Does KalkMate work in English or German?",
+      a: "Yes. The calculator works in Polish, English and German — you switch the language in Settings → Language. The AI then answers in the selected language, even if the problem in the photo is written in another one. The shop and user panel are available in all three languages too.",
+    },
   ],
   de: [
     {
@@ -106,6 +114,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
     {
       q: "Wie sieht die Garantie aus?",
       a: "24 Monate Herstellergarantie auf alle Komponenten. Im Falle eines Defekts reparieren oder ersetzen wir das Gerät.",
+    },
+    {
+      q: "Funktioniert KalkMate auf Deutsch oder Englisch?",
+      a: "Ja. Der Rechner funktioniert auf Polnisch, Englisch und Deutsch — die Sprache stellst du unter Einstellungen → Sprache ein. Die KI antwortet dann in der gewählten Sprache, auch wenn die Aufgabe auf dem Foto in einer anderen Sprache steht. Shop und Benutzerbereich gibt es ebenfalls in allen drei Sprachen.",
     },
   ],
 };
