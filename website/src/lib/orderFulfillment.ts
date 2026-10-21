@@ -193,17 +193,24 @@ export async function applyFulfillmentStatus(
   };
 }
 
-// Nadanie przesylki z panelu (Base Courier) — klient od razu dostaje mail
-// "Pakujemy i wysylamy" z numerem przesylki. unfulfilled -> in_progress BEZ
-// zwyklego maila "w realizacji" (bylby drugim mailem w tej samej chwili);
-// in_progress zostaje. "shipped"/"fulfilled" przyjda pozniej ze sledzenia
-// (mail "W drodze" po odbiorze przez kuriera). Wolane tylko raz na przesylke
-// (po udanym nadaniu — straznik w basecourier/route.ts blokuje drugie).
-export async function notifyShipmentCreated(orderId: string): Promise<boolean> {
+// Mail "Pakujemy i wysylamy" z numerem przesylki — wysylany RAZ na numer:
+//   - po nadaniu z panelu (basecourier/route.ts) i po "Powiaz zlecenie",
+//   - przy kazdym sprawdzeniu statusu (przycisk + cron), jesli wczesniej nie
+//     poszedl (np. numer wpisany recznie, blad SMTP, zamowienia sprzed tej funkcji).
+// Znacznik z numerem w adminNotes (jak flagi zwrotow — bez nowej kolumny):
+// zajmowany atomowo PRZED wysylka (cron i przycisk naraz nie wysla dwoch),
+// zdejmowany, gdy wysylka sie nie uda (nastepne sprawdzenie ponowi). Nowy
+// numer przesylki = nowy znacznik = nowy mail.
+// Tylko dla "unfulfilled"/"in_progress": po odbiorze przez kuriera klient ma
+// numer w mailu "W drodze". unfulfilled -> in_progress BEZ zwyklego maila
+// "w realizacji" (bylby drugim mailem w tej samej chwili).
+export async function ensureLabelEmail(orderId: string): Promise<boolean> {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) return false;
   const status = order.fulfillmentStatus || "unfulfilled";
+  const trackingNumber = (order.trackingNumber || "").trim();
   if (status !== "unfulfilled" && status !== "in_progress") return false;
+  if (!trackingNumber) return false;
 
   if (status === "unfulfilled") {
     await prisma.order.updateMany({
@@ -211,9 +218,18 @@ export async function notifyShipmentCreated(orderId: string): Promise<boolean> {
       data: { fulfillmentStatus: "in_progress" },
     });
   }
+  if (!order.customerEmail) return false;
 
-  const trackingNumber = (order.trackingNumber || "").trim();
-  if (!order.customerEmail || !trackingNumber) return false;
+  const marker = `[mail „Pakujemy i wysyłamy”: ${trackingNumber}]`;
+  const line = `${marker} ${new Date().toISOString().slice(0, 16)}`;
+  const claimed = await prisma.$executeRaw`
+    UPDATE "Order" SET "adminNotes" = CASE
+      WHEN "adminNotes" IS NULL OR "adminNotes" = '' THEN ${line}
+      ELSE "adminNotes" || char(10) || ${line}
+    END
+    WHERE id = ${orderId} AND ("adminNotes" IS NULL OR instr("adminNotes", ${marker}) = 0)`;
+  if (Number(claimed) === 0) return false; // juz wyslany (albo wysylany wlasnie teraz)
+
   const locale = localeFromCountry(order.customerCountry);
   const html = statusLabelCreatedEmail({
     customerName: order.customerName || "Customer",
@@ -224,6 +240,11 @@ export async function notifyShipmentCreated(orderId: string): Promise<boolean> {
   }, locale);
   const r = await sendMail({ to: order.customerEmail, subject: EMAIL_SUBJECTS.orderLabelCreated[locale], html })
     .catch((err) => ({ ok: false, error: String(err) }));
-  if (!r.ok) console.error(`[fulfillment] label email failed for order ${orderId}:`, r.error);
+  if (!r.ok) {
+    console.error(`[fulfillment] label email failed for order ${orderId}:`, r.error);
+    await prisma.$executeRaw`
+      UPDATE "Order" SET "adminNotes" = replace(replace("adminNotes", char(10) || ${line}, ''), ${line}, '')
+      WHERE id = ${orderId}`.catch((e) => console.error(`[fulfillment] label email marker rollback failed ${orderId}:`, e));
+  }
   return r.ok;
 }

@@ -9,6 +9,7 @@ import {
   BC_UNCERTAIN_NOTE,
   BC_UNCERTAIN_RESOLVED_NOTE,
 } from "@/lib/basecourier";
+import { ensureLabelEmail } from "@/lib/orderFulfillment";
 
 // POST /api/admin/orders/[id]/basecourier/link — { basecourierOrderId }
 // Wiaze z zamowieniem przesylke nadana RECZNIE w panelu Base Courier (np. do
@@ -115,11 +116,19 @@ export async function POST(
     // Ostrzezenie, gdy zlecenie jest na innego odbiorce niz zamowienie (pomylone ID).
     const emailMismatch = takerEmail && takerEmail !== (order.customerEmail || "").trim().toLowerCase();
     const nameMismatch = !takerEmail && takerName && takerName.trim().toLowerCase() !== (order.customerName || "").trim().toLowerCase();
+
+    // Mail "Pakujemy i wysylamy" — ale NIE przy innym odbiorcy w zleceniu
+    // (prawdopodobnie pomylone ID: klient dostalby cudzy numer przesylki).
+    let emailSent = false;
+    if (!emailMismatch && !nameMismatch) {
+      try { emailSent = await ensureLabelEmail(id); } catch (e) { console.error("[basecourier/link] label email failed", id, e); }
+    }
     return NextResponse.json({
       ok: true,
       basecourierOrderId: resolvedId,
       trackingNumber: waybill,
       courierName: details.courierName,
+      emailSent,
       warning: emailMismatch
         ? `Uwaga: odbiorca w tym zleceniu Base Courier (${takerEmail}) ma inny e-mail niż zamówienie (${order.customerEmail}). Sprawdź, czy podałeś właściwy numer.`
         : nameMismatch

@@ -20,7 +20,7 @@ import {
   type BcCreatedShipment,
 } from "@/lib/basecourier";
 import { syncOrderTracking, appendOrderNoteOnce } from "@/lib/inpostTracking";
-import { notifyShipmentCreated } from "@/lib/orderFulfillment";
+import { ensureLabelEmail } from "@/lib/orderFulfillment";
 import { receiverFromOrder, applyReceiverEdits, orderPatchFromReceiver, savedForClient } from "@/lib/basecourierReceiver";
 import { customsGoodsValue } from "@/lib/customsInvoice";
 import { readOrderUnits } from "@/lib/orderPersonalization";
@@ -214,7 +214,7 @@ async function runCreate(
   }
   // Mail do klienta "Pakujemy i wysylamy" z numerem — blad maila nie psuje nadania.
   let emailSent = false;
-  try { emailSent = await notifyShipmentCreated(id); } catch (e) { console.error(`[basecourier] ${logTag} label email failed`, id, e); }
+  try { emailSent = await ensureLabelEmail(id); } catch (e) { console.error(`[basecourier] ${logTag} label email failed`, id, e); }
   return { ok: true, created, emailSent };
 }
 

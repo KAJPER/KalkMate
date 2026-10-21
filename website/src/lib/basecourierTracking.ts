@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { applyFulfillmentStatus, type FulfillmentStatus } from "@/lib/orderFulfillment";
+import { applyFulfillmentStatus, ensureLabelEmail, type FulfillmentStatus } from "@/lib/orderFulfillment";
 import { bcGetOrderDetails, type BcOrderDetails, type BcTrackingEvent } from "@/lib/basecourier";
 import { looksLikeInPostNumber, appendOrderNoteOnce, trackingSkipReason, mapWithConcurrency } from "@/lib/inpostTracking";
 
@@ -81,13 +81,26 @@ export interface BcSyncResult {
   newStatus: string;
   changed: boolean;
   emailSent: boolean;
+  labelEmailSent?: boolean;
   note?: string;
 }
 
 // prefetched — szczegoly zlecenia JUZ pobrane przez wywolujacego (przycisk
 // "Sprawdz status" pokazuje tez zdarzenia — bez drugiego zapytania do Base
 // Courier): undefined = pobierz samodzielnie, null = Base Courier niedostepny.
+// + brakujacy mail "Pakujemy i wysylamy" (ensureLabelEmail) — PO zmianie statusu,
+// zeby paczka juz odebrana przez kuriera dostala tylko "W drodze".
 export async function syncBaseCourierOrder(orderId: string, prefetched?: BcOrderDetails | null): Promise<BcSyncResult | null> {
+  const r = await syncBaseCourierOrderInner(orderId, prefetched);
+  let labelEmailSent = false;
+  // Przewoznik nie odpowiedzial = nie wiemy, czy paczka juz nie jedzie/nie lezy
+  // w Paczkomacie (status mogl nie zdazyc sie przesunac) — mail przy nastepnym sprawdzeniu.
+  if (r?.note?.endsWith("_unavailable")) return r;
+  try { labelEmailSent = await ensureLabelEmail(orderId); } catch (e) { console.error("[tracking] label email failed", orderId, e); }
+  return r ? { ...r, labelEmailSent } : r;
+}
+
+async function syncBaseCourierOrderInner(orderId: string, prefetched?: BcOrderDetails | null): Promise<BcSyncResult | null> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: { furgonetkaStatus: true, furgonetkaPackageId: true, fulfillmentStatus: true },

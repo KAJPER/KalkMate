@@ -223,8 +223,14 @@ export default function OrderDetailPage({
   } | null>(null);
   const [trackingMsg, setTrackingMsg] = useState("");
 
-  const applyTrackingSync = (sync: { changed?: boolean; newStatus?: string; emailSent?: boolean; note?: string } | null, refresh = true) => {
+  const applyTrackingSync = (sync: { changed?: boolean; newStatus?: string; emailSent?: boolean; labelEmailSent?: boolean; note?: string } | null, refresh = true) => {
     if (!sync) return;
+    if (sync.labelEmailSent) {
+      // Brakujacy mail "Pakujemy i wysylamy" dosłany — status/notatki zmienione.
+      if (refresh) void refreshOrder();
+      setTrackingMsg("Wysłano klientowi brakujący mail „Pakujemy i wysyłamy” z numerem przesyłki");
+      return;
+    }
     if (sync.changed && sync.newStatus) {
       // Status zmienil serwer — pobierz zamowienie (odznaka, pole statusu,
       // baza do expected_fulfillment_status), zamiast tylko podmieniac pole.
@@ -329,7 +335,8 @@ export default function OrderDetailPage({
       setBcMsg(
         `Nadano — powiązano zlecenie ${data.basecourierOrderId}${data.courierName ? ` (${data.courierName})` : ""}` +
           `${data.trackingNumber ? `, numer przesyłki: ${data.trackingNumber}` : ". API nie podaje numeru przesyłki — wpisz go ręcznie w polu „Numer przesyłki” (np. 1Z…) i zapisz"}.` +
-          `${data.warning ? ` ${data.warning}` : ""}`
+          `${data.emailSent ? " Klient dostał mail „Pakujemy i wysyłamy”." : ""}` +
+          `${data.warning ? ` ${data.warning} Mail do klienta NIE poszedł — po sprawdzeniu numeru kliknij „Sprawdź status”, żeby go wysłać.` : ""}`
       );
     } catch {
       setLinkMsg("Błąd sieci");

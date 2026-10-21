@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { applyFulfillmentStatus, isForwardTransition, type FulfillmentStatus } from "@/lib/orderFulfillment";
+import { applyFulfillmentStatus, ensureLabelEmail, isForwardTransition, type FulfillmentStatus } from "@/lib/orderFulfillment";
 
 // Atomowe dopisanie linii do Order.adminNotes (jedno UPDATE w SQL). Dawniej
 // read-modify-write: notatka admina zapisana w panelu miedzy odczytem a zapisem
@@ -148,6 +148,7 @@ export interface SyncResult {
   newStatus: string;
   changed: boolean;
   emailSent: boolean;
+  labelEmailSent?: boolean;
   note?: string;
 }
 
@@ -157,7 +158,19 @@ export interface SyncResult {
 //   undefined = pobierz samodzielnie, null = InPost niedostepny (bez ponownej proby).
 // Jesli prefetched dotyczy innego numeru niz aktualny w zamowieniu (zmiana w
 // miedzyczasie), pobieramy od nowa.
+// + brakujacy mail "Pakujemy i wysylamy" (ensureLabelEmail) — PO zmianie statusu,
+// zeby paczka juz odebrana przez kuriera dostala tylko "W drodze".
 export async function syncOrderTracking(orderId: string, prefetched?: InPostTracking | null): Promise<SyncResult | null> {
+  const r = await syncOrderTrackingInner(orderId, prefetched);
+  let labelEmailSent = false;
+  // Przewoznik nie odpowiedzial = nie wiemy, czy paczka juz nie jedzie/nie lezy
+  // w Paczkomacie (status mogl nie zdazyc sie przesunac) — mail przy nastepnym sprawdzeniu.
+  if (r?.note?.endsWith("_unavailable")) return r;
+  try { labelEmailSent = await ensureLabelEmail(orderId); } catch (e) { console.error("[tracking] label email failed", orderId, e); }
+  return r ? { ...r, labelEmailSent } : r;
+}
+
+async function syncOrderTrackingInner(orderId: string, prefetched?: InPostTracking | null): Promise<SyncResult | null> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: { trackingNumber: true, fulfillmentStatus: true },
