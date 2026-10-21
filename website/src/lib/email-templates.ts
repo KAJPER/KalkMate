@@ -410,6 +410,54 @@ export function statusInProgressEmail(data: FulfillmentData, locale: EmailLocale
   return shell(inner, locale);
 }
 
+// Etykieta nadana w panelu (Base Courier) — numer przesylki juz jest, kurier
+// jeszcze nie odebral paczki. Wysylane raz, przy nadaniu (notifyShipmentCreated).
+export function statusLabelCreatedEmail(data: FulfillmentData, locale: EmailLocale = "pl"): string {
+  const eyebrows: Record<EmailLocale, string> = {
+    pl: "Status · Nadanie",
+    de: "Status · Versandvorbereitung",
+    en: "Status · Shipping",
+  };
+  const headlines: Record<EmailLocale, [string, string]> = {
+    pl: ["Pakujemy i wysyłamy.", "wysyłamy"],
+    de: ["Wird verpackt und verschickt.", "verschickt"],
+    en: ["Packing and shipping.", "shipping"],
+  };
+  const leads: Record<EmailLocale, string> = {
+    pl: `Cześć ${strongName(data.customerName)}, pakujemy Twoje zamówienie ${strongItem(data.product)} i nadaliśmy już przesyłkę.`,
+    de: `Hallo ${strongName(data.customerName)}, wir verpacken deine Bestellung ${strongItem(data.product)} — die Sendung ist bereits angemeldet.`,
+    en: `Hi ${strongName(data.customerName)}, we're packing your order ${strongItem(data.product)} and the shipment is already booked.`,
+  };
+  const bodies: Record<EmailLocale, string> = {
+    pl: "Kurier odbierze paczkę w ciągu 1–2 dni roboczych. Do tego czasu śledzenie może pokazywać tylko „przesyłka utworzona” — to normalne.",
+    de: "Der Kurier holt das Paket innerhalb von 1–2 Werktagen ab. Bis dahin zeigt die Sendungsverfolgung eventuell nur „Sendung erstellt“ — das ist normal.",
+    en: "The courier will collect the package within 1–2 business days. Until then, tracking may only show “shipment created” — that's normal.",
+  };
+  const [hl, hlAccent] = headlines[locale];
+  const tracking = data.trackingNumber || "";
+  const isInPost = /^\d{24}$/.test(tracking);
+
+  const inner = `
+    ${eyebrowBlock(eyebrows[locale])}
+    ${headline(hl, hlAccent)}
+    ${lead(leads[locale])}
+
+    ${infoTable([
+      infoRow(t(locale, "rowStatus"), statusBadge(t(locale, "badgeInProgress"))),
+      tracking
+        ? infoRow(t(locale, "rowTracking"), `<strong style="color:${C.ink};font-family:${FONT_MONO};font-size:13px;background:${C.signal};padding:2px 6px;border-radius:2px;">${escHtml(tracking)}</strong>`)
+        : "",
+      data.pickupPoint ? infoRow(t(locale, "rowLocker"), escHtml(data.pickupPoint)) : "",
+    ].join(""))}
+
+    ${body(bodies[locale])}
+    ${isInPost
+      ? ctaButton(t(locale, "btnTrack"), `https://inpost.pl/sledzenie-przesylek?number=${encodeURIComponent(tracking)}`)
+      : ctaButton(t(locale, "btnPanel"), "https://kalkmate.pl/panel")}
+  `;
+  return shell(inner, locale);
+}
+
 export function statusShippedEmail(data: FulfillmentData, locale: EmailLocale = "pl"): string {
   const eyebrows: Record<EmailLocale, string> = {
     pl: "Status · Wysłane",
@@ -841,6 +889,11 @@ export const EMAIL_SUBJECTS = {
     pl: "Twoje zamówienie jest w realizacji – KalkMate",
     de: "Deine Bestellung wird bearbeitet – KalkMate",
     en: "Your order is being processed – KalkMate",
+  },
+  orderLabelCreated: {
+    pl: "Pakujemy i wysyłamy Twoje zamówienie – KalkMate",
+    de: "Deine Bestellung wird verpackt und verschickt – KalkMate",
+    en: "We're packing and shipping your order – KalkMate",
   },
   orderShipped: {
     pl: "Twoja paczka została wysłana! – KalkMate",

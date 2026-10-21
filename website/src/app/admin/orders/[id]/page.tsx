@@ -799,7 +799,7 @@ export default function OrderDetailPage({
       void refreshOrder();
       setBcMsg(
         data.trackingNumber
-          ? `Nadano. Numer przesyłki: ${data.trackingNumber}`
+          ? `Nadano. Numer przesyłki: ${data.trackingNumber}${data.emailSent ? " · klient dostał mail „Pakujemy i wysyłamy”" : " · mail do klienta NIE poszedł"}`
           : "Nadano — numer przesyłki nie wrócił w odpowiedzi, sprawdź w panelu Base Courier"
       );
     } catch {
@@ -855,7 +855,7 @@ export default function OrderDetailPage({
       void refreshOrder();
       setBcMsg(
         data.trackingNumber
-          ? `Nadano. Numer przesyłki: ${data.trackingNumber}`
+          ? `Nadano. Numer przesyłki: ${data.trackingNumber}${data.emailSent ? " · klient dostał mail „Pakujemy i wysyłamy”" : " · mail do klienta NIE poszedł"}`
           : "Nadano — numer przesyłki nie wrócił w odpowiedzi, sprawdź w panelu Base Courier"
       );
     } catch {

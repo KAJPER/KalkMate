@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
 import {
   statusInProgressEmail,
+  statusLabelCreatedEmail,
   statusShippedEmail,
   statusFulfilledEmail,
   statusCancelledEmail,
@@ -190,4 +191,39 @@ export async function applyFulfillmentStatus(
     newStatus: statusChanged && newStatus ? newStatus : previousStatus,
     ...(conflict ? { conflict: true } : {}),
   };
+}
+
+// Nadanie przesylki z panelu (Base Courier) — klient od razu dostaje mail
+// "Pakujemy i wysylamy" z numerem przesylki. unfulfilled -> in_progress BEZ
+// zwyklego maila "w realizacji" (bylby drugim mailem w tej samej chwili);
+// in_progress zostaje. "shipped"/"fulfilled" przyjda pozniej ze sledzenia
+// (mail "W drodze" po odbiorze przez kuriera). Wolane tylko raz na przesylke
+// (po udanym nadaniu — straznik w basecourier/route.ts blokuje drugie).
+export async function notifyShipmentCreated(orderId: string): Promise<boolean> {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) return false;
+  const status = order.fulfillmentStatus || "unfulfilled";
+  if (status !== "unfulfilled" && status !== "in_progress") return false;
+
+  if (status === "unfulfilled") {
+    await prisma.order.updateMany({
+      where: { id: orderId, fulfillmentStatus: order.fulfillmentStatus },
+      data: { fulfillmentStatus: "in_progress" },
+    });
+  }
+
+  const trackingNumber = (order.trackingNumber || "").trim();
+  if (!order.customerEmail || !trackingNumber) return false;
+  const locale = localeFromCountry(order.customerCountry);
+  const html = statusLabelCreatedEmail({
+    customerName: order.customerName || "Customer",
+    product: "KalkMate v3.0",
+    trackingNumber,
+    pickupPoint: order.pickupPoint || "",
+    pickupPointAddress: order.pickupPointAddress || "",
+  }, locale);
+  const r = await sendMail({ to: order.customerEmail, subject: EMAIL_SUBJECTS.orderLabelCreated[locale], html })
+    .catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) console.error(`[fulfillment] label email failed for order ${orderId}:`, r.error);
+  return r.ok;
 }

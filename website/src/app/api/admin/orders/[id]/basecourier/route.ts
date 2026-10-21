@@ -20,6 +20,7 @@ import {
   type BcCreatedShipment,
 } from "@/lib/basecourier";
 import { syncOrderTracking, appendOrderNoteOnce } from "@/lib/inpostTracking";
+import { notifyShipmentCreated } from "@/lib/orderFulfillment";
 import { receiverFromOrder, applyReceiverEdits, orderPatchFromReceiver, savedForClient } from "@/lib/basecourierReceiver";
 import { customsGoodsValue } from "@/lib/customsInvoice";
 import { readOrderUnits } from "@/lib/orderPersonalization";
@@ -164,7 +165,7 @@ async function runCreate(
   orderPatch: Record<string, unknown>,
   create: () => Promise<BcCreatedShipment>,
   logTag: string
-): Promise<{ ok: true; created: BcCreatedShipment } | { ok: false; response: NextResponse }> {
+): Promise<{ ok: true; created: BcCreatedShipment; emailSent: boolean } | { ok: false; response: NextResponse }> {
   let created: BcCreatedShipment;
   try {
     created = await create();
@@ -211,7 +212,10 @@ async function runCreate(
       ),
     };
   }
-  return { ok: true, created };
+  // Mail do klienta "Pakujemy i wysylamy" z numerem — blad maila nie psuje nadania.
+  let emailSent = false;
+  try { emailSent = await notifyShipmentCreated(id); } catch (e) { console.error(`[basecourier] ${logTag} label email failed`, id, e); }
+  return { ok: true, created, emailSent };
 }
 
 export async function GET(
@@ -384,6 +388,7 @@ async function createShipment(request: NextRequest, id: string): Promise<NextRes
       basecourierOrderId: created.orderId,
       trackingNumber: created.trackingNumber,
       waybillLink: created.waybillLink,
+      emailSent: r.emailSent,
       trackingSync,
       saved: savedForClient(savedPatch, receiver),
       raw: created.raw,
@@ -417,6 +422,7 @@ async function createShipment(request: NextRequest, id: string): Promise<NextRes
     basecourierOrderId: created.orderId,
     trackingNumber: created.trackingNumber,
     waybillLink: created.waybillLink,
+    emailSent: r.emailSent,
     saved: savedForClient(savedPatch, receiver),
     trackingSync,
     raw: created.raw,
