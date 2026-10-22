@@ -5,13 +5,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import { downloadLicenseSheetPdf, CARDS_PER_SHEET } from "@/lib/licensePdf";
 import { toast } from "@/components/admin/toast";
-import { createLicenses, LICENSE_DURATION_DAYS, type LicenseDuration } from "@/components/admin/licenseGen";
+import { createLicenses, LEGACY_DURATION_DAYS, LICENSE_TOKENS_LABEL } from "@/components/admin/licenseGen";
 
 interface License {
   id: string;
   code: string;
-  durationDays: number;
   isUsed: boolean;
+  // Model tokenowy: kiedy przyznano LICENSE_TOKENS (null przy isUsed = licencja
+  // wykorzystana jeszcze w starym modelu czasowym).
+  tokensGrantedAt?: string | null;
   usedBy: string | null;
   usedAt: string | null;
   createdAt: string;
@@ -25,7 +27,6 @@ interface License {
 export default function LicensesPage() {
   const [generatingCodes, setGeneratingCodes] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
-  const [licenseDuration, setLicenseDuration] = useState<LicenseDuration>("month");
   const [licenses, setLicenses] = useState<License[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "used" | "unused">("all");
@@ -80,7 +81,7 @@ export default function LicensesPage() {
     setGeneratedCodes([]);
 
     try {
-      setGeneratedCodes(await createLicenses(count, licenseDuration));
+      setGeneratedCodes(await createLicenses(count));
       fetchLicenses(); // Refresh list
     } catch (error) {
       console.error("Failed to generate licenses:", error);
@@ -95,11 +96,13 @@ export default function LicensesPage() {
     const count = sheetCount * CARDS_PER_SHEET;
 
     try {
-      const codes = await createLicenses(count, licenseDuration, "Arkusz PDF do druku");
+      const codes = await createLicenses(count, "Arkusz PDF do druku");
       // Kody sa juz w bazie — pokaz je nawet, gdyby generowanie PDF sie wysypalo.
       setGeneratedCodes(codes);
       fetchLicenses();
-      await downloadLicenseSheetPdf(codes, LICENSE_DURATION_DAYS[licenseDuration]);
+      // UWAGA: tekst na karcie generuje src/lib/licensePdf.ts (durationLabel) —
+      // do zmiany po stronie lib na "2 mln tokenów AI".
+      await downloadLicenseSheetPdf(codes, LEGACY_DURATION_DAYS);
     } catch (error) {
       console.error("Failed to generate license sheet PDF:", error);
       toast((error as Error).message || "Wystąpił błąd", "error");
@@ -113,7 +116,7 @@ export default function LicensesPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#E0E0E0] mb-1">Generator Licencji</h1>
-          <p className="text-sm text-[#E0E0E0]/60">Zarządzaj kodami dostępu do AI Chat</p>
+          <p className="text-sm text-[#E0E0E0]/60">Kody z pudełka — każdy jednorazowo dodaje {LICENSE_TOKENS_LABEL} AI</p>
         </div>
         <button
           onClick={fetchLicenses}
@@ -156,54 +159,15 @@ export default function LicensesPage() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-[#E0E0E0]">Generuj nowe licencje</h2>
-            <p className="text-sm text-[#E0E0E0]/60">Kody dostępu dla użytkowników</p>
+            <p className="text-sm text-[#E0E0E0]/60">Kody do pudełek (po {LICENSE_TOKENS_LABEL})</p>
           </div>
         </div>
 
         <div className="bg-[#2B2D31] rounded-xl p-4 mb-6 border border-[#3F4147]/50">
           <p className="text-sm text-[#E0E0E0]/80 mb-2">
             <span className="font-semibold text-[#3B82F6]">Format:</span> 16 znaków (a-z, 0-9, -+=%)<br />
-            <span className="font-semibold text-[#3B82F6]">Dostęp:</span> AI Chat przez wybrany okres
+            <span className="font-semibold text-[#3B82F6]">Wartość:</span> jednorazowo {LICENSE_TOKENS_LABEL} na konto
           </p>
-        </div>
-
-        <div className="mb-6">
-          <label className="text-sm font-semibold text-[#E0E0E0] mb-3 block">Wybierz okres dostępu:</label>
-          <div className="grid grid-cols-3 gap-3">
-            <button
-              onClick={() => setLicenseDuration("week")}
-              className={`px-4 py-4 rounded-xl text-sm font-medium transition-all ${
-                licenseDuration === "week"
-                  ? "bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white shadow-lg scale-105"
-                  : "bg-[#2B2D31] text-[#E0E0E0]/60 hover:bg-[#313338]"
-              }`}
-            >
-              <div className="font-bold text-base">Tydzień</div>
-              <div className="text-xs opacity-75 mt-1">7 dni</div>
-            </button>
-            <button
-              onClick={() => setLicenseDuration("month")}
-              className={`px-4 py-4 rounded-xl text-sm font-medium transition-all ${
-                licenseDuration === "month"
-                  ? "bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white shadow-lg scale-105"
-                  : "bg-[#2B2D31] text-[#E0E0E0]/60 hover:bg-[#313338]"
-              }`}
-            >
-              <div className="font-bold text-base">Miesiąc</div>
-              <div className="text-xs opacity-75 mt-1">30 dni</div>
-            </button>
-            <button
-              onClick={() => setLicenseDuration("3months")}
-              className={`px-4 py-4 rounded-xl text-sm font-medium transition-all ${
-                licenseDuration === "3months"
-                  ? "bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white shadow-lg scale-105"
-                  : "bg-[#2B2D31] text-[#E0E0E0]/60 hover:bg-[#313338]"
-              }`}
-            >
-              <div className="font-bold text-base">3 miesiące</div>
-              <div className="text-xs opacity-75 mt-1">90 dni</div>
-            </button>
-          </div>
         </div>
 
         <div className="flex gap-3 mb-4">
@@ -415,7 +379,7 @@ export default function LicensesPage() {
                           {license.isUsed ? "✓ Użyta" : "◯ Dostępna"}
                         </span>
                         <span className="text-xs text-[#E0E0E0]/40">
-                          {license.durationDays} dni
+                          {license.isUsed && !license.tokensGrantedAt ? "stary model (czasowa)" : LICENSE_TOKENS_LABEL}
                         </span>
                       </div>
 

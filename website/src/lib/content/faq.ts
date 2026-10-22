@@ -24,6 +24,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
       a: "Tryb AI wymaga WiFi (konfigurujesz raz, w panelu użytkownika). Tryb klasycznego kalkulatora działa offline przez cały czas.",
     },
     {
+      q: "Czy AI wymaga abonamentu?",
+      a: "Nie. AI działa na tokenach z Twojego konta, bez abonamentu. W zestawie dostajesz 2 mln tokenów AI (kod w pudełku), a nowe konto ma 200 tys. tokenów na start. Gdy się skończą, dokupisz paczkę tokenów w panelu na kalkmate.pl/panel.",
+    },
+    {
       q: "Jak długo działa na baterii?",
       a: "Około 6 godzin w trybie mieszanym (AI + kalkulator). Sam tryb kalkulatora wytrzymuje znacznie dłużej. Ładowanie USB-C ~ 2 godziny.",
     },
@@ -62,6 +66,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
       a: "AI mode requires WiFi (you configure it once in your user panel). The classic calculator mode works offline at all times.",
     },
     {
+      q: "Do I need a subscription for the AI?",
+      a: "No. The AI runs on tokens from your account, with no subscription. The box includes 2M AI tokens (code inside), and every new account gets 200K tokens to start. When they run out, you can buy a token pack in your panel at kalkmate.pl/panel.",
+    },
+    {
       q: "How long does the battery last?",
       a: "Around 6 hours in mixed use (AI + calculator). Calculator mode alone lasts considerably longer. USB-C charging takes about 2 hours.",
     },
@@ -98,6 +106,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
     {
       q: "Brauche ich WLAN?",
       a: "Der KI-Modus benötigt WLAN (du richtest es einmal im Benutzerbereich ein). Der klassische Taschenrechner-Modus funktioniert jederzeit offline.",
+    },
+    {
+      q: "Brauche ich ein Abo für die KI?",
+      a: "Nein. Die KI läuft über Tokens auf deinem Konto, ganz ohne Abo. Im Lieferumfang sind 2 Mio. KI-Tokens enthalten (Code in der Verpackung), und jedes neue Konto erhält 200.000 Tokens zum Start. Sind sie aufgebraucht, kaufst du im Panel unter kalkmate.pl/panel ein Token-Paket nach.",
     },
     {
       q: "Wie lange hält der Akku?",

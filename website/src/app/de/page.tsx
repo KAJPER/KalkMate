@@ -24,7 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "KalkMate — KI-Taschenrechner | Foto-Rechner mit KI",
     description:
-      "KalkMate ist der KI Taschenrechner mit Kamera für Prüfungen. Fotografiere die Aufgabe — die KI zeigt die vollständige Lösung Schritt für Schritt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. 169 EUR, danach ab 4 EUR/Monat.",
+      "KalkMate ist der KI Taschenrechner mit Kamera für Prüfungen. Fotografiere die Aufgabe — die KI zeigt die vollständige Lösung Schritt für Schritt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. 169 EUR inkl. 2 Mio. KI-Tokens — ohne Abo.",
     keywords: [
       "KI Taschenrechner",
       "ki taschenrechner",
@@ -51,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: "KalkMate — KI-Taschenrechner",
       description:
-        "KI Taschenrechner mit Kamera: Fotografiere deine Aufgabe — KalkMate löst sie mit KI direkt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. 169 EUR, danach ab 4 EUR/Monat.",
+        "KI Taschenrechner mit Kamera: Fotografiere deine Aufgabe — KalkMate löst sie mit KI direkt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. 169 EUR inkl. 2 Mio. KI-Tokens — ohne Abo.",
       type: "website",
       locale: "de_DE",
       url: `${siteUrl}/de`,

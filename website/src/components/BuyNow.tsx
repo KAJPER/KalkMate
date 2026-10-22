@@ -152,7 +152,7 @@ const content: Record<Locale, {
     included: [
       "Urządzenie KalkMate v3.0",
       "6 naklejek znamionowych",
-      "Miesiąc AI Chat gratis",
+      "2 mln tokenów AI w zestawie (kod w pudełku)",
       "Instrukcja obsługi",
     ],
     badges: ["Bezpieczna płatność", "Personalizowany dla Ciebie", "Gwarancja 24 mc", "Wysyłka międzynarodowa"],
@@ -233,7 +233,7 @@ const content: Record<Locale, {
     included: [
       "KalkMate v3.0 device",
       "6 rating-plate stickers",
-      "One month of AI Chat free",
+      "2M AI tokens included (code in the box)",
       "User manual",
     ],
     badges: ["Secure payment", "Personalized for you", "24-month warranty", "International shipping"],
@@ -314,7 +314,7 @@ const content: Record<Locale, {
     included: [
       "KalkMate v3.0 Gerät",
       "6 Typenschild-Aufkleber",
-      "Ein Monat AI Chat gratis",
+      "2 Mio. KI-Tokens inklusive (Code in der Verpackung)",
       "Bedienungsanleitung",
     ],
     badges: ["Sichere Zahlung", "Für dich personalisiert", "24 Monate Garantie", "Internationaler Versand"],

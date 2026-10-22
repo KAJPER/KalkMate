@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Wspolna sciezka z przypomnieniami/auto-anulowaniem (lib/paymentReminders.ts):
-  // porownanie kwoty, verify, atomowe pending->paid, kupon, trial, paragon, mail,
+  // porownanie kwoty, verify, atomowe pending->paid, kupon, paragon, mail,
   // wplata po anulowaniu -> notatka + alert.
   const result = await settleP24OrderPayment({
     orderId: rows[0].id,

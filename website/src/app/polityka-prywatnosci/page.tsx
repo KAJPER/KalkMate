@@ -201,7 +201,7 @@ export default function PrivacyPolicy() {
             <UL>
               <li>historia zamówień,</li>
               <li>dane płatności (przetwarzane przez Stripe),</li>
-              <li>informacje o subskrypcji AI Chat,</li>
+              <li>informacje o saldzie, zakupach i aktywacjach tokenów AI (w tym aktywowanych kodach licencji z pudełka),</li>
               <li>historia konwersacji z AI Chat.</li>
             </UL>
           </section>
@@ -250,8 +250,8 @@ export default function PrivacyPolicy() {
             <ul className="list-disc list-outside ml-6 mt-4 space-y-2.5 text-[14px] text-[#F2EDE3]/70 marker:text-[#D8FF3D]/60">
               <li><strong className="text-[#F2EDE3]">Dane transakcyjne i faktury:</strong> 5 lat od końca roku kalendarzowego, w którym powstał obowiązek podatkowy.</li>
               <li><strong className="text-[#F2EDE3]">Dane dotyczące umowy:</strong> przez okres obowiązywania umowy oraz przez czas wymagany przepisami prawa (np. 6 lat w związku z przedawnieniem roszczeń).</li>
-              <li><strong className="text-[#F2EDE3]">Dane związane z subskrypcją:</strong> przez czas trwania subskrypcji oraz 3 lata po jej zakończeniu.</li>
-              <li><strong className="text-[#F2EDE3]">Historia AI Chat:</strong> przez czas aktywnej subskrypcji oraz 30 dni po jej zakończeniu.</li>
+              <li><strong className="text-[#F2EDE3]">Dane związane z tokenami AI</strong> (saldo, zakupy pakietów, aktywowane kody)<strong className="text-[#F2EDE3]">:</strong> przez czas prowadzenia konta oraz 3 lata po jego usunięciu.</li>
+              <li><strong className="text-[#F2EDE3]">Historia AI Chat:</strong> przez czas prowadzenia konta (do usunięcia rozmowy lub konta przez użytkownika) oraz do 30 dni po usunięciu konta.</li>
               <li><strong className="text-[#F2EDE3]">Dane marketingowe (zgoda):</strong> do momentu wycofania zgody lub wniesienia sprzeciwu.</li>
               <li><strong className="text-[#F2EDE3]">Dane analityczne:</strong> do 25 miesięcy od ostatniej aktywności.</li>
             </ul>
@@ -262,7 +262,7 @@ export default function PrivacyPolicy() {
             <H id="sek-6" eyebrow="06" title="Udostępnianie" accent="" />
             <P>Dane osobowe mogą być udostępniane następującym kategoriom odbiorców:</P>
             <ul className="list-disc list-outside ml-6 mt-4 space-y-2.5 text-[14px] text-[#F2EDE3]/70 marker:text-[#D8FF3D]/60">
-              <li><strong className="text-[#F2EDE3]">Stripe</strong> – operator płatności (przetwarzanie transakcji kartami płatniczymi i subskrypcji).</li>
+              <li><strong className="text-[#F2EDE3]">Stripe</strong> – operator płatności (przetwarzanie transakcji kartami płatniczymi, w tym zakupów pakietów tokenów AI).</li>
               <li><strong className="text-[#F2EDE3]">InPost</strong> – firma kurierska (dostawa produktów do Paczkomatów).</li>
               <li><strong className="text-[#F2EDE3]">Resend</strong> – usługa email (wysyłka wiadomości transakcyjnych i magic links).</li>
               <li><strong className="text-[#F2EDE3]">Google AI (Gemini)</strong> – dostawca usługi AI Chat (przetwarzanie zapytań w chatbocie).</li>

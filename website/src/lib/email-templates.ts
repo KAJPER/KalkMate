@@ -325,6 +325,12 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
     de: "Wir benachrichtigen dich, sobald das Paket verschickt wird. Du kannst den Status in deinem Kundenkonto verfolgen.",
     en: "We'll let you know once the package is shipped. You can track the status in your account.",
   };
+  // Model tokenowy (2026-10): bez triala/subskrypcji — tokeny AI z licencji w pudelku.
+  const licenseNote: Record<EmailLocale, string> = {
+    pl: "W pudełku znajdziesz kod licencji — po aktywacji w panelu dostaniesz 2 mln tokenów AI na swoje konto. Tokeny nie wygasają; kolejne możesz dokupić w panelu.",
+    de: "In der Verpackung findest du einen Lizenzcode — nach der Aktivierung im Kundenkonto erhältst du 2 Mio. KI-Tokens. Die Tokens verfallen nicht; weitere kannst du im Kundenkonto nachkaufen.",
+    en: "Inside the box you'll find a license code — activate it in your account panel to get 2 million AI tokens. Tokens never expire; you can top up more in the panel.",
+  };
   const eyebrows: Record<EmailLocale, string> = {
     pl: "Zamówienie · Potwierdzenie",
     de: "Bestellung · Bestätigung",
@@ -364,6 +370,7 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
     ].join(""))}
 
     ${body(bodies[locale])}
+    ${body(licenseNote[locale])}
     ${ctaButton(t(locale, "btnPanel"), "https://kalkmate.pl/panel")}
 
     <p style="margin:24px 0 0 0;font-family:${FONT_MONO};font-size:10px;letter-spacing:0.15em;color:${C.paperDim};text-transform:uppercase;text-align:center;">${t(locale, "labelOrderId")} <span style="color:${C.paper};font-weight:600;">${escHtml(data.orderId)}</span></p>
@@ -530,9 +537,9 @@ export function statusFulfilledEmail(data: FulfillmentData, locale: EmailLocale 
   };
   const mailLink = `<a href="mailto:kontakt@kalkmate.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">kontakt@kalkmate.pl</a>`;
   const bodies: Record<EmailLocale, string> = {
-    pl: `Dziękujemy za zakup. W razie pytań napisz do nas: ${mailLink}.`,
-    de: `Danke für deinen Kauf. Bei Fragen schreib uns an ${mailLink}.`,
-    en: `Thank you for your purchase. If you have any questions, contact us at ${mailLink}.`,
+    pl: `Dziękujemy za zakup. Nie zapomnij aktywować kodu licencji z pudełka w panelu — dostaniesz 2 mln tokenów AI. W razie pytań napisz do nas: ${mailLink}.`,
+    de: `Danke für deinen Kauf. Vergiss nicht, den Lizenzcode aus der Verpackung im Kundenkonto zu aktivieren — du erhältst 2 Mio. KI-Tokens. Bei Fragen schreib uns an ${mailLink}.`,
+    en: `Thank you for your purchase. Don't forget to activate the license code from the box in your account panel — you'll get 2 million AI tokens. If you have any questions, contact us at ${mailLink}.`,
   };
   const [hl, hlAccent] = headlines[locale];
 

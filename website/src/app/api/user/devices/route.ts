@@ -56,16 +56,9 @@ export async function GET() {
     where: { claimedByUserId: user.id },
   });
 
-  let licenseStatus = "none";
-  if (license) {
-    licenseStatus = "active";
-    if (license.usedAt) {
-      const expiresAt = new Date(
-        new Date(license.usedAt).getTime() + license.durationDays * 24 * 60 * 60 * 1000
-      );
-      if (new Date() > expiresAt) licenseStatus = "expired";
-    }
-  }
+  // Model tokenowy (2026-10): licencja nie wygasa — to jednorazowe
+  // doladowanie tokenow. "active" = aktywowana na tym koncie.
+  const licenseStatus = license ? "active" : "none";
 
   return NextResponse.json({
     ok: true,
@@ -73,7 +66,6 @@ export async function GET() {
     license: license
       ? {
           code: license.code,
-          durationDays: license.durationDays,
           activatedAt: license.usedAt,
           status: licenseStatus,
         }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { requireAdminAuth } from "@/lib/admin-auth";
+import { ensureLicenseTokensColumn } from "@/lib/licenseTokens";
+import { LICENSE_TOKENS } from "@/lib/tokenGrants";
 
 export async function GET(request: NextRequest) {
   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
@@ -56,11 +58,34 @@ export async function GET(request: NextRequest) {
 
     const userMap = new Map(users.map((u) => [u.id, u]));
 
+    // Model tokenowy (2026-10): licencja = jednorazowe LICENSE_TOKENS, bez
+    // dat waznosci. tokensGrantedAt (raw kolumna) — kiedy przyznano tokeny;
+    // null przy isUsed = licencja wykorzystana w starym modelu czasowym.
+    const grantedMap = new Map<string, string | null>();
+    try {
+      await ensureLicenseTokensColumn();
+      const ids = licenses.map((l) => l.id);
+      if (ids.length) {
+        const rows = await prisma.$queryRaw<{ id: string; tokensGrantedAt: string | null }[]>`
+          SELECT "id", "tokensGrantedAt" FROM "License" WHERE "id" IN (${Prisma.join(ids)})
+        `;
+        for (const r of rows) grantedMap.set(r.id, r.tokensGrantedAt);
+      }
+    } catch (e) {
+      console.error("[admin/licenses/list] tokensGrantedAt read fail:", e);
+    }
+
     // Enrich licenses with user data
-    const enrichedLicenses = licenses.map((license) => ({
-      ...license,
-      usedByUser: license.usedBy ? userMap.get(license.usedBy) : null,
-    }));
+    const enrichedLicenses = licenses.map(({ durationDays: _legacyDays, ...license }) => {
+      const tokensGrantedAt = grantedMap.get(license.id) ?? null;
+      return {
+        ...license,
+        tokenValue: LICENSE_TOKENS,
+        tokensGrantedAt,
+        tokensGranted: tokensGrantedAt ? LICENSE_TOKENS : 0,
+        usedByUser: license.usedBy ? userMap.get(license.usedBy) : null,
+      };
+    });
 
     return NextResponse.json({
       licenses: enrichedLicenses,

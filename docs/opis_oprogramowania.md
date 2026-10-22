@@ -107,7 +107,7 @@ Główna infrastruktura serwerowa oparta jest na nowoczesnym stosie technologicz
 1. **Panel Klienta (`/panel`):**
    - Logowanie i rejestracja (NextAuth.js).
    - Przeglądanie notatek, historii AI i zapisanych sprawdzianów zsynchronizowanych z urządzeniem.
-   - Zarządzanie subskrypcją na czat AI.
+   - Saldo tokenów AI (czat w panelu i kalkulator), zakup pakietów tokenów oraz aktywacja kodu z pudełka (+2 mln tokenów). Model bez subskrypcji.
 2. **Panel Administratora (`/admin`):**
    - Uwierzytelnianie dwuskładnikowe (TOTP 2FA via Google Authenticator) w module logowania (`/admin/login`).
    - Zarządzanie użytkownikami, urządzeniami, wygenerowanymi kodami licencji.

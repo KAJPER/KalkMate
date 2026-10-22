@@ -68,7 +68,7 @@ const DICT: Record<
     brandEyebrow: "[ 01 ] · Panel klienta",
     brandHeading: (<>Twój sprzęt.<br /><span className="italic">Twoje</span> rozwiązania.</>),
     brandDesc:
-      "Zaloguj się, żeby skonfigurować WiFi w kalkulatorze, przeglądać historię rozwiązań, zarządzać licencjami AI Chat i aktywować nowe urządzenia.",
+      "Zaloguj się, żeby skonfigurować WiFi w kalkulatorze, przeglądać historię rozwiązań, zarządzać tokenami AI i aktywować nowe urządzenia.",
     statSubjects: "Przedmiotów",
     statResponse: "Odpowiedź",
     statWarranty: "Gwarancja",
@@ -118,7 +118,7 @@ const DICT: Record<
     brandEyebrow: "[ 01 ] · Client panel",
     brandHeading: (<>Your hardware.<br /><span className="italic">Your</span> solutions.</>),
     brandDesc:
-      "Sign in to set up WiFi on your calculator, browse your solution history, manage AI Chat licenses and activate new devices.",
+      "Sign in to set up WiFi on your calculator, browse your solution history, manage your AI tokens and activate new devices.",
     statSubjects: "Subjects",
     statResponse: "Response",
     statWarranty: "Warranty",
@@ -168,7 +168,7 @@ const DICT: Record<
     brandEyebrow: "[ 01 ] · Kundenbereich",
     brandHeading: (<>Deine Hardware.<br /><span className="italic">Deine</span> Lösungen.</>),
     brandDesc:
-      "Melde dich an, um WiFi auf deinem Rechner einzurichten, deinen Lösungsverlauf einzusehen, AI-Chat-Lizenzen zu verwalten und neue Geräte zu aktivieren.",
+      "Melde dich an, um WiFi auf deinem Rechner einzurichten, deinen Lösungsverlauf einzusehen, deine KI-Tokens zu verwalten und neue Geräte zu aktivieren.",
     statSubjects: "Fächer",
     statResponse: "Antwort",
     statWarranty: "Garantie",

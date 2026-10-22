@@ -11,7 +11,7 @@ import GeminiUsageChart from "@/components/admin/GeminiUsageChart";
 import OrdersPieChart from "@/components/admin/OrdersPieChart";
 import { toast } from "@/components/admin/toast";
 import { usePolling } from "@/components/admin/usePolling";
-import { createLicenses, type LicenseDuration } from "@/components/admin/licenseGen";
+import { createLicenses, LICENSE_TOKENS_LABEL } from "@/components/admin/licenseGen";
 
 interface Analytics {
   totalRevenue: number;
@@ -38,12 +38,17 @@ interface Stats {
   users: {
     total: number;
   };
-  subscriptions: {
-    total: number;
-    active: number;
-    trial: number;
-    expired: number;
+  // Model tokenowy (od 2026-10). Starsze API może tego pola nie zwracać.
+  tokens?: {
+    usersWithAccess: number;
+    totalBalance: number;
+    minForAi: number;
+    licenseValue: number;
+    licensesWithTokens: number;
   };
+  // Subskrypcje wycofane — API zwraca je już tylko jako dane historyczne,
+  // dashboard ich nie pokazuje.
+  subscriptions?: unknown;
   licenses: {
     total: number;
     used: number;
@@ -90,11 +95,6 @@ interface User {
   email: string;
   name: string | null;
   createdAt: string;
-  subscription: {
-    status: string;
-    trialEndsAt: string | null;
-    plan: string | null;
-  } | null;
   licensesUsed: number;
 }
 
@@ -107,7 +107,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [generatingCodes, setGeneratingCodes] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
-  const [licenseDuration, setLicenseDuration] = useState<LicenseDuration>("month");
   const [stockValue, setStockValue] = useState<number | "">("");
   const [stockSaving, setStockSaving] = useState(false);
   const [stockSaved, setStockSaved] = useState(false);
@@ -162,7 +161,7 @@ export default function AdminDashboard() {
     setGeneratedCodes([]);
 
     try {
-      setGeneratedCodes(await createLicenses(count, licenseDuration));
+      setGeneratedCodes(await createLicenses(count));
       fetchData(); // Refresh stats
     } catch (error) {
       console.error("Failed to generate licenses:", error);
@@ -352,54 +351,15 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-[#E0E0E0]">Generator licencji</h2>
-                <p className="text-sm text-[#E0E0E0]/60">Generuj kody dostępu do AI Chat</p>
+                <p className="text-sm text-[#E0E0E0]/60">Kody z pudełka — po {LICENSE_TOKENS_LABEL} AI</p>
               </div>
             </div>
 
             <div className="bg-[#2B2D31] rounded-xl p-4 mb-4 border border-[#3F4147]/50">
               <p className="text-sm text-[#E0E0E0]/80 mb-2">
                 <span className="font-semibold text-[#3B82F6]">Format:</span> 16 znaków (a-z, 0-9, -+=%)<br />
-                <span className="font-semibold text-[#3B82F6]">Dostęp:</span> AI Chat przez wybrany okres
+                <span className="font-semibold text-[#3B82F6]">Wartość:</span> jednorazowo {LICENSE_TOKENS_LABEL} na konto
               </p>
-            </div>
-
-            <div className="mb-4">
-              <label className="text-sm font-semibold text-[#E0E0E0] mb-2 block">Okres dostępu:</label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => setLicenseDuration("week")}
-                  className={`px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                    licenseDuration === "week"
-                      ? "bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white shadow-lg"
-                      : "bg-[#2B2D31] text-[#E0E0E0]/60 hover:bg-[#313338]"
-                  }`}
-                >
-                  <div className="font-bold">Tydzień</div>
-                  <div className="text-xs opacity-75">7 dni</div>
-                </button>
-                <button
-                  onClick={() => setLicenseDuration("month")}
-                  className={`px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                    licenseDuration === "month"
-                      ? "bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white shadow-lg"
-                      : "bg-[#2B2D31] text-[#E0E0E0]/60 hover:bg-[#313338]"
-                  }`}
-                >
-                  <div className="font-bold">Miesiąc</div>
-                  <div className="text-xs opacity-75">30 dni</div>
-                </button>
-                <button
-                  onClick={() => setLicenseDuration("3months")}
-                  className={`px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                    licenseDuration === "3months"
-                      ? "bg-gradient-to-br from-[#3B82F6] to-[#2563EB] text-white shadow-lg"
-                      : "bg-[#2B2D31] text-[#E0E0E0]/60 hover:bg-[#313338]"
-                  }`}
-                >
-                  <div className="font-bold">3 miesiące</div>
-                  <div className="text-xs opacity-75">90 dni</div>
-                </button>
-              </div>
             </div>
 
             <div className="flex gap-2 mb-4">
@@ -603,16 +563,6 @@ export default function AdminDashboard() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="text-sm font-semibold text-[#E0E0E0]">{user.name || "Brak imienia"}</p>
-                          {user.subscription && (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              user.subscription.status === "active" ? "bg-green-500/20 text-green-400" :
-                              user.subscription.status === "trial" ? "bg-blue-500/20 text-blue-400" :
-                              "bg-gray-500/20 text-gray-400"
-                            }`}>
-                              {user.subscription.status === "active" ? "Aktywna" :
-                               user.subscription.status === "trial" ? "Trial" : user.subscription.status}
-                            </span>
-                          )}
                         </div>
                         <p className="text-xs text-[#E0E0E0]/60 mb-2">{user.email}</p>
                         <div className="flex items-center gap-4 text-xs text-[#E0E0E0]/50">
@@ -629,7 +579,7 @@ export default function AdminDashboard() {
             </motion.div>
           )}
 
-          {/* Stats cards - użytkownicy i subskrypcje */}
+          {/* Stats cards - użytkownicy, AI (tokeny), licencje */}
           {stats && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
@@ -639,15 +589,15 @@ export default function AdminDashboard() {
                 color="cyan"
               />
               <StatCard
-                title="Subskrypcje"
-                value={stats.subscriptions.total}
-                subtitle={`${stats.subscriptions.active} aktywnych`}
+                title="Z dostępem do AI"
+                value={stats.tokens ? stats.tokens.usersWithAccess : "—"}
+                subtitle={stats.tokens ? `saldo ≥ ${stats.tokens.minForAi.toLocaleString("pl-PL")} tokenów` : "brak danych z API"}
                 color="indigo"
               />
               <StatCard
-                title="Triale"
-                value={stats.subscriptions.trial}
-                subtitle={`${stats.subscriptions.expired} wygasłych`}
+                title="Tokeny na kontach"
+                value={stats.tokens ? stats.tokens.totalBalance.toLocaleString("pl-PL") : "—"}
+                subtitle={stats.tokens ? `${stats.tokens.licensesWithTokens} kodów z pudełka aktywowanych` : "brak danych z API"}
                 color="pink"
               />
               <StatCard

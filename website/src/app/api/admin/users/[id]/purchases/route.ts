@@ -25,7 +25,7 @@ export async function GET(
     listTokenPurchasesByUser(id),
     prisma.license.findMany({
       where: { usedBy: id },
-      select: { code: true, durationDays: true, usedAt: true, description: true },
+      select: { code: true, usedAt: true, description: true },
       orderBy: { usedAt: "desc" },
     }),
   ]);

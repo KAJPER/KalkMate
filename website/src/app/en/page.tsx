@@ -24,7 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "KalkMate — AI Calculator with Camera | Smart Photo Calculator",
     description:
-      "KalkMate is an AI calculator with camera built in — point it at any math, physics, chemistry or biology problem and get the full step-by-step solution on its OLED screen. 169 EUR, then from 4 EUR/month.",
+      "KalkMate is an AI calculator with camera built in — point it at any math, physics, chemistry or biology problem and get the full step-by-step solution on its OLED screen. 169 EUR with 2M AI tokens included — no subscription.",
     keywords: [
       "AI calculator",
       "AI calculator with camera",
@@ -48,7 +48,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: "KalkMate — AI Calculator with Camera",
       description:
-        "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, subscription from 4 EUR/month.",
+        "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, no subscription. 2M AI tokens included.",
       type: "website",
       locale: "en_US",
       url: `${siteUrl}/en`,

@@ -11,6 +11,7 @@ import {
   type EmailLocale,
 } from "@/lib/email-templates";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { SIGNUP_TOKENS } from "@/lib/tokenGrants";
 import { giveConsent, rememberUserLanguage } from "@/lib/newsletter";
 import { newMailToken } from "@/lib/linkTokens";
 import {
@@ -157,16 +158,10 @@ export async function POST(req: NextRequest) {
       await prisma.order.update({ where: { id: existingOrder.id }, data: { userId: user.id } });
     }
 
-    const trialDays = existingOrder ? 30 : 1;
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
-    await prisma.subscription.create({
-      data: { id: crypto.randomUUID(), userId: user.id, status: "trial", trialEndsAt, trialDays, updatedAt: new Date() },
-    });
-
-    // Startowe saldo TYLKO dla nowo utworzonego konta (wczesniej wykonywalo sie
-    // tez dla istniejacych kont i nadpisywalo oplacone saldo).
-    await prisma.$executeRaw`UPDATE "User" SET "tokenBalance" = 1000000 WHERE "id" = ${user.id}`;
+    // Model tokenowy (2026-10): bez rekordu Subscription/trialu — tylko saldo
+    // startowe SIGNUP_TOKENS. TYLKO dla nowo utworzonego konta (wczesniej
+    // wykonywalo sie tez dla istniejacych kont i nadpisywalo oplacone saldo).
+    await prisma.$executeRaw`UPDATE "User" SET "tokenBalance" = ${SIGNUP_TOKENS} WHERE "id" = ${user.id}`;
 
     // Checkbox "chce dostawac newsletter" (domyslnie odznaczony). Blad zapisu
     // zgody nie moze blokowac rejestracji.

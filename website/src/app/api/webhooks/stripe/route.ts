@@ -13,7 +13,7 @@ import { getTokenPack } from "@/lib/tokenPacks";
 import { setOrderPersonalization, setOrderUnits, unitsFromStripeMetadata, type OrderUnit } from "@/lib/orderPersonalization";
 import {
   alertAdmin, appendOrderAdminNote, expectedPaidAmount, formatMinor,
-  generateOrderNumber, grantDevicePurchaseTrial, isUniqueViolation, parseOrderQuantity,
+  generateOrderNumber, isUniqueViolation, parseOrderQuantity,
 } from "@/lib/checkoutPricing";
 import { randomUUID } from "crypto";
 
@@ -92,36 +92,17 @@ export async function POST(request: NextRequest) {
             await handleCalculatorPurchase(session);
           }
         } else if (session.mode === "subscription") {
-          await handleSubscriptionCreated(session);
+          logIgnoredSubscriptionEvent(event.type, session.id);
         }
         break;
       }
 
-      case "customer.subscription.updated": {
-        const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionUpdated(subscription);
-        break;
-      }
-
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionDeleted(subscription);
-        break;
-      }
-
-      case "invoice.payment_succeeded": {
-        const invoice = event.data.object as Stripe.Invoice;
-        if (invoiceSubscriptionId(invoice)) {
-          await handleInvoicePaymentSucceeded(invoice);
-        }
-        break;
-      }
-
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted":
+      case "invoice.payment_succeeded":
       case "invoice.payment_failed": {
-        const invoice = event.data.object as Stripe.Invoice;
-        if (invoiceSubscriptionId(invoice)) {
-          await handleInvoicePaymentFailed(invoice);
-        }
+        const obj = event.data.object as { id?: string };
+        logIgnoredSubscriptionEvent(event.type, obj?.id);
         break;
       }
 
@@ -335,12 +316,8 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     return;
   }
 
-  // Zakup kalkulatora = 30 dni AI, bez skracania dluzszego dostepu.
-  try {
-    await grantDevicePurchaseTrial(existingUser?.id);
-  } catch (e) {
-    console.error("[WEBHOOK] subscription trial update failed:", e);
-  }
+  // Model tokenowy (2026-10): zakup kalkulatora nie daje triala/tokenow —
+  // tokeny sa z licencji w pudelku (aktywacja w panelu).
 
   console.log(`[WEBHOOK] ✅ Order created successfully: ${orderNumber} for email ${email}${existingUser ? ` (user ID: ${existingUser.id})` : " (no account yet)"}`);
 
@@ -438,13 +415,9 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
       .catch((e) => console.error("[WEBHOOK] personalization save failed:", e));
   }
 
-  // Zakup kalkulatora = 30 dni AI, bez skracania dluzszego dostepu.
-  // Jeśli użytkownik NIE ma konta, zamówienie zostanie połączone przy rejestracji
-  try {
-    await grantDevicePurchaseTrial(existingUser?.id);
-  } catch (e) {
-    console.error("[WEBHOOK] subscription trial update failed:", e);
-  }
+  // Model tokenowy (2026-10): zakup kalkulatora nie daje triala/tokenow —
+  // tokeny sa z licencji w pudelku. Jeśli użytkownik NIE ma konta, zamówienie
+  // zostanie połączone przy rejestracji.
 
   await autoEnqueueOrderReceipt(orderId);
 
@@ -534,162 +507,12 @@ async function handleTokenPurchase(session: Stripe.Checkout.Session) {
   }
 }
 
-// === Subskrypcje (stripe@20, API 2026-01-28.clover) ===
-// Subscription.current_period_end przeniesiono na pozycje (items.data[].current_period_end),
-// Invoice.subscription -> invoice.parent.subscription_details.subscription.
-
-function subscriptionPeriodEnd(sub: Stripe.Subscription): Date | null {
-  const fromItem = sub.items?.data?.[0]?.current_period_end;
-  const legacy = (sub as unknown as { current_period_end?: number }).current_period_end;
-  const ts = typeof fromItem === "number" ? fromItem : typeof legacy === "number" ? legacy : null;
-  if (ts === null || !Number.isFinite(ts) || ts <= 0) return null;
-  const d = new Date(ts * 1000);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-// active/trialing -> active; past_due/unpaid -> past_due (dostep do konca
-// oplaconego okresu — K2); canceled -> cancelled. incomplete = pierwsza
-// platnosc w toku — statusu nie ruszamy (null).
-function mapStripeStatus(status: Stripe.Subscription.Status): "active" | "past_due" | "cancelled" | null {
-  switch (status) {
-    case "active":
-    case "trialing":
-      return "active";
-    case "past_due":
-    case "unpaid":
-      return "past_due";
-    case "canceled":
-    case "incomplete_expired":
-    case "paused":
-      return "cancelled";
-    default:
-      return null;
-  }
-}
-
-function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
-  const sub = invoice.parent?.subscription_details?.subscription;
-  if (typeof sub === "string") return sub;
-  if (sub && typeof sub === "object") return sub.id;
-  const legacy = (invoice as unknown as { subscription?: string | { id: string } | null }).subscription;
-  if (typeof legacy === "string") return legacy;
-  if (legacy && typeof legacy === "object") return legacy.id;
-  return null;
-}
-
-async function handleSubscriptionCreated(session: Stripe.Checkout.Session) {
-  const userId = session.metadata?.userId;
-
-  if (!userId) {
-    console.error("Missing userId in checkout session metadata");
-    return;
-  }
-  const subId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
-  if (!subId) {
-    console.error(`[WEBHOOK] checkout session ${session.id} bez subscription`);
-    return;
-  }
-
-  const stripeSubscription = await stripe.subscriptions.retrieve(subId);
-  const periodEnd = subscriptionPeriodEnd(stripeSubscription);
-  const status = mapStripeStatus(stripeSubscription.status);
-
-  const data = {
-    stripeSubscriptionId: stripeSubscription.id,
-    stripePriceId: stripeSubscription.items.data[0]?.price?.id ?? null,
-    ...(periodEnd ? { stripeCurrentPeriodEnd: periodEnd } : {}),
-    ...(status ? { status } : {}),
-    ...(status === "active" ? { cancelledAt: null } : {}),
-  };
-  await prisma.subscription.upsert({
-    where: { userId },
-    update: data,
-    create: {
-      id: randomUUID(),
-      userId,
-      trialEndsAt: new Date(),
-      trialDays: 0,
-      updatedAt: new Date(),
-      ...data,
-      status: status ?? "trial",
-    },
-  });
-
-  console.log(`Subscription created for user ${userId} (${stripeSubscription.status})`);
-}
-
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-  const dbSubscription = await prisma.subscription.findUnique({
-    where: { stripeSubscriptionId: subscription.id },
-  });
-
-  if (!dbSubscription) {
-    console.error(`Subscription not found: ${subscription.id}`);
-    return;
-  }
-
-  const status = mapStripeStatus(subscription.status);
-  const periodEnd = subscriptionPeriodEnd(subscription);
-  const data = {
-    ...(status ? { status } : {}),
-    ...(periodEnd ? { stripeCurrentPeriodEnd: periodEnd } : {}),
-    ...(status === "cancelled" && !dbSubscription.cancelledAt ? { cancelledAt: new Date() } : {}),
-  };
-  if (Object.keys(data).length > 0) {
-    await prisma.subscription.update({ where: { id: dbSubscription.id }, data });
-  }
-
-  console.log(`Subscription updated: ${subscription.id} (${subscription.status}${subscription.cancel_at_period_end ? ", cancel_at_period_end" : ""})`);
-}
-
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-  const dbSubscription = await prisma.subscription.findUnique({
-    where: { stripeSubscriptionId: subscription.id },
-  });
-
-  if (!dbSubscription) {
-    console.error(`Subscription not found: ${subscription.id}`);
-    return;
-  }
-
-  await prisma.subscription.update({
-    where: { id: dbSubscription.id },
-    data: {
-      status: "cancelled",
-      cancelledAt: dbSubscription.cancelledAt ?? new Date(),
-    },
-  });
-
-  console.log(`Subscription deleted: ${subscription.id}`);
-}
-
-async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
-  const subId = invoiceSubscriptionId(invoice);
-  if (!subId) return;
-  const subscription = await stripe.subscriptions.retrieve(subId);
-
-  const dbSubscription = await prisma.subscription.findUnique({
-    where: { stripeSubscriptionId: subscription.id },
-  });
-
-  if (!dbSubscription) return;
-
-  const periodEnd = subscriptionPeriodEnd(subscription);
-  await prisma.subscription.update({
-    where: { id: dbSubscription.id },
-    data: {
-      status: mapStripeStatus(subscription.status) ?? "active",
-      ...(periodEnd ? { stripeCurrentPeriodEnd: periodEnd } : {}),
-    },
-  });
-
-  console.log(`Invoice payment succeeded for subscription ${subscription.id}`);
-}
-
-async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
-  // Status (past_due/unpaid) przyjdzie w customer.subscription.updated.
-  console.error(`Invoice payment failed for subscription ${invoiceSubscriptionId(invoice)}`);
-  // TODO: Send payment failed email to customer
+// === Subskrypcje — wycofane (model tokenowy 2026-10) ===
+// Dostep do AI nie zalezy juz od Subscription, wiec zdarzenia subskrypcyjne
+// Stripe (resztki sprzed zmiany: odnowienia, anulowania, porzucone sesje
+// checkout mode=subscription) tylko logujemy i ignorujemy — bez zapisu.
+function logIgnoredSubscriptionEvent(type: string, id: string | null | undefined) {
+  console.warn(`[WEBHOOK] subskrypcje wycofane — ignoruje ${type} (${id ?? "?"})`);
 }
 
 // === Zwroty i spory (chargeback) ===

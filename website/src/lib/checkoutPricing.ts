@@ -10,7 +10,7 @@
 // wczesniej dowolna waluta != eur dostawala kwote 69900 (np. 699 HUF).
 //
 // Do tego drobne helpery wspolne dla sciezek platnosci: numer zamowienia,
-// alert do admina, notatka w zamowieniu, trial po zakupie urzadzenia.
+// alert do admina, notatka w zamowieniu.
 
 import { randomInt } from "crypto";
 import { prisma } from "@/lib/db";
@@ -217,25 +217,5 @@ export async function appendOrderAdminNote(orderId: string, note: string, dedupe
   return Number(changed) > 0;
 }
 
-// === Trial AI po zakupie urzadzenia ===
-// Zakup kalkulatora daje 30 dni AI — ale NIE skraca dluzszego dostepu: trial
-// konczy sie max(obecny koniec, teraz + 30 dni), a status 'active' (licencja /
-// subskrypcja) zostaje. Brak rekordu Subscription = nic (jak dotad — rekord
-// powstaje przy rejestracji).
-export async function grantDevicePurchaseTrial(userId: string | null | undefined): Promise<void> {
-  if (!userId) return;
-  const subscription = await prisma.subscription.findUnique({ where: { userId } });
-  if (!subscription) return;
-  const target = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const current = subscription.trialEndsAt ? new Date(subscription.trialEndsAt) : null;
-  const extend = !current || isNaN(current.getTime()) || current < target;
-  const keepStatus = subscription.status === "active" || subscription.status === "past_due";
-  if (!extend && keepStatus) return;
-  await prisma.subscription.update({
-    where: { id: subscription.id },
-    data: {
-      ...(extend ? { trialEndsAt: target, trialDays: 30 } : {}),
-      ...(keepStatus ? {} : { status: "trial" }),
-    },
-  });
-}
+// (Model tokenowy 2026-10: usunieto grantDevicePurchaseTrial — zakup kalkulatora
+// nie daje juz triala ani tokenow; tokeny sa z licencji w pudelku.)

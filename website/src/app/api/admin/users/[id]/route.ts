@@ -14,24 +14,12 @@ export async function PATCH(
     const { action, data } = body;
 
     if (action === "updateSubscription") {
-      // Update subscription status
-      const subscription = await prisma.subscription.findUnique({
-        where: { userId: id },
-      });
-
-      if (!subscription) {
-        return NextResponse.json({ error: "No subscription found" }, { status: 404 });
-      }
-
-      const updated = await prisma.subscription.update({
-        where: { userId: id },
-        data: {
-          status: data.status,
-          ...(data.trialEndsAt && { trialEndsAt: new Date(data.trialEndsAt) }),
-        },
-      });
-
-      return NextResponse.json({ success: true, subscription: updated });
+      // Model tokenowy (2026-10): subskrypcje wycofane — status Subscription
+      // nie wplywa juz na dostep do AI. Uzyj "addTokens".
+      return NextResponse.json(
+        { error: "Subskrypcje zostały wycofane — dostęp do AI działa na tokenach. Użyj doładowania tokenów." },
+        { status: 410 }
+      );
     }
 
     if (action === "updateUser") {

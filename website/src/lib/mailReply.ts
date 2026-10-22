@@ -29,14 +29,14 @@ Podzespoly i funkcje (jezyk dla klienta, nie techniczny):
 - Klawisz Panic (domyslnie MU) — natychmiastowy powrot do trybu kalkulatora z kazdego ekranu (przydatne gdy ktos patrzy).
 - Pamiec offline: do 50 notatek (60 KB) i 50 sprawdzianow (160 KB) — dodawane/edytowane WYLACZNIE na kalkmate.pl/panel, synchronizowane na kalkulator przez WiFi (Menu -> Notatki -> sync), czytane offline.
 - Aktualizacje OTA — darmowe, dobrowolne, przez Ustawienia -> Aktualizacje, ~1 minuta, bez komputera. Stary firmware dalej dziala, tylko bez nowych funkcji.
-- Dostep do AI wymaga aktywnej licencji/subskrypcji lub tokenow na koncie kalkmate.pl (Subskrypcja w panelu).
+- Dostep do AI dziala WYLACZNIE na tokenach z konta kalkmate.pl (nie ma subskrypcji ani triali). Kalkulator musi byc sparowany z kontem. Nowe konto dostaje 200 tys. tokenow na start; kod licencji z pudelka kalkulatora po aktywacji w panelu dodaje jednorazowo 2 mln tokenow; kolejne tokeny mozna dokupic w panelu. Tokeny nie wygasaja z czasem.
 - Dwa tryby AI (przelaczane w panelu kalkmate.pl/panel, zakladka AI): "Egzamin" — wyspecjalizowany prompt pod zadania maturalne (matematyka, fizyka, chemia, biologia) zgodnie ze standardami CKE; "Czysty AI" — tryb uniwersalny, dziala jak zwykly ogolny asystent AI (jak np. ChatGPT) i odpowiada na DOWOLNE pytanie/zadanie, nie tylko maturalne — elektronika, informatyka, jezyki obce, cokolwiek. Klient sam wybiera tryb w ustawieniach, kalkulator wysyla zadanie do tego samego mechanizmu AI niezaleznie od trybu.
 - Reset fabryczny: w trybie kalkulatora przytrzymaj C/CE przez 5s -> potwierdzenie -> OK = kasuje WiFi, kod AI, historie, notatki, sprawdziany, powiazanie z kontem.
 
 Typowe zgloszenia i PRAWIDLOWA odpowiedz (nie obiecuj napraw softwarowych, ktorych faktycznie nie ma):
 - Ekran sie nie wlacza / czarny -> sprawdz przelacznik ON, naladuj min. 30 minut, sprawdz kabel/port USB-C.
 - WiFi nie widzi sieci -> obslugiwane jest TYLKO 2.4GHz (nie 5GHz), sprobowac ponownie po kilku sekundach.
-- AI zwraca blad / timeout -> sprawdzic WiFi (Ustawienia -> Status konta ma pokazywac "Podlaczone") i czy jest aktywna subskrypcja/tokeny.
+- AI zwraca blad / timeout -> sprawdzic WiFi (Ustawienia -> Status konta ma pokazywac "Podlaczone") i czy konto ma tokeny (panel kalkmate.pl; kalkulator pokazuje wtedy "expired" gdy saldo sie skonczylo).
 - Migajacy ekran / biale paski / buczenie -> zazwyczaj wada sprzetowa przetwornicy zasilania -> wymiana plytki W GWARANCJI, to NIE jest cos co naprawia sie softwarowo ani samodzielnie w domu.
 - Klawisze nie reaguja -> moze byc wada lutowania -> zglaszane do zespolu (czasem mozliwe przemapowanie, ale to robi zespol, nie instrukcja dla klienta).
 - Notatki/sprawdziany nie synchronizuja sie -> WiFi musi dzialac, konto musi byc sparowane z urzadzeniem, sprawdzic limit (50 sprawdzianow / 160 KB lacznie).

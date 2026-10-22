@@ -11,8 +11,8 @@ import {
   settleTokens,
   refundTokens,
   readTokenBalance,
-  isSubscriptionValid,
 } from "@/lib/aiCost";
+import { MIN_TOKENS_FOR_AI } from "@/lib/tokenGrants";
 import { rateLimit } from "@/lib/rate-limit";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -1296,12 +1296,12 @@ export async function POST(request: NextRequest) {
       return errorJson(413, "Zapytanie za duze.");
     }
 
-    // Sprawdź użytkownika i subskrypcję
+    // Sprawdź użytkownika
     let user;
     try {
       user = await prisma.user.findUnique({
         where: { email: session.user.email },
-        include: { Subscription: true },
+        select: { id: true },
       });
     } catch (e) {
       console.error("[chat] user read fail:", e);
@@ -1315,20 +1315,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Sprawdź czy użytkownik ma aktywną subskrypcję lub trial
-    // (K2: "active" wazne tylko do konca okresu — stripeCurrentPeriodEnd)
-    const subscription = user.Subscription;
-    if (!subscription) {
-      return NextResponse.json(
-        { error: "Brak aktywnej subskrypcji. Wykup dostęp do AI Chat." },
-        { status: 403 }
-      );
-    }
-    if (!isSubscriptionValid(subscription)) {
-      return NextResponse.json(
-        { error: "Twoja subskrypcja wygasła. Odnów dostęp do AI Chat." },
-        { status: 403 }
-      );
+    // Model tokenowy (2026-10): brak subskrypcji/triali — dostep do AI
+    // wylacznie na saldzie konta. Prog MIN_TOKENS_FOR_AI; faktyczny koszt
+    // i tak pokrywa atomowa rezerwacja nizej (402 gdy nie starcza).
+    const balance = await readTokenBalance(user.id);
+    if (balance === null) return errorJson(503, DB_ERROR_MSG);
+    if (balance < MIN_TOKENS_FOR_AI) {
+      return errorJson(402, `Za mało tokenów (${balance}). Doładuj tokeny w panelu albo aktywuj licencję z pudełka kalkulatora.`);
     }
 
     let body: any;

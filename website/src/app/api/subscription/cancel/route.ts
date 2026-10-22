@@ -36,16 +36,35 @@ export async function POST(request: NextRequest) {
       where: { userId: user.id },
     })
 
-    if (!subscription?.stripeSubscriptionId) {
+    // Model tokenowy (2026-10): subskrypcje wycofane. Jedyny sensowny
+    // przypadek to jeszcze zywa subskrypcja Stripe sprzed zmiany — wtedy
+    // nadal pozwalamy ja anulowac (zeby klient nie byl dalej obciazany).
+    // Bez niej — 410.
+    const liveStripeSub =
+      !!subscription?.stripeSubscriptionId &&
+      !subscription.cancelledAt &&
+      (subscription.status === "active" || subscription.status === "past_due")
+    if (!subscription?.stripeSubscriptionId || !liveStripeSub) {
       return NextResponse.json(
-        { error: "No active subscription found" },
-        { status: 404 }
+        { error: "Subskrypcje zostały wycofane — dostęp do AI działa na tokenach. Nie masz aktywnej subskrypcji do anulowania." },
+        { status: 410 }
       )
     }
 
-    const updated = await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-      cancel_at_period_end: true,
-    })
+    let updated
+    try {
+      updated = await stripe.subscriptions.update(subscription.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      })
+    } catch (e) {
+      // Np. subskrypcja juz usunieta w Stripe (webhooki subskrypcyjne sa
+      // teraz ignorowane, wiec status w bazie moze byc nieaktualny).
+      console.error("Cancel subscription (stripe) error:", e)
+      return NextResponse.json(
+        { error: "Subskrypcje zostały wycofane — nie znaleziono aktywnej subskrypcji do anulowania." },
+        { status: 410 }
+      )
+    }
 
     // Koniec oplaconego okresu (stripe@20: na pozycji subskrypcji).
     const ts = updated.items?.data?.[0]?.current_period_end

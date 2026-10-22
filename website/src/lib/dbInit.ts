@@ -54,6 +54,9 @@ const RAW_COLUMNS: Record<string, ColumnSpec[]> = {
   EmailVerification: [
     ["targetEmail", "TEXT"], // migracja 20260624000002
   ],
+  License: [
+    ["tokensGrantedAt", "TEXT"], // ISO — jednorazowe LICENSE_TOKENS (lib/licenseTokens.ts)
+  ],
 };
 
 // [nazwa, tabela, kolumny] — tworzone tylko gdy tabela i wszystkie kolumny istnieja.

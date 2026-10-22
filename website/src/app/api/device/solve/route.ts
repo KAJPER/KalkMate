@@ -9,11 +9,8 @@ import {
   settleTokens,
   refundTokens,
   readTokenBalance,
-  isSubscriptionValid,
-  licenseDailyTokenLimit,
-  getDailyUsage,
-  addDailyUsage,
 } from "@/lib/aiCost";
+import { MIN_TOKENS_FOR_AI } from "@/lib/tokenGrants";
 import { rateLimit } from "@/lib/rate-limit";
 import { checkRentalLock } from "@/lib/deviceRental";
 import { verifyDeviceAuth } from "@/lib/device-auth";
@@ -23,7 +20,7 @@ import { saveCapture } from "@/lib/captures";
 // POST /api/device/solve
 // Headers: x-api-key: <CALCULATOR_API_KEY>, x-device-id: <MAC 12 hex>,
 //          x-device-token: <token z /register> (wymagany gdy device ma token w DB;
-//          przy DEVICE_AUTH_STRICT=1 zawsze), x-license-key: <licenseCode> (opcjonalny),
+//          przy DEVICE_AUTH_STRICT=1 zawsze), x-license-key: <licenseCode> (ignorowany przy autoryzacji — model tokenowy),
 //          x-request-id: <8-64 [A-Za-z0-9_-]> (opcjonalny, idempotencja ponowien — K3)
 // Body (JSON):
 //   { mode: "text", text: "treść zadania" }
@@ -54,8 +51,6 @@ const UPSTREAM_TIMEOUT_MS = 120_000;
 const UPSTREAM_ERROR_MSG = "Serwis AI chwilowo niedostepny. Sprobuj ponownie.";
 const EMPTY_ANSWER_MSG = "Brak odpowiedzi AI. Sprobuj ponownie.";
 const DB_ERROR_MSG = "Blad bazy danych. Sprobuj ponownie.";
-// Prog salda, przy ktorym wygasla licencja czasowa nadal dziala (model tokenowy).
-const MIN_TOKENS_FOR_EXPIRED_LICENSE = 1000;
 
 interface OpenRouterResult {
   ok: boolean;
@@ -387,17 +382,14 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
     return { status, body: { ok: false, error } };
   };
 
-  // Weryfikacja klucza licencyjnego — opcjonalny, patrz fallback
-  // subskrypcyjny nizej (dla userow z AI Chat ale bez fizycznej licencji).
+  // Model tokenowy (2026-10): koniec subskrypcji/triali/licencji czasowych
+  // i trybu license-only (urzadzenie bez konta). Dostep do AI tylko gdy
+  // urzadzenie jest sparowane z kontem, a konto ma saldo >= MIN_TOKENS_FOR_AI.
+  // Naglowek x-license-key jest juz ignorowany przy autoryzacji (licencja z
+  // pudelka = jednorazowe doladowanie tokenow w panelu) — zostaje tylko
+  // jako etykieta zapisu zdjecia.
   const licenseKey = request.headers.get("x-license-key");
   const fwVersion = request.headers.get("x-fw-version");
-
-  // Sprawdź licencję w bazie
-  let license = licenseKey
-    ? await prisma.license.findUnique({
-        where: { code: licenseKey.trim().toLowerCase() },
-      })
-    : null;
 
   const device = await prisma.device.findUnique({
     where: { deviceId },
@@ -407,126 +399,22 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
     ? { id: device.id, userId: device.userId }
     : null;
 
-  // Weryfikacja wlasciwosci licencji:
-  // Jezeli licencja jest "claimed" przez konto webowe (claimedByUserId),
-  // to urzadzenie wysylajace ja MUSI byc sparowane z TYM SAMYM kontem.
-  // Inaczej kazdy z dostepem do kodu mogłby ja uzywac na obcym device.
-  // Jezeli licencja nie jest claimed - dopuszczamy "device-only" usage
-  // (legacy mode: licencja przypisana do urzadzenia bez konta).
-  if (license?.claimedByUserId) {
-    if (!pairedDevice || pairedDevice.userId !== license.claimedByUserId) {
-      return fail(403, "Urzadzenie nie sparowane z kontem wlasciciela licencji");
-    }
+  if (!pairedDevice?.userId) {
+    // Komunikat znany firmware — nie zmieniac.
+    return fail(403, "Konto nie jest podpiete do tego urzadzenia");
   }
+  const ownerUserId: string = pairedDevice.userId;
 
-  // Fallback: brak (lub nierozpoznany) klucz licencyjny, ale urzadzenie
-  // jest sparowane z kontem ktore ma aktywna subskrypcje AI Chat —
-  // niektore kalkulatory sprzedawane sa bez fizycznego kodu licencyjnego,
-  // dostep dziala wtedy wylacznie przez subskrypcje z panelu.
-  // K2: "active" wazne tylko do konca okresu (stripeCurrentPeriodEnd).
-  if (!license) {
-    let subscriptionActive = false;
-    if (pairedDevice?.userId) {
-      const subscription = await prisma.subscription.findUnique({
-        where: { userId: pairedDevice.userId },
-      });
-      subscriptionActive = isSubscriptionValid(subscription);
-    }
-    if (!subscriptionActive) {
-      // Trzy rozne przyczyny tego samego 403 — rozne komunikaty, zeby klient
-      // wiedzial co realnie zrobic (zamiast mylacego "zly klucz" gdy w ogole
-      // nie ma zadnego konta/klucza). Audyt 2026-10-18: zgloszenie klienta,
-      // ktory widzial "Nieprawidlowy klucz licencji" mimo ze nigdy zadnego
-      // klucza nie mial — kalkulator po prostu nie byl podpiety do konta.
-      if (licenseKey) {
-        return fail(403, "Nieprawidlowy klucz licencji");
-      }
-      if (!pairedDevice?.userId) {
-        return fail(403, "Konto nie jest podpiete do tego urzadzenia");
-      }
-      return fail(403, "Brak aktywnej subskrypcji AI");
-    }
-  }
-
-  // H6: rate limit — per licencja, albo per urzadzenie gdy dostep jest
-  // przez subskrypcje (brak licencji)
-  const rl = rateLimit(`solve:${license?.code || pairedDevice?.id || deviceId}`, 30, 60_000);
+  // H6: rate limit per urzadzenie
+  const rl = rateLimit(`solve:${pairedDevice.id}`, 30, 60_000);
   if (!rl.ok) {
     return fail(429, "Za duzo zadan. Poczekaj chwile.");
   }
 
-  // Pierwsza aktywacja licencji — ustaw timer wygasania
-  // (caly ten blok dotyczy tylko dostepu przez fizyczna licencje; dostep
-  // przez subskrypcje, obsluzony wyzej, nie ma z nim nic wspolnego)
-  if (license && (!license.isUsed || !license.usedAt)) {
-    await prisma.license.update({
-      where: { id: license.id },
-      data: {
-        isUsed: true,
-        usedBy: license.usedBy || (license.claimedByUserId ? "user" : "device"),
-        usedAt: license.usedAt || new Date(),
-      },
-    });
-  }
-
-  // Czy licencja z headera wygasla?
-  const isExpired = (l: NonNullable<typeof license>) => {
-    if (!l.usedAt) return false;
-    const activatedAt = new Date(l.usedAt);
-    const expiresAt = new Date(
-      activatedAt.getTime() + l.durationDays * 24 * 60 * 60 * 1000,
-    );
-    return new Date() > expiresAt;
-  };
-
-  if (license && isExpired(license)) {
-    // Auto-upgrade: jezeli device jest sparowane z userem, ktory ma INNA
-    // aktywna licencje (zaclaim'owana w panelu), uzyj jej zamiast tej z
-    // headera. Pokrywa przypadek: firmware ma na flashu stary kod, user
-    // zclaim'owal nowy w panelu — chcemy zeby kalkulator dzialal bez
-    // koniecznosci recznego przepisywania kodu.
-    if (pairedDevice?.userId) {
-      const candidates = await prisma.license.findMany({
-        where: { claimedByUserId: pairedDevice.userId },
-        orderBy: { usedAt: "desc" },
-      });
-      const active = candidates.find((c) => !isExpired(c));
-      if (active) {
-        console.log(
-          `[solve] auto-upgrade license ${license.code} (expired) -> ${active.code} for device ${deviceId}`,
-        );
-        license = active;
-        // Zaktualizuj Device.licenseCode zeby panel admin widzial wlasciwa
-        await prisma.device
-          .update({
-            where: { id: pairedDevice.id },
-            data: { licenseCode: active.code },
-          })
-          .catch((e) => console.error("[solve] licenseCode upgrade fail:", e));
-      }
-    }
-    // Jezeli po fallbacku dalej expired:
-    // Model tokenowy — wygasla licencja CZASOWA nie blokuje, jezeli wlasciciel
-    // ma wazna subskrypcje (K2) albo tokeny (tokeny = nowa waluta, dokupisz w
-    // sklepie). Brak tokenow obsluzy ponizej rezerwacja (402 "Brak tokenow").
-    if (isExpired(license)) {
-      const oid = license.claimedByUserId || pairedDevice?.userId || null;
-      let allowed = false;
-      if (oid) {
-        const sub = await prisma.subscription.findUnique({ where: { userId: oid } });
-        if (isSubscriptionValid(sub)) {
-          allowed = true;
-        } else {
-          const bal = await readTokenBalance(oid);
-          if (bal === null) return fail(503, DB_ERROR_MSG);
-          allowed = bal >= MIN_TOKENS_FOR_EXPIRED_LICENSE;
-        }
-      }
-      if (!allowed) {
-        return fail(403, "Licencja wygasla");
-      }
-      console.log(`[solve] expired license ${license.code} OK via subscription/token balance (user ${oid})`);
-    }
+  const balance = await readTokenBalance(ownerUserId);
+  if (balance === null) return fail(503, DB_ERROR_MSG);
+  if (balance < MIN_TOKENS_FOR_AI) {
+    return fail(402, `Brak tokenow (${balance}). Dokup na kalkmate.pl.`);
   }
 
   if (!OPENROUTER_API_KEY) {
@@ -537,10 +425,9 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
   // User.aiModel / User.aiMode oraz Device.promptMode nie sa w Prisma schemie
   // -> raw SQL. Priorytet trybu: user.aiMode -> Device.promptMode (legacy) ->
   // default "matura". Model: user.aiModel -> "default" (Gemini).
-  const ownerUserId = license?.claimedByUserId || pairedDevice?.userId || null;
   let aiMode: "matura" | "raw" = "matura";
   let aiModel = "default";
-  if (ownerUserId) {
+  {
     try {
       const urows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null }[]>`
         SELECT "aiModel", "aiMode" FROM "User" WHERE "id" = ${ownerUserId} LIMIT 1
@@ -652,31 +539,11 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
     base64Data = image.includes(",") ? image.split(",")[1] : image;
   }
 
-  // Dzienny budzet dla trybu license-only (licencja bez konta -> brak salda,
-  // ktore by limitowalo koszt). Trwaly licznik per kod licencji i per
-  // urzadzenie (tabela DeviceDailyUsage), limit LICENSE_DAILY_TOKEN_LIMIT.
-  if (!ownerUserId) {
-    const limit = licenseDailyTokenLimit();
-    try {
-      const [licUsed, devUsed] = await Promise.all([
-        license ? getDailyUsage("license", license.code) : Promise.resolve(0),
-        getDailyUsage("device", deviceId),
-      ]);
-      if (licUsed >= limit || devUsed >= limit) {
-        console.warn(`[solve] dzienny limit license-only: lic=${license?.code} ${licUsed} dev=${deviceId} ${devUsed} / ${limit}`);
-        return fail(429, "Dzienny limit AI wyczerpany. Sprobuj jutro.");
-      }
-    } catch (e) {
-      console.error("[solve] daily usage read fail:", e);
-      return fail(503, DB_ERROR_MSG);
-    }
-  }
-
   // Atomowa rezerwacja salda PRZED wywolaniem AI (tylko userzy z kontem).
   // Szacunek: (wejscie + max_tokens) x mnoznik modelu; po odpowiedzi
   // rozliczamy roznice, przy bledzie zwracamy rezerwacje. Blad bazy -> 503.
   let reserved = 0;
-  if (ownerUserId) {
+  {
     const inputTokens = estimateInputTokens(
       systemPrompt.length + (mode === "text" ? (text || "").length : 0),
       mode === "image" ? 1 : 0
@@ -700,7 +567,7 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
       await saveCapture(
         base64Data,
         deviceId,
-        licenseKey || license?.code || "subscription",
+        licenseKey || "tokens",
         fwVersion,
         pairedDevice?.userId ?? null
       );
@@ -711,7 +578,7 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
     const solution = r.ok && r.solution && r.finishReason !== "error" ? normalizeForCalc(r.solution) : "";
     if (!r.ok || !solution) {
       // Nie rozliczaj bledu ani pustej odpowiedzi — zwrot calej rezerwacji.
-      if (ownerUserId && reserved) await refundTokens(ownerUserId, reserved);
+      if (reserved) await refundTokens(ownerUserId, reserved);
       if (!r.ok) {
         // Szczegoly tylko do logu — na OLED neutralny komunikat.
         console.error(`[solve] OpenRouter ${r.status} (model=${modelToUse}): ${r.detail}`);
@@ -730,16 +597,7 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
     if (source === "estimate") {
       console.warn(`[solve] usage.cost brak dla modelu ${modelToUse} — fallback na szacunek (tokens=${r.tokensUsed}, mult=${costMultiplier})`);
     }
-    if (ownerUserId) {
-      await settleTokens(ownerUserId, reserved, effectiveTokens);
-    } else {
-      if (license) {
-        addDailyUsage("license", license.code, effectiveTokens)
-          .catch((e) => console.error("[solve] daily usage (license) fail:", e));
-      }
-      addDailyUsage("device", deviceId, effectiveTokens)
-        .catch((e) => console.error("[solve] daily usage (device) fail:", e));
-    }
+    await settleTokens(ownerUserId, reserved, effectiveTokens);
 
     // Zlicz zapytanie + log do DeviceSolve (fire-and-forget, nie blokuje odpowiedzi)
     if (device) {
@@ -750,7 +608,6 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
             requestCount: { increment: 1 },
             lastSeen: new Date(),
             firmwareVersion: fwVersion || undefined,
-            licenseCode: license?.code || undefined,
           },
         })
         .catch((e) => console.error("[solve] device.update fail:", e));
@@ -759,7 +616,7 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
         .create({
           data: {
             deviceId,
-            licenseCode: license?.code || null,
+            licenseCode: null,
             userId: ownerUserId,
             mode,
             question: mode === "text" ? (text || "") : "[zdjecie kamery]",
@@ -772,7 +629,7 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
     return { status: 200, body: { ok: true, solution } };
   } catch (e) {
     // Nieoczekiwany wyjatek po rezerwacji — nie zostawiaj pobranych tokenow.
-    if (ownerUserId && reserved) await refundTokens(ownerUserId, reserved);
+    if (reserved) await refundTokens(ownerUserId, reserved);
     throw e;
   }
 }

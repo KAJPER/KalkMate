@@ -22,20 +22,23 @@ const MessageRenderer = dynamic(() => import("@/components/MessageRenderer"), {
 
 const DATE_LOCALE: Record<Locale, string> = { pl: "pl-PL", en: "en-GB", de: "de-DE" };
 
-const TAB_IDS = ["orders", "chat", "subscription", "ai", "calculator", "notes", "tests", "settings"] as const;
+const TAB_IDS = ["orders", "chat", "ai", "calculator", "notes", "tests", "settings"] as const;
 type TabId = (typeof TAB_IDS)[number];
-const CALC_TABS: readonly TabId[] = ["calculator", "notes", "tests", "subscription"];
+const CALC_TABS: readonly TabId[] = ["calculator", "notes", "tests"];
 
 // Dane zakładki uznajemy za świeże przez 60 s — powrót do zakładki nie odpala
 // ponownie wszystkich zapytań (słabe telefony / mobilny internet).
 const FRESH_MS = 60_000;
-// Pakiet startowy przy rejestracji — tylko punkt odniesienia dla paska salda.
-const TOKEN_REFERENCE = 1_000_000;
+// Pakiet startowy przy rejestracji (200 tys.) — punkt odniesienia dla paska salda.
+const TOKEN_REFERENCE = 200_000;
+// Kod z pudełka dodaje jednorazowo 2 mln tokenów — punkt odniesienia dla
+// szacunku "ile zadań" i tabelki wydajności modeli.
+const LICENSE_TOKENS = 2_000_000;
 const CAPTURES_PAGE = 24;
 
 type ChatAttachment = { filename: string; mimeType: string; fileSize: number; data: string };
 type ChatMessage = { role: string; content: string; attachments?: ChatAttachment[] };
-type ReturnNotice = "tokens_success" | "tokens_cancelled" | "sub_success" | "sub_cancelled";
+type ReturnNotice = "tokens_success" | "tokens_cancelled";
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 2)}M`;
@@ -58,7 +61,6 @@ const PANEL_DICT: Record<Locale, {
   // tabs
   tabsOrders: string;
   tabsChat: string;
-  tabsSubscription: string;
   tabsAi: string;
   tabsCalculator: string;
   tabsNotes: string;
@@ -86,7 +88,7 @@ const PANEL_DICT: Record<Locale, {
   serverError: (status: number) => string;
   tryAgain: string;
   chatNoTokens: string;
-  chatNoSubscription: string;
+  chatNoAccess: string;
   chatTooLarge: string;
   chatOnlyImages: string;
   chatTooMany: string;
@@ -95,7 +97,6 @@ const PANEL_DICT: Record<Locale, {
   convLoadFailed: string;
   convDeleteFailed: string;
   goBuyTokens: string;
-  goSubscription: string;
   dismiss: string;
   imgProcessing: string;
   imgTooMany: (max: number) => string;
@@ -103,19 +104,14 @@ const PANEL_DICT: Record<Locale, {
   imgTooLarge: (name: string) => string;
   returnTokensSuccess: string;
   returnTokensCancelled: string;
-  returnSubSuccess: string;
-  returnSubCancelled: string;
   loadFailed: string;
   retry: string;
   loadMore: string;
   licenseRedeemed: string;
-  subCreateFailed: string;
+  licenseTokensAdded: (n: string, balance: string) => string;
   enterLicenseCode: string;
   licenseRedeemFailed: string;
   licenseRedeemError: string;
-  confirmCancelSub: string;
-  subCancelled: string;
-  subCancelFailed: string;
   // orders
   ordersHeading: string;
   ordersSubtitle: string;
@@ -158,45 +154,14 @@ const PANEL_DICT: Record<Locale, {
   chatPlaceholder: string;
   attachFile: string;
   send: string;
-  // subscription
-  subHeading: string;
-  subSubtitle: string;
-  status: string;
-  statusTrial: string;
-  statusActive: string;
-  statusInactive: string;
-  assignedLicense: string;
-  daysWord: (n: number) => string;
-  activatedOn: (d: string) => string;
-  notActivated: string;
+  // kod z pudełka (licencja)
   unpinning: string;
   unpin: string;
-  haveLicenseCode: string;
-  enterCodeToExtend: string;
+  redeemHeading: string;
+  redeemDesc: string;
   licenseCodePlaceholder: string;
   redeeming: string;
   redeem: string;
-  trialPeriod: (n: number) => string;
-  extraTrialDays: string;
-  trialEnds: (d: string) => string;
-  trialExpiredOwner: string;
-  trialExpired: string;
-  choosePlan: string;
-  promo98: string;
-  secondMonth: string;
-  loadingBtn: string;
-  choose1zl: string;
-  fixedPrice: string;
-  nextMonths: string;
-  choose15zl: string;
-  securePayment: string;
-  ownerCanUseChat: string;
-  paidSubActive: string;
-  feeLine: string;
-  perMonthFee: string;
-  savesYou: string;
-  renewsOn: (d: string) => string;
-  cancelSub: string;
   // ai tab
   tokenUsage: string;
   effectiveTokens: string;
@@ -204,7 +169,7 @@ const PANEL_DICT: Record<Locale, {
   aiLoadFailed: string;
   tasksLeftLabel: string;
   maturaTasks: string;
-  monthlyLimit: string;
+  perLicenseLabel: string;
   forModel: (m: string) => string;
   defaultModel: string;
   modelPerformance: string;
@@ -329,7 +294,6 @@ const PANEL_DICT: Record<Locale, {
     loading: "Ładowanie...",
     tabsOrders: "Zamówienia",
     tabsChat: "AI Chat",
-    tabsSubscription: "Subskrypcja",
     tabsAi: "AI",
     tabsCalculator: "Kalkulator",
     tabsNotes: "Notatki",
@@ -355,8 +319,8 @@ const PANEL_DICT: Record<Locale, {
     fileAttached: "(plik załączony)",
     serverError: (s) => `Błąd serwera (${s})`,
     tryAgain: "Spróbuj ponownie.",
-    chatNoTokens: "Skończyły się tokeny AI. Doładuj saldo, aby kontynuować.",
-    chatNoSubscription: "Brak aktywnej subskrypcji AI Chat.",
+    chatNoTokens: "Skończyły się tokeny AI. Dokup paczkę tokenów albo aktywuj kod z pudełka, aby kontynuować.",
+    chatNoAccess: "Brak dostępu do AI na tym koncie. Sprawdź saldo tokenów — jeśli problem się powtarza, napisz do nas: kontakt@kalkmate.pl.",
     chatTooLarge: "Zdjęcie jest za duże. Usuń je lub dołącz mniejsze (maks. 4 zdjęcia).",
     chatOnlyImages: "Można dołączać tylko zdjęcia (JPG, PNG, WebP).",
     chatTooMany: "Za dużo zapytań. Poczekaj chwilę i spróbuj ponownie.",
@@ -365,7 +329,6 @@ const PANEL_DICT: Record<Locale, {
     convLoadFailed: "Nie udało się wczytać konwersacji.",
     convDeleteFailed: "Nie udało się usunąć konwersacji.",
     goBuyTokens: "Kup tokeny →",
-    goSubscription: "Subskrypcja →",
     dismiss: "Zamknij",
     imgProcessing: "Zmniejszam zdjęcie…",
     imgTooMany: (m) => `Maks. ${m} zdjęcia na wiadomość.`,
@@ -373,19 +336,14 @@ const PANEL_DICT: Record<Locale, {
     imgTooLarge: (n) => `Zdjęcie „${n}” jest za duże nawet po zmniejszeniu.`,
     returnTokensSuccess: "Płatność przyjęta — tokeny pojawią się na koncie w ciągu kilku chwil.",
     returnTokensCancelled: "Płatność za tokeny została anulowana.",
-    returnSubSuccess: "Płatność przyjęta — subskrypcja zostanie aktywowana w ciągu kilku chwil.",
-    returnSubCancelled: "Płatność za subskrypcję została anulowana.",
     loadFailed: "Nie udało się wczytać danych.",
     retry: "Spróbuj ponownie",
     loadMore: "Pokaż więcej",
-    licenseRedeemed: "Licencja została zrealizowana.",
-    subCreateFailed: "Nie udało się utworzyć subskrypcji. Spróbuj ponownie.",
-    enterLicenseCode: "Wprowadź kod licencji",
-    licenseRedeemFailed: "Nie udało się zrealizować licencji",
-    licenseRedeemError: "Wystąpił błąd podczas realizacji licencji",
-    confirmCancelSub: "Czy na pewno chcesz anulować subskrypcję?",
-    subCancelled: "Subskrypcja została anulowana.",
-    subCancelFailed: "Nie udało się anulować subskrypcji.",
+    licenseRedeemed: "Kod został aktywowany.",
+    licenseTokensAdded: (n, b) => `Kod aktywowany — dodano ${n} tokenów. Saldo: ${b}.`,
+    enterLicenseCode: "Wprowadź kod z pudełka",
+    licenseRedeemFailed: "Nie udało się aktywować kodu",
+    licenseRedeemError: "Wystąpił błąd podczas aktywacji kodu",
     ordersHeading: "Historia zamówień",
     ordersSubtitle: "Twoje zamówienia i status wysyłek",
     ordersEmpty: "Nie masz jeszcze żadnych zamówień",
@@ -426,56 +384,25 @@ const PANEL_DICT: Record<Locale, {
     chatPlaceholder: "Wklej treść zadania lub dołącz zdjęcie (Ctrl+V działa też dla obrazów)...",
     attachFile: "Dołącz zdjęcie (maks. 4)",
     send: "Wyślij",
-    subHeading: "Subskrypcja AI Chat",
-    subSubtitle: "Zarządzaj dostępem do AI Chat",
-    status: "Status",
-    statusTrial: "🎁 Okres próbny",
-    statusActive: "✓ Aktywna",
-    statusInactive: "✗ Nieaktywna",
-    assignedLicense: "Przypisana licencja",
-    daysWord: (n) => `${n} dni`,
-    activatedOn: (d) => ` · aktywowana ${d}`,
-    notActivated: " · nieaktywowana",
     unpinning: "Odpinanie...",
     unpin: "Odepnij",
-    haveLicenseCode: "Masz kod licencji?",
-    enterCodeToExtend: "Wprowadź kod, aby przedłużyć dostęp do AI Chat",
+    redeemHeading: "Aktywuj kod z pudełka (+2 mln tokenów)",
+    redeemDesc: "Kod licencji znajdziesz w pudełku kalkulatora. Aktywacja jednorazowo dodaje 2 000 000 tokenów AI do Twojego salda.",
     licenseCodePlaceholder: "abcd123-+=%abcd",
-    redeeming: "Realizuję...",
-    redeem: "Realizuj",
-    trialPeriod: (n) => `Okres próbny: ${n} dni pozostało`,
-    extraTrialDays: "✨ Dodatkowe 30 dni za zakup kalkulatora!",
-    trialEnds: (d) => `Kończy się: ${d}`,
-    trialExpiredOwner: "Twój okres próbny wygasł. Możesz kontynuować korzystanie z AI Chat aktywując subskrypcję.",
-    trialExpired: "Twój okres próbny wygasł. Aktywuj subskrypcję, aby kontynuować korzystanie z AI Chat.",
-    choosePlan: "Wybierz plan subskrypcji",
-    promo98: "🔥 Promocja -98%",
-    secondMonth: "Drugi miesiąc",
-    loadingBtn: "Ładowanie...",
-    choose1zl: "Wybierz 1 zł",
-    fixedPrice: "💎 Stała cena",
-    nextMonths: "Kolejne miesiące",
-    choose15zl: "Wybierz 15 zł",
-    securePayment: "💳 Bezpieczna płatność przez Stripe • Anuluj w każdej chwili",
-    ownerCanUseChat: "💡 Jako właściciel kalkulatora możesz korzystać z AI Chat przez subskrypcję. To opcjonalne - kalkulator działa niezależnie.",
-    paidSubActive: "✓ Płatna subskrypcja aktywna",
-    feeLine: "Opłata:",
-    perMonthFee: "15 zł/miesiąc",
-    savesYou: "(oszczędzasz 67%)",
-    renewsOn: (d) => `Odnawia się: ${d}`,
-    cancelSub: "Anuluj subskrypcję",
+    redeeming: "Aktywuję...",
+    redeem: "Aktywuj",
     tokenUsage: "/ Saldo tokenów",
     effectiveTokens: "efektywnych tokenów na koncie",
     remaining: "POZOSTAŁO",
     aiLoadFailed: "Nie udało się wczytać ustawień AI i salda tokenów.",
     tasksLeftLabel: "Zadań zostało",
     maturaTasks: "zadań",
-    monthlyLimit: "Na 1 mln tokenów",
+    perLicenseLabel: "Na 2 mln tokenów",
     forModel: (m) => `dla modelu ${m}`,
     defaultModel: "domyślnego",
-    modelPerformance: "WYDAJNOŚĆ MODELI — ile zadań z 1 mln tokenów",
+    modelPerformance: "WYDAJNOŚĆ MODELI — ile zadań z 2 mln tokenów",
     tasksAbbr: "zad.",
-    tokenEstimateNote: "Szacunek dla typowego zadania (~800 realnych tokenów wejście + odpowiedź). Tokeny odnawiają się razem z subskrypcją.",
+    tokenEstimateNote: "Szacunek dla typowego zadania (~800 realnych tokenów wejście + odpowiedź). Bez abonamentu — gdy saldo się skończy, dokup paczkę poniżej.",
     buyTokens: "/ Kup tokeny",
     buyTokensDesc: "Doładuj saldo tokenów. Płatność jednorazowa (karta / BLIK / Przelewy24) — tokeny dodają się od razu po opłaceniu.",
     popular: "POPULARNY",
@@ -591,7 +518,6 @@ const PANEL_DICT: Record<Locale, {
     loading: "Loading...",
     tabsOrders: "Orders",
     tabsChat: "AI Chat",
-    tabsSubscription: "Subscription",
     tabsAi: "AI",
     tabsCalculator: "Calculator",
     tabsNotes: "Notes",
@@ -617,8 +543,8 @@ const PANEL_DICT: Record<Locale, {
     fileAttached: "(file attached)",
     serverError: (s) => `Server error (${s})`,
     tryAgain: "Please try again.",
-    chatNoTokens: "You are out of AI tokens. Top up your balance to continue.",
-    chatNoSubscription: "No active AI Chat subscription.",
+    chatNoTokens: "You've run out of AI tokens. Buy a token pack or activate the code from the box to continue.",
+    chatNoAccess: "AI access is unavailable on this account. Check your token balance — if the problem persists, contact us at kontakt@kalkmate.pl.",
     chatTooLarge: "The image is too large. Remove it or attach a smaller one (max 4 images).",
     chatOnlyImages: "Only images can be attached (JPG, PNG, WebP).",
     chatTooMany: "Too many requests. Wait a moment and try again.",
@@ -627,7 +553,6 @@ const PANEL_DICT: Record<Locale, {
     convLoadFailed: "Could not load the conversation.",
     convDeleteFailed: "Could not delete the conversation.",
     goBuyTokens: "Buy tokens →",
-    goSubscription: "Subscription →",
     dismiss: "Close",
     imgProcessing: "Resizing image…",
     imgTooMany: (m) => `Max ${m} images per message.`,
@@ -635,19 +560,14 @@ const PANEL_DICT: Record<Locale, {
     imgTooLarge: (n) => `Image "${n}" is too large even after resizing.`,
     returnTokensSuccess: "Payment received — tokens will appear in your account within a few moments.",
     returnTokensCancelled: "The token payment was cancelled.",
-    returnSubSuccess: "Payment received — your subscription will be activated within a few moments.",
-    returnSubCancelled: "The subscription payment was cancelled.",
     loadFailed: "Could not load data.",
     retry: "Try again",
     loadMore: "Show more",
-    licenseRedeemed: "The license has been redeemed.",
-    subCreateFailed: "Could not create subscription. Please try again.",
-    enterLicenseCode: "Enter a license code",
-    licenseRedeemFailed: "Could not redeem the license",
-    licenseRedeemError: "An error occurred while redeeming the license",
-    confirmCancelSub: "Are you sure you want to cancel the subscription?",
-    subCancelled: "Subscription has been cancelled.",
-    subCancelFailed: "Could not cancel the subscription.",
+    licenseRedeemed: "The code has been activated.",
+    licenseTokensAdded: (n, b) => `Code activated — ${n} tokens added. Balance: ${b}.`,
+    enterLicenseCode: "Enter the code from the box",
+    licenseRedeemFailed: "Could not activate the code",
+    licenseRedeemError: "An error occurred while activating the code",
     ordersHeading: "Order history",
     ordersSubtitle: "Your orders and shipping status",
     ordersEmpty: "You don't have any orders yet",
@@ -688,56 +608,25 @@ const PANEL_DICT: Record<Locale, {
     chatPlaceholder: "Paste your problem or attach a photo (Ctrl+V works for images too)...",
     attachFile: "Attach image (max 4)",
     send: "Send",
-    subHeading: "AI Chat subscription",
-    subSubtitle: "Manage access to AI Chat",
-    status: "Status",
-    statusTrial: "🎁 Trial period",
-    statusActive: "✓ Active",
-    statusInactive: "✗ Inactive",
-    assignedLicense: "Assigned license",
-    daysWord: (n) => `${n} days`,
-    activatedOn: (d) => ` · activated ${d}`,
-    notActivated: " · not activated",
     unpinning: "Unpinning...",
     unpin: "Unpin",
-    haveLicenseCode: "Have a license code?",
-    enterCodeToExtend: "Enter a code to extend your AI Chat access",
+    redeemHeading: "Activate the code from the box (+2M tokens)",
+    redeemDesc: "You'll find the license code in the calculator box. Activating it adds 2,000,000 AI tokens to your balance (one-time).",
     licenseCodePlaceholder: "abcd123-+=%abcd",
-    redeeming: "Redeeming...",
-    redeem: "Redeem",
-    trialPeriod: (n) => `Trial period: ${n} days remaining`,
-    extraTrialDays: "✨ Extra 30 days for purchasing the calculator!",
-    trialEnds: (d) => `Ends on: ${d}`,
-    trialExpiredOwner: "Your trial period has expired. You can keep using AI Chat by activating a subscription.",
-    trialExpired: "Your trial period has expired. Activate a subscription to keep using AI Chat.",
-    choosePlan: "Choose a subscription plan",
-    promo98: "🔥 Promo -98%",
-    secondMonth: "Second month",
-    loadingBtn: "Loading...",
-    choose1zl: "Choose 1 zł",
-    fixedPrice: "💎 Fixed price",
-    nextMonths: "Following months",
-    choose15zl: "Choose 15 zł",
-    securePayment: "💳 Secure payment via Stripe • Cancel anytime",
-    ownerCanUseChat: "💡 As a calculator owner you can use AI Chat via subscription. It's optional - the calculator works independently.",
-    paidSubActive: "✓ Paid subscription active",
-    feeLine: "Fee:",
-    perMonthFee: "15 zł/month",
-    savesYou: "(you save 67%)",
-    renewsOn: (d) => `Renews on: ${d}`,
-    cancelSub: "Cancel subscription",
+    redeeming: "Activating...",
+    redeem: "Activate",
     tokenUsage: "/ Token balance",
     effectiveTokens: "effective tokens in your account",
     remaining: "REMAINING",
     aiLoadFailed: "Could not load AI settings and token balance.",
     tasksLeftLabel: "Tasks left",
     maturaTasks: "exam problems",
-    monthlyLimit: "Per 1M tokens",
+    perLicenseLabel: "Per 2M tokens",
     forModel: (m) => `for model ${m}`,
     defaultModel: "default",
-    modelPerformance: "MODEL EFFICIENCY — tasks per 1M tokens",
+    modelPerformance: "MODEL EFFICIENCY — tasks per 2M tokens",
     tasksAbbr: "tasks",
-    tokenEstimateNote: "Estimate for a typical exam problem (~800 real tokens input + answer). Tokens renew with your subscription.",
+    tokenEstimateNote: "Estimate for a typical exam problem (~800 real tokens input + answer). No subscription — when your balance runs out, top up with a pack below.",
     buyTokens: "/ Buy tokens",
     buyTokensDesc: "Top up your token balance. One-time payment (card / BLIK / Przelewy24) — tokens are added immediately after payment.",
     popular: "POPULAR",
@@ -853,7 +742,6 @@ const PANEL_DICT: Record<Locale, {
     loading: "Lädt...",
     tabsOrders: "Bestellungen",
     tabsChat: "AI Chat",
-    tabsSubscription: "Abonnement",
     tabsAi: "AI",
     tabsCalculator: "Rechner",
     tabsNotes: "Notizen",
@@ -879,8 +767,8 @@ const PANEL_DICT: Record<Locale, {
     fileAttached: "(Datei angehängt)",
     serverError: (s) => `Serverfehler (${s})`,
     tryAgain: "Bitte versuche es erneut.",
-    chatNoTokens: "Deine AI-Tokens sind aufgebraucht. Lade dein Guthaben auf, um fortzufahren.",
-    chatNoSubscription: "Kein aktives AI-Chat-Abonnement.",
+    chatNoTokens: "Deine KI-Tokens sind aufgebraucht. Kaufe ein Token-Paket oder aktiviere den Code aus der Verpackung, um fortzufahren.",
+    chatNoAccess: "Für dieses Konto ist kein KI-Zugang verfügbar. Prüfe dein Token-Guthaben — wenn das Problem bleibt, schreib uns: kontakt@kalkmate.pl.",
     chatTooLarge: "Das Bild ist zu groß. Entferne es oder hänge ein kleineres an (max. 4 Bilder).",
     chatOnlyImages: "Es können nur Bilder angehängt werden (JPG, PNG, WebP).",
     chatTooMany: "Zu viele Anfragen. Warte kurz und versuche es erneut.",
@@ -889,7 +777,6 @@ const PANEL_DICT: Record<Locale, {
     convLoadFailed: "Die Unterhaltung konnte nicht geladen werden.",
     convDeleteFailed: "Die Unterhaltung konnte nicht gelöscht werden.",
     goBuyTokens: "Tokens kaufen →",
-    goSubscription: "Abonnement →",
     dismiss: "Schließen",
     imgProcessing: "Bild wird verkleinert…",
     imgTooMany: (m) => `Max. ${m} Bilder pro Nachricht.`,
@@ -897,19 +784,14 @@ const PANEL_DICT: Record<Locale, {
     imgTooLarge: (n) => `Bild „${n}“ ist auch nach dem Verkleinern zu groß.`,
     returnTokensSuccess: "Zahlung erhalten — die Tokens erscheinen in wenigen Augenblicken auf deinem Konto.",
     returnTokensCancelled: "Die Token-Zahlung wurde abgebrochen.",
-    returnSubSuccess: "Zahlung erhalten — dein Abonnement wird in wenigen Augenblicken aktiviert.",
-    returnSubCancelled: "Die Abonnement-Zahlung wurde abgebrochen.",
     loadFailed: "Daten konnten nicht geladen werden.",
     retry: "Erneut versuchen",
     loadMore: "Mehr anzeigen",
-    licenseRedeemed: "Die Lizenz wurde eingelöst.",
-    subCreateFailed: "Abonnement konnte nicht erstellt werden. Bitte versuche es erneut.",
-    enterLicenseCode: "Lizenzcode eingeben",
-    licenseRedeemFailed: "Lizenz konnte nicht eingelöst werden",
-    licenseRedeemError: "Beim Einlösen der Lizenz ist ein Fehler aufgetreten",
-    confirmCancelSub: "Möchtest du das Abonnement wirklich kündigen?",
-    subCancelled: "Abonnement wurde gekündigt.",
-    subCancelFailed: "Abonnement konnte nicht gekündigt werden.",
+    licenseRedeemed: "Der Code wurde aktiviert.",
+    licenseTokensAdded: (n, b) => `Code aktiviert — ${n} Tokens hinzugefügt. Guthaben: ${b}.`,
+    enterLicenseCode: "Code aus der Verpackung eingeben",
+    licenseRedeemFailed: "Der Code konnte nicht aktiviert werden",
+    licenseRedeemError: "Beim Aktivieren des Codes ist ein Fehler aufgetreten",
     ordersHeading: "Bestellverlauf",
     ordersSubtitle: "Deine Bestellungen und der Versandstatus",
     ordersEmpty: "Du hast noch keine Bestellungen",
@@ -950,56 +832,25 @@ const PANEL_DICT: Record<Locale, {
     chatPlaceholder: "Aufgabe einfügen oder Foto anhängen (Strg+V funktioniert auch für Bilder)...",
     attachFile: "Bild anhängen (max. 4)",
     send: "Senden",
-    subHeading: "AI-Chat-Abonnement",
-    subSubtitle: "Zugang zum AI Chat verwalten",
-    status: "Status",
-    statusTrial: "🎁 Testzeitraum",
-    statusActive: "✓ Aktiv",
-    statusInactive: "✗ Inaktiv",
-    assignedLicense: "Zugewiesene Lizenz",
-    daysWord: (n) => `${n} Tage`,
-    activatedOn: (d) => ` · aktiviert ${d}`,
-    notActivated: " · nicht aktiviert",
     unpinning: "Wird entkoppelt...",
     unpin: "Entkoppeln",
-    haveLicenseCode: "Hast du einen Lizenzcode?",
-    enterCodeToExtend: "Gib einen Code ein, um deinen AI-Chat-Zugang zu verlängern",
+    redeemHeading: "Code aus der Verpackung aktivieren (+2 Mio. Tokens)",
+    redeemDesc: "Den Lizenzcode findest du in der Verpackung des Rechners. Die Aktivierung fügt deinem Guthaben einmalig 2.000.000 KI-Tokens hinzu.",
     licenseCodePlaceholder: "abcd123-+=%abcd",
-    redeeming: "Wird eingelöst...",
-    redeem: "Einlösen",
-    trialPeriod: (n) => `Testzeitraum: ${n} Tage übrig`,
-    extraTrialDays: "✨ Zusätzliche 30 Tage für den Kauf des Rechners!",
-    trialEnds: (d) => `Endet am: ${d}`,
-    trialExpiredOwner: "Dein Testzeitraum ist abgelaufen. Du kannst den AI Chat durch Aktivieren eines Abonnements weiter nutzen.",
-    trialExpired: "Dein Testzeitraum ist abgelaufen. Aktiviere ein Abonnement, um den AI Chat weiter zu nutzen.",
-    choosePlan: "Wähle einen Abonnementplan",
-    promo98: "🔥 Aktion -98%",
-    secondMonth: "Zweiter Monat",
-    loadingBtn: "Lädt...",
-    choose1zl: "1 zł wählen",
-    fixedPrice: "💎 Festpreis",
-    nextMonths: "Folgende Monate",
-    choose15zl: "15 zł wählen",
-    securePayment: "💳 Sichere Zahlung über Stripe • Jederzeit kündbar",
-    ownerCanUseChat: "💡 Als Rechnerbesitzer kannst du den AI Chat per Abonnement nutzen. Das ist optional - der Rechner funktioniert unabhängig.",
-    paidSubActive: "✓ Bezahltes Abonnement aktiv",
-    feeLine: "Gebühr:",
-    perMonthFee: "15 zł/Monat",
-    savesYou: "(du sparst 67%)",
-    renewsOn: (d) => `Verlängert sich am: ${d}`,
-    cancelSub: "Abonnement kündigen",
+    redeeming: "Wird aktiviert...",
+    redeem: "Aktivieren",
     tokenUsage: "/ Token-Guthaben",
     effectiveTokens: "effektive Tokens auf deinem Konto",
     remaining: "VERBLEIBEND",
     aiLoadFailed: "AI-Einstellungen und Token-Guthaben konnten nicht geladen werden.",
     tasksLeftLabel: "Aufgaben übrig",
     maturaTasks: "Prüfungsaufgaben",
-    monthlyLimit: "Pro 1 Mio. Tokens",
+    perLicenseLabel: "Pro 2 Mio. Tokens",
     forModel: (m) => `für Modell ${m}`,
     defaultModel: "Standard",
-    modelPerformance: "MODELLEFFIZIENZ — Aufgaben pro 1 Mio. Tokens",
+    modelPerformance: "MODELL-EFFIZIENZ — Aufgaben pro 2 Mio. Tokens",
     tasksAbbr: "Aufg.",
-    tokenEstimateNote: "Schätzung für eine typische Prüfungsaufgabe (~800 echte Tokens Eingabe + Antwort). Tokens werden mit dem Abonnement erneuert.",
+    tokenEstimateNote: "Schätzung für eine typische Prüfungsaufgabe (~800 echte Tokens Eingabe + Antwort). Kein Abo — wenn dein Guthaben aufgebraucht ist, lade unten ein Paket nach.",
     buyTokens: "/ Tokens kaufen",
     buyTokensDesc: "Lade dein Token-Guthaben auf. Einmalzahlung (Karte / BLIK / Przelewy24) — Tokens werden sofort nach der Zahlung gutgeschrieben.",
     popular: "BELIEBT",
@@ -1113,7 +964,6 @@ export default function PanelPage() {
   const authed = status === "authenticated";
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("orders");
-  const [isLoading, setIsLoading] = useState(false);
   const [returnNotice, setReturnNotice] = useState<ReturnNotice | null>(null);
 
   // Kiedy ostatnio pobrano dane danej zakładki (cache FRESH_MS).
@@ -1136,7 +986,7 @@ export default function PanelPage() {
   }, [messages]);
   const [isSending, setIsSending] = useState(false);
   const sendingRef = useRef(false);
-  const [chatError, setChatError] = useState<{ text: string; action?: "ai" | "subscription" } | null>(null);
+  const [chatError, setChatError] = useState<{ text: string; action?: "ai" } | null>(null);
   const messagesBoxRef = useRef<HTMLDivElement>(null);
   // Szkic pola czatu (tekst + zdjęcia) — trzymany w ref, żeby pisanie nie
   // przerenderowywało panelu; draftEpoch remountuje ChatInput po przywróceniu.
@@ -1172,13 +1022,10 @@ export default function PanelPage() {
     []
   );
 
-  // Subscription state
-  const [subscriptionStatus, setSubscriptionStatus] = useState<any>(null);
-  const [subLoadError, setSubLoadError] = useState<string | null>(null);
-
-  // License state
+  // Kod z pudełka (licencja = jednorazowe 2 mln tokenów)
   const [licenseCode, setLicenseCode] = useState("");
   const [redeemingLicense, setRedeemingLicense] = useState(false);
+  const [redeemResult, setRedeemResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Orders state
   const [orders, setOrders] = useState<any[]>([]);
@@ -1212,7 +1059,7 @@ export default function PanelPage() {
   const [aiModels, setAiModels] = useState<Array<{ id: string; label: string; provider: string; note?: string; costMultiplier: number }>>([]);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiLoadError, setAiLoadError] = useState(false);
-  // null = jeszcze nie wczytane (nie pokazujemy fikcyjnego 1M przed odpowiedzią API)
+  // null = jeszcze nie wczytane (nie pokazujemy fikcyjnego salda przed odpowiedzią API)
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [buyingPack, setBuyingPack] = useState<string | null>(null);
   const [buyCurrency, setBuyCurrency] = useState<"pln" | "eur">("pln");
@@ -1222,7 +1069,6 @@ export default function PanelPage() {
     const onShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
         setBuyingPack(null);
-        setIsLoading(false);
       }
     };
     window.addEventListener("pageshow", onShow);
@@ -1470,7 +1316,7 @@ export default function PanelPage() {
     return null;
   };
 
-  // Dane zakładek Kalkulator / Notatki / Sprawdziany / Subskrypcja (licencja).
+  // Dane zakładek Kalkulator / Notatki / Sprawdziany.
   const loadCalcData = async (opts?: { force?: boolean }) => {
     if (!opts?.force && isFresh("calc")) return;
     calcAbortRef.current?.abort();
@@ -1676,8 +1522,9 @@ export default function PanelPage() {
     }
   }, [status, router]);
 
-  // ?tab=<id> oraz powrót z płatności (?tokens=success, ?subscription=success…)
-  // → właściwa zakładka + potwierdzenie; parametry usuwamy z paska adresu.
+  // ?tab=<id> oraz powrót z płatności (?tokens=success…) → właściwa zakładka
+  // + potwierdzenie; parametry usuwamy z paska adresu. Subskrypcje wycofane:
+  // stare linki (?subscription=…, ?tab=subscription) kierują na zakładkę AI/tokenów.
   useEffect(() => {
     let sp: URLSearchParams;
     try {
@@ -1692,8 +1539,7 @@ export default function PanelPage() {
     let notice: ReturnNotice | null = null;
     if (tok === "success") { tab = "ai"; notice = "tokens_success"; }
     else if (tok === "cancelled") { tab = "ai"; notice = "tokens_cancelled"; }
-    else if (sub === "success") { tab = "subscription"; notice = "sub_success"; }
-    else if (sub === "cancelled") { tab = "subscription"; notice = "sub_cancelled"; }
+    else if (sub !== null || tabParam === "subscription") tab = "ai";
     else if (tabParam && (TAB_IDS as readonly string[]).includes(tabParam)) tab = tabParam as TabId;
     if (tab) setActiveTab(tab);
     if (notice) setReturnNotice(notice);
@@ -1711,15 +1557,10 @@ export default function PanelPage() {
   }, []);
 
   // Webhook płatności dochodzi zwykle kilka sekund po powrocie — dociągnij
-  // saldo / status subskrypcji jeszcze raz.
+  // saldo jeszcze raz.
   useEffect(() => {
-    if (!authed || (returnNotice !== "tokens_success" && returnNotice !== "sub_success")) return;
-    const timers = [3000, 10000].map((ms) =>
-      setTimeout(() => {
-        if (returnNotice === "tokens_success") void loadAiSettings();
-        else void fetchSubscriptionStatus();
-      }, ms)
-    );
+    if (!authed || returnNotice !== "tokens_success") return;
+    const timers = [3000, 10000].map((ms) => setTimeout(() => void loadAiSettings(), ms));
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, returnNotice]);
@@ -1735,15 +1576,6 @@ export default function PanelPage() {
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, isAiTab]);
-
-  // Fetch subscription status
-  useEffect(() => {
-    if (!authed || activeTab !== "subscription" || isFresh("sub")) return;
-    const ac = new AbortController();
-    void fetchSubscriptionStatus(ac.signal);
-    return () => ac.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authed, activeTab]);
 
   // Fetch orders when orders tab is active
   useEffect(() => {
@@ -1843,18 +1675,6 @@ export default function PanelPage() {
     void fetchConversations();
   };
 
-  const fetchSubscriptionStatus = async (signal?: AbortSignal) => {
-    const r = await fetchJson("/api/subscription/status", { cache: "no-store", signal });
-    if (r.aborted) return;
-    if (!r.ok) {
-      setSubLoadError(errText(r, t.loadFailed));
-      return;
-    }
-    setSubLoadError(null);
-    setSubscriptionStatus(r.data);
-    markFetched("sub");
-  };
-
   const fetchOrders = async (signal?: AbortSignal) => {
     setOrdersLoading(true);
     setOrdersError(null);
@@ -1899,12 +1719,12 @@ export default function PanelPage() {
     }
   };
 
-  const chatErrorFrom = (r: FetchJsonResult): { text: string; action?: "ai" | "subscription" } => {
+  const chatErrorFrom = (r: FetchJsonResult): { text: string; action?: "ai" } => {
     switch (r.status) {
       case 0: return { text: t.errNetwork };
       case 401: return { text: t.sessionExpired };
       case 402: return { text: t.chatNoTokens, action: "ai" };
-      case 403: return { text: t.chatNoSubscription, action: "subscription" };
+      case 403: return { text: t.chatNoAccess, action: "ai" };
       case 413: return { text: t.chatTooLarge };
       case 415: return { text: t.chatOnlyImages };
       case 429: return { text: t.chatTooMany };
@@ -1931,7 +1751,7 @@ export default function PanelPage() {
 
     // Błąd: treść i zdjęcia wracają do pola (nic nie ginie), a z listy znika
     // niewysłana wiadomość — serwer jej nie zapisał.
-    const fail = (err: { text: string; action?: "ai" | "subscription" }) => {
+    const fail = (err: { text: string; action?: "ai" }) => {
       chatDraftRef.current = { text, files };
       setDraftEpoch((e) => e + 1);
       if (chatEpochRef.current === epoch) {
@@ -2025,57 +1845,41 @@ export default function PanelPage() {
     [t]
   );
 
-  const handleSubscribe = async (plan: "second_month" | "regular") => {
-    if (isLoading) return;
-    setIsLoading(true);
-    const r = await sendJson("/api/subscription/purchase", "POST", { plan });
-    const url = r.ok && typeof r.data?.url === "string" ? (r.data.url as string) : null;
-    if (url) {
-      // Bez resetu isLoading — przyciski zostają zablokowane do przekierowania.
-      window.location.href = url;
-      return;
-    }
-    alert(errText(r, t.subCreateFailed));
-    setIsLoading(false);
-  };
-
   const handleRedeemLicense = async () => {
     if (!licenseCode.trim()) {
-      alert(t.enterLicenseCode);
+      setRedeemResult({ ok: false, text: t.enterLicenseCode });
       return;
     }
     if (redeemingLicense) return;
     setRedeemingLicense(true);
+    setRedeemResult(null);
     try {
-      const r = await sendJson("/api/subscription/redeem", "POST", { licenseCode: licenseCode.trim() });
+      // { ok, tokensGranted, tokenBalance, message } — ponowna aktywacja: tokensGranted 0 + message.
+      const r = await sendJson("/api/user/license/claim", "POST", { code: licenseCode.trim() });
       if (!r.ok) {
-        alert(r.status === 0 || (r.notJson && r.status !== 401) ? t.licenseRedeemError : errText(r, t.licenseRedeemFailed));
+        setRedeemResult({
+          ok: false,
+          text: r.status === 0 || (r.notJson && r.status !== 401) ? t.licenseRedeemError : errText(r, t.licenseRedeemFailed),
+        });
         return;
       }
-      alert(typeof r.data?.message === "string" && r.data.message ? r.data.message : t.licenseRedeemed);
+      const granted = typeof r.data?.tokensGranted === "number" ? (r.data.tokensGranted as number) : 0;
+      const balance = typeof r.data?.tokenBalance === "number" ? (r.data.tokenBalance as number) : null;
+      const message = typeof r.data?.message === "string" && r.data.message ? (r.data.message as string) : null;
+      if (balance !== null) setTokenBalance(balance);
+      setRedeemResult({
+        ok: true,
+        text:
+          granted > 0
+            ? t.licenseTokensAdded(granted.toLocaleString(DATE_LOCALE[lang]), formatTokens(balance ?? granted))
+            : message ?? t.licenseRedeemed,
+      });
       setLicenseCode("");
-      void fetchSubscriptionStatus();
-      void loadCalcData({ force: true });
+      if (balance === null) void loadAiSettings();
+      // Kod przypisuje się do konta — dane zakładki Kalkulator odśwież przy następnym wejściu.
+      fetchedAtRef.current.calc = 0;
     } finally {
       setRedeemingLicense(false);
-    }
-  };
-
-  const handleCancelSubscription = async () => {
-    if (isLoading) return;
-    if (!confirm(t.confirmCancelSub)) return;
-
-    setIsLoading(true);
-    try {
-      const r = await fetchJson("/api/subscription/cancel", { method: "POST" });
-      if (!r.ok) {
-        alert(errText(r, t.subCancelFailed));
-        return;
-      }
-      alert(t.subCancelled);
-      void fetchSubscriptionStatus();
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -2097,12 +1901,11 @@ export default function PanelPage() {
   const tabs = [
     { id: "orders" as const, n: "01", label: t.tabsOrders },
     { id: "chat" as const, n: "02", label: t.tabsChat },
-    { id: "subscription" as const, n: "03", label: t.tabsSubscription },
-    { id: "ai" as const, n: "04", label: t.tabsAi },
-    { id: "calculator" as const, n: "05", label: t.tabsCalculator },
-    { id: "notes" as const, n: "06", label: t.tabsNotes },
-    { id: "tests" as const, n: "07", label: t.tabsTests },
-    { id: "settings" as const, n: "08", label: t.tabsSettings },
+    { id: "ai" as const, n: "03", label: t.tabsAi },
+    { id: "calculator" as const, n: "04", label: t.tabsCalculator },
+    { id: "notes" as const, n: "05", label: t.tabsNotes },
+    { id: "tests" as const, n: "06", label: t.tabsTests },
+    { id: "settings" as const, n: "07", label: t.tabsSettings },
   ];
 
   return (
@@ -2192,13 +1995,7 @@ export default function PanelPage() {
             }`}
           >
             <p className={`text-sm ${returnNotice.endsWith("success") ? "text-[#D8FF3D]" : "text-[#FFB800]"}`}>
-              {returnNotice === "tokens_success"
-                ? t.returnTokensSuccess
-                : returnNotice === "tokens_cancelled"
-                ? t.returnTokensCancelled
-                : returnNotice === "sub_success"
-                ? t.returnSubSuccess
-                : t.returnSubCancelled}
+              {returnNotice === "tokens_success" ? t.returnTokensSuccess : t.returnTokensCancelled}
             </p>
             <button
               onClick={() => setReturnNotice(null)}
@@ -2638,10 +2435,10 @@ export default function PanelPage() {
                     <p className="text-sm text-[#FF4D2E]">{chatError.text}</p>
                     {chatError.action && (
                       <button
-                        onClick={() => setActiveTab(chatError.action === "ai" ? "ai" : "subscription")}
+                        onClick={() => setActiveTab("ai")}
                         className="mt-1.5 km-mono-eyebrow text-[#D8FF3D] hover:underline"
                       >
-                        {chatError.action === "ai" ? t.goBuyTokens : t.goSubscription}
+                        {t.goBuyTokens}
                       </button>
                     )}
                   </div>
@@ -2668,258 +2465,6 @@ export default function PanelPage() {
             </div>
           )}
 
-          {activeTab === "subscription" && (
-            <div
-              key="subscription"
-              className="km-panel-fade"
-            >
-              <div className="bg-[#0E0E0E] p-4 sm:p-8 border border-[rgba(242,237,227,0.10)]">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12  bg-[#D8FF3D]/10 bg-[#D8FF3D]/10 flex items-center justify-center">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#D8FF3D]">
-                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-[#F2EDE3]">
-                      {t.subHeading}
-                    </h2>
-                    <p className="text-sm text-[#F2EDE3]/60">
-                      {t.subSubtitle}
-                    </p>
-                  </div>
-                </div>
-
-                {subscriptionStatus ? (
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3 p-4 bg-[#141414] ">
-                      <div className={`w-4 h-4 rounded-full ${subscriptionStatus.canUseChat ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
-                      <span className="text-lg font-bold text-[#F2EDE3]">
-                        {t.status}: {subscriptionStatus.status === "trial" ? t.statusTrial : subscriptionStatus.status === "active" ? t.statusActive : t.statusInactive}
-                      </span>
-                    </div>
-
-                    {/* Aktualnie przypisana licencja */}
-                    {calcInfo?.claimed && calcInfo?.license?.code && (
-                      <div className="flex items-center justify-between p-4 bg-[#141414] ">
-                        <div>
-                          <div className="text-xs text-[#F2EDE3]/60 mb-1">
-                            {t.assignedLicense}
-                          </div>
-                          <div className="font-mono text-sm text-[#F2EDE3]">
-                            {calcInfo.license.code}
-                          </div>
-                          <div className="text-xs text-[#F2EDE3]/60 mt-1">
-                            {t.daysWord(calcInfo.license.durationDays)}
-                            {calcInfo.license.activatedAt
-                              ? t.activatedOn(new Date(calcInfo.license.activatedAt).toLocaleDateString(DATE_LOCALE[lang]))
-                              : t.notActivated}
-                          </div>
-                        </div>
-                        <button
-                          onClick={calcUnclaim}
-                          disabled={unclaiming}
-                          className="text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400  disabled:opacity-50"
-                        >
-                          {unclaiming ? t.unpinning : t.unpin}
-                        </button>
-                      </div>
-                    )}
-
-                    {/* License Redemption */}
-                    <div className=" from-purple-50 to-blue-50 dark:from-purple-500/10 dark:to-blue-500/10 border border-purple-200 dark:border-purple-500/20  p-6">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10   from-purple-500 to-blue-500 flex items-center justify-center">
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                          </svg>
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-[#F2EDE3]">
-                            {t.haveLicenseCode}
-                          </h3>
-                          <p className="text-xs text-[#F2EDE3]/60">
-                            {t.enterCodeToExtend}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <input
-                          type="text"
-                          value={licenseCode}
-                          onChange={(e) => setLicenseCode(e.target.value)}
-                          placeholder={t.licenseCodePlaceholder}
-                          className="flex-1 bg-[#0E0E0E] border border-purple-200 dark:border-purple-500/20  px-4 py-3 text-sm text-[#F2EDE3] placeholder:text-[#F2EDE3]/40 placeholder:text-[#F2EDE3]/40 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
-                          disabled={redeemingLicense}
-                        />
-                        <button
-                          onClick={handleRedeemLicense}
-                          disabled={!licenseCode.trim() || redeemingLicense}
-                          className="px-6 py-3  from-purple-500 to-blue-500 text-white font-medium   transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {redeemingLicense ? t.redeeming : t.redeem}
-                        </button>
-                      </div>
-                    </div>
-
-                    {subscriptionStatus.isTrialActive && (
-                      <div className=" from-blue-50 to-blue-100 dark:from-blue-500/10 dark:to-blue-600/10 border border-blue-200 dark:border-blue-500/20  p-6">
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12  bg-blue-500 flex items-center justify-center shrink-0">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6M12 2v10M16 7l-4-4-4 4" />
-                            </svg>
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-lg font-bold text-blue-900 dark:text-blue-200 mb-2">
-                              {t.trialPeriod(subscriptionStatus.daysRemaining)}
-                            </p>
-                            {subscriptionStatus.hasPurchasedCalculator && subscriptionStatus.trialDays === 30 && (
-                              <p className="text-sm text-blue-700 dark:text-blue-300">
-                                {t.extraTrialDays}
-                              </p>
-                            )}
-                            <p className="text-sm text-blue-700 dark:text-blue-300 mt-2">
-                              {t.trialEnds(new Date(subscriptionStatus.trialEndsAt).toLocaleDateString(DATE_LOCALE[lang], {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              }))}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {!subscriptionStatus.hasActiveSubscription && !subscriptionStatus.isTrialActive && (
-                      <div>
-                        <p className="text-sm text-[#F2EDE3]/60 mb-6">
-                          {subscriptionStatus.hasPurchasedCalculator ? (
-                            <>{t.trialExpiredOwner}</>
-                          ) : (
-                            <>{t.trialExpired}</>
-                          )}
-                        </p>
-
-                        {/* Pricing Plans */}
-                        <div className=" from-[#D8FF3D]/5 to-[#D8FF3D]/5 dark:from-[#D8FF3D]/10 dark:to-[#D8FF3D]/10  p-6 mb-6">
-                          <h3 className="text-lg font-bold text-[#F2EDE3] mb-4 text-center">
-                            {t.choosePlan}
-                          </h3>
-
-                          <div className="grid md:grid-cols-2 gap-4 mb-4">
-                            {/* Second Month Plan - 1 zł */}
-                            <div className="bg-[#0E0E0E]  p-5 border-2 border-[#D8FF3D] relative">
-                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1  from-[#D8FF3D] to-[#D8FF3D] text-[#0B0B0B] text-xs font-bold rounded-full">
-                                {t.promo98}
-                              </div>
-                              <div className="text-center mt-2 mb-4">
-                                <div className="text-3xl font-bold text-[#D8FF3D] mb-1">
-                                  1 zł
-                                </div>
-                                <div className="text-xs text-[#F2EDE3]/40 line-through">
-                                  44,99 zł
-                                </div>
-                                <div className="text-sm text-[#F2EDE3]/60 mt-1">
-                                  {t.secondMonth}
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => handleSubscribe("second_month")}
-                                disabled={isLoading}
-                                className="w-full  from-[#D8FF3D] to-[#D8FF3D] text-[#0B0B0B] px-4 py-3   transition-all duration-300 disabled:opacity-50 font-bold text-sm"
-                              >
-                                {isLoading ? t.loadingBtn : t.choose1zl}
-                              </button>
-                            </div>
-
-                            {/* Regular Plan - 15 zł */}
-                            <div className="relative bg-[#0E0E0E]  p-5 border-2 border-[rgba(242,237,227,0.15)]">
-                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-[#D8FF3D] text-[#0B0B0B] km-mono-eyebrow">
-                                {t.fixedPrice}
-                              </div>
-                              <div className="text-center mt-2 mb-4">
-                                <div className="text-3xl font-bold text-[#F2EDE3] mb-1">
-                                  15 zł
-                                </div>
-                                <div className="text-xs text-[#F2EDE3]/40 line-through">
-                                  44,99 zł
-                                </div>
-                                <div className="text-sm text-[#F2EDE3]/60 mt-1">
-                                  {t.nextMonths}
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => handleSubscribe("regular")}
-                                disabled={isLoading}
-                                className="w-full bg-[#0E0E0E] bg-[#141414] text-[#F2EDE3] px-4 py-3  hover:bg-[#141414] hover:bg-[#1a1a1a] transition-all duration-300 disabled:opacity-50 font-bold text-sm border border-[rgba(242,237,227,0.15)]"
-                              >
-                                {isLoading ? t.loadingBtn : t.choose15zl}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="text-center text-xs text-[#F2EDE3]/60">
-                            {t.securePayment}
-                          </div>
-                        </div>
-
-                        {subscriptionStatus.hasPurchasedCalculator && (
-                          <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20  p-4">
-                            <p className="text-sm text-green-800 dark:text-green-200">
-                              {t.ownerCanUseChat}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {subscriptionStatus.hasActiveSubscription && (
-                      <div>
-                        <div className=" from-green-50 to-emerald-100 dark:from-green-500/10 dark:to-emerald-600/10 border border-green-200 dark:border-green-500/20  p-6 mb-4">
-                          <p className="text-lg font-bold text-green-900 dark:text-green-200 mb-2">
-                            {t.paidSubActive}
-                          </p>
-                          <p className="text-sm text-green-700 dark:text-green-300">
-                            {t.feeLine} <strong>{t.perMonthFee}</strong> <span className="text-xs">{t.savesYou}</span>
-                          </p>
-                          {subscriptionStatus.subscriptionEndsAt && (
-                            <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                              {t.renewsOn(new Date(subscriptionStatus.subscriptionEndsAt).toLocaleDateString(DATE_LOCALE[lang]))}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          onClick={handleCancelSubscription}
-                          disabled={isLoading}
-                          className="text-sm text-red-600 dark:text-red-400 hover:underline disabled:opacity-50"
-                        >
-                          {t.cancelSub}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : subLoadError ? (
-                  <div className="text-center py-12">
-                    <p className="text-sm text-[#FF4D2E] mb-4">{subLoadError}</p>
-                    <button
-                      onClick={() => void fetchSubscriptionStatus()}
-                      className="km-mono-eyebrow px-4 py-2 border border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/80 hover:border-[#D8FF3D] hover:text-[#D8FF3D] transition-colors"
-                    >
-                      {t.retry}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="w-8 h-8 border-4 border-[#D8FF3D] border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {activeTab === "ai" && (
             <div
               key="ai"
@@ -2927,9 +2472,9 @@ export default function PanelPage() {
             >
               {/* === LICZNIK TOKENÓW === */}
               {(() => {
-                // Serwer nie zwraca puli startowej (rejestracja daje 1M, zakupy
-                // dokładają dowolnie dużo), więc pokazujemy SALDO, a pasek liczymy
-                // względem max(saldo, 1M) — bez fikcyjnego "zużyto X%".
+                // Serwer nie zwraca puli startowej (rejestracja daje 200 tys., kod z
+                // pudełka 2 mln, zakupy dowolnie dużo), więc pokazujemy SALDO, a pasek
+                // liczymy względem max(saldo, 200 tys.) — bez fikcyjnego "zużyto X%".
                 const loaded = tokenBalance !== null;
                 const balance = tokenBalance ?? 0;
                 const base = Math.max(balance, TOKEN_REFERENCE);
@@ -2940,7 +2485,7 @@ export default function PanelPage() {
                 const avgRealTokensPerTask = 800;
                 const avgEffectiveTokensPerTask = Math.ceil(avgRealTokensPerTask * multiplier);
                 const tasksLeft = Math.floor(balance / avgEffectiveTokensPerTask);
-                const tasksTotal = Math.floor(TOKEN_REFERENCE / avgEffectiveTokensPerTask);
+                const tasksTotal = Math.floor(LICENSE_TOKENS / avgEffectiveTokensPerTask);
                 const barColor =
                   balance < TOKEN_REFERENCE * 0.1 ? "#FF4D2E" : balance < TOKEN_REFERENCE * 0.3 ? "#FFB800" : "#D8FF3D";
                 return (
@@ -2990,7 +2535,7 @@ export default function PanelPage() {
                         <div className="text-xs text-[#F2EDE3]/40 mt-0.5">{t.maturaTasks}</div>
                       </div>
                       <div className="bg-[#141414] border border-[rgba(242,237,227,0.08)] p-3">
-                        <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">{t.monthlyLimit}</div>
+                        <div className="km-mono-eyebrow text-[#F2EDE3]/40 mb-0.5">{t.perLicenseLabel}</div>
                         <div className="text-xl font-bold text-[#F2EDE3]">
                           ~{tasksTotal.toLocaleString(DATE_LOCALE[lang])}
                         </div>
@@ -3006,7 +2551,7 @@ export default function PanelPage() {
                       <div className="divide-y divide-[rgba(242,237,227,0.05)]">
                         {aiModels.map((m) => {
                           const eff = Math.ceil(avgRealTokensPerTask * m.costMultiplier);
-                          const tasks = Math.floor(TOKEN_REFERENCE / eff);
+                          const tasks = Math.floor(LICENSE_TOKENS / eff);
                           const isCurrent = m.id === aiModel;
                           return (
                             <div
@@ -3045,6 +2590,44 @@ export default function PanelPage() {
                   </div>
                 );
               })()}
+
+              {/* === KOD Z PUDEŁKA: +2 MLN TOKENÓW === */}
+              <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
+                <div className="km-mono-eyebrow text-[#D8FF3D] mb-1">/ {t.redeemHeading}</div>
+                <p className="text-sm text-[#F2EDE3]/55 mb-4">{t.redeemDesc}</p>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleRedeemLicense();
+                  }}
+                  className="flex flex-col sm:flex-row gap-3"
+                >
+                  <input
+                    type="text"
+                    value={licenseCode}
+                    onChange={(e) => setLicenseCode(e.target.value)}
+                    placeholder={t.licenseCodePlaceholder}
+                    autoComplete="off"
+                    className="flex-1 px-4 py-3 bg-[#0B0B0B] border border-[rgba(242,237,227,0.18)] focus:outline-none focus:border-[#D8FF3D] text-sm font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/25 transition-colors"
+                    disabled={redeemingLicense}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!licenseCode.trim() || redeemingLicense}
+                    className="px-6 py-3 km-mono-eyebrow bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {redeemingLicense ? t.redeeming : t.redeem}
+                  </button>
+                </form>
+                {redeemResult && (
+                  <p
+                    role="status"
+                    className={`mt-3 text-sm ${redeemResult.ok ? "text-[#D8FF3D]" : "text-[#FF4D2E]"}`}
+                  >
+                    {redeemResult.text}
+                  </p>
+                )}
+              </div>
 
               {/* === SKLEP: KUP TOKENY === */}
               <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">

@@ -26,7 +26,7 @@ import { getTransactionBySessionId, p24StatusIsPaid, verifyTransaction, type P24
 import { getOrderCoupon, consumeCouponUsage } from "@/lib/coupons";
 import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
 import { readOrderUnits } from "@/lib/orderPersonalization";
-import { alertAdmin, appendOrderAdminNote, formatMinor, grantDevicePurchaseTrial } from "@/lib/checkoutPricing";
+import { alertAdmin, appendOrderAdminNote, formatMinor } from "@/lib/checkoutPricing";
 
 // Po ilu dniach bez platnosci zamowienie jest auto-anulowane (lib/orderCleanup.ts
 // re-eksportuje te stala). Trzymana tutaj, zeby orderCleanup mogl importowac
@@ -204,12 +204,8 @@ export async function settleP24OrderPayment(p: {
     return "late_payment";
   }
 
-  // Zakup kalkulatora = 30 dni AI (bez skracania dluzszego dostepu).
-  try {
-    await grantDevicePurchaseTrial(order.userId);
-  } catch (err) {
-    console.error("[P24 settle] subscription update failed:", err);
-  }
+  // Model tokenowy (2026-10): zakup kalkulatora nie daje triala/tokenow —
+  // tokeny sa z licencji w pudelku.
 
   if (p.source !== "webhook") {
     const note = `[auto ${day}] Platnosc P24 domknieta automatycznie (${p.source}) — webhook P24 nie dotarl, status sprawdzony w API P24.`;

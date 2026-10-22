@@ -134,38 +134,16 @@ export async function readTokenBalance(userId: string): Promise<number | null> {
 }
 
 // ===========================================================================
-// Waznosc subskrypcji (kontrakt K2)
+// Dzienny licznik DeviceDailyUsage (dawny budzet trybu license-only)
 // ===========================================================================
-// status "active" jest wazny tylko gdy okres nie minal (stripeCurrentPeriodEnd
-// null albo w przyszlosci) — licencje/odnowienia ustawiaja koniec okresu.
-// "trial" — do trialEndsAt.
-export function isSubscriptionValid(
-  sub: { status: string; trialEndsAt: Date | null; stripeCurrentPeriodEnd: Date | null } | null | undefined,
-  now: Date = new Date()
-): boolean {
-  if (!sub) return false;
-  if (sub.status === "active") {
-    return !sub.stripeCurrentPeriodEnd || new Date(sub.stripeCurrentPeriodEnd).getTime() > now.getTime();
-  }
-  if (sub.status === "trial") {
-    return !!sub.trialEndsAt && new Date(sub.trialEndsAt).getTime() > now.getTime();
-  }
-  return false;
-}
-
-// ===========================================================================
-// Dzienny budzet dla trybu license-only (urzadzenie bez konta -> brak salda)
-// ===========================================================================
-// Tabela DeviceDailyUsage poza Prisma schema (leniwie, wzorem Coupon):
+// Model tokenowy (2026-10): tryb license-only (urzadzenie bez konta) i
+// subskrypcje zostaly usuniete — /api/device/solve wymaga sparowanego konta
+// z saldem. Tabela zostaje (dbInit tworzy/czysci ja), licznik nie jest juz
+// zapisywany. Tabela poza Prisma schema:
 //   scope   'license' | 'device'
 //   subject kod licencji albo deviceId
 //   day     YYYY-MM-DD (czas Europe/Warsaw)
 //   tokens  suma efektywnych tokenow danego dnia
-export function licenseDailyTokenLimit(): number {
-  const n = parseInt(process.env.LICENSE_DAILY_TOKEN_LIMIT || "", 10);
-  return Number.isFinite(n) && n > 0 ? n : 300_000;
-}
-
 export function usageDay(d: Date = new Date()): string {
   // sv-SE formatuje jako YYYY-MM-DD
   return new Intl.DateTimeFormat("sv-SE", {

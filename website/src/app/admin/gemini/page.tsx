@@ -46,6 +46,8 @@ interface StatsData {
     | { ok: false; error: string };
 }
 
+// Musi byc zgodne z TOKEN_GRANT w /api/admin/openrouter-stats (tam liczony tokenPct).
+// Model tokenowy: start konta = 200 tys., kod z pudelka = +2 mln — do zmiany razem z API.
 const TOKEN_GRANT = 1_000_000;
 
 function fmtTokens(n: number) {
@@ -274,10 +276,9 @@ export default function OpenRouterPage() {
               <p className="text-emerald-400 font-semibold mb-0.5">Ekonomika tokenów</p>
               <p className="text-[#E0E0E0]/60">
                 1M efektywnych tokenów = ~$1.40 kosztu API (niezależnie od modelu).
-                Przy subskrypcji 30 PLN (~$7.70) marża wynosi <span className="text-emerald-400 font-semibold">~82%</span>.
-                {" "}Szacowany przychód przy pełnym zużyciu ({data.totals.totalUsers} userów × 30 PLN) ={" "}
-                <span className="text-emerald-400 font-semibold">{(data.totals.totalUsers * 30).toLocaleString()} PLN</span>,
-                {" "}koszt API <span className="text-red-400 font-semibold">{(data.totals.totalUsers * 1.40 * 3.9).toFixed(2)} PLN</span>.
+                Przy paczce 1 mln tokenów za 29 PLN (~$7.40) marża wynosi <span className="text-emerald-400 font-semibold">~81%</span>.
+                {" "}Kod z pudełka (2 mln tokenów) to ~<span className="text-red-400 font-semibold">{(2 * 1.40 * 3.9).toFixed(2)} PLN</span> kosztu API
+                {" "}na kalkulator przy pełnym zużyciu, start nowego konta (200 tys.) ~{(0.2 * 1.40 * 3.9).toFixed(2)} PLN.
               </p>
             </div>
           </motion.div>

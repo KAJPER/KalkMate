@@ -4,9 +4,11 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
+import { activateLicenseForTokens, LICENSE_INVALID_MSG } from "@/lib/licenseTokens";
+
 // Ujednolicony komunikat dla wszystkich "nieudanych" przypadkow zeby nie
-// dawac sygnalu czy kod istnieje czy juz uzyty (anty-enumeracja).
-const INVALID_CODE_MSG = "Nieprawidlowy lub juz wykorzystany kod licencji";
+// dawac sygnalu czy kod istnieje czy nalezy do kogos innego (anty-enumeracja).
+const INVALID_CODE_MSG = LICENSE_INVALID_MSG;
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,70 +53,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find license (normalize: trim and lowercase to match generator)
-    const normalizedCode = licenseCode.trim().toLowerCase();
-
-    const license = await prisma.license.findUnique({
-      where: { code: normalizedCode },
-    });
-
-    if (!license) {
-      return NextResponse.json({ error: INVALID_CODE_MSG }, { status: 400 });
-    }
-
-    if (license.isUsed) {
-      return NextResponse.json({ error: INVALID_CODE_MSG }, { status: 400 });
-    }
-
-    // M6: atomowe oznaczenie licencji — zapobiega TOCTOU (podwójnemu użyciu
-    // przy równoczesnych żądaniach). UPDATE zwraca 0 wierszy jeśli już użyta.
-    const now = new Date();
-    const marked = await prisma.$executeRaw`
-      UPDATE "License"
-      SET "isUsed" = 1, "usedBy" = ${user.id}, "usedAt" = ${now.toISOString()}
-      WHERE "id" = ${license.id} AND "isUsed" = 0
-    `;
-    if (Number(marked) === 0) {
-      return NextResponse.json({ error: INVALID_CODE_MSG }, { status: 400 });
-    }
-
-    // Get or create subscription
-    let subscription = await prisma.subscription.findUnique({
-      where: { userId: user.id },
-    });
-
-    if (!subscription) {
-      // Create new subscription with license duration
-      const trialEndsAt = new Date(now.getTime() + license.durationDays * 24 * 60 * 60 * 1000);
-
-      subscription = await prisma.subscription.create({
-        data: {
-          id: require("crypto").randomUUID(),
-          userId: user.id,
-          status: "trial",
-          trialEndsAt,
-          trialDays: license.durationDays,
-          updatedAt: new Date(),
-        },
-      });
-    } else {
-      // Extend existing subscription
-      const currentEndDate = subscription.trialEndsAt > now ? subscription.trialEndsAt : now;
-      const newEndDate = new Date(currentEndDate.getTime() + license.durationDays * 24 * 60 * 60 * 1000);
-
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: {
-          trialEndsAt: newEndDate,
-          status: subscription.status === "expired" ? "trial" : subscription.status,
-        },
-      });
+    // Model tokenowy (2026-10): licencja = jednorazowe LICENSE_TOKENS na
+    // konto (wspolna logika z /api/user/license/claim — lib/licenseTokens.ts).
+    const act = await activateLicenseForTokens(user.id, licenseCode)
+    if (!act.ok) {
+      return NextResponse.json({ ok: false, error: INVALID_CODE_MSG }, { status: 400 });
     }
 
     return NextResponse.json({
-      success: true,
-      message: `Licencja aktywowana! Dodano ${license.durationDays} dni dostępu do AI Chat.`,
-      daysAdded: license.durationDays,
+      ok: true,
+      success: true, // pole czytane przez starszy panel
+      code: act.code,
+      tokensGranted: act.tokensGranted,
+      tokenBalance: act.tokenBalance,
+      alreadyActivated: act.alreadyActivated,
+      message: act.message,
     });
   } catch (error) {
     console.error("Redeem license error:", error);

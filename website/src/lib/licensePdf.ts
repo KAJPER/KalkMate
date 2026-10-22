@@ -84,8 +84,10 @@ export async function buildLicenseSheetPdf(
   const mono = await doc.embedFont(StandardFonts.CourierBold);
 
   const sheetCount = Math.max(1, Math.ceil(codes.length / CARDS_PER_SHEET));
-  const durationLabel =
-    durationDays === 7 ? "7 dni dostepu" : durationDays === 90 ? "90 dni dostepu" : `${durationDays} dni dostepu`;
+  // Model tokenowy (2026-10): kod z pudelka = jednorazowo 2 mln tokenow AI.
+  // durationDays zostaje w sygnaturze tylko dla zgodnosci wywolan.
+  void durationDays;
+  const durationLabel = "2 mln tokenow AI";
 
   for (let s = 0; s < sheetCount; s++) {
     const sheetCodes = codes.slice(s * CARDS_PER_SHEET, (s + 1) * CARDS_PER_SHEET);
@@ -171,9 +173,9 @@ export async function buildLicenseSheetPdf(
       const steps = [
         "1. Wejdz na kalkmate.pl",
         "2. Zaloguj sie / zaloz konto",
-        "3. Panel -> Subskrypcja",
+        "3. Otworz Panel",
         "4. Wpisz kod licencji",
-        "5. Kliknij Aktywuj",
+        "5. Aktywuj = 2 mln tokenow AI",
       ];
       steps.forEach((line, li) => {
         back.drawText(line, {

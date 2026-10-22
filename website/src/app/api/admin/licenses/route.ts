@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { randomInt } from "crypto";
+import { LICENSE_TOKENS } from "@/lib/tokenGrants";
 
 // Generator licencji: 16 znaków, więcej cyfr i znaków specjalnych niż liter.
 // Losowanie z crypto.randomInt (CSPRNG) — Math.random jest przewidywalny, a kod
@@ -40,7 +41,10 @@ function generateLicenseCode(): string {
 export async function POST(req: NextRequest) {
   const authErr = await requireAdminAuth(req); if (authErr) return authErr;
   try {
-    const { count = 1, durationDays = 30, description } = await req.json();
+    // Model tokenowy (2026-10): licencja = jednorazowe LICENSE_TOKENS, bez
+    // czasu waznosci (durationDays z body ignorowane; kolumna zostaje z
+    // domyslna wartoscia, nic jej juz nie czyta).
+    const { count = 1, description } = await req.json();
 
     // Walidacja
     if (count < 1 || count > 100) {
@@ -73,7 +77,6 @@ export async function POST(req: NextRequest) {
         data: {
           id: require("crypto").randomUUID(),
           code,
-          durationDays,
           description: description || `Generated ${new Date().toISOString()}`,
         },
       });
@@ -86,7 +89,8 @@ export async function POST(req: NextRequest) {
       success: true,
       codes,
       count: codes.length,
-      details: createdLicenses,
+      tokenValue: LICENSE_TOKENS,
+      details: createdLicenses.map(({ durationDays: _legacyDays, ...l }) => ({ ...l, tokenValue: LICENSE_TOKENS })),
     });
   } catch (error) {
     console.error("License generation error:", error);
@@ -111,7 +115,7 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-      codes: licenses,
+      codes: licenses.map(({ durationDays: _legacyDays, ...l }) => ({ ...l, tokenValue: LICENSE_TOKENS })),
       count: licenses.length,
     });
   } catch (error) {

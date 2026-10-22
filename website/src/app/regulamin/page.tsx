@@ -183,8 +183,8 @@ export default function RegulaminPage() {
                 Konsumentowi przed zawarciem umowy, w formularzu zamówienia.
               </p>
               <p className="text-[14px] leading-[1.65] text-[#F2EDE3]/80 mt-3">
-                Wyjątek ten <strong className="text-[#F2EDE3]">nie dotyczy</strong> zakupów subskrypcji
-                AI Chat ani doładowań tokenów, dla których prawo odstąpienia obowiązuje na zasadach ogólnych.
+                Wyjątek ten <strong className="text-[#F2EDE3]">nie dotyczy</strong> zakupów pakietów
+                (doładowań) tokenów AI, dla których prawo odstąpienia obowiązuje na zasadach ogólnych.
               </p>
             </div>
 

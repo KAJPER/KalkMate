@@ -7,6 +7,7 @@ import { deleteUserCaptures } from "./captures"
 import bcrypt from "bcryptjs"
 import { randomUUID } from "crypto"
 import { rateLimit, clientIp } from "./rate-limit"
+import { SIGNUP_TOKENS } from "./tokenGrants"
 
 // ---------------------------------------------------------------------------
 // Wspolne reguly kont
@@ -358,21 +359,9 @@ export const authOptions: NextAuthOptions = {
             },
           })
 
+          // Model tokenowy (2026-10): bez Subscription/trialu — saldo startowe.
           try {
-            await prisma.subscription.create({
-              data: {
-                id: randomUUID(),
-                userId: dbUser.id,
-                status: "trial",
-                trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-                trialDays: 30,
-                updatedAt: new Date(),
-              },
-            })
-          } catch {}
-
-          try {
-            await prisma.$executeRaw`UPDATE "User" SET "tokenBalance" = 1000000 WHERE "id" = ${dbUser.id}`
+            await prisma.$executeRaw`UPDATE "User" SET "tokenBalance" = ${SIGNUP_TOKENS} WHERE "id" = ${dbUser.id}`
           } catch {}
         } else if (!dbUser.emailVerified) {
           // Konto z haslem, ktorego wlasciciel adresu NIGDY nie potwierdzil —

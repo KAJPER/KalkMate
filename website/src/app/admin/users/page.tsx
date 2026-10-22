@@ -4,17 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
 import { toast } from "@/components/admin/toast";
+import { LICENSE_TOKENS_LABEL } from "@/components/admin/licenseGen";
 
 interface User {
   id: string;
   email: string;
   name: string | null;
   createdAt: string;
-  subscription: {
-    status: string;
-    trialEndsAt: string | null;
-    plan: string | null;
-  } | null;
   licensesUsed: number;
   ordersCount: number;
   tokenBalance: number;
@@ -30,7 +26,7 @@ interface PurchaseHistory {
   tokenPurchases: Array<{
     id: string; provider: string; tokens: number; amount: number; currency: string; paidAt: string | null;
   }>;
-  licenses: Array<{ code: string; durationDays: number; usedAt: string | null; description: string | null }>;
+  licenses: Array<{ code: string; durationDays?: number; usedAt: string | null; description: string | null }>;
 }
 
 function fmtTokensShort(n: number) {
@@ -47,7 +43,7 @@ export default function UsersPage() {
   const [offset, setOffset] = useState(0);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", email: "", subscriptionStatus: "" });
+  const [editForm, setEditForm] = useState({ name: "", email: "" });
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState(""); // search z opoznieniem -> zapytanie do serwera
   useEffect(() => {
@@ -132,7 +128,6 @@ export default function UsersPage() {
     setEditForm({
       name: user.name || "",
       email: user.email,
-      subscriptionStatus: user.subscription?.status || "",
     });
     setShowEditModal(true);
   };
@@ -159,19 +154,6 @@ export default function UsersPage() {
         action: "updateUser",
         data: { name: editForm.name, email: editForm.email },
       });
-
-      // Update subscription if changed — tylko gdy uzytkownik ma subskrypcje
-      // (inaczej API zwraca 404, a pole w formularzu i tak jest ukryte).
-      if (selectedUser.subscription && editForm.subscriptionStatus !== selectedUser.subscription.status) {
-        try {
-          await patchUser(selectedUser.id, {
-            action: "updateSubscription",
-            data: { status: editForm.subscriptionStatus },
-          });
-        } catch (e) {
-          throw new Error(`Dane zapisane, ale subskrypcja nie: ${(e as Error).message}`);
-        }
-      }
 
       toast("Zapisano zmiany!");
       setShowEditModal(false);
@@ -243,7 +225,7 @@ export default function UsersPage() {
               <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-[#E0E0E0]/60 uppercase">
                 <div className="col-span-4">Użytkownik</div>
                 <div className="col-span-3">Email</div>
-                <div className="col-span-2">Status</div>
+                <div className="col-span-2">Saldo tokenów</div>
                 <div className="col-span-2">Dołączył</div>
                 <div className="col-span-1 text-right">Licencje</div>
               </div>
@@ -274,33 +256,14 @@ export default function UsersPage() {
                       <p className="text-sm text-[#E0E0E0]/80">{user.email}</p>
                     </div>
                     <div className="col-span-2">
-                      {user.subscription ? (
-                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                          user.subscription.status === "active" ? "bg-green-500/20 text-green-400" :
-                          user.subscription.status === "trial" ? "bg-blue-500/20 text-blue-400" :
-                          user.subscription.status === "cancelled" ? "bg-orange-500/20 text-orange-400" :
-                          "bg-gray-500/20 text-gray-400"
-                        }`}>
-                          {user.subscription.status === "active" ? "✓ Aktywna" :
-                           user.subscription.status === "trial" ? "⏱ Trial" :
-                           user.subscription.status === "cancelled" ? "⊗ Anulowana" :
-                           user.subscription.status}
-                        </span>
-                      ) : (
-                        <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-gray-500/20 text-gray-400">
-                          Brak
-                        </span>
-                      )}
+                      <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400">
+                        {fmtTokensShort(user.tokenBalance)}
+                      </span>
                     </div>
                     <div className="col-span-2">
                       <p className="text-sm text-[#E0E0E0]/80">
                         {new Date(user.createdAt).toLocaleDateString("pl-PL", { day: "2-digit", month: "short", year: "numeric" })}
                       </p>
-                      {user.subscription?.trialEndsAt && (
-                        <p className="text-xs text-[#E0E0E0]/40">
-                          Trial: {new Date(user.subscription.trialEndsAt).toLocaleDateString("pl-PL", { day: "2-digit", month: "short" })}
-                        </p>
-                      )}
                     </div>
                     <div className="col-span-1 text-right">
                       <span className={`text-sm font-bold ${user.licensesUsed > 0 ? "text-[#3B82F6]" : "text-[#E0E0E0]/40"}`}>
@@ -421,21 +384,6 @@ export default function UsersPage() {
                 />
               </div>
 
-              {selectedUser.subscription && (
-                <div>
-                  <label className="text-sm font-medium text-[#E0E0E0] block mb-2">Status subskrypcji</label>
-                  <select
-                    value={editForm.subscriptionStatus}
-                    onChange={(e) => setEditForm({ ...editForm, subscriptionStatus: e.target.value })}
-                    className="w-full px-4 py-2 bg-[#313338] border border-[#3F4147] rounded-lg text-[#E0E0E0] focus:outline-none focus:border-[#3B82F6]"
-                  >
-                    <option value="trial">Trial</option>
-                    <option value="active">Aktywna</option>
-                    <option value="cancelled">Anulowana</option>
-                    <option value="expired">Wygasła</option>
-                  </select>
-                </div>
-              )}
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -532,9 +480,9 @@ export default function UsersPage() {
                   )}
                 </div>
 
-                {/* Licencje AI Chat */}
+                {/* Licencje (kody z pudełka, po 2 mln tokenów) */}
                 <div>
-                  <h3 className="text-sm font-semibold text-blue-400 mb-2">Licencje AI Chat wykorzystane ({purchasesData.licenses.length})</h3>
+                  <h3 className="text-sm font-semibold text-blue-400 mb-2">Kody z pudełka aktywowane ({purchasesData.licenses.length})</h3>
                   {purchasesData.licenses.length === 0 ? (
                     <p className="text-xs text-[#E0E0E0]/40">Brak</p>
                   ) : (
@@ -546,7 +494,7 @@ export default function UsersPage() {
                             {l.description && <span className="text-[#E0E0E0]/40 ml-2">{l.description}</span>}
                           </div>
                           <span className="text-[#E0E0E0]/50">
-                            {l.durationDays} dni
+                            {LICENSE_TOKENS_LABEL}
                             {l.usedAt && <span className="ml-2">{new Date(l.usedAt).toLocaleDateString("pl-PL", { day: "2-digit", month: "short" })}</span>}
                           </span>
                         </div>
