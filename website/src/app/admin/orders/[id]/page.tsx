@@ -5,6 +5,7 @@ import Link from "next/link";
 import AdminShell from "@/components/admin/AdminShell";
 import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
 import OrderFiscalCard from "@/components/admin/OrderFiscalCard";
+import ProductLabelLink from "@/components/admin/ProductLabelLink";
 import { fmtDateTime, formatAmount as fmtAmount } from "@/components/admin/format";
 import { splitAddress, splitCityState, needsStateCode } from "@/lib/address";
 
@@ -1181,6 +1182,9 @@ export default function OrderDetailPage({
             <CopyButton text={order.order_number} />
             <OrderStatusBadge status={order.status} type="payment" />
             <OrderStatusBadge status={order.fulfillment_status} type="fulfillment" />
+            <span className="sm:ml-auto">
+              <ProductLabelLink orderId={id} />
+            </span>
           </div>
         )}
       </div>
@@ -1600,6 +1604,15 @@ export default function OrderDetailPage({
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-green-500/20 hover:bg-green-500/30 text-green-300 transition-colors"
                     >
                       Pobierz etykietę PDF
+                    </a>
+                    <a
+                      href={`/admin/orders/${id}/etykieta`}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Etykieta produktowa 100×150 mm (tył + przód dla każdej sztuki) — druk na VEVOR"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-[#2B2D31] border border-[#3F4147] hover:bg-[#3F4147] text-[#E0E0E0] transition-colors"
+                    >
+                      🏷 Etykieta produktowa
                     </a>
                   </div>
                   {printMsg && (

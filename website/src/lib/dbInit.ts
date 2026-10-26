@@ -3,6 +3,7 @@ import { ensureCaptureTable, ensureCapturesIndexed, purgeOldCaptures, captureRet
 import { ensureDailyUsageTable, purgeOldDailyUsage } from "@/lib/aiCost";
 import { ensureDeviceTokenHashColumn } from "@/lib/device-auth";
 import { ensureDeviceLogTable } from "@/lib/deviceLog";
+import { ensureProductSerialTables } from "@/lib/productSerial";
 
 // Inicjalizacja bazy przy starcie serwera (wolane z src/instrumentation.ts).
 //
@@ -186,6 +187,7 @@ async function runEnsureSchema(): Promise<void> {
   await ensureCaptureTable();
   await ensureDailyUsageTable();
   await ensureDeviceLogTable();
+  await ensureProductSerialTables(); // AppSetting + ProductSerial (SN na etykiecie produktowej)
 }
 
 // --- Zadania okresowe (raz na dobe) ---------------------------------------

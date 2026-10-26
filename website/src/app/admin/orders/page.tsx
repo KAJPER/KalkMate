@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AdminShell from "@/components/admin/AdminShell";
 import OrderStatusBadge from "@/components/admin/OrderStatusBadge";
+import ProductLabelLink from "@/components/admin/ProductLabelLink";
 import { csvCell, downloadBlob, fmtDateTime, fmtIsoLocal, formatAmount } from "@/components/admin/format";
 
 interface Order {
@@ -139,6 +140,30 @@ export default function OrdersPage() {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Numery seryjne z etykiet produktowych (lib/productSerial.ts) — zbiorczo
+  // dla zaladowanych zamowien, paczkami po 100 id (dlugosc URL). Blad = brak SN.
+  const [serialsByOrder, setSerialsByOrder] = useState<Record<string, number[]>>({});
+  useEffect(() => {
+    if (!orders.length) return;
+    let cancelled = false;
+    const ids = orders.map((o) => o.id);
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100));
+    Promise.all(
+      chunks.map((c) =>
+        fetch(`/api/admin/product-serials?orderIds=${encodeURIComponent(c.join(","))}`).then((r) => (r.ok ? r.json() : null))
+      )
+    )
+      .then((rs: ({ serials?: Record<string, { serial: number }[]> } | null)[]) => {
+        if (cancelled) return;
+        const map: Record<string, number[]> = {};
+        for (const r of rs) for (const [k, v] of Object.entries(r?.serials || {})) map[k] = v.map((u) => u.serial);
+        setSerialsByOrder(map);
+      })
+      .catch(() => { /* SN to tylko podglad */ });
+    return () => { cancelled = true; };
+  }, [orders]);
 
   // Inny widok / fraza = inna lista: zaznaczenie z poprzedniej nie moze
   // przejsc na akcje zbiorcze (i "Zaladuj wiecej" ze starej listy znika).
@@ -407,10 +432,11 @@ export default function OrdersPage() {
             <label className="flex items-start pl-4 pt-4" onClick={(e) => e.stopPropagation()}>
               <input type="checkbox" checked={selected.has(order.id)} onChange={() => toggle(order.id)} className="w-5 h-5" aria-label={`Zaznacz ${order.order_number}`} />
             </label>
+            <div className="flex-1 min-w-0">
             <button
               type="button"
               onClick={() => router.push(`/admin/orders/${order.id}`)}
-              className="block flex-1 min-w-0 text-left px-3 py-3.5 space-y-2 active:bg-[#3F4147]/30"
+              className="block w-full text-left px-3 pt-3.5 pb-2 space-y-2 active:bg-[#3F4147]/30"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -437,6 +463,10 @@ export default function OrdersPage() {
                 </p>
               )}
             </button>
+            <div className="px-3 pb-3">
+              <ProductLabelLink orderId={order.id} serials={serialsByOrder[order.id] ?? []} compact />
+            </div>
+            </div>
             </div>
           ))}
           {filtered.length === 0 && !loading && (
@@ -471,6 +501,9 @@ export default function OrdersPage() {
                 </th>
                 <th className="px-4 py-3 text-xs font-medium text-[#E0E0E0]/50 uppercase tracking-wider hidden sm:table-cell">
                   Realizacja
+                </th>
+                <th className="px-4 py-3 text-xs font-medium text-[#E0E0E0]/50 uppercase tracking-wider">
+                  Etykieta
                 </th>
               </tr>
             </thead>
@@ -530,12 +563,15 @@ export default function OrdersPage() {
                       type="fulfillment"
                     />
                   </td>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <ProductLabelLink orderId={order.id} serials={serialsByOrder[order.id] ?? []} compact />
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && !loading && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-8 text-center text-[#E0E0E0]/40 text-sm"
                   >
                     Brak zamówień

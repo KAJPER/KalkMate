@@ -3,488 +3,320 @@
 <head>
 <meta charset="utf-8">
 <title>KalkMate — etykieta produktowa (100x150mm)</title>
+<!--
+  Etykieta do drukarki TERMICZNEJ (monochromatyczna, 203 dpi):
+  - tylko czysta czern #000 na bieli — zadnego szarego tekstu ani linii
+    (termik drukuje szarosc jako rastrowe kropki albo wcale),
+  - linie min. 0.25 mm, tekst min. ~2.1 mm wysokosci,
+  - ikony = te same bitmapy 8x8 co w menu kalkulatora (src/ui_kit.h),
+    zrzut ekranu = prawdziwe fonty U8g2 z firmware.
+  Strona 1: tyl (opis, dane, EAN, zgodnosc CE/WEEE, SN). Strona 2: przod.
+-->
 <style>
   @page { size: 100mm 150mm; margin: 0; }
   * { box-sizing: border-box; }
-  html, body {
-    margin: 0; padding: 0;
-    width: 100mm; height: 150mm;
-    background: #fff;
-    font-family: Arial, Helvetica, sans-serif;
-    color: #000;
-  }
+  html, body { margin: 0; padding: 0; background: #fff; color: #000;
+    font-family: "Arial", "Helvetica Neue", Helvetica, sans-serif; }
+  b, strong { font-weight: 700; }
+
   .label {
     width: 100mm; height: 150mm;
-    padding: 4mm;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    page-break-after: always;
+    padding: 4mm 4.5mm;
+    display: flex; flex-direction: column;
+    page-break-after: always; overflow: hidden;
   }
   .label:last-of-type { page-break-after: auto; }
 
-  /* --- Naglowek --- */
-  .brand {
-    text-align: center;
+  /* Pikselowe ikony (generowane w JS z bitmap 8x8) */
+  .px { display: inline-block; vertical-align: middle; image-rendering: pixelated; }
+  .px rect { fill: #000; }
+
+  /* ---------- naglowek: czarny pasek jak naglowek ekranu ---------- */
+  .bar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #000; color: #fff;
+    border-radius: 1.6mm;
+    padding: 2.2mm 3mm;
   }
-  .brand .logo {
-    font-size: 9mm;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-    line-height: 1;
+  .bar .word { font-size: 7mm; font-weight: 800; letter-spacing: -0.2mm; line-height: 1; }
+  .bar .tag { font-size: 2.5mm; font-weight: 700; letter-spacing: 0.5mm; text-transform: uppercase; text-align: right; line-height: 1.25; }
+
+  .section-title {
+    display: flex; align-items: center; gap: 1.6mm;
+    font-size: 2.6mm; font-weight: 800; letter-spacing: 0.35mm; text-transform: uppercase;
+    border-bottom: 0.35mm solid #000; padding-bottom: 0.8mm; margin: 2.4mm 0 1.4mm;
   }
-  .brand .tagline {
-    font-size: 3mm;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: #333;
-    margin-top: 1mm;
-  }
-  .rule {
-    border: none;
-    border-top: 0.4mm solid #000;
-    margin: 2.5mm 0;
+  .section-title .px { width: 3mm; height: 3mm; }
+
+  /* ---------- opis w 3 jezykach ---------- */
+  /* Pogrubione i wieksze — cienki regular 2.3 mm na termiku wychodzil nieczytelny */
+  .desc { font-size: 2.6mm; line-height: 1.26; font-weight: 700; letter-spacing: 0.02mm; }
+  .desc .row { display: flex; gap: 2mm; margin-bottom: 0.9mm; }
+  .desc .lang {
+    flex: 0 0 auto; width: 6mm; height: 3.3mm;
+    border: 0.3mm solid #000; border-radius: 0.8mm;
+    font-size: 2mm; font-weight: 800; line-height: 2.8mm; text-align: center;
   }
 
-  /* --- Nazwa produktu --- */
-  .product-name {
-    text-align: center;
-    font-size: 5mm;
-    font-weight: 700;
-    line-height: 1.2;
-  }
-  .product-desc {
-    text-align: center;
-    font-size: 2.9mm;
-    color: #222;
-    line-height: 1.35;
-    margin-top: 2mm;
-  }
-  .product-desc-multi {
-    margin-top: 2mm;
-    font-size: 2.15mm;
-    line-height: 1.3;
-    color: #222;
-  }
-  .product-desc-multi div { margin-bottom: 1.2mm; }
-  .product-desc-multi b {
-    display: inline-block;
-    width: 5mm;
-    color: #000;
-    font-size: 2.15mm;
-  }
+  /* ---------- dane techniczne: wiersze jak lista w telefonie ---------- */
+  .spec { font-size: 2.6mm; font-weight: 700; }
+  .spec .r { display: flex; justify-content: space-between; align-items: center;
+    padding: 0.6mm 0; border-bottom: 0.25mm solid #000; }
+  .spec .r:last-child { border-bottom: none; }
+  .spec .r span { display: flex; align-items: center; gap: 1.6mm; }
+  .spec .r .px { width: 2.8mm; height: 2.8mm; }
+  .spec .r b { text-align: right; }
 
-  /* --- Specyfikacja --- */
-  .specs {
-    font-size: 2.8mm;
-    line-height: 1.6;
-    border-top: 0.3mm solid #999;
-    border-bottom: 0.3mm solid #999;
-    padding: 2mm 0;
-  }
-  .specs .row { display: flex; justify-content: space-between; }
-  .specs .row b { font-weight: 700; }
+  /* ---------- EAN ---------- */
+  .ean { display: flex; flex-direction: column; align-items: center; margin-top: 2mm; }
+  /* Modul = 0.375 mm = dokladnie 3 punkty termika 203 dpi (rowne slupki).
+     113 modulow z marginesami ciszy = 42.375 mm. */
+  .ean svg { display: block; width: 42.375mm; height: 17mm; }
+  .ean .digits { font-size: 3mm; font-weight: 700; letter-spacing: 0.9mm; margin-top: 0.6mm; font-family: "Courier New", monospace; }
 
-  /* --- Kod kreskowy --- */
-  .barcode-wrap {
-    text-align: center;
+  /* ---------- zgodnosc ---------- */
+  .comp {
+    margin-top: auto;
+    border: 0.4mm solid #000; border-radius: 1.6mm;
+    padding: 2.2mm 2.6mm;
+    display: flex; gap: 2.6mm; align-items: stretch;
   }
-  .barcode-wrap svg { display: block; margin: 0 auto; }
-  .gtin-text {
-    font-size: 3mm;
-    letter-spacing: 1px;
-    margin-top: 0.5mm;
-  }
+  .comp .marks { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 1.4mm; flex: 0 0 auto; }
+  .comp .ce { width: 9.8mm; height: 7mm; }
+  .comp .rohs { font-size: 2.6mm; font-weight: 800; border: 0.3mm solid #000; border-radius: 0.8mm; padding: 0.2mm 1mm; }
+  .comp .weee { width: 8mm; height: 8.8mm; }
+  .comp .info { flex: 1 1 auto; font-size: 2.35mm; line-height: 1.34; font-weight: 700; }
+  .comp .info .model { font-size: 3.1mm; font-weight: 800; line-height: 1.2; margin-bottom: 0.6mm; }
+  .comp .tags { display: flex; gap: 1.4mm; flex-wrap: wrap; margin-top: 1.2mm; }
+  .chip { display: inline-block; background: #000; color: #fff; border-radius: 0.8mm;
+    font-size: 2.4mm; font-weight: 800; padding: 0.35mm 1.6mm; letter-spacing: 0.2mm; }
+  .chip.out { background: #fff; color: #000; border: 0.3mm solid #000; }
 
-  /* --- Stopka --- */
-  .footer {
-    text-align: center;
-    font-size: 2.3mm;
-    color: #333;
-    line-height: 1.4;
-  }
+  .foot { display: flex; justify-content: space-between; font-size: 2.4mm; font-weight: 700; margin-top: 2mm; }
 
-  /* --- Blok zgodnosci: CE / RoHS / dane producenta / SN / WEEE --- */
-  .compliance {
-    display: flex;
-    align-items: center;
-    gap: 3mm;
-    border-top: 0.35mm solid #000;
-    border-bottom: 0.35mm solid #000;
-    padding: 2mm 0;
-  }
-  .compliance .marks {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1.2mm;
-    flex: 0 0 auto;
-  }
-  .compliance .marks svg.ce-mark { width: 9.8mm; height: 7mm; }
-  .compliance .marks .rohs {
-    font-size: 2.8mm;
-    font-weight: 800;
-    letter-spacing: 0.2px;
-  }
-  .compliance .info {
-    flex: 1 1 auto;
-    font-size: 2.3mm;
-    line-height: 1.45;
-  }
-  .compliance .info .model {
-    font-size: 3.4mm;
-    font-weight: 800;
-    margin-bottom: 0.5mm;
-  }
-  .compliance .info .label-i { color: #555; }
-  .compliance .info .sn-box {
-    display: inline-block;
-    border: 0.3mm solid #000;
-    padding: 0.3mm 1.8mm;
-    margin-top: 1mm;
-    font-size: 2.4mm;
-    font-weight: 700;
-  }
-  .compliance .weee { flex: 0 0 auto; }
-  .compliance .weee svg { width: 7.5mm; height: 9mm; }
+  /* ---------- PRZOD ---------- */
+  .front { align-items: stretch; }
+  .front .hero { text-align: center; margin-top: 2mm; }
+  .front .hero .word { font-size: 15mm; font-weight: 800; letter-spacing: -0.6mm; line-height: 0.95; }
+  .front .hero .tag { font-size: 3mm; font-weight: 800; letter-spacing: 0.9mm; text-transform: uppercase; margin-top: 1.8mm; }
 
-  /* Pole numeru seryjnego — widoczne tylko na ekranie, nie na wydruku */
-  .sn-controls {
-    max-width: 100mm;
-    margin: 0 auto 4mm;
-    padding: 3mm;
-    background: #fffbe6;
-    border: 1px solid #e0c94a;
-    font-family: Arial, sans-serif;
-    font-size: 13px;
+  .device {
+    margin: 4mm auto 0; width: 86mm;
+    background: #000; border-radius: 2.4mm; padding: 2.2mm;
   }
-  .sn-controls input {
-    font-size: 14px;
-    padding: 4px 8px;
-    width: 120px;
-  }
+  .device img { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+
+  .steps { display: flex; align-items: center; justify-content: center; gap: 2mm; margin-top: 4mm; }
+  .step { display: flex; flex-direction: column; align-items: center; gap: 1.2mm; width: 20mm; }
+  .step .ic { width: 11mm; height: 11mm; background: #000; border-radius: 2mm; display: flex; align-items: center; justify-content: center; }
+  .step .ic .px { width: 6.4mm; height: 6.4mm; }
+  .step .ic .px rect { fill: #fff; }
+  .step .t { font-size: 2.5mm; font-weight: 800; text-transform: uppercase; letter-spacing: 0.25mm; text-align: center; }
+  .chev { font-size: 5mm; font-weight: 800; line-height: 1; margin-bottom: 3.6mm; }
+
+  .headline { text-align: center; font-size: 6.2mm; font-weight: 800; line-height: 1.15; margin-top: 4mm; letter-spacing: -0.15mm; }
+
+  .feats { margin-top: 3.4mm; border-top: 0.35mm solid #000; }
+  .feat { display: flex; align-items: center; gap: 2.4mm; padding: 1.5mm 0; border-bottom: 0.25mm solid #000; font-size: 2.7mm; font-weight: 700; }
+  .feat .px { width: 4mm; height: 4mm; flex: 0 0 auto; }
+  .feat b { font-size: 2.9mm; }
+
+  .persona { margin-top: 3mm; border: 0.5mm solid #000; border-radius: 1.6mm; text-align: center; padding: 1.8mm 2mm; }
+  .persona .l { font-size: 2.3mm; font-weight: 800; letter-spacing: 0.5mm; text-transform: uppercase; }
+  .persona .n { font-size: 5.4mm; font-weight: 800; margin-top: 0.4mm; }
+
+  .front .bottom { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; }
+  .front .bottom .m { font-size: 3mm; font-weight: 800; }
+  .front .bottom .s { font-size: 3.4mm; font-weight: 800; text-align: right; line-height: 1.2; }
+
+  /* Pasek sterowania — tylko na ekranie */
+  .sn-controls { max-width: 100mm; margin: 0 auto 4mm; padding: 3mm; background: #fffbe6;
+    border: 1px solid #e0c94a; font: 13px Arial, sans-serif; }
+  .sn-controls input { font-size: 14px; padding: 4px 8px; width: 120px; }
+  @media screen { body { background: #e8e8e8; padding: 6mm 0; }
+    .label { background: #fff; margin: 0 auto 6mm; box-shadow: 0 1px 6px rgba(0,0,0,.25); } }
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .sn-controls { display: none; }
-  }
-
-  /* --- Etykieta przednia (strona 2) --- */
-  .label-front {
-    text-align: center;
-    align-items: center;
-  }
-  .label-front .brand .logo { font-size: 13mm; }
-  .label-front .brand .tagline { font-size: 3.4mm; margin-top: 1.5mm; }
-
-  .front-icons {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 3mm;
-  }
-  .front-icons svg { width: 13mm; height: 13mm; }
-  .front-icons .arrow { width: 6mm; height: 6mm; opacity: 0.35; }
-
-  .front-headline {
-    font-size: 6mm;
-    font-weight: 800;
-    line-height: 1.25;
-  }
-
-  .front-features {
-    width: 100%;
-    text-align: left;
-    font-size: 3mm;
-    line-height: 1.5;
-    border-top: 0.3mm solid #999;
-    border-bottom: 0.3mm solid #999;
-    padding: 3mm 0;
-  }
-  .front-features .feat {
-    display: flex;
-    align-items: center;
-    gap: 3mm;
-    margin: 2mm 0;
-  }
-  .front-features svg { width: 7mm; height: 7mm; flex: 0 0 auto; }
-  .front-features b { display: block; font-size: 3.1mm; }
-  .front-features span { color: #333; font-size: 2.6mm; }
-
-  .front-bottom .model { font-size: 4mm; font-weight: 800; }
-  .front-bottom .site { font-size: 3mm; color: #333; margin-top: 1mm; }
-
-  /* --- Personalizacja na etykiecie przedniej --- */
-  .personalized-front {
-    width: 100%;
-    text-align: center;
-    border: 0.4mm solid #000;
-    padding: 2mm 3mm;
-    margin: 1mm 0;
-  }
-  .personalized-front .p-label {
-    font-size: 2.4mm;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: #555;
-  }
-  .personalized-front .p-name {
-    font-size: 5mm;
-    font-weight: 800;
-    margin-top: 0.5mm;
   }
 </style>
 </head>
 <body>
 
   <div class="sn-controls">
-    Numer seryjny na etykiecie: <input type="text" id="snInput" value="06">
+    Numer seryjny: <input type="text" id="snInput" value="06">
     &nbsp;&nbsp;Personalizacja (imię/nick z zamówienia): <input type="text" id="nameInput" value="">
-    <br>(edytuj przed drukiem każdej sztuki — imię bierzesz z panelu /admin/orders, ten pasek się nie drukuje)
+    <br>(edytuj przed drukiem każdej sztuki — imię z panelu /admin/orders; ten pasek się nie drukuje)
   </div>
 
+  <!-- =========================== TYŁ =========================== -->
   <div class="label">
 
-    <div>
-      <div class="brand">
-        <div class="logo">KalkMate</div>
-        <div class="tagline">Kalkulator AI</div>
-      </div>
-      <hr class="rule">
-
-      <div class="product-name">Kalkulator AI KalkMate</div>
-      <div class="product-desc-multi">
-        <div><b>PL</b> Kalkulator edukacyjny z kamerą i wbudowaną AI — fotografuje zadanie i pokazuje pełne rozwiązanie krok po kroku na ekranie OLED. Matematyka, fizyka, chemia, biologia.</div>
-        <div><b>EN</b> Educational calculator with a camera and built-in AI — photographs the problem and shows the full step-by-step solution on the OLED screen. Math, physics, chemistry, biology.</div>
-        <div><b>DE</b> Bildungsrechner mit Kamera und integrierter KI — fotografiert die Aufgabe und zeigt die vollständige Lösung Schritt für Schritt auf dem OLED-Display. Mathematik, Physik, Chemie, Biologie.</div>
-      </div>
+    <div class="bar">
+      <div class="word">KalkMate</div>
+      <div class="tag">Kalkulator AI<br>z kamerą</div>
     </div>
 
-    <div class="specs">
-      <div class="row"><span>Ekran</span><b>OLED 256×64 px</b></div>
-      <div class="row"><span>Zasilanie</span><b>Akumulator LiPo, USB-C</b></div>
-      <div class="row"><span>Łączność</span><b>WiFi</b></div>
-      <div class="row"><span>Kraj pochodzenia</span><b>Polska</b></div>
+    <div class="section-title"><span class="px" data-ico="info"></span>Opis produktu</div>
+    <div class="desc">
+      <div class="row"><div class="lang">PL</div><div>Kalkulator edukacyjny z kamerą i AI — fotografuje zadanie i pokazuje pełne rozwiązanie krok po kroku na ekranie OLED. Matematyka, fizyka, chemia, biologia.</div></div>
+      <div class="row"><div class="lang">EN</div><div>Educational calculator with a camera and AI — photographs the problem and shows the full step-by-step solution on the OLED screen. Math, physics, chemistry, biology.</div></div>
+      <div class="row"><div class="lang">DE</div><div>Lernrechner mit Kamera und KI — fotografiert die Aufgabe und zeigt die vollständige Lösung Schritt für Schritt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie.</div></div>
     </div>
 
-    <div class="barcode-wrap">
-      <svg id="barcode" height="88"></svg>
-      <div class="gtin-text" id="gtin-text"></div>
+    <div class="section-title"><span class="px" data-ico="gear"></span>Dane techniczne</div>
+    <div class="spec">
+      <div class="r"><span><span class="px" data-ico="display"></span>Ekran / Display</span><b>OLED 256×64 px</b></div>
+      <div class="r"><span><span class="px" data-ico="camera"></span>Kamera / Camera</span><b>OV2640</b></div>
+      <div class="r"><span><span class="px" data-ico="battery"></span>Zasilanie / Power</span><b>Li-Po 3,7 V 1500 mAh · USB-C 5 V</b></div>
+      <div class="r"><span><span class="px" data-ico="wifi"></span>Łączność / Connectivity</span><b>WiFi 2,4 GHz</b></div>
+      <div class="r"><span><span class="px" data-ico="globe"></span>Języki / Languages</span><b>11 (PL EN DE CS SK LT…)</b></div>
     </div>
 
-    <div class="compliance">
+    <div class="ean">
+      <svg id="barcode"></svg>
+      <div class="digits" id="gtin-text"></div>
+    </div>
+
+    <div class="comp">
       <div class="marks">
-        <!-- Oficjalny znak CE (Conformite Europeenne (logo).svg) — dokladne
-             oficjalne proporcje wg specyfikacji technicznej UE. -->
-        <svg class="ce-mark" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
+        <!-- Oficjalny znak CE (geometria z Conformite_Europeenne_(logo).svg, viewBox 280x200) -->
+        <svg class="ce" viewBox="0 0 280 200" xmlns="http://www.w3.org/2000/svg">
           <path d="M110,199.498744A100,100 0 0 1 100,200A100,100 0 0 1 100,0A100,100 0 0 1 110,0.501256L110,30.501256A70,70 0 0 0 100,30A70,70 0 0 0 100,170A70,70 0 0 0 110,169.498744Z" fill="#000"/>
           <path d="M280,199.498744A100,100 0 0 1 270,200A100,100 0 0 1 270,0A100,100 0 0 1 280,0.501256L280,30.501256A70,70 0 0 0 270,30A70,70 0 0 0 201.620283,85L260,85L260,115L201.620283,115A70,70 0 0 0 270,170A70,70 0 0 0 280,169.498744Z" fill="#000"/>
         </svg>
         <div class="rohs">RoHS</div>
+        <!-- Symbol WEEE (EN 50419): przekreslony kosz na kolkach z belka -->
+        <svg class="weee" viewBox="0 0 40 44" xmlns="http://www.w3.org/2000/svg">
+          <line x1="8.2" y1="6.4" x2="31.8" y2="6.4" stroke="#000" stroke-width="2.4"/>
+          <rect x="17.4" y="3.6" width="5.2" height="2.4" fill="#000"/>
+          <path d="M10.2,7.6 L12.2,29.6 L27.8,29.6 L29.8,7.6" fill="none" stroke="#000" stroke-width="2"/>
+          <circle cx="14.6" cy="31.6" r="2" fill="#000"/>
+          <circle cx="25.4" cy="31.6" r="2" fill="#000"/>
+          <line x1="4.8" y1="1.6" x2="35.2" y2="34.4" stroke="#000" stroke-width="2.2"/>
+          <line x1="35.2" y1="1.6" x2="4.8" y2="34.4" stroke="#000" stroke-width="2.2"/>
+          <rect x="5.6" y="38" width="28.8" height="4" fill="#000"/>
+        </svg>
       </div>
-
       <div class="info">
-        <div class="model">KalkMate v3</div>
-        <div><span class="label-i">Producent:</span> <b>KAJPA Kacper Popko</b></div>
-        <div>Zastawie I 37, 16-070 Choroszcz</div>
-        <div>Made in Poland · Li-Po 3.7V 1500mAh, USB-C 5V</div>
-        <div style="display:flex; gap:2mm; flex-wrap:wrap;">
-          <div class="sn-box">SN: <span id="sn-value">06</span></div>
-          <div class="sn-box" id="name-box" style="display:none;">Dla: <span id="name-value"></span></div>
+        <div class="model">KalkMate-ESP32S3-v1</div>
+        <div>Seria / Batch: <b>PCB-v4-2026</b></div>
+        <div>Producent / Manufacturer:</div>
+        <div><b>KAJPA Kacper Popko</b></div>
+        <div>ul. Zastawie I 37, 16-070 Choroszcz, PL</div>
+        <div class="tags">
+          <span class="chip">SN <span id="sn-value">06</span></span>
+          <span class="chip out" id="name-box" style="display:none;">Dla: <span id="name-value"></span></span>
+          <span class="chip out">Made in Poland</span>
         </div>
       </div>
-
-      <div class="weee">
-        <!-- Symbol przekreslonego kontenera na odpady (dyrektywa WEEE) —
-             przyblizenie graficzne standardowego piktogramu EN 50419. -->
-        <svg viewBox="0 0 40 50" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="15" y="4" width="10" height="5" />
-          <rect x="6" y="10" width="28" height="4" />
-          <path d="M9,14 L11,43 A2,2 0 0 0 13,45 H27 A2,2 0 0 0 29,43 L31,14" />
-          <line x1="15" y1="19" x2="15.7" y2="40" />
-          <line x1="20" y1="19" x2="20" y2="40" />
-          <line x1="25" y1="19" x2="24.3" y2="40" />
-          <line x1="2" y1="47" x2="38" y2="3" stroke-width="2.4" />
-        </svg>
-      </div>
     </div>
 
-    <div class="footer">
-      kalkmate.pl&nbsp;&nbsp;·&nbsp;&nbsp;kontakt@kalkmate.pl
-    </div>
-
+    <div class="foot"><span>kalkmate.pl · kalkmate.eu</span><span>kontakt@kalkmate.pl</span></div>
   </div>
 
-  <!-- ===================================================================
-       ETYKIETA PRZEDNIA (strona 2 wydruku) — bez zdjecia produktu: po
-       sprawie z Esperanza swiadomie zero fotografii, tylko wlasna
-       ikonografia + branding, zeby nie powtorzyc tego samego problemu.
-       =================================================================== -->
-  <div class="label label-front">
+  <!-- =========================== PRZÓD =========================== -->
+  <!-- Bez zdjec produktu (po sprawie z Esperanza): tylko wlasna ikonografia,
+       branding i zrzut ekranu z wlasnego firmware. -->
+  <div class="label front">
 
-    <div class="brand">
-      <div class="logo">KalkMate</div>
-      <div class="tagline">Kalkulator AI</div>
+    <div class="hero">
+      <div class="word">KalkMate</div>
+      <div class="tag">Kalkulator AI z kamerą</div>
     </div>
 
-    <div class="front-icons">
-      <!-- kamera -->
-      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-        <rect x="9" y="4" width="6" height="3"/>
-        <rect x="3" y="7" width="18" height="12" rx="2"/>
-        <circle cx="12" cy="13" r="3.5"/>
-      </svg>
-      <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-        <line x1="3" y1="12" x2="21" y2="12"/><polyline points="14,5 21,12 14,19"/>
-      </svg>
-      <!-- AI (iskra) -->
-      <svg viewBox="0 0 24 24" fill="#000" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12,2 L14.2,9.8 L22,12 L14.2,14.2 L12,22 L9.8,14.2 L2,12 L9.8,9.8 Z"/>
-      </svg>
-      <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-        <line x1="3" y1="12" x2="21" y2="12"/><polyline points="14,5 21,12 14,19"/>
-      </svg>
-      <!-- ekran OLED z rozwiazaniem -->
-      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="5" width="20" height="14" rx="1.5"/>
-        <polyline points="5,15 9,10 12,13 19,8"/>
-      </svg>
+    <!-- Prawdziwy ekran urzadzenia: rozwiazanie zadania (fonty U8g2 z firmware) -->
+    <div class="device">
+      <img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAABAAQAAAADdJpQTAAACL0lEQVR4nMWUP2/TQBjGf3c2xKFRYtIMHazKCRKKOlUMnSrXwMDOzGD4AkSdOiBhoUhEfIZKRHwCPkCFrAiJSuwINm9kLKhCTqhjdHFC/tg0DCm8w/mk+93z+N7nbLj6khWQgJG3qGugG/6fd5dqSB1reNsafNxq5QDRJsJMNs/MsGw94ijHwt2X0U9M37p5Qp4CLvrFNWx02/U6Oes3nsdI43jwYHvQP85VWEeJ5KqUp1VQMVxaq4H99KmFqNBcNbcXgE9p0vF4aQyl1Mzi8ENNBA42uxVf+LQq/gJAdaPZUaIBpzB06SxaFCRPC5FS8AgqfrFLVFm6QNVXTUPayFtKgftZhZ2zpJYEJK/pA4kaPy8f1VCDzmycV1jVp8IqQK4jC9FW7a8HaYuNXZjO06oyBh6OmwlbLjyZzCfv0NqwtLC0B+KlpYWmCw6OmLWz2mlLuEPgSPcNGG8rvh0gpxaSatTe1sKGAO1rVwuNU6jjaOHMokM7tk0B8WMZ28pc0Iu936fY+XbwDIYihGQIe334Mt3+NyXX0EnWAPhwFwqmEYD/LgsI4B6II+EieJ8BGgJHvIDooogj1GwJ+D6ih06k+WbQG4nM/1Seq/Su+4ag7jnIHxmgBL3k0EfXD5SUnQHKmje+HoVO0kXzhtmDRqvacHn9m7BEMJ9FHuCpLOxJFlmgMZrPIsejRoAoEml6I89CynPhqiyaaRY5FiUxn0UOUFZfREA4ySIH+f9Z/AIAjJVs/f19RwAAAABJRU5ErkJggg==">
     </div>
 
-    <div class="front-headline">Zrób zdjęcie.<br>Otrzymaj rozwiązanie.</div>
-
-    <div class="personalized-front" id="personalized-front-box" style="display:none;">
-      <div class="p-label">Personalizowany egzemplarz dla</div>
-      <div class="p-name" id="front-name-value"></div>
+    <div class="steps">
+      <div class="step"><div class="ic"><span class="px" data-ico="camera"></span></div><div class="t">Zdjęcie</div></div>
+      <div class="chev">›</div>
+      <div class="step"><div class="ic"><span class="px" data-ico="cloud"></span></div><div class="t">AI</div></div>
+      <div class="chev">›</div>
+      <div class="step"><div class="ic"><span class="px" data-ico="check"></span></div><div class="t">Rozwiązanie</div></div>
     </div>
 
-    <div class="front-features">
-      <div class="feat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-          <rect x="9" y="4" width="6" height="3"/><rect x="3" y="7" width="18" height="12" rx="2"/><circle cx="12" cy="13" r="3.5"/>
-        </svg>
-        <div><b>Kamera + AI</b><span> — sfotografuj zadanie, reszta dzieje się sama</span></div>
-      </div>
-      <div class="feat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-          <rect x="2" y="5" width="20" height="14" rx="1.5"/><polyline points="5,15 9,10 12,13 19,8"/>
-        </svg>
-        <div><b>Ekran OLED 256×64</b><span> — pełne rozwiązanie krok po kroku</span></div>
-      </div>
-      <div class="feat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12,3 L4,7 V12 C4,17 7.5,20.5 12,22 C16.5,20.5 20,17 20,12 V7 Z"/>
-        </svg>
-        <div><b>Matematyka · Fizyka</b><span> — Chemia · Biologia</span></div>
-      </div>
-      <div class="feat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-          <rect x="2" y="8" width="17" height="8" rx="1.5"/><rect x="19" y="10.5" width="2.5" height="3" fill="#000" stroke="none"/><rect x="4" y="10" width="8" height="4" fill="#000" stroke="none"/>
-        </svg>
-        <div><b>Bateria na cały dzień</b><span> — ładowanie USB-C</span></div>
-      </div>
+    <div class="headline">Zrób zdjęcie.<br>Otrzymaj rozwiązanie.</div>
+
+    <div class="persona" id="personalized-front-box" style="display:none;">
+      <div class="l">Personalizowany egzemplarz dla</div>
+      <div class="n" id="front-name-value"></div>
     </div>
 
-    <div class="front-bottom">
-      <div class="model">KalkMate v3</div>
-      <div class="site">kalkmate.pl</div>
+    <div class="feats">
+      <div class="feat"><span class="px" data-ico="camera"></span><div><b>Kamera + AI</b> — sfotografuj zadanie, reszta dzieje się sama</div></div>
+      <div class="feat"><span class="px" data-ico="display"></span><div><b>Ekran OLED</b> — pełne rozwiązanie krok po kroku</div></div>
+      <div class="feat"><span class="px" data-ico="notes"></span><div><b>Matematyka · Fizyka · Chemia · Biologia</b></div></div>
+      <div class="feat"><span class="px" data-ico="battery"></span><div><b>Bateria 1500 mAh</b> — ładowanie USB-C</div></div>
     </div>
 
+    <div class="bottom">
+      <div class="m">11 języków · bez abonamentu</div>
+      <div class="s">kalkmate.pl<br>kalkmate.eu</div>
+    </div>
   </div>
 
 <script>
+// Ikony 8x8 — te same bitmapy co w firmware (src/ui_kit.h, bit 0 = lewy piksel).
+const ICO = {
+  display: [0xFF,0x81,0x81,0x81,0xFF,0x18,0x3C,0x00],
+  camera:  [0x1C,0xFF,0x99,0xA5,0xA5,0x99,0xFF,0x00],
+  globe:   [0x3C,0x5A,0x99,0xFF,0x99,0x5A,0x3C,0x00],
+  wifi:    [0x7E,0x81,0x3C,0x42,0x18,0x24,0x00,0x18],
+  battery: [0x00,0x7F,0x41,0xDD,0xDD,0x41,0x7F,0x00],
+  gear:    [0x18,0x7E,0x66,0xC3,0xC3,0x66,0x7E,0x18],
+  info:    [0x3C,0x66,0xFF,0xE7,0xE7,0xE7,0x7E,0x3C],
+  notes:   [0x7E,0x42,0x5A,0x42,0x5A,0x42,0x7E,0x00],
+  check:   [0x00,0xC0,0xE0,0x70,0x3B,0x1F,0x0E,0x04],
+  cloud:   [0x00,0x18,0x3C,0x7E,0xFF,0xFF,0x7E,0x00],
+};
+document.querySelectorAll(".px[data-ico]").forEach(el => {
+  const bits = ICO[el.dataset.ico]; let r = "";
+  bits.forEach((row, y) => { for (let x = 0; x < 8; x++) if (row >> x & 1) r += `<rect x="${x}" y="${y}" width="1.02" height="1.02"/>`; });
+  el.innerHTML = `<svg viewBox="0 0 8 8" width="100%" height="100%" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">${r}</svg>`;
+});
+
 // ---------------------------------------------------------------------
-// Generator kodu EAN-13 (czysty JS/SVG, bez zaleznosci zewnetrznych —
-// dziala offline, wazne bo to plik do druku, nie strona online).
+// EAN-13 (czysty JS/SVG, offline). Strefy ciszy 11/7 modulow po bokach.
 // ---------------------------------------------------------------------
 const GTIN = "5908202546201";
-
-const L_CODE = { // lewa strona, parzystosc nieparzysta (odd/L)
-  "0":"0001101","1":"0011001","2":"0010011","3":"0111101","4":"0100011",
-  "5":"0110001","6":"0101111","7":"0111011","8":"0110111","9":"0001011"
-};
-const G_CODE = { // lewa strona, parzystosc parzysta (even/G)
-  "0":"0100111","1":"0110011","2":"0011011","3":"0100001","4":"0011101",
-  "5":"0111001","6":"0000101","7":"0010001","8":"0001001","9":"0010111"
-};
-const R_CODE = { // prawa strona
-  "0":"1110010","1":"1100110","2":"1101100","3":"1000010","4":"1011100",
-  "5":"1001110","6":"1010000","7":"1000100","8":"1001000","9":"1110100"
-};
-// Wzorzec L/G dla 6 cyfr po pierwszej, w zaleznosci od pierwszej cyfry.
-const PARITY = {
-  "0":"LLLLLL","1":"LLGLGG","2":"LLGGLG","3":"LLGGGL","4":"LGLLGG",
-  "5":"LGGLLG","6":"LGGGLL","7":"LGLGLG","8":"LGLGGL","9":"LGGLGL"
-};
-
-function ean13Bits(digits) {
-  const first = digits[0];
-  const left = digits.slice(1, 7).split("");
-  const right = digits.slice(7, 13).split("");
-  const parity = PARITY[first];
-
-  let bits = "101"; // start guard
-  left.forEach((d, i) => {
-    bits += (parity[i] === "L" ? L_CODE[d] : G_CODE[d]);
-  });
-  bits += "01010"; // middle guard
-  right.forEach(d => { bits += R_CODE[d]; });
-  bits += "101"; // end guard
-  return bits;
+const L_CODE = {"0":"0001101","1":"0011001","2":"0010011","3":"0111101","4":"0100011","5":"0110001","6":"0101111","7":"0111011","8":"0110111","9":"0001011"};
+const G_CODE = {"0":"0100111","1":"0110011","2":"0011011","3":"0100001","4":"0011101","5":"0111001","6":"0000101","7":"0010001","8":"0001001","9":"0010111"};
+const R_CODE = {"0":"1110010","1":"1100110","2":"1101100","3":"1000010","4":"1011100","5":"1001110","6":"1010000","7":"1000100","8":"1001000","9":"1110100"};
+const PARITY = {"0":"LLLLLL","1":"LLGLGG","2":"LLGGLG","3":"LLGGGL","4":"LGLLGG","5":"LGGLLG","6":"LGGGLL","7":"LGLGLG","8":"LGLGGL","9":"LGGLGL"};
+function ean13Bits(d) {
+  let bits = "101";
+  d.slice(1, 7).split("").forEach((c, i) => bits += (PARITY[d[0]][i] === "L" ? L_CODE[c] : G_CODE[c]));
+  bits += "01010";
+  d.slice(7, 13).split("").forEach(c => bits += R_CODE[c]);
+  return bits + "101";
 }
-
-function drawEan13(svgEl, digits, moduleW, height) {
-  const bits = ean13Bits(digits);
-  const guardExtra = 6; // guardy (start/middle/end) rysowane troche dluzsze
-  const totalW = bits.length * moduleW;
-  svgEl.setAttribute("width", totalW);
-  svgEl.setAttribute("viewBox", `0 0 ${totalW} ${height}`);
-
-  // Indeksy modulow nalezace do guardow (start, middle, end) — te slupki
-  // wystaja ponizej, tak jak na prawdziwych kodach EAN.
-  const guardRanges = [[0,3], [45,50], [92,95]];
-  const isGuard = (i) => guardRanges.some(([a,b]) => i >= a && i < b);
-
-  let x = 0;
-  let svgContent = "";
-  for (let i = 0; i < bits.length; i++) {
-    if (bits[i] === "1") {
-      const h = isGuard(i) ? height : height - guardExtra;
-      svgContent += `<rect x="${x}" y="0" width="${moduleW}" height="${h}" fill="#000"/>`;
-    }
-    x += moduleW;
-  }
-  svgEl.innerHTML = svgContent;
+function drawEan13(svg, digits, h) {
+  const bits = ean13Bits(digits), qL = 11, qR = 7, W = bits.length + qL + qR;
+  const guard = i => (i < 3) || (i >= 45 && i < 50) || (i >= 92);
+  let s = "";
+  for (let i = 0; i < bits.length; i++)
+    if (bits[i] === "1") s += `<rect x="${qL + i}" y="0" width="1" height="${guard(i) ? h : h - 5}" fill="#000"/>`;
+  svg.setAttribute("viewBox", `0 0 ${W} ${h}`);
+  svg.setAttribute("shape-rendering", "crispEdges");
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.innerHTML = s;
 }
+drawEan13(document.getElementById("barcode"), GTIN, 60);
+document.getElementById("gtin-text").textContent = GTIN[0] + " " + GTIN.slice(1, 7) + " " + GTIN.slice(7, 13);
 
-drawEan13(document.getElementById("barcode"), GTIN, 2.4, 88);
-
-// Human-readable GTIN pod kodem, z odstepami jak na oryginalnych etykietach:
-// pierwsza cyfra / 6 cyfr / 6 cyfr
-document.getElementById("gtin-text").textContent =
-  GTIN[0] + "  " + GTIN.slice(1,7) + "  " + GTIN.slice(7,13);
-
-// Numer seryjny — edytowalny na ekranie (pasek .sn-controls, nie drukuje sie),
-// zeby mozna bylo wydrukowac serie etykiet z roznym SN bez edycji pliku.
+// Numer seryjny i personalizacja — edycja na ekranie przed drukiem.
 const snInput = document.getElementById("snInput");
-const snValue = document.getElementById("sn-value");
-snInput.addEventListener("input", () => { snValue.textContent = snInput.value; });
-
-// Personalizacja (imie/nick z zamowienia, patrz /admin/orders) — pole
-// opcjonalne, oba miejsca na etykiecie pokazuja sie tylko gdy cos wpisano:
-// maly box "Dla: X" na tylnej etykiecie (przy SN) + wyrazny box na
-// etykiecie przedniej (ta bardziej "na pokaz"), zeby personalizacja
-// faktycznie rzucala sie w oczy, a nie byla schowana w drobnym druku.
+snInput.addEventListener("input", () => { document.getElementById("sn-value").textContent = snInput.value; });
 const nameInput = document.getElementById("nameInput");
-const nameValue = document.getElementById("name-value");
-const nameBox = document.getElementById("name-box");
-const frontNameValue = document.getElementById("front-name-value");
-const frontNameBox = document.getElementById("personalized-front-box");
 nameInput.addEventListener("input", () => {
   const v = nameInput.value.trim();
-  nameValue.textContent = nameInput.value;
-  nameBox.style.display = v ? "inline-block" : "none";
-  frontNameValue.textContent = nameInput.value;
-  frontNameBox.style.display = v ? "block" : "none";
+  document.getElementById("name-value").textContent = nameInput.value;
+  document.getElementById("name-box").style.display = v ? "inline-block" : "none";
+  document.getElementById("front-name-value").textContent = nameInput.value;
+  document.getElementById("personalized-front-box").style.display = v ? "block" : "none";
 });
 </script>
 </body>
