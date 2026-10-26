@@ -1,7 +1,4 @@
-"use client";
-
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import FAQItem from "@/components/FAQItem";
 import { type Locale } from "@/lib/i18n";
 import { faqs } from "@/lib/content/faq";
 
@@ -70,47 +67,6 @@ const content: Record<
   },
 };
 
-function Item({ item, n }: { item: { q: string; a: string }; n: number }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-[rgba(242,237,227,0.10)]">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full py-6 lg:py-7 flex items-start gap-6 text-left group"
-      >
-        <span className="km-mono-eyebrow text-[#D8FF3D] pt-2 w-12 flex-shrink-0">
-          {String(n).padStart(2, "0")}
-        </span>
-        <span className="flex-1 km-display text-2xl lg:text-[28px] text-[#F2EDE3] leading-tight group-hover:text-[#D8FF3D] transition-colors">
-          {item.q}
-        </span>
-        <span
-          className={`flex-shrink-0 w-8 h-8 border border-[rgba(242,237,227,0.20)] flex items-center justify-center km-display text-xl text-[#F2EDE3] transition-transform ${
-            open ? "rotate-45 border-[#D8FF3D] text-[#D8FF3D]" : ""
-          }`}
-        >
-          +
-        </span>
-      </button>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
-          >
-            <p className="pb-8 pl-[4.5rem] pr-12 text-[15px] leading-[1.65] text-[#F2EDE3]/70 max-w-3xl">
-              {item.a}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 export default function FAQ({ lang = "pl" }: { lang?: Locale }) {
   const t = content[lang];
   const items = faqs[lang];
@@ -140,7 +96,7 @@ export default function FAQ({ lang = "pl" }: { lang?: Locale }) {
 
         <div className="border-t border-[rgba(242,237,227,0.10)]">
           {items.map((f, i) => (
-            <Item key={i} item={f} n={i + 1} />
+            <FAQItem key={i} item={f} n={i + 1} />
           ))}
         </div>
       </div>

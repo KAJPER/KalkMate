@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('kalkmateDesktop', {
   // etykiet. url = sciezka na kalkmate.pl (np. /api/admin/orders/<id>/basecourier/label).
   // Zwraca { ok, printer, error? }.
   printLabel: (url) => ipcRenderer.invoke('kalkmate:print-label', String(url)),
+  // Cichy druk etykiety produktowej zamowienia (tyl + przod dla kazdej sztuki).
+  // units = indeksy sztuk (opcjonalnie). Zwraca { ok, printer, error? }.
+  printProductLabel: (orderId, units) => ipcRenderer.invoke('kalkmate:print-product-label', String(orderId),
+    Array.isArray(units) ? units.map((u) => Number(u)) : []),
   // Agent fiskalny wbudowany w aplikację (drukarka POSNET w sieci lokalnej).
   // info(refresh) -> { ok, config, printer, queue, platformError, recent }
   // configure({ enabled?, host?, port?, encoding?, allowFiscal? }) -> to samo co info

@@ -7,6 +7,10 @@ import { useEffect, useState } from "react";
 // komponent sam pobiera SN; na liscie zamowien dostaje je z jednego zbiorczego
 // zapytania (prop serials).
 
+type DesktopWindow = Window & {
+  kalkmateDesktop?: { printProductLabel?: (orderId: string, units: number[]) => Promise<{ ok: boolean; printer?: string; error?: string }> };
+};
+
 export function formatSerialRange(serials: number[]): string {
   if (!serials.length) return "";
   const s = [...serials].sort((a, b) => a - b);
@@ -27,6 +31,35 @@ export default function ProductLabelLink({
   compact?: boolean;
 }) {
   const [own, setOwn] = useState<number[] | null>(null);
+  // Aplikacja desktopowa: cichy druk na drukarce etykiet (jak etykieta wysylkowa).
+  const [canPrint, setCanPrint] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printMsg, setPrintMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    setCanPrint(typeof (window as DesktopWindow).kalkmateDesktop?.printProductLabel === "function");
+  }, []);
+
+  const printNow = async () => {
+    const bridge = (window as DesktopWindow).kalkmateDesktop;
+    if (!bridge?.printProductLabel || printing) return;
+    setPrinting(true);
+    setPrintMsg(null);
+    try {
+      const r = await bridge.printProductLabel(orderId, []);
+      setPrintMsg(r.ok ? { ok: true, text: `Wydrukowano (${r.printer ?? "drukarka etykiet"})` } : { ok: false, text: r.error || "Błąd drukowania" });
+      if (r.ok && serials === undefined) {
+        // Druk przydzielil SN — odswiez zakres obok przycisku.
+        fetch(`/api/admin/product-serials?orderId=${encodeURIComponent(orderId)}`)
+          .then((x) => (x.ok ? x.json() : null))
+          .then((d: { serials?: { serial: number }[] } | null) => { if (d?.serials) setOwn(d.serials.map((u) => u.serial)); })
+          .catch(() => {});
+      }
+    } catch (e) {
+      setPrintMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   useEffect(() => {
     if (serials !== undefined) return;
@@ -58,6 +91,24 @@ export default function ProductLabelLink({
       >
         🏷 {compact ? "Etykieta prod." : "Etykieta produktowa"}
       </a>
+      {canPrint && (
+        <button
+          type="button"
+          onClick={printNow}
+          disabled={printing}
+          title="Cichy druk etykiety produktowej (tył + przód dla każdej sztuki) na drukarce etykiet"
+          className={
+            compact
+              ? "inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[#D8FF3D] px-2 py-1 text-xs font-semibold text-black hover:brightness-95 disabled:opacity-50"
+              : "inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-[#D8FF3D] px-4 py-2 text-xs font-semibold text-black hover:brightness-95 disabled:opacity-50 transition"
+          }
+        >
+          🖨 {printing ? "Drukuję…" : compact ? "Drukuj" : "Drukuj etykietę produktową"}
+        </button>
+      )}
+      {printMsg && (
+        <span className={`whitespace-nowrap text-xs ${printMsg.ok ? "text-green-400" : "text-red-400"}`}>{printMsg.text}</span>
+      )}
       {range && <span className="whitespace-nowrap font-mono text-xs text-[#E0E0E0]/60">{range}</span>}
     </span>
   );

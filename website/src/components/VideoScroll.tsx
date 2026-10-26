@@ -9,6 +9,45 @@ const FRAME_COUNT = 90;
 // inaczej przegladarki ktore juz raz wczytaly strone NIGDY nie pobiora
 // nowej wersji (immutable = zero rewalidacji az do wygasniecia).
 const FRAME_VERSION = "2";
+// Wymiary klatek (wszystkie 720x405) — canvas ma je od startu, zeby nie
+// zmienial proporcji (300x150 -> 16:9) po wczytaniu pierwszej klatki (CLS).
+const FRAME_W = 720;
+const FRAME_H = 405;
+// Ile klatek pobieramy naraz — reszta czeka w kolejce (nie zapychamy lacza
+// 90 requestami na raz, a przewijanie od razu dostaje kolejne klatki).
+const FRAME_CONCURRENCY = 4;
+
+const frameUrl = (n: number) =>
+  `/frames/frame_${String(n).padStart(3, "0")}.webp?v=${FRAME_VERSION}`;
+
+type NetworkInformationLike = { saveData?: boolean; effectiveType?: string };
+
+/**
+ * Ktore klatki (indeksy 0-based, bez klatki 0 = plakat) pobrac i w jakiej
+ * kolejnosci. Kolejnosc "od zgrubnej do dokladnej" (co 16., co 8., ... co
+ * 1.) — przy przewijaniu w trakcie ladowania animacja jest od razu cala,
+ * tylko mniej plynna, zamiast urywac sie na ostatniej zaladowanej klatce.
+ * - Save-Data / 2G: zadnych — zostaje statyczny plakat (klatka 1).
+ * - 3G: co 3. klatka (30 z 90).
+ * - Mobile (<1024px, sekcja 220vh i maly canvas): co 2. klatka (45 z 90).
+ * - Desktop: wszystkie 90 (zachowanie jak dotad).
+ */
+function framePlan(): number[] {
+  const conn = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
+  const type = conn?.effectiveType ?? "4g";
+  if (conn?.saveData || type === "slow-2g" || type === "2g") return [];
+  const mobile = window.matchMedia("(max-width: 1023.98px)").matches;
+  const step = type === "3g" ? 3 : mobile ? 2 : 1;
+  const order: number[] = [];
+  const seen = new Set<number>([0]);
+  for (const stride of [16, 8, 4, 2, 1]) {
+    const s = stride * step;
+    for (let i = 0; i < FRAME_COUNT; i += s) {
+      if (!seen.has(i)) { seen.add(i); order.push(i); }
+    }
+  }
+  return order;
+}
 
 interface Benefit {
   side: "left" | "right";
@@ -153,43 +192,98 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
   const deskRefs = useRef<(HTMLDivElement | null)[]>([]);
   const mobRefs  = useRef<(HTMLDivElement | null)[]>([]);
 
-  // Lazy-load frames only when section is near viewport
+  // Klatki pobieramy leniwie: dopiero po zdarzeniu load + bezczynnosci
+  // przegladarki (nic nie konkuruje z LCP/hydracja) ORAZ gdy sekcja jest
+  // blisko viewportu. Wczesniej rootMargin 400px na mobile lapal sekcje od
+  // razu po zaladowaniu (stoi tuz pod Hero) i 90 klatek (~3.3 MB) lecialo
+  // na starcie strony. Najpierw klatka 1 (plakat, rysowana od razu), potem
+  // reszta kolejka po FRAME_CONCURRENCY z niskim priorytetem.
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return;
+    let cancelled = false;
+    let observer: IntersectionObserver | null = null;
+    let idleHandle: number | null = null;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
-    const startLoading = () => {
-      if (framesRef.current.length > 0) return;
-      const imgs: HTMLImageElement[] = new Array(FRAME_COUNT);
-
-      // Load frame 1 first — draw it immediately so canvas has content fast
-      const first = new window.Image();
-      first.src = `/frames/frame_001.webp?v=${FRAME_VERSION}`;
-      imgs[0] = first;
-      framesRef.current = imgs;
-
-      first.onload = () => {
-        for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
-          if (!canvas) continue;
-          canvas.width = first.naturalWidth;
-          canvas.height = first.naturalHeight;
-          canvas.getContext("2d")?.drawImage(first, 0, 0);
-        }
-        // Load remaining frames only after first is drawn
-        for (let i = 2; i <= FRAME_COUNT; i++) {
-          const img = new window.Image();
-          img.src = `/frames/frame_${String(i).padStart(3, "0")}.webp?v=${FRAME_VERSION}`;
-          imgs[i - 1] = img;
-        }
-      };
+    const makeImg = (n: number, onDone: () => void) => {
+      const img = new window.Image();
+      img.decoding = "async";
+      (img as HTMLImageElement & { fetchPriority?: string }).fetchPriority = "low";
+      img.onload = onDone;
+      img.onerror = onDone;
+      img.src = frameUrl(n);
+      return img;
     };
 
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) { startLoading(); observer.disconnect(); } },
-      { rootMargin: "400px" }
-    );
-    observer.observe(section);
-    return () => observer.disconnect();
+    const startLoading = () => {
+      if (cancelled || framesRef.current.length > 0) return;
+      const imgs: HTMLImageElement[] = new Array(FRAME_COUNT);
+      framesRef.current = imgs;
+
+      const queue = framePlan();
+      let active = 0;
+      const pump = () => {
+        while (!cancelled && active < FRAME_CONCURRENCY && queue.length > 0) {
+          const i = queue.shift()!;
+          active++;
+          imgs[i] = makeImg(i + 1, () => { active--; pump(); });
+        }
+      };
+
+      imgs[0] = makeImg(1, () => {
+        if (cancelled) return;
+        const first = imgs[0];
+        if (first.naturalWidth > 0) {
+          for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
+            if (!canvas) continue;
+            canvas.width = first.naturalWidth;
+            canvas.height = first.naturalHeight;
+            canvas.getContext("2d")?.drawImage(first, 0, 0);
+          }
+          currentFrameRef.current = 0;
+        }
+        pump();
+      });
+    };
+
+    const observe = () => {
+      if (cancelled) return;
+      // Desktop: wiekszy zapas (sekcja 400vh, wszystkie 90 klatek) — i tak
+      // dopiero po load+idle. Mobile: sekcja stoi ~200px pod viewportem, wiec
+      // maly margines = start dopiero gdy uzytkownik zacznie przewijac.
+      const ahead = window.matchMedia("(min-width: 1024px)").matches ? 600 : 150;
+      observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) {
+            observer?.disconnect();
+            startLoading();
+          }
+        },
+        { rootMargin: `0px 0px ${ahead}px 0px` }
+      );
+      observer.observe(section);
+    };
+
+    const afterLoad = () => {
+      const w = window as Window & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      };
+      if (w.requestIdleCallback) idleHandle = w.requestIdleCallback(observe, { timeout: 2000 });
+      else timeoutHandle = setTimeout(observe, 300);
+    };
+
+    if (document.readyState === "complete") afterLoad();
+    else window.addEventListener("load", afterLoad, { once: true });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", afterLoad);
+      observer?.disconnect();
+      const w = window as Window & { cancelIdleCallback?: (h: number) => void };
+      if (idleHandle !== null) w.cancelIdleCallback?.(idleHandle);
+      if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+    };
   }, []);
 
   // Scroll + rAF loop
@@ -206,25 +300,36 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
     const animate = () => {
       const p = progressRef.current;
 
-      // Draw current frame
-      const idx = Math.min(FRAME_COUNT - 1, Math.floor(p * FRAME_COUNT));
-      if (idx !== currentFrameRef.current) {
-        const frame = framesRef.current[idx];
-        if (frame?.complete && frame.naturalWidth > 0) {
-          for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
-            if (!canvas) continue;
-            if (canvas.width !== frame.naturalWidth) {
-              canvas.width = frame.naturalWidth;
-              canvas.height = frame.naturalHeight;
-            }
-            const ctx = canvas.getContext("2d");
-            if (ctx) {
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              ctx.drawImage(frame, 0, 0);
-            }
-          }
-          currentFrameRef.current = idx;
+      // Draw current frame — albo najblizsza juz wczytana (ladowanie
+      // progresywne / mniej klatek na mobile i wolnym laczu).
+      const target = Math.min(FRAME_COUNT - 1, Math.floor(p * FRAME_COUNT));
+      const frames = framesRef.current;
+      const ready = (i: number) => {
+        const f = frames[i];
+        return !!f && f.complete && f.naturalWidth > 0;
+      };
+      let idx = -1;
+      if (frames.length > 0) {
+        for (let d = 0; d < FRAME_COUNT; d++) {
+          if (target - d >= 0 && ready(target - d)) { idx = target - d; break; }
+          if (target + d < FRAME_COUNT && ready(target + d)) { idx = target + d; break; }
         }
+      }
+      if (idx !== -1 && idx !== currentFrameRef.current) {
+        const frame = frames[idx];
+        for (const canvas of [canvasRef.current, canvasMobileRef.current]) {
+          if (!canvas) continue;
+          if (canvas.width !== frame.naturalWidth) {
+            canvas.width = frame.naturalWidth;
+            canvas.height = frame.naturalHeight;
+          }
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(frame, 0, 0);
+          }
+        }
+        currentFrameRef.current = idx;
       }
 
       // Animate benefit cards
@@ -304,7 +409,7 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
           <p className="km-mono-eyebrow text-[#D8FF3D] text-[11px]">{t.eyebrow}</p>
           <h2 className="km-display text-[clamp(32px,4.5vw,64px)] text-[#F2EDE3] mt-2 leading-[0.95]">
             {t.heading}
-            <span className="text-[#F2EDE3]/35"> {t.sub}</span>
+            <span className="text-[#F2EDE3]/50"> {t.sub}</span>
           </h2>
         </div>
 
@@ -335,6 +440,8 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
             <div className="absolute inset-0 blur-[90px] opacity-20 bg-[#D8FF3D] rounded-full scale-90 pointer-events-none" />
             <canvas
               ref={canvasRef}
+              width={FRAME_W}
+              height={FRAME_H}
               className="relative w-full h-auto block"
               style={{ zIndex: 1 }}
             />
@@ -365,6 +472,8 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
           <div className="w-full max-w-sm overflow-hidden" style={{ borderRadius: "2px" }}>
             <canvas
               ref={canvasMobileRef}
+              width={FRAME_W}
+              height={FRAME_H}
               className="w-full h-auto block"
             />
           </div>
@@ -386,7 +495,7 @@ export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {
 
         {/* Scroll hint */}
         <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none">
-          <p className="km-mono-eyebrow text-[#F2EDE3]/20 text-[10px] tracking-widest">SCROLL</p>
+          <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] tracking-widest">SCROLL</p>
         </div>
       </div>
     </section>

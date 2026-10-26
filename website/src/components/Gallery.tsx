@@ -1,7 +1,5 @@
-"use client";
-
 import Image from "next/image";
-import { motion } from "framer-motion";
+import Reveal from "@/components/Reveal";
 import { type Locale } from "@/lib/i18n";
 
 interface Shot {
@@ -296,20 +294,21 @@ export default function Gallery({ lang = "pl" }: { lang?: Locale }) {
               {t.h2.after}
             </h2>
           </div>
-          <div className="lg:col-span-4 km-mono-eyebrow text-[#F2EDE3]/45">
+          <div className="lg:col-span-4 km-mono-eyebrow text-[#F2EDE3]/55">
             <p>{t.galleryCount}</p>
-            <p className="mt-2 text-[#F2EDE3]/30">{t.meta}</p>
+            <p className="mt-2 text-[#F2EDE3]/55">{t.meta}</p>
           </div>
         </div>
 
         <div className="grid md:grid-cols-12 grid-cols-1 gap-3 md:gap-4">
           {items.map((s, i) => (
-            <motion.figure
+            <Reveal
+              as="figure"
               key={s.src}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ duration: 0.6, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+              y={24}
+              amount={0.2}
+              duration={0.6}
+              delay={i * 0.06}
               className={`relative overflow-hidden border border-[rgba(242,237,227,0.10)] bg-[#1a1a1a] group ${s.span}`}
             >
               <Image
@@ -331,7 +330,7 @@ export default function Gallery({ lang = "pl" }: { lang?: Locale }) {
                   ↗
                 </span>
               </figcaption>
-            </motion.figure>
+            </Reveal>
           ))}
         </div>
       </div>

@@ -193,6 +193,75 @@ ipcMain.handle('kalkmate:print-label', async (event, urlPath) => {
   }
 });
 
+// === Cichy druk etykiety PRODUKTOWEJ (100x150, tyl + przod na sztuke) ===
+// Etykieta produktowa to strona HTML (/admin/orders/<id>/etykieta), nie PDF z
+// serwera. Otwieramy ja w ukrytym oknie z sesja aplikacji (cookie admina),
+// czekamy az strona przydzieli numery seryjne i ustawi window.__kalkLabelReady,
+// robimy printToPDF w rozmiarze z CSS (@page 100x150) i drukujemy dokladnie
+// jak etykiete wysylkowa (pdf-to-printer, zapamietana drukarka etykiet).
+const ORDER_ID_RE = /^[A-Za-z0-9_-]{1,100}$/;
+
+ipcMain.handle('kalkmate:print-product-label', async (event, orderId, units) => {
+  if (!fromKalkmate(event)) return { ok: false, error: 'Niedostępne' };
+  const id = String(orderId || '');
+  if (!ORDER_ID_RE.test(id)) return { ok: false, error: 'Nieprawidlowe ID zamowienia' };
+  const unitList = Array.isArray(units)
+    ? units.map((u) => Number(u)).filter((u) => Number.isInteger(u) && u >= 0 && u < 50)
+    : [];
+  const { print } = require('pdf-to-printer');
+  const settings = loadSettings();
+  const url = new URL(`${ADMIN_URL}/orders/${encodeURIComponent(id)}/etykieta`);
+  if (unitList.length) url.searchParams.set('units', unitList.join(','));
+  if (!isTrustedUrl(url.toString())) return { ok: false, error: 'Niedozwolony adres' };
+
+  let win = null;
+  let tmpFile = null;
+  try {
+    win = new BrowserWindow({
+      show: false,
+      width: 600,
+      height: 900,
+      webPreferences: { partition: PARTITION, sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    await win.loadURL(url.toString());
+    // Czekaj na gotowosc strony (zamowienie + numery seryjne), max 25 s.
+    const t0 = Date.now();
+    let state = 0;
+    while (Date.now() - t0 < 25000) {
+      state = await win.webContents.executeJavaScript(
+        'window.__kalkLabelError ? "err:" + window.__kalkLabelError : (window.__kalkLabelReady === true ? 1 : 0)', true);
+      if (state !== 0) break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (typeof state === 'string') return { ok: false, error: `Etykieta: ${state.slice(4)}` };
+    if (state !== 1) return { ok: false, error: 'Etykieta nie zaladowala sie w 25 s (zaloguj sie ponownie?)' };
+    await win.webContents.executeJavaScript('document.fonts ? document.fonts.ready.then(() => 1) : 1', true);
+
+    const pdf = await win.webContents.printToPDF({
+      preferCSSPageSize: true,
+      printBackground: true,
+      margins: { marginType: 'none' },
+    });
+    tmpFile = path.join(app.getPath('temp'), `kalkmate-etykieta-produktowa-${Date.now()}.pdf`);
+    fs.writeFileSync(tmpFile, pdf);
+
+    await print(tmpFile, {
+      printer: settings.labelPrinter,
+      copies: 1,
+      orientation: 'portrait',
+      monochrome: true,
+      scale: 'fit',
+      silent: true,
+    });
+    return { ok: true, printer: settings.labelPrinter };
+  } catch (err) {
+    return { ok: false, error: `Blad drukowania (${settings.labelPrinter}): ${err && err.message ? err.message : err}`, printer: settings.labelPrinter };
+  } finally {
+    if (win && !win.isDestroyed()) win.destroy();
+    if (tmpFile) setTimeout(() => { try { fs.unlinkSync(tmpFile); } catch (_) { /* juz usuniete */ } }, 60_000);
+  }
+});
+
 // === Agent fiskalny (drukarka fiskalna POSNET w sieci lokalnej) ===
 // Logika w fiscal/ (port fiscal-agent/ z Pythona). Agent pobiera zlecenia
 // paragonów z kalkmate.pl SESJĄ ADMINA tej aplikacji (bez osobnego tokenu)

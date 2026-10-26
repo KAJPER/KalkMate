@@ -81,7 +81,7 @@ export default function LanguageSwitcher({
           </svg>
           {compact ? (
             <span lang={current}>
-              {localeName[current]} <span className="text-[#F2EDE3]/45">· {localeLabel[current]}</span>
+              {localeName[current]} <span className="text-[#F2EDE3]/55">· {localeLabel[current]}</span>
             </span>
           ) : (
             <span>{localeLabel[current]}</span>
@@ -121,7 +121,7 @@ export default function LanguageSwitcher({
                 }`}
               >
                 <span>{localeName[l]}</span>
-                <span className={`km-mono-eyebrow ${active ? "text-[#D8FF3D]" : "text-[#F2EDE3]/35"}`}>
+                <span className={`km-mono-eyebrow ${active ? "text-[#D8FF3D]" : "text-[#F2EDE3]/55"}`}>
                   {localeLabel[l]}
                 </span>
               </a>

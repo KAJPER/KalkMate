@@ -1766,13 +1766,13 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                 <div className="flex border-b border-[rgba(242,237,227,0.10)]">
                   <button
                     onClick={() => changeCountry("PL")}
-                    className={`flex-1 py-2.5 km-mono-eyebrow text-xs transition-colors ${!showEUR ? "bg-[#D8FF3D] text-[#0B0B0B]" : "text-[#F2EDE3]/40 hover:text-[#F2EDE3]"}`}
+                    className={`flex-1 py-2.5 km-mono-eyebrow text-xs transition-colors ${!showEUR ? "bg-[#D8FF3D] text-[#0B0B0B]" : "text-[#F2EDE3]/55 hover:text-[#F2EDE3]"}`}
                   >
                     PLN · 🇵🇱
                   </button>
                   <button
                     onClick={() => { if (isPoland) changeCountry(intlDefault); }}
-                    className={`flex-1 py-2.5 km-mono-eyebrow text-xs transition-colors ${showEUR ? "bg-[#D8FF3D] text-[#0B0B0B]" : "text-[#F2EDE3]/40 hover:text-[#F2EDE3]"}`}
+                    className={`flex-1 py-2.5 km-mono-eyebrow text-xs transition-colors ${showEUR ? "bg-[#D8FF3D] text-[#0B0B0B]" : "text-[#F2EDE3]/55 hover:text-[#F2EDE3]"}`}
                   >
                     EUR · 🌍
                   </button>
@@ -1780,7 +1780,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
 
                 {/* Price */}
                 <div className="px-6 lg:px-8 py-10">
-                  <p className="km-mono-eyebrow text-[#F2EDE3]/45">
+                  <p className="km-mono-eyebrow text-[#F2EDE3]/55">
                     {t.preSalePrice}
                   </p>
                   <div className="mt-3 flex items-baseline gap-4">
@@ -1794,7 +1794,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                   <p className="mt-3 km-mono-eyebrow text-[#D8FF3D]">
                     {showEUR ? t.shippingEur : t.discountPln}
                   </p>
-                  <p className="mt-2 km-mono-eyebrow text-[#F2EDE3]/35 text-[11px]">
+                  <p className="mt-2 km-mono-eyebrow text-[#F2EDE3]/55 text-[11px]">
                     {t.lowestPrice30d}: {fmtMoney(productCents)}
                   </p>
 
@@ -1889,7 +1889,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                     <div className="flex items-center justify-between gap-4 border border-[rgba(242,237,227,0.10)] p-4">
                       <div className="min-w-0">
                         <p className="km-mono-eyebrow text-[#F2EDE3]/55">{t.quantityLabel}</p>
-                        <p className="km-mono-eyebrow text-[#F2EDE3]/35 text-[10px] mt-1">
+                        <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mt-1">
                           {maxQty < MAX_ORDER_QUANTITY ? t.quantityStockLimit(maxQty) : t.quantityLimit(MAX_ORDER_QUANTITY)}
                         </p>
                       </div>
@@ -1907,15 +1907,15 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                       <span className="text-[#F2EDE3]/65">
                         KalkMate v3.0{orderQty > 1 ? ` × ${orderQty}` : ""}
                         {orderQty > 1 && (
-                          <span className="block text-xs text-[#F2EDE3]/40">{fmtMoney(productCents)} {t.perUnit}</span>
+                          <span className="block text-xs text-[#F2EDE3]/55">{fmtMoney(productCents)} {t.perUnit}</span>
                         )}
                       </span>
                       <span className="text-right text-[#F2EDE3]">
                         {fmtMoney(subtotalCents)}
                       </span>
-                      <span className="text-[#F2EDE3]/45 text-xs">
+                      <span className="text-[#F2EDE3]/55 text-xs">
                         {isPoland ? t.inpostParcel : isEU ? t.euCourier : t.intlCourier}
-                        {orderQty > 1 && <span className="block text-[#F2EDE3]/35">{t.shippingPerOrder}</span>}
+                        {orderQty > 1 && <span className="block text-[#F2EDE3]/55">{t.shippingPerOrder}</span>}
                       </span>
                       {shippingCents === 0 ? (
                         <span className="text-right text-[#D8FF3D] km-mono-eyebrow">{t.free}</span>
@@ -2014,7 +2014,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                         aria-readonly={!!sessionEmail}
                         onChange={(e) => { if (!sessionEmail) setFormData({ ...formData, email: e.target.value }); }}
                         className={inputClass + (sessionEmail ? " opacity-60 cursor-not-allowed focus:border-[rgba(242,237,227,0.18)]" : "")} />
-                      {sessionEmail && <p className="text-xs text-[#F2EDE3]/40 mt-1.5">{t.emailFromAccount}</p>}
+                      {sessionEmail && <p className="text-xs text-[#F2EDE3]/55 mt-1.5">{t.emailFromAccount}</p>}
                     </div>
                     <div>
                       <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
@@ -2029,7 +2029,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                         }}
                         placeholder={dialCode(formData.country) ? `${dialCode(formData.country)} …` : undefined}
                         className={inputClass} />
-                      {!isPoland && <p className="text-xs text-[#F2EDE3]/40 mt-1.5">{t.phoneHint}</p>}
+                      {!isPoland && <p className="text-xs text-[#F2EDE3]/55 mt-1.5">{t.phoneHint}</p>}
                     </div>
 
                     {/* Address */}
@@ -2145,7 +2145,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                               onChange={(e) => setUnit(0, { unlockCode: e.target.value.replace(/\D/g, "").slice(0, 4) })}
                               className={inputClass}
                               placeholder={t.personalizeCodePlaceholder} />
-                            <p className="text-xs text-[#F2EDE3]/40 mt-1.5 leading-relaxed">{t.personalizeCodeHint}</p>
+                            <p className="text-xs text-[#F2EDE3]/55 mt-1.5 leading-relaxed">{t.personalizeCodeHint}</p>
                           </div>
                           <div>
                             <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">
@@ -2156,7 +2156,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                               onChange={(e) => setUnit(0, { name: e.target.value })}
                               className={inputClass}
                               placeholder={t.personalizeNamePlaceholder} />
-                            <p className="text-xs text-[#F2EDE3]/40 mt-1.5 leading-relaxed">{t.personalizeNameHint}</p>
+                            <p className="text-xs text-[#F2EDE3]/55 mt-1.5 leading-relaxed">{t.personalizeNameHint}</p>
                           </div>
                         </>
                       ) : (
@@ -2177,7 +2177,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                                 onChange={(e) => setUnit(0, { unlockCode: e.target.value.replace(/\D/g, "").slice(0, 4) })}
                                 className={inputClass}
                                 placeholder={t.personalizeCodePlaceholder} />
-                              <p className="text-xs text-[#F2EDE3]/40 mt-1.5 leading-relaxed">{t.personalizeCodeHintMulti}</p>
+                              <p className="text-xs text-[#F2EDE3]/55 mt-1.5 leading-relaxed">{t.personalizeCodeHintMulti}</p>
                             </div>
                           )}
                           <div className="space-y-3">
@@ -2205,7 +2205,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                               </div>
                             ))}
                           </div>
-                          <p className="text-xs text-[#F2EDE3]/40 leading-relaxed">
+                          <p className="text-xs text-[#F2EDE3]/55 leading-relaxed">
                             {sameCode ? t.personalizeNameHintMulti : `${t.personalizeCodeHintEach} ${t.personalizeNameHintMulti}`}
                           </p>
                         </>
@@ -2300,7 +2300,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                       <div className="mt-1">
                         <div className="my-4 flex items-center gap-3">
                           <div className="flex-1 h-px bg-[rgba(242,237,227,0.10)]" />
-                          <span className="text-xs text-[#F2EDE3]/30 km-mono-eyebrow">{t.or}</span>
+                          <span className="text-xs text-[#F2EDE3]/55 km-mono-eyebrow">{t.or}</span>
                           <div className="flex-1 h-px bg-[rgba(242,237,227,0.10)]" />
                         </div>
                         {polandStripeError && (
@@ -2328,9 +2328,9 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                             </div>
                             <div className="text-left">
                               <p className="text-sm text-[#F2EDE3] font-medium">{t.klarnaTitle}</p>
-                              <p className="text-xs text-[#F2EDE3]/45 mt-0.5">{t.klarnaSub}</p>
+                              <p className="text-xs text-[#F2EDE3]/55 mt-0.5">{t.klarnaSub}</p>
                             </div>
-                            <span className="ml-auto text-[#F2EDE3]/30">→</span>
+                            <span className="ml-auto text-[#F2EDE3]/55">→</span>
                           </motion.button>
                         ) : (
                           <StripeProvider clientSecret={polandStripeSecret} lang={lang}>
@@ -2367,7 +2367,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                         <span className="text-[#F2EDE3]/65">
                           {PRODUCT_NAME}{q.quantity > 1 ? ` × ${q.quantity}` : ""}
                           {q.quantity > 1 && (
-                            <span className="block text-xs text-[#F2EDE3]/40">{fmtMoney(q.unitCents, q.currency)} {t.perUnit}</span>
+                            <span className="block text-xs text-[#F2EDE3]/55">{fmtMoney(q.unitCents, q.currency)} {t.perUnit}</span>
                           )}
                         </span>
                         <span className="text-[#F2EDE3]">{fmtMoney(q.subtotalCents, q.currency)}</span>
@@ -2379,7 +2379,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                           : <span className="text-[#F2EDE3]">{fmtMoney(q.shippingCents, q.currency)}</span>}
                       </div>
                       {formData.city && (
-                        <div className="text-xs text-[#F2EDE3]/45 pt-1">
+                        <div className="text-xs text-[#F2EDE3]/55 pt-1">
                           ↳ {formData.street}, {cityWithRegion(formData.city, formData.region)} · {formData.country}
                         </div>
                       )}
@@ -2449,7 +2449,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                           </>
                         )}
                       </p>
-                      <p className="mt-3 text-xs text-[#F2EDE3]/40">
+                      <p className="mt-3 text-xs text-[#F2EDE3]/55">
                         {t.pendingRetry}
                       </p>
                     </div>

@@ -48,6 +48,23 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return d as T;
 }
 
+// Aplikacja desktopowa (Electron) drukuje te strone po cichu: laduje ja w
+// ukrytym oknie i czeka na window.__kalkLabelReady (zamowienie + SN gotowe)
+// albo window.__kalkLabelError. ?units=0,2 = tylko wybrane sztuki.
+type LabelWindow = Window & {
+  __kalkLabelReady?: boolean;
+  __kalkLabelError?: string;
+  kalkmateDesktop?: { printProductLabel?: (orderId: string, units: number[]) => Promise<{ ok: boolean; printer?: string; error?: string }> };
+};
+
+function unitsFromQuery(count: number): boolean[] {
+  if (typeof window === "undefined") return Array.from({ length: count }, () => true);
+  const raw = new URLSearchParams(window.location.search).get("units");
+  if (!raw) return Array.from({ length: count }, () => true);
+  const set = new Set(raw.split(",").map((x) => Number(x)).filter((x) => Number.isInteger(x)));
+  return Array.from({ length: count }, (_, i) => set.has(i));
+}
+
 export default function ProductLabelPage() {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<OrderData | null>(null);
@@ -80,7 +97,7 @@ export default function ProductLabelPage() {
         const n = unitNames(o);
         setOrder(o);
         setNames(n);
-        setInclude(n.map(() => true));
+        setInclude(unitsFromQuery(n.length));
         document.title = `Etykieta produktowa ${o.order_number}`;
         // Przydziel brakujace SN (idempotentne — ponowne otwarcie = te same numery).
         try {
@@ -89,14 +106,22 @@ export default function ProductLabelPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ action: "assign", orderId: o.id }),
           });
-          if (!cancelled) applySerials(s, n.length);
+          if (!cancelled) {
+            applySerials(s, n.length);
+            // Po wyrenderowaniu etykiet z numerami (nastepna klatka).
+            requestAnimationFrame(() => requestAnimationFrame(() => { (window as LabelWindow).__kalkLabelReady = true; }));
+          }
         } catch (e) {
           if (cancelled) return;
           setSnDraft(n.map(() => ""));
           setMsg({ kind: "err", text: `Numery seryjne: ${(e as Error).message}` });
+          (window as LabelWindow).__kalkLabelError = `numery seryjne: ${(e as Error).message}`;
         }
       } catch (e) {
-        if (!cancelled) setLoadErr(`Błąd ładowania zamówienia: ${(e as Error).message}`);
+        if (!cancelled) {
+          setLoadErr(`Błąd ładowania zamówienia: ${(e as Error).message}`);
+          (window as LabelWindow).__kalkLabelError = (e as Error).message;
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -157,6 +182,18 @@ export default function ProductLabelPage() {
     if (unsaved.length && !window.confirm(
       `Sztuka ${unsaved.map((i) => i + 1).join(", ")}: numer seryjny nie jest zapisany na serwerze.\n\nDrukować mimo to?`
     )) return;
+    const bridge = (window as LabelWindow).kalkmateDesktop;
+    if (bridge?.printProductLabel && order) {
+      setBusy(true);
+      setMsg(null);
+      bridge.printProductLabel(order.id, toPrint)
+        .then((r) => setMsg(r.ok
+          ? { kind: "ok", text: `Wysłano do drukarki ${r.printer ?? ""} (${toPrint.length} szt.)` }
+          : { kind: "err", text: r.error || "Błąd drukowania" }))
+        .catch((e) => setMsg({ kind: "err", text: (e as Error).message }))
+        .finally(() => setBusy(false));
+      return;
+    }
     window.print();
   };
 
@@ -175,7 +212,7 @@ export default function ProductLabelPage() {
           {order?.fulfillment_status === "cancelled" && (
             <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800">Anulowane</span>
           )}
-          <button onClick={print} disabled={!order || !toPrint.length} className={`${btnCls} ml-auto`}>
+          <button onClick={print} disabled={!order || !toPrint.length || busy} className={`${btnCls} ml-auto`}>
             🖨 Drukuj ({toPrint.length} szt. = {toPrint.length * 2} etykiet)
           </button>
         </div>

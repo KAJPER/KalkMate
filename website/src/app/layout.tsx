@@ -7,6 +7,12 @@ import { ClientCartDrawer, ClientCookieBanner, ClientClarityAnalytics } from "@/
 import PageTracker from "@/components/PageTracker";
 import { organizationJsonLd } from "@/lib/seo";
 
+// Fonty: display "swap" + adjustFontFallback (domyslnie true w next/font/google
+// — fallback z dopasowanymi metrykami), wiec H1 Hero (element LCP) maluje sie
+// od razu fallbackiem. Preload zostaje dla WSZYSTKICH trzech rodzin: sprawdzone
+// w Lighthouse — bez preloadu Geist/JetBrains sa odkrywane dopiero z CSS z
+// priorytetem VeryHigh (blokuja FCP w symulacji, FCP 1.2 s -> 1.8 s) i daja
+// widoczny przeskok po podmianie fontu (CLS 0.026 na przyciskach Hero).
 const geist = Geist({
   variable: "--font-geist",
   subsets: ["latin", "latin-ext"],
@@ -19,6 +25,7 @@ const instrument = Fraunces({
   weight: ["400", "600"],
   style: ["normal", "italic"],
   display: "swap",
+  adjustFontFallback: true,
 });
 
 const jetbrains = JetBrains_Mono({

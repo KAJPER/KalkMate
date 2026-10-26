@@ -46,3 +46,9 @@ next-env.d.ts
 
 # kopie zapasowe bazy (lib/dbBackup.ts) — dane klientow, nigdy w repo
 /backups/
+
+# SQLite: dziennik WAL / pliki tymczasowe lokalnej bazy NIGDY nie moga trafic
+# do paczki wdrozenia (2026-10-26: lokalny dev.db-wal nadpisal produkcje).
+*.db-wal
+*.db-shm
+*.db-journal

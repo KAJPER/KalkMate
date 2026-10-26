@@ -174,7 +174,7 @@ export const PRODUCT_LABEL_CSS = `
     margin: 4mm auto 0; width: 86mm;
     background: #000; border-radius: 2.4mm; padding: 2.2mm;
   }
-  .kmpl .device img { display: block; width: 100%; max-width: none; height: auto; image-rendering: pixelated; }
+  .kmpl .device img { display: block; width: 100%; max-width: none; height: auto; aspect-ratio: 4 / 1; image-rendering: pixelated; }
 
   .kmpl .steps { display: flex; align-items: center; justify-content: center; gap: 2mm; margin-top: 4mm; }
   .kmpl .step { display: flex; flex-direction: column; align-items: center; gap: 1.2mm; width: 20mm; }
@@ -222,8 +222,9 @@ export const PRODUCT_LABEL_CSS = `
   .kmpl .label[data-fit~="4"] .chip.name { font-size: 2.1mm; letter-spacing: 0; }
 
   .kmpl .front .bottom { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; }
-  .kmpl .front .bottom .m { font-size: 3mm; font-weight: 800; }
-  .kmpl .front .bottom .s { font-size: 3.4mm; font-weight: 800; text-align: right; line-height: 1.2; }
+  .kmpl .front .bottom { align-items: baseline; padding-top: 1.5mm; }
+  .kmpl .front .bottom .m { font-size: 2.7mm; font-weight: 800; }
+  .kmpl .front .bottom .s { font-size: 2.9mm; font-weight: 800; text-align: right; }
 
   @media screen {
     html, body { background: #e8e8e8 !important; }
@@ -254,7 +255,16 @@ export function fitLabel(el: HTMLElement): void {
 function useFit(deps: unknown[]) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (ref.current) fitLabel(ref.current);
+    const el = ref.current;
+    if (!el) return;
+    const run = () => fitLabel(el);
+    run();
+    // Zrzut ekranu (data: PNG) i czcionki dochodza po pierwszym pomiarze —
+    // wtedy etykieta rosnie, wiec mierz ponownie (inaczej dol byl ucinany).
+    el.querySelectorAll("img").forEach((img) => {
+      if (!img.complete) img.addEventListener("load", run, { once: true });
+    });
+    document.fonts?.ready.then(run).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return ref;
@@ -375,7 +385,7 @@ export function ProductLabelFront({ name }: { name: string }) {
 
       <div className="bottom">
         <div className="m">11 języków · bez abonamentu</div>
-        <div className="s">kalkmate.pl<br />kalkmate.eu</div>
+        <div className="s">kalkmate.pl · kalkmate.eu</div>
       </div>
     </div>
   );

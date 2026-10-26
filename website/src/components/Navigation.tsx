@@ -162,7 +162,7 @@ export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
             <span className="km-display text-[26px] tracking-tight leading-none text-[#F2EDE3]">
               Kalk<span className="italic text-[#D8FF3D]">Mate</span>
             </span>
-            <span className="km-mono-eyebrow text-[#F2EDE3]/40 hidden sm:inline">
+            <span className="km-mono-eyebrow text-[#F2EDE3]/55 hidden sm:inline">
               /v0.6.4
             </span>
           </a>
@@ -174,7 +174,7 @@ export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
                 href={l.href}
                 className="group flex items-baseline gap-1.5 text-[13.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3] transition-colors"
               >
-                <span className="km-mono-eyebrow text-[#F2EDE3]/30 group-hover:text-[#D8FF3D] transition-colors">
+                <span className="km-mono-eyebrow text-[#F2EDE3]/55 group-hover:text-[#D8FF3D] transition-colors">
                   {l.n}
                 </span>
                 <span>{t.navLabels[i]}</span>
@@ -183,7 +183,7 @@ export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
           </nav>
 
           <div className="hidden lg:flex items-center gap-5">
-            <span className="km-mono-eyebrow text-[#F2EDE3]/40 tabular-nums">
+            <span className="km-mono-eyebrow text-[#F2EDE3]/55 tabular-nums">
               {`${localeLabel[lang]} · ${clock}`}
             </span>
             <LanguageSwitcher current={lang} />

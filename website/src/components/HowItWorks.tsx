@@ -1,6 +1,4 @@
-"use client";
-
-import { motion } from "framer-motion";
+import Reveal from "@/components/Reveal";
 import { type ReactNode } from "react";
 import { type Locale } from "@/lib/i18n";
 
@@ -437,7 +435,7 @@ export default function HowItWorks({ lang = "pl" }: { lang?: Locale }) {
             <p className="text-[15px] leading-[1.65] text-[#F2EDE3]/65">
               {t.side}
             </p>
-            <div className="km-mono-eyebrow text-[#F2EDE3]/40 mt-4">
+            <div className="km-mono-eyebrow text-[#F2EDE3]/55 mt-4">
               {t.avg}
             </div>
           </div>
@@ -445,19 +443,19 @@ export default function HowItWorks({ lang = "pl" }: { lang?: Locale }) {
 
         <div className="grid lg:grid-cols-3 gap-px bg-[rgba(242,237,227,0.10)] border border-[rgba(242,237,227,0.10)]">
           {t.steps.map((s, i) => (
-            <motion.div
+            <Reveal
               key={s.n}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.4 }}
-              transition={{ duration: 0.6, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
+              y={24}
+              amount={0.4}
+              duration={0.6}
+              delay={i * 0.1}
               className="bg-[#0B0B0B] p-8 lg:p-10 group relative hover:bg-[#111] transition-colors"
             >
               <div className="flex items-start justify-between">
-                <span className="km-display text-7xl text-[#F2EDE3]/20 group-hover:text-[#D8FF3D] transition-colors">
+                <span className="km-display text-7xl text-[#F2EDE3]/40 group-hover:text-[#D8FF3D] transition-colors">
                   {s.n}
                 </span>
-                <span className="km-mono-eyebrow text-[#F2EDE3]/40 border border-[rgba(242,237,227,0.18)] px-2 py-1">
+                <span className="km-mono-eyebrow text-[#F2EDE3]/55 border border-[rgba(242,237,227,0.18)] px-2 py-1">
                   {s.tag}
                 </span>
               </div>
@@ -474,21 +472,21 @@ export default function HowItWorks({ lang = "pl" }: { lang?: Locale }) {
                 {s.desc}
               </p>
 
-              <p className="km-mono-eyebrow text-[#F2EDE3]/35 mt-10">
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 mt-10">
                 {t.stepLabel} / {s.title.toUpperCase()}
               </p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
 
         <div className="mt-10 border border-[rgba(242,237,227,0.10)] bg-[#0E0E0E] p-5 lg:p-6 font-mono text-[12.5px] leading-[1.7] text-[#F2EDE3]/65 overflow-x-auto km-no-scrollbar">
           <p>
-            <span className="text-[#F2EDE3]/35">$</span>{" "}
+            <span className="text-[#F2EDE3]/55">$</span>{" "}
             <span className="text-[#D8FF3D]">kalkmate</span> --capture --solve
           </p>
-          <p className="text-[#F2EDE3]/45">[ok] zdjęcie · 1632×1232 · 218 KB</p>
-          <p className="text-[#F2EDE3]/45">[ok] klasyfikator: matematyka / całki / oznaczone</p>
-          <p className="text-[#F2EDE3]/45">[ok] model: kalkmate-r1</p>
+          <p className="text-[#F2EDE3]/55">[ok] zdjęcie · 1632×1232 · 218 KB</p>
+          <p className="text-[#F2EDE3]/55">[ok] klasyfikator: matematyka / całki / oznaczone</p>
+          <p className="text-[#F2EDE3]/55">[ok] model: kalkmate-r1</p>
           <p>
             <span className="text-[#D8FF3D]">→</span> ∫₀¹ (3x² + 2x) dx ={" "}
             <span className="text-[#D8FF3D]">2</span>

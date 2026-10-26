@@ -107,7 +107,7 @@ export default function Reviews({ lang = "pl" }: { lang?: Locale }) {
             </h2>
             <div className="flex items-center gap-2 pb-1">
               <Stars rating={5} />
-              <span className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px]">{t.sub}</span>
+              <span className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px]">{t.sub}</span>
             </div>
           </div>
         </div>
@@ -130,7 +130,7 @@ export default function Reviews({ lang = "pl" }: { lang?: Locale }) {
                   <p className="text-[13px] text-[#F2EDE3] font-medium">
                     {r.author}
                   </p>
-                  <p className="km-mono-eyebrow text-[#F2EDE3]/35 text-[10px] mt-0.5">{r.location}</p>
+                  <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mt-0.5">{r.location}</p>
                 </div>
                 <span className="km-mono-eyebrow text-[#D8FF3D]/60 text-[10px]">{t.verified}</span>
               </div>

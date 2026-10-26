@@ -1,5 +1,3 @@
-"use client";
-
 import { type ReactNode } from "react";
 import Image from "next/image";
 import { type Locale } from "@/lib/i18n";
@@ -482,7 +480,7 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
             <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
             {t.eyebrow}
           </span>
-          <span className="km-mono-eyebrow text-[#F2EDE3]/40 hidden md:inline">
+          <span className="km-mono-eyebrow text-[#F2EDE3]/55 hidden md:inline">
             S/N · KM–0001 ▸ KM–0500
           </span>
         </div>
@@ -528,15 +526,15 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
           {/* Footnote / spec */}
           <div className="mt-12 grid grid-cols-3 gap-6 max-w-xl border-t border-[rgba(242,237,227,0.10)] pt-6">
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40">{t.specBattery}</p>
-              <p className="km-display text-3xl text-[#F2EDE3] mt-1">~6<span className="text-[#F2EDE3]/40 text-xl">h</span></p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55">{t.specBattery}</p>
+              <p className="km-display text-3xl text-[#F2EDE3] mt-1">~6<span className="text-[#F2EDE3]/55 text-xl">h</span></p>
             </div>
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40">{t.specAnswer}</p>
-              <p className="km-display text-3xl text-[#F2EDE3] mt-1">1.2<span className="text-[#F2EDE3]/40 text-xl">s</span></p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55">{t.specAnswer}</p>
+              <p className="km-display text-3xl text-[#F2EDE3] mt-1">1.2<span className="text-[#F2EDE3]/55 text-xl">s</span></p>
             </div>
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40">{t.specSubjects}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55">{t.specSubjects}</p>
               <p className="km-display text-3xl text-[#F2EDE3] mt-1">04</p>
             </div>
           </div>

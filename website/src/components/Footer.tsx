@@ -396,7 +396,7 @@ export default function Footer({ lang = "pl" }: { lang?: Locale }) {
             <p className="km-display text-[clamp(56px,9vw,140px)] leading-[0.92] text-[#F2EDE3]">
               Kalk<span className="italic text-[#D8FF3D]">Mate</span>.
             </p>
-            <p className="km-mono-eyebrow text-[#F2EDE3]/45 mt-6">
+            <p className="km-mono-eyebrow text-[#F2EDE3]/55 mt-6">
               {t.tagline}
             </p>
           </div>
@@ -443,33 +443,33 @@ export default function Footer({ lang = "pl" }: { lang?: Locale }) {
           <p className="km-mono-eyebrow text-[#D8FF3D] mb-4">{t.company}</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3 text-[13.5px] text-[#F2EDE3]/70">
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.seller}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mb-1">{t.fields.seller}</p>
               <p className="text-[#F2EDE3]">KAJPA Kacper Popko</p>
             </div>
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.nip}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mb-1">{t.fields.nip}</p>
               <p className="font-mono text-[#F2EDE3]">9662222951</p>
             </div>
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.regon}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mb-1">{t.fields.regon}</p>
               <p className="font-mono text-[#F2EDE3]">545011444</p>
             </div>
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.bdo}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mb-1">{t.fields.bdo}</p>
               <p className="font-mono text-[#F2EDE3]">000727998</p>
             </div>
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.address}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mb-1">{t.fields.address}</p>
               <p className="text-[#F2EDE3]">ul. Zastawie I 37, 16-070 Choroszcz</p>
             </div>
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.email}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mb-1">{t.fields.email}</p>
               <a href="mailto:kontakt@kajpa.pl" className="font-mono text-[#F2EDE3] hover:text-[#D8FF3D] transition-colors">
                 kontakt@kajpa.pl
               </a>
             </div>
             <div>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/40 text-[10px] mb-1">{t.fields.phone}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mb-1">{t.fields.phone}</p>
               <a href="tel:+48600580888" className="font-mono text-[#F2EDE3] hover:text-[#D8FF3D] transition-colors">
                 600 580 888
               </a>
@@ -478,10 +478,10 @@ export default function Footer({ lang = "pl" }: { lang?: Locale }) {
         </div>
 
         <div className="mt-10 pt-6 border-t border-[rgba(242,237,227,0.10)] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <p className="km-mono-eyebrow text-[#F2EDE3]/40">
+          <p className="km-mono-eyebrow text-[#F2EDE3]/55">
             {t.copyright}
           </p>
-          <p className="km-mono-eyebrow text-[#F2EDE3]/30">
+          <p className="km-mono-eyebrow text-[#F2EDE3]/55">
             FW 0.6.4 · LAT 50.0647 LON 19.9450
           </p>
         </div>

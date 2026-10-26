@@ -1,6 +1,4 @@
-"use client";
-
-import { motion } from "framer-motion";
+import Reveal from "@/components/Reveal";
 import { type Locale } from "@/lib/i18n";
 import type { ReactNode } from "react";
 
@@ -810,12 +808,12 @@ export default function ExamBenefits({ lang = "pl" }: { lang?: Locale }) {
 
         <div className="grid md:grid-cols-2 gap-px bg-[rgba(242,237,227,0.10)] border border-[rgba(242,237,227,0.10)]">
           {t.subjects.map((s, i) => (
-            <motion.div
+            <Reveal
               key={s.code}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.3 }}
-              transition={{ duration: 0.55, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              y={24}
+              amount={0.3}
+              duration={0.55}
+              delay={i * 0.08}
               className={`relative p-8 lg:p-10 bg-[#0E0E0E] hover:bg-[#0B0B0B] transition-colors group ${
                 s.accent ? "lg:row-span-1" : ""
               }`}
@@ -827,25 +825,25 @@ export default function ExamBenefits({ lang = "pl" }: { lang?: Locale }) {
                     {s.name}
                   </h3>
                 </div>
-                <span className="km-mono-eyebrow text-[#F2EDE3]/40 border border-[rgba(242,237,227,0.18)] px-2 py-1 whitespace-nowrap">
+                <span className="km-mono-eyebrow text-[#F2EDE3]/55 border border-[rgba(242,237,227,0.18)] px-2 py-1 whitespace-nowrap">
                   0{i + 1}/04
                 </span>
               </div>
 
               <div className="mt-8 border-l-2 border-[#D8FF3D]/60 pl-4">
-                <p className="km-mono-eyebrow text-[#F2EDE3]/40">{t.exampleLabel}</p>
+                <p className="km-mono-eyebrow text-[#F2EDE3]/55">{t.exampleLabel}</p>
                 <p className="km-led text-lg mt-1">{s.formula}</p>
               </div>
 
               <ul className="mt-8 space-y-2">
                 {s.bullets.map((b, j) => (
                   <li key={j} className="flex items-baseline gap-3 text-[14.5px] text-[#F2EDE3]/75">
-                    <span className="km-mono-eyebrow text-[#F2EDE3]/30">→</span>
+                    <span className="km-mono-eyebrow text-[#F2EDE3]/55">→</span>
                     <span>{b}</span>
                   </li>
                 ))}
               </ul>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
 
@@ -855,7 +853,7 @@ export default function ExamBenefits({ lang = "pl" }: { lang?: Locale }) {
               <p className="km-display text-5xl text-[#F2EDE3]">
                 {stat.value}
               </p>
-              <p className="km-mono-eyebrow text-[#F2EDE3]/45 mt-2">{stat.label}</p>
+              <p className="km-mono-eyebrow text-[#F2EDE3]/55 mt-2">{stat.label}</p>
             </div>
           ))}
         </div>

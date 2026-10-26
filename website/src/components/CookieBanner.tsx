@@ -269,7 +269,7 @@ export default function CookieBanner() {
                 <span className="w-1.5 h-1.5 bg-[#D8FF3D] rounded-full km-blink" />
                 {t.heading}
               </span>
-              <span className="km-mono-eyebrow text-[#F2EDE3]/30 hidden sm:inline">
+              <span className="km-mono-eyebrow text-[#F2EDE3]/55 hidden sm:inline">
                 {t.privacyBadge}
               </span>
             </div>
@@ -277,7 +277,7 @@ export default function CookieBanner() {
               {t.bodyPrefix}<strong className="text-[#F2EDE3]">{t.bodyEssential}</strong>{t.bodyMiddle}
               <strong className="text-[#F2EDE3]">{t.bodyAnalytics}</strong>{t.bodySuffix}
             </p>
-            <p className="mt-2 text-[12px] text-[#F2EDE3]/45">
+            <p className="mt-2 text-[12px] text-[#F2EDE3]/55">
               {t.moreInfo}
               <Link
                 href="/polityka-prywatnosci#sek-9"
