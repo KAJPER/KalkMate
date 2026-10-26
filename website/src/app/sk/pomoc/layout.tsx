@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Pomoc a návod na použitie — KalkMate",
+    title: "Návod na použitie KalkMate — pomoc, WiFi, režim AI",
     description:
-      "Návod na použitie kalkulačky KalkMate: prvé spustenie, nastavenie WiFi, režim AI, riešenie problémov a história firmvéru.",
+      "Návod na použitie AI kalkulačky KalkMate: prvé spustenie, WiFi, režim AI, batéria a nabíjanie, aktualizácie OTA, riešenie problémov a časté otázky.",
     robots: { index: true, follow: true },
     alternates: {
       canonical: `${siteUrl}/sk/pomoc`,
@@ -15,6 +15,21 @@ export async function generateMetadata(): Promise<Metadata> {
         ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
+    },
+    openGraph: {
+      title: "Návod na použitie KalkMate — pomoc, WiFi, režim AI",
+      description:
+        "Návod na použitie AI kalkulačky KalkMate: prvé spustenie, WiFi, režim AI, batéria a nabíjanie, aktualizácie OTA, riešenie problémov a časté otázky.",
+      type: "website",
+      locale: ogLocale.sk,
+      url: `${siteUrl}/sk/pomoc`,
+      siteName: "KalkMate",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Návod na použitie KalkMate — pomoc, WiFi, režim AI",
+      description:
+        "Návod na použitie AI kalkulačky KalkMate: prvé spustenie, WiFi, režim AI, batéria a nabíjanie, aktualizácie OTA, riešenie problémov a časté otázky.",
     },
   };
 }

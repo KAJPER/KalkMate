@@ -6,7 +6,7 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd } from "@/lib/seo";
-import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
+import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
@@ -22,18 +22,21 @@ const lang = "lt" as const;
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "KalkMate — DI skaičiuotuvas su kamera | Nufotografuok užduotį, gauk sprendimą",
+    title: "DI skaičiuotuvas su kamera ruošiantis VBE | KalkMate",
     description:
-      "KalkMate — skaičiuotuvas su kamera ir dirbtiniu intelektu kontroliniams ir brandos egzaminams. Nufotografuok užduotį — DI parodys visą sprendimą žingsnis po žingsnio OLED ekrane. Matematika, fizika, chemija, biologija, meniu lietuvių kalba. 169 EUR su 2 mln. DI žetonų — be prenumeratos.",
+      "Nufotografuok uždavinį – KalkMate parodys sprendimą žingsnis po žingsnio. Matematika, fizika, chemija, biologija. 169 EUR su 2 mln. DI žetonų, be prenumeratos.",
     keywords: [
       "DI skaičiuotuvas",
       "AI skaičiuotuvas",
       "skaičiuotuvas su kamera",
       "skaičiuotuvas su dirbtiniu intelektu",
+      "uždavinių sprendimas iš nuotraukos",
+      "matematikos uždavinių sprendimas",
+      "uždaviniai su sprendimais",
+      "pasiruošimas VBE",
+      "matematikos brandos egzaminas",
+      "kontrolinis darbas matematika",
       "išmanusis skaičiuotuvas",
-      "skaičiuotuvas egzaminui",
-      "skaičiuotuvas brandos egzaminui",
-      "uždavinių sprendimas su DI",
       "KalkMate",
     ],
     authors: [{ name: "KalkMate" }],
@@ -46,19 +49,20 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: languageAlternates(siteUrl),
     },
     openGraph: {
-      title: "KalkMate — DI skaičiuotuvas su kamera",
+      title: "DI skaičiuotuvas su kamera — KalkMate",
       description:
-        "Nufotografuok užduotį — KalkMate ją išspręs su DI tiesiai OLED ekrane. Matematika, fizika, chemija, biologija. 169 EUR su 2 mln. DI žetonų — be prenumeratos.",
+        "Nufotografuok matematikos, fizikos, chemijos ar biologijos uždavinį – KalkMate parodys sprendimą žingsnis po žingsnio OLED ekrane. Meniu 11 kalbų. 169 EUR su 2 mln. DI žetonų, be prenumeratos.",
       type: "website",
       locale: "lt_LT",
+      alternateLocale: locales.filter((l) => l !== lang).map((l) => ogLocale[l]),
       url: `${siteUrl}/lt`,
       siteName: "KalkMate",
     },
     twitter: {
       card: "summary_large_image",
-      title: "KalkMate — DI skaičiuotuvas su kamera",
+      title: "DI skaičiuotuvas su kamera — KalkMate",
       description:
-        "Nuotrauka → DI → sprendimas. Išmanusis skaičiuotuvas, sprendžiantis matematikos, fizikos, chemijos ir biologijos užduotis.",
+        "Nuotrauka → DI → sprendimas žingsnis po žingsnio. Padeda ruoštis kontroliniams ir brandos egzaminams. 169 EUR su 2 mln. DI žetonų, be prenumeratos.",
     },
     robots: {
       index: true,

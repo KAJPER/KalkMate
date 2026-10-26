@@ -6,7 +6,7 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd } from "@/lib/seo";
-import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
+import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
@@ -54,6 +54,7 @@ export async function generateMetadata(): Promise<Metadata> {
         "KI Taschenrechner mit Kamera: Fotografiere deine Aufgabe — KalkMate löst sie mit KI direkt auf dem OLED-Display. Mathe, Physik, Chemie, Biologie. 169 EUR inkl. 2 Mio. KI-Tokens — ohne Abo.",
       type: "website",
       locale: "de_DE",
+      alternateLocale: locales.filter((l) => l !== lang).map((l) => ogLocale[l]),
       url: `${siteUrl}/de`,
       siteName: "KalkMate",
     },

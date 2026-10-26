@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 
 // /pomoc to publiczna strona pomocy/instrukcji — chcemy ją indeksować, z własnym
 // tytułem i canonical (strona główna ma osobny canonical, nie dziedziczymy go tu).
@@ -11,9 +11,9 @@ import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Pomoc i instrukcja obsługi — KalkMate",
+    title: "Instrukcja obsługi kalkulatora KalkMate — pomoc",
     description:
-      "Instrukcja obsługi kalkulatora KalkMate: pierwsze uruchomienie, konfiguracja WiFi, tryb AI, rozwiązywanie problemów i historia firmware.",
+      "Instrukcja obsługi KalkMate krok po kroku: pierwsze uruchomienie, WiFi, tryb AI, bateria i ładowanie, aktualizacje OTA, rozwiązywanie problemów i changelog.",
     robots: { index: true, follow: true },
     alternates: {
       canonical: `${siteUrl}/pomoc`,
@@ -21,6 +21,21 @@ export async function generateMetadata(): Promise<Metadata> {
         ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
+    },
+    openGraph: {
+      title: "Instrukcja obsługi kalkulatora KalkMate — pomoc",
+      description:
+        "Instrukcja obsługi KalkMate krok po kroku: pierwsze uruchomienie, WiFi, tryb AI, bateria i ładowanie, aktualizacje OTA, rozwiązywanie problemów i changelog.",
+      type: "website",
+      locale: ogLocale.pl,
+      url: `${siteUrl}/pomoc`,
+      siteName: "KalkMate",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Instrukcja obsługi kalkulatora KalkMate — pomoc",
+      description:
+        "Instrukcja obsługi KalkMate krok po kroku: pierwsze uruchomienie, WiFi, tryb AI, bateria i ładowanie, aktualizacje OTA, rozwiązywanie problemów i changelog.",
     },
   };
 }

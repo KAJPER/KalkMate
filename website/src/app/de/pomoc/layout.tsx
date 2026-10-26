@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Hilfe und Bedienungsanleitung — KalkMate",
+    title: "KalkMate Bedienungsanleitung & Hilfe — Einrichtung, WLAN, KI",
     description:
-      "Bedienungsanleitung für den KalkMate-Taschenrechner: erste Inbetriebnahme, WLAN-Einrichtung, KI-Modus, Fehlerbehebung und Firmware-Verlauf.",
+      "Bedienungsanleitung für den KI-Taschenrechner KalkMate: Ersteinrichtung, WLAN, KI-Modus, Akku und Laden, OTA-Updates, Fehlerbehebung und FAQ.",
     robots: { index: true, follow: true },
     alternates: {
       canonical: `${siteUrl}/de/pomoc`,
@@ -15,6 +15,21 @@ export async function generateMetadata(): Promise<Metadata> {
         ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
+    },
+    openGraph: {
+      title: "KalkMate Bedienungsanleitung & Hilfe — Einrichtung, WLAN, KI",
+      description:
+        "Bedienungsanleitung für den KI-Taschenrechner KalkMate: Ersteinrichtung, WLAN, KI-Modus, Akku und Laden, OTA-Updates, Fehlerbehebung und FAQ.",
+      type: "website",
+      locale: ogLocale.de,
+      url: `${siteUrl}/de/pomoc`,
+      siteName: "KalkMate",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "KalkMate Bedienungsanleitung & Hilfe — Einrichtung, WLAN, KI",
+      description:
+        "Bedienungsanleitung für den KI-Taschenrechner KalkMate: Ersteinrichtung, WLAN, KI-Modus, Akku und Laden, OTA-Updates, Fehlerbehebung und FAQ.",
     },
   };
 }

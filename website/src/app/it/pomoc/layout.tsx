@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Assistenza e manuale d’uso — KalkMate",
+    title: "Manuale d’uso KalkMate — assistenza, WiFi e modalità IA",
     description:
-      "Manuale della calcolatrice KalkMate: primo avvio, configurazione WiFi, modalità IA, risoluzione dei problemi e cronologia del firmware.",
+      "Manuale d’uso della calcolatrice IA KalkMate: prima accensione, WiFi, modalità IA, batteria e ricarica, aggiornamenti OTA, risoluzione dei problemi e FAQ.",
     robots: { index: true, follow: true },
     alternates: {
       canonical: `${siteUrl}/it/pomoc`,
@@ -15,6 +15,21 @@ export async function generateMetadata(): Promise<Metadata> {
         ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
+    },
+    openGraph: {
+      title: "Manuale d’uso KalkMate — assistenza, WiFi e modalità IA",
+      description:
+        "Manuale d’uso della calcolatrice IA KalkMate: prima accensione, WiFi, modalità IA, batteria e ricarica, aggiornamenti OTA, risoluzione dei problemi e FAQ.",
+      type: "website",
+      locale: ogLocale.it,
+      url: `${siteUrl}/it/pomoc`,
+      siteName: "KalkMate",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Manuale d’uso KalkMate — assistenza, WiFi e modalità IA",
+      description:
+        "Manuale d’uso della calcolatrice IA KalkMate: prima accensione, WiFi, modalità IA, batteria e ricarica, aggiornamenti OTA, risoluzione dei problemi e FAQ.",
     },
   };
 }

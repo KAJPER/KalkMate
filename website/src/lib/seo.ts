@@ -52,7 +52,9 @@ function shippingDetails(currency: "PLN" | "EUR", rate: string, countries: strin
 
 /** Product JSON-LD (schema.org) dla strony głównej w danym języku. */
 export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
-  const isPl = locale === "pl";
+  // /be: Bialorus nie jest krajem wysylki — strona domyslnie pokazuje
+  // Polske i cene w PLN, wiec dane strukturalne musza sie z tym zgadzac.
+  const isPl = locale === "pl" || locale === "be";
   return {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -113,11 +115,33 @@ export function faqJsonLd(locale: Locale) {
   };
 }
 
+/**
+ * WebPage JSON-LD — jawny jezyk strony (inLanguage). <html lang> jest
+ * renderowane jako "pl" na wszystkich wersjach (patrz HtmlLang), wiec to
+ * jest serwerowy sygnal jezyka dla wyszukiwarek.
+ */
+export function webPageJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
+  const url = localeHomeUrl(locale, siteUrl);
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": `${url}#webpage`,
+    url,
+    name: productName[locale],
+    description: productDescription[locale],
+    inLanguage: locale,
+    isPartOf: { "@type": "WebSite", name: "KalkMate", url: siteUrl },
+    primaryImageOfPage: `${siteUrl}/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp`,
+  };
+}
+
 /** Tablica skryptów JSON-LD jako stringi gotowe do wstrzyknięcia. */
 export function homeJsonLd(locale: Locale, siteUrl: string = SITE_URL): string[] {
-  return [productJsonLd(locale, siteUrl), faqJsonLd(locale)].map((o) =>
-    JSON.stringify(o),
-  );
+  return [
+    webPageJsonLd(locale, siteUrl),
+    productJsonLd(locale, siteUrl),
+    { ...faqJsonLd(locale), inLanguage: locale },
+  ].map((o) => JSON.stringify(o));
 }
 
 /**

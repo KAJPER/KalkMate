@@ -6,7 +6,7 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd } from "@/lib/seo";
-import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
+import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
@@ -54,6 +54,7 @@ export async function generateMetadata(): Promise<Metadata> {
         "Vyfoť úlohu — KalkMate ji vyřeší pomocí AI přímo na OLED displeji. Matematika, fyzika, chemie, biologie. 169 EUR včetně 2 mil. AI tokenů — bez předplatného.",
       type: "website",
       locale: "cs_CZ",
+      alternateLocale: locales.filter((l) => l !== lang).map((l) => ogLocale[l]),
       url: `${siteUrl}/cs`,
       siteName: "KalkMate",
     },

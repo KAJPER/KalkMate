@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Aide et mode d’emploi — KalkMate",
+    title: "Mode d’emploi KalkMate — aide, WiFi et mode IA",
     description:
-      "Mode d’emploi de la calculatrice KalkMate : première mise en route, configuration WiFi, mode IA, dépannage et historique du firmware.",
+      "Mode d’emploi de la calculatrice IA KalkMate : première mise en route, WiFi, mode IA, batterie et recharge, mises à jour OTA, dépannage et FAQ.",
     robots: { index: true, follow: true },
     alternates: {
       canonical: `${siteUrl}/fr/pomoc`,
@@ -15,6 +15,21 @@ export async function generateMetadata(): Promise<Metadata> {
         ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
+    },
+    openGraph: {
+      title: "Mode d’emploi KalkMate — aide, WiFi et mode IA",
+      description:
+        "Mode d’emploi de la calculatrice IA KalkMate : première mise en route, WiFi, mode IA, batterie et recharge, mises à jour OTA, dépannage et FAQ.",
+      type: "website",
+      locale: ogLocale.fr,
+      url: `${siteUrl}/fr/pomoc`,
+      siteName: "KalkMate",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Mode d’emploi KalkMate — aide, WiFi et mode IA",
+      description:
+        "Mode d’emploi de la calculatrice IA KalkMate : première mise en route, WiFi, mode IA, batterie et recharge, mises à jour OTA, dépannage et FAQ.",
     },
   };
 }

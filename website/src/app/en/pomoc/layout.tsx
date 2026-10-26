@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Help & User Guide — KalkMate",
+    title: "KalkMate User Manual & Help — Setup, WiFi, AI Mode",
     description:
-      "KalkMate calculator user guide: first setup, WiFi configuration, AI mode, troubleshooting and firmware history.",
+      "KalkMate AI calculator user manual: first setup, WiFi, AI mode, battery and charging, OTA updates, troubleshooting, FAQ and firmware changelog.",
     robots: { index: true, follow: true },
     alternates: {
       canonical: `${siteUrl}/en/pomoc`,
@@ -15,6 +15,21 @@ export async function generateMetadata(): Promise<Metadata> {
         ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
+    },
+    openGraph: {
+      title: "KalkMate User Manual & Help — Setup, WiFi, AI Mode",
+      description:
+        "KalkMate AI calculator user manual: first setup, WiFi, AI mode, battery and charging, OTA updates, troubleshooting, FAQ and firmware changelog.",
+      type: "website",
+      locale: ogLocale.en,
+      url: `${siteUrl}/en/pomoc`,
+      siteName: "KalkMate",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "KalkMate User Manual & Help — Setup, WiFi, AI Mode",
+      description:
+        "KalkMate AI calculator user manual: first setup, WiFi, AI mode, battery and charging, OTA updates, troubleshooting, FAQ and firmware changelog.",
     },
   };
 }

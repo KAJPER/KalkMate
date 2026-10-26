@@ -6,7 +6,7 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd } from "@/lib/seo";
-import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
+import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
@@ -22,19 +22,22 @@ const lang = "pt" as const;
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "KalkMate — Calculadora com IA e câmara | Tira uma foto, recebe a resolução",
+    title: "Calculadora IA com câmara que resolve exercícios | KalkMate",
     description:
-      "O KalkMate é uma calculadora com IA e câmara integrada para testes e exames nacionais. Tira uma foto ao exercício e vês a resolução completa passo a passo no ecrã OLED. Matemática, física, química e biologia, com menu em português. 169 EUR com 2 milhões de tokens de IA incluídos — sem subscrição.",
+      "Fotografa o exercício e o KalkMate mostra a resolução passo a passo. Matemática, física, química, biologia. 169 EUR com 2 milhões de tokens IA, sem subscrição.",
     keywords: [
-      "calculadora IA",
       "calculadora com IA",
+      "calculadora IA",
       "calculadora com câmara",
-      "calculadora IA com câmara",
+      "calculadora que resolve exercícios",
+      "resolver exercícios com foto",
+      "resolver exercícios de matemática com IA",
+      "exercícios resolvidos passo a passo",
+      "preparação para exames nacionais",
+      "exame nacional de matemática",
+      "estudar para o teste de matemática",
+      "calculadora para o secundário",
       "calculadora inteligente",
-      "calculadora para exames",
-      "calculadora exames nacionais",
-      "resolver exercícios com IA",
-      "calculadora inteligência artificial",
       "KalkMate",
     ],
     authors: [{ name: "KalkMate" }],
@@ -47,19 +50,20 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: languageAlternates(siteUrl),
     },
     openGraph: {
-      title: "KalkMate — Calculadora com IA e câmara",
+      title: "Calculadora com IA e câmara — KalkMate",
       description:
-        "Aponta a câmara a qualquer exercício: a IA do KalkMate mostra a resolução passo a passo no ecrã OLED. Sem telemóvel, sem app, sem subscrição. 2 milhões de tokens de IA incluídos.",
+        "Tira uma foto ao exercício de matemática, física, química ou biologia: o KalkMate mostra a resolução passo a passo no ecrã OLED. Menu em 11 línguas. 169 EUR com 2 milhões de tokens IA, sem subscrição.",
       type: "website",
       locale: "pt_PT",
+      alternateLocale: locales.filter((l) => l !== lang).map((l) => ogLocale[l]),
       url: `${siteUrl}/pt`,
       siteName: "KalkMate",
     },
     twitter: {
       card: "summary_large_image",
-      title: "KalkMate — Calculadora com IA e câmara",
+      title: "Calculadora com IA e câmara — KalkMate",
       description:
-        "Foto → IA → resolução. A calculadora inteligente que resolve exercícios de matemática, física, química e biologia.",
+        "Foto → IA → resolução passo a passo. Ajuda a preparar testes e exames nacionais. 169 EUR com 2 milhões de tokens IA, sem subscrição.",
     },
     robots: {
       index: true,

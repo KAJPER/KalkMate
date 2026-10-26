@@ -6,7 +6,7 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd } from "@/lib/seo";
-import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
+import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
@@ -22,17 +22,21 @@ const lang = "be" as const;
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "KalkMate — калькулятар з ШІ і камерай | Сфатаграфуй задачу — атрымай рашэнне",
+    title: "Калькулятар з ШІ і камерай — падрыхтоўка да ЦЭ | KalkMate",
     description:
-      "KalkMate — калькулятар з камерай і штучным інтэлектам для кантрольных і экзаменаў. Сфатаграфуй задачу — ШІ пакажа поўнае рашэнне крок за крокам на OLED-экране. Матэматыка, фізіка, хімія, біялогія, меню па-беларуску. 699 zł (169 EUR) з 2 млн токенаў ШІ — без падпіскі.",
+      "Сфатаграфуй задачу — KalkMate пакажа рашэнне крок за крокам. Матэматыка, фізіка, хімія, біялогія. 699 zł з 2 млн токенаў ШІ, без падпіскі.",
     keywords: [
-      "калькулятар ШІ",
+      "калькулятар з ШІ",
       "калькулятар са штучным інтэлектам",
       "калькулятар з камерай",
+      "рашэнне задач па фота",
+      "рашэнне задач па матэматыцы",
+      "падрыхтоўка да ЦЭ",
+      "падрыхтоўка да ЦТ па матэматыцы",
+      "задачы да экзамену з рашэннямі",
       "разумны калькулятар",
-      "калькулятар для экзамену",
-      "рашэнне задач ШІ",
-      "AI калькулятар",
+      "калькулятор с ИИ",
+      "калькулятор с камерой",
       "KalkMate",
     ],
     authors: [{ name: "KalkMate" }],
@@ -45,19 +49,20 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: languageAlternates(siteUrl),
     },
     openGraph: {
-      title: "KalkMate — калькулятар з ШІ і камерай",
+      title: "Калькулятар з ШІ і камерай — KalkMate",
       description:
-        "Сфатаграфуй задачу — KalkMate рашыць яе з дапамогай ШІ проста на OLED-экране. Матэматыка, фізіка, хімія, біялогія. 699 zł з 2 млн токенаў ШІ — без падпіскі.",
+        "Сфатаграфуй задачу па матэматыцы, фізіцы, хіміі ці біялогіі — KalkMate пакажа рашэнне крок за крокам на OLED-экране. Меню на 11 мовах. 699 zł з 2 млн токенаў ШІ, без падпіскі.",
       type: "website",
       locale: "be_BY",
+      alternateLocale: locales.filter((l) => l !== lang).map((l) => ogLocale[l]),
       url: `${siteUrl}/be`,
       siteName: "KalkMate",
     },
     twitter: {
       card: "summary_large_image",
-      title: "KalkMate — калькулятар з ШІ і камерай",
+      title: "Калькулятар з ШІ і камерай — KalkMate",
       description:
-        "Фота → ШІ → рашэнне. Разумны калькулятар, які рашае задачы па матэматыцы, фізіцы, хіміі і біялогіі.",
+        "Фота → ШІ → рашэнне крок за крокам. Дапамагае падрыхтавацца да кантрольных, ЦЭ і ЦТ. 699 zł з 2 млн токенаў ШІ, без падпіскі.",
     },
     robots: {
       index: true,

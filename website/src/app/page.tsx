@@ -5,7 +5,7 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import { homeJsonLd } from "@/lib/seo";
 import type { Metadata } from "next";
-import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
+import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
@@ -30,6 +30,19 @@ export async function generateMetadata(): Promise<Metadata> {
     alternates: {
       canonical: `${siteUrl}/`,
       languages: languageAlternates(siteUrl),
+    },
+    // openGraph w Next.js NIE jest mergowany z layoutem (podany tu obiekt zastepuje
+    // caly openGraph z src/app/layout.tsx), wiec powtarzamy tresc z layoutu + url
+    // per-host i alternateLocale. Obrazek OG idzie z pliku opengraph-image (nie ustawiac images).
+    openGraph: {
+      title: "KalkMate — Kalkulator AI",
+      description:
+        "Kalkulator z wbudowaną sztuczną inteligencją. Zrób zdjęcie zadania — AI rozwiąże je za Ciebie.",
+      type: "website",
+      locale: "pl_PL",
+      alternateLocale: locales.filter((l) => l !== lang).map((l) => ogLocale[l]),
+      url: `${siteUrl}/`,
+      siteName: "KalkMate",
     },
   };
 }

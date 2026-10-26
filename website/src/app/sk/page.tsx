@@ -6,7 +6,7 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd } from "@/lib/seo";
-import { languageAlternates, siteUrlFromHost } from "@/lib/i18n";
+import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
@@ -22,20 +22,21 @@ const lang = "sk" as const;
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "KalkMate — AI kalkulačka s kamerou | Odfoť úlohu, získaj riešenie",
+    title: "AI kalkulačka s kamerou na maturitu a písomky | KalkMate",
     description:
-      "KalkMate je AI kalkulačka s kamerou na skúšky a maturitu. Odfoť úlohu — AI ukáže kompletné riešenie krok za krokom na OLED displeji. Matematika, fyzika, chémia, biológia, menu v slovenčine. 169 EUR vrátane 2 mil. AI tokenov — bez predplatného.",
+      "Odfoť príklad a KalkMate ti ukáže riešenie krok za krokom. Matematika, fyzika, chémia, biológia. 169 EUR vrátane 2 mil. AI tokenov, bez predplatného.",
     keywords: [
       "AI kalkulačka",
-      "ai kalkulačka",
-      "kalkulačka s AI",
       "kalkulačka s kamerou",
       "AI kalkulačka s kamerou",
-      "inteligentná kalkulačka",
+      "kalkulačka s umelou inteligenciou",
       "kalkulačka na maturitu",
-      "kalkulačka na skúšky",
-      "AI riešenie príkladov",
-      "kalkulačka umelá inteligencia",
+      "príprava na maturitu z matematiky",
+      "príklady na písomku z matematiky",
+      "riešenie príkladov z fotky",
+      "riešenie príkladov krok za krokom",
+      "AI riešenie úloh z fyziky a chémie",
+      "inteligentná kalkulačka",
       "KalkMate",
     ],
     authors: [{ name: "KalkMate" }],
@@ -48,19 +49,20 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: languageAlternates(siteUrl),
     },
     openGraph: {
-      title: "KalkMate — AI kalkulačka s kamerou",
+      title: "AI kalkulačka s kamerou — KalkMate",
       description:
-        "Odfoť úlohu — KalkMate ju vyrieši pomocou AI priamo na OLED displeji. Matematika, fyzika, chémia, biológia. 169 EUR vrátane 2 mil. AI tokenov — bez predplatného.",
+        "Odfoť úlohu z matematiky, fyziky, chémie či biológie — KalkMate ukáže riešenie krok za krokom na OLED displeji. Menu v 11 jazykoch. 169 EUR vrátane 2 mil. AI tokenov, bez predplatného.",
       type: "website",
       locale: "sk_SK",
+      alternateLocale: locales.filter((l) => l !== lang).map((l) => ogLocale[l]),
       url: `${siteUrl}/sk`,
       siteName: "KalkMate",
     },
     twitter: {
       card: "summary_large_image",
-      title: "KalkMate — AI kalkulačka s kamerou",
+      title: "AI kalkulačka s kamerou — KalkMate",
       description:
-        "Fotka → AI → riešenie. Inteligentná kalkulačka, ktorá vyrieši úlohy z matematiky, fyziky, chémie a biológie.",
+        "Fotka → AI → riešenie krok za krokom. Pomôže s prípravou na písomky aj maturitu. 169 EUR vrátane 2 mil. AI tokenov, bez predplatného.",
     },
     robots: {
       index: true,

@@ -71,6 +71,15 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Root layout renderuje <html lang="pl"> (HtmlLang poprawia to dopiero
+      // w JS), wiec jezyk wersji /xx podajemy tez naglowkiem — Bing/Yandex
+      // biora go pod uwage przy przypisaniu strony do jezyka.
+      ...["en", "de", "cs", "sk", "lt", "be", "es", "pt", "fr", "it"].flatMap((l) => [
+        { source: `/${l}`, headers: [{ key: "Content-Language", value: l }] },
+        { source: `/${l}/:path*`, headers: [{ key: "Content-Language", value: l }] },
+      ]),
+      { source: "/", headers: [{ key: "Content-Language", value: "pl" }] },
+      { source: "/pomoc", headers: [{ key: "Content-Language", value: "pl" }] },
       {
         source: "/frames/:path*",
         headers: [

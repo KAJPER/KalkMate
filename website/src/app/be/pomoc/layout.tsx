@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Дапамога і інструкцыя — KalkMate",
+    title: "Інструкцыя KalkMate — дапамога, WiFi, рэжым ШІ",
     description:
-      "Інструкцыя да калькулятара KalkMate: першы запуск, наладжванне WiFi, рэжым ШІ, вырашэнне праблем і гісторыя прашыўкі.",
+      "Інструкцыя да калькулятара KalkMate з ШІ: першы запуск, WiFi, рэжым ШІ, батарэя і зарадка, абнаўленні OTA, вырашэнне праблем і частыя пытанні.",
     robots: { index: true, follow: true },
     alternates: {
       canonical: `${siteUrl}/be/pomoc`,
@@ -15,6 +15,21 @@ export async function generateMetadata(): Promise<Metadata> {
         ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
+    },
+    openGraph: {
+      title: "Інструкцыя KalkMate — дапамога, WiFi, рэжым ШІ",
+      description:
+        "Інструкцыя да калькулятара KalkMate з ШІ: першы запуск, WiFi, рэжым ШІ, батарэя і зарадка, абнаўленні OTA, вырашэнне праблем і частыя пытанні.",
+      type: "website",
+      locale: ogLocale.be,
+      url: `${siteUrl}/be/pomoc`,
+      siteName: "KalkMate",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Інструкцыя KalkMate — дапамога, WiFi, рэжым ШІ",
+      description:
+        "Інструкцыя да калькулятара KalkMate з ШІ: першы запуск, WiFi, рэжым ШІ, батарэя і зарадка, абнаўленні OTA, вырашэнне праблем і частыя пытанні.",
     },
   };
 }
