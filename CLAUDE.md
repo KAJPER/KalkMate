@@ -195,7 +195,7 @@ USB ani dosięgnąć OTA (ono też jest za tym samym kodem).
 wpisaniem kodu) przytrzymaj **C/CE przez 5s** → menu potwierdzenia → **OK**
 = pełny reset fabryczny (WiFi, kod AI, panic key, historia, notatki,
 sprawdziany, powiązanie z kontem), **C/CE** = anuluj. Ten sam zakres co
-„Ustawienia → Reset fabryczny", tylko dostępny zanim jeszcze da się wejść
+„Ustawienia → System → Reset fabryczny", tylko dostępny zanim jeszcze da się wejść
 do menu — nie trzeba łapać momentu włączania (to była wcześniejsza,
 niewygodna wersja z fw 1.7.0-1.7.1). Patrz `factory_reset.h`
 (`factoryResetRun()`, wspolne dla kalkulatora i Ustawien) + hold-detection

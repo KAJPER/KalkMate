@@ -26,6 +26,7 @@
 #include "kalkmate_certs.h"
 #include "wifi_persist.h"
 #include "i18n_extra.h"   // kalkTrExtra — _notesTr dla jezykow 4..10
+#include "ui_kit.h"       // wspolny wyglad ekranow (naglowek, wiersze, komunikaty)
 
 #ifndef KALK_SERVER_URL
 #error "notes.h wymaga KALK_SERVER_URL"
@@ -573,65 +574,135 @@ static inline const char* _notesTr(const char* pl, const char* en, const char* d
     }
 }
 
+// =====================================================================
+//  Wspolne elementy UI list wpisow (notatki + sprawdziany, styl ui_kit.h)
+// =====================================================================
+
+static inline const char* _kalkUntitled() {
+    return _notesTr("(bez tytulu)", "(no title)", "(ohne Titel)", "(bez nazvu)");
+}
+
+// Tekst przyciety do maxW px (aktualna czcionka), z ".." na koncu.
+static inline String _kalkFitText(U8G2 &d, const String& s, int maxW) {
+    if (d.getStrWidth(s.c_str()) <= maxW) return s;
+    String t = s;
+    while (t.length() > 0) {
+        t.remove(t.length() - 1);
+        while (t.length() > 0 && t[t.length() - 1] == ' ') t.remove(t.length() - 1);
+        String c = t + "..";
+        if (d.getStrWidth(c.c_str()) <= maxW) return c;
+    }
+    return String("..");
+}
+
+// Lista tytulow: naglowek z licznikiem, 3 wiersze z ">", pasek przewijania,
+// stopka z podpowiedzia (sync = DOWN na ostatniej pozycji — nieoczywiste).
+// titleAt(idx) -> String. scroll trzymany przez wywolujacego.
+template <typename TitleAt>
+static inline void _kalkDrawEntryList(U8G2 &d, const char* title, int cursor, int count,
+                                      int& scroll, TitleAt titleAt, const char* foot) {
+    d.clearBuffer();
+    uiHeaderCount(d, title, false, cursor, count);
+    uiFitScroll(cursor, count, scroll, UI_ROWS_FOOTER);
+    d.setFont(UI_FONT);
+    for (int r = 0; r < UI_ROWS_FOOTER; r++) {
+        int idx = scroll + r;
+        if (idx >= count) break;
+        String t = titleAt(idx);
+        if (t.length() == 0) t = _kalkUntitled();
+        t = _kalkFitText(d, t, UI_CHEVRON_X - 4 - 8);
+        uiRow(d, r, idx == cursor, nullptr, t.c_str(), nullptr, true);
+    }
+    uiScrollbar(d, scroll, count, UI_ROWS_FOOTER);
+    uiFooter(d, foot);
+    d.sendBuffer();
+}
+
+// Naglowek czytnika: "< Tytul" + pozycja "linia/linii" z prawej.
+static inline void _kalkViewerHeader(U8G2 &d, const String& title, int pos, int total) {
+    char cnt[16] = "";
+    if (total > 0) snprintf(cnt, sizeof(cnt), "%d/%d", pos + 1, total);
+    d.setFont(UI_FONT_SMALL);
+    const int cw = cnt[0] ? d.getStrWidth(cnt) : 0;
+    d.setFont(UI_FONT);
+    String t = _kalkFitText(d, title.length() ? title : String(_kalkUntitled()),
+                            250 - cw - 10 - 12);
+    uiHeader(d, t.c_str(), true, cnt);
+}
+
+// Cienki pasek przewijania czytnika (x 254..255) — tekst zawijany na 42
+// znaki (x 2..253) zostaje nietkniety.
+static inline void _kalkViewerScrollbar(U8G2 &d, int scroll, int total, int rows) {
+    if (total <= rows) return;
+    const int top = 14, h = 50;
+    int barH = h * rows / total;
+    if (barH < 4) barH = 4;
+    const int maxScroll = total - rows;
+    if (scroll > maxScroll) scroll = maxScroll;
+    if (scroll < 0) scroll = 0;
+    const int barY = top + (h - barH) * scroll / maxScroll;
+    d.setDrawColor(1);
+    for (int y = top; y < top + h; y += 2) d.drawPixel(255, y);
+    d.drawBox(254, barY, 2, barH);
+}
+
+// Baseline linii tresci czytnika (4 linie po 12 px: 24, 36, 48, 60).
+#define _KALK_VIEW_Y(i)  (UI_ROW_Y0 + (i) * UI_ROW_H)
+
+// Ekran "trwa synchronizacja": naglowek, tekst, kropki, maly podpis.
+static inline void _kalkDrawSyncing(U8G2 &d, const char* title, const char* l1, const char* l2) {
+    d.clearBuffer();
+    uiHeader(d, title, false);
+    d.setFont(UI_FONT);
+    d.setBitmapMode(1);
+    const int w = d.getStrWidth(l1);
+    const int x = (UI_W - (w + 12)) / 2;
+    d.drawXBM(x, 23, 8, 8, UI_ICO_CLOUD);
+    d.setBitmapMode(0);
+    d.drawStr(x + 12, 31, l1);
+    uiSpinner(d, UI_W / 2, 43);
+    if (l2 && l2[0]) {
+        d.setFont(UI_FONT_SMALL);
+        uiCenter(d, 59, l2);
+        d.setFont(UI_FONT);
+    }
+    d.sendBuffer();
+}
+
 inline void showNotesScreen(U8G2 &d) {
     inputWaitRelease();
     notesBuildTitleCache();   // raz na wejscie — lista bez czytania pliku co klatke
 
-    auto drawList = [&](int cursor, int count) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        char hdr[40];
-        snprintf(hdr, sizeof(hdr),
-                 _notesTr("Notatki (%d)", "Notes (%d)", "Notizen (%d)", "Poznamky (%d)"),
-                 count);
-        d.drawStr(2, 10, hdr);
-        d.drawHLine(0, 12, 256);
+    const char* screenTitle = _notesTr("Notatki", "Notes", "Notizen", "Poznamky");
+    int listScroll = 0;
 
+    auto drawList = [&](int cursor, int count) {
         if (count == 0) {
-            d.drawStr(2, 30,
+            uiMessage(d, screenTitle, UI_ICO_NOTES,
                 _notesTr("Brak notatek. Dodaj je",
                    "No notes. Add them",
                    "Keine Notizen. Fuege sie",
-                   "Zadne poznamky. Pridejte je"));
-            d.drawStr(2, 42,
+                   "Zadne poznamky. Pridejte je"),
                 _notesTr("w panelu klienta i zsynchron.",
                    "in user panel and sync.",
                    "im Kundenpanel hinzu und sync.",
-                   "v zakaznickem panelu a synch."));
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62,
+                   "v zakaznickem panelu a synch."),
+                nullptr,
                 _notesTr("OK = sync   < = wyjscie",
                    "OK = sync   < = exit",
                    "OK = sync   < = beenden",
                    "OK = sync   < = konec"));
-        } else {
-            // Pokaz 4 widoczne tytuly (z cache — bez I/O)
-            int scroll = (cursor < 4) ? 0 : cursor - 3;
-            d.setFont(u8g2_font_6x10_tf);
-            for (int i = 0; i < 4 && (scroll + i) < count; i++) {
-                int idx = scroll + i;
-                int y = 25 + i * 10;
-                String t = (idx < (int)_notesTitleCache.size()) ? _notesTitleCache[idx] : String();
-                if (t.length() == 0) t = "(bez tytulu)";
-                if (t.length() > 38) t = t.substring(0, 36) + "..";
-                if (idx == cursor) {
-                    d.setDrawColor(1);
-                    d.drawBox(0, y - 9, 256, 11);
-                    d.setDrawColor(0);
-                    d.drawStr(4, y, t.c_str());
-                    d.setDrawColor(1);
-                } else {
-                    d.drawStr(4, y, t.c_str());
-                }
-            }
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62,
-                _notesTr("OK = otworz   v = sync   < = wyjscie",
-                   "OK = open   v = sync   < = exit",
-                   "OK = oeffnen  v = sync  < = beenden",
-                   "OK = otevrit   v = sync   < = konec"));
+            return;
         }
-        d.sendBuffer();
+        // Tytuly z cache — bez I/O
+        _kalkDrawEntryList(d, screenTitle, cursor, count, listScroll,
+            [&](int idx) {
+                return (idx < (int)_notesTitleCache.size()) ? _notesTitleCache[idx] : String();
+            },
+            _notesTr("OK = otworz   v = sync   < = wyjscie",
+               "OK = open   v = sync   < = exit",
+               "OK = oeffnen  v = sync  < = beenden",
+               "OK = otevrit   v = sync   < = konec"));
     };
 
     auto drawDetail = [&](const NoteEntry& n) {
@@ -641,9 +712,6 @@ inline void showNotesScreen(U8G2 &d) {
         // juz ASCII (notesGet), wiec ciecie nie trafi w srodek znaku UTF-8.
         std::vector<String> lines;
         _kalkWrapLines(n.content, 42, lines);
-        String t = n.title.length() == 0 ? String("(bez tytulu)") : n.title;
-        if (t.length() > 40) t = t.substring(0, 38) + "..";
-
         int scrollLine = 0;
         bool needRedraw = true;   // rysuj tylko po zmianie (bez sendBuffer co 20 ms)
         while (true) {
@@ -653,25 +721,15 @@ inline void showNotesScreen(U8G2 &d) {
             if (needRedraw) {
                 needRedraw = false;
                 d.clearBuffer();
-                d.setFont(u8g2_font_6x10_tf);
-                d.drawStr(2, 10, t.c_str());
-                d.drawHLine(0, 12, 256);
+                _kalkViewerHeader(d, n.title, scrollLine, (int)lines.size());
 
+                d.setFont(UI_FONT);
                 for (int i = 0; i < 4; i++) {
                     int idx = scrollLine + i;
                     if (idx >= (int)lines.size()) break;
-                    d.drawStr(2, 24 + i * 11, lines[idx].c_str());
+                    d.drawStr(2, _KALK_VIEW_Y(i), lines[idx].c_str());
                 }
-
-                d.setFont(u8g2_font_5x7_tf);
-                char info[24];
-                snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
-                d.drawStr(220, 62, info);
-                d.drawStr(2, 62,
-                    _notesTr("^/v scroll   < = wstecz",
-                       "^/v scroll   < = back",
-                       "^/v scroll   < = zurueck",
-                       "^/v posun   < = zpet"));
+                _kalkViewerScrollbar(d, scrollLine, (int)lines.size(), 4);
                 d.sendBuffer();
             }
 
@@ -693,13 +751,12 @@ inline void showNotesScreen(U8G2 &d) {
     };
 
     auto syncFromServer = [&]() {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 24,
-            _notesTr("Synchronizacja...", "Syncing...", "Synchronisiere...", "Synchronizace..."));
-        d.drawStr(2, 38,
-            _notesTr("Lacze z serwerem", "Connecting to server", "Verbinde mit Server", "Pripojuji k serveru"));
-        d.sendBuffer();
+        auto drawSyncing = [&]() {
+            _kalkDrawSyncing(d, screenTitle,
+                _notesTr("Synchronizacja...", "Syncing...", "Synchronisiere...", "Synchronizace..."),
+                _notesTr("Lacze z serwerem", "Connecting to server", "Verbinde mit Server", "Pripojuji k serveru"));
+        };
+        drawSyncing();
 
         // Ensure WiFi connected (uzyj zapisanego SSID/pass)
         if (WiFi.status() != WL_CONNECTED) {
@@ -709,16 +766,16 @@ inline void showNotesScreen(U8G2 &d) {
                 uint32_t t0 = millis();
                 while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
                     delay(100);
+                    drawSyncing();   // animacja kropek
                 }
             }
             memset(pass, 0, sizeof(pass));
         }
         if (WiFi.status() != WL_CONNECTED) {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 30,
-                _notesTr("Brak WiFi", "No WiFi", "Kein WLAN", "Bez WiFi"));
-            d.sendBuffer();
+            uiMessage(d, screenTitle, UI_ICO_WIFI,
+                _notesTr("Brak WiFi", "No WiFi", "Kein WLAN", "Bez WiFi"),
+                _notesTr("Ustawienia -> WiFi i konto", "Settings -> WiFi & account",
+                         "Einstellungen -> WLAN & Konto", "Nastaveni -> WiFi a ucet"));
             delay(2000);
             return -1;
         }
@@ -729,19 +786,16 @@ inline void showNotesScreen(U8G2 &d) {
         wifiLoadLicense(licKey, sizeof(licKey));
         int n = notesSync(licKey, KALK_API_KEY);
         notesBuildTitleCache();   // plik (moze) sie zmienil
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
         if (n < 0) {
-            d.drawStr(2, 30,
+            uiMessage(d, screenTitle, UI_ICO_WARN,
                 _notesTr("Blad synchronizacji", "Sync error", "Sync-Fehler", "Chyba synchronizace"));
         } else {
             char buf[40];
             snprintf(buf, sizeof(buf),
                 _notesTr("Pobrano: %d notatek", "Downloaded: %d notes", "Geladen: %d Notizen", "Stazeno: %d poznamek"),
                 n);
-            d.drawStr(2, 30, buf);
+            uiMessage(d, screenTitle, UI_ICO_CHECK, buf);
         }
-        d.sendBuffer();
         delay(1500);
         return n;
     };

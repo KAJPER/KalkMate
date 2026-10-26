@@ -62,8 +62,18 @@ static const char* _infoT(const char* pl, const char* en, const char* de, const 
 // ---------------------------------------------------------------------------
 #define _INFO_TOTAL_PAGES 5
 
-// Wspolrzedne Y linii tresci
+// Wspolrzedne Y linii tresci (miedzy naglowkiem y=12 a stopka y=55)
 static const int _INFO_CONTENT_Y[4] = {22, 32, 42, 52};
+
+// ---------------------------------------------------------------------------
+// Rama strony: naglowek "< Tytul" + licznik "2/5", stopka "< Wstecz" /
+// "Dalej >" (bez "Dalej" na ostatniej stronie). Bez clear/sendBuffer.
+// ---------------------------------------------------------------------------
+static void _infoDrawChrome(U8G2 &d, int page, const char* title) {
+    uiHeaderCount(d, title, true, page, _INFO_TOTAL_PAGES);
+    uiFooter(d, _infoT("< Wstecz", "< Back", "< Zurueck", "< Zpet"),
+             (page < _INFO_TOTAL_PAGES - 1) ? _infoT("Dalej >", "Next >", "Weiter >", "Dalsi >") : nullptr);
+}
 
 // ---------------------------------------------------------------------------
 // Rysowanie pojedynczej strony ze stala trescia
@@ -75,43 +85,15 @@ static void _infoDrawStaticPage(U8G2 &d, int page,
                                  const char* line2,
                                  const char* line3) {
     d.clearBuffer();
-
-    // Tytul (y=10, font 6x10)
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 10, title);
-
-    // Linia pod tytulem (y=12)
-    d.drawHLine(0, 12, 256);
+    _infoDrawChrome(d, page, title);
 
     // 4 linie tresci (y=22,32,42,52)
+    d.setFont(UI_FONT);
     const char* lines[4] = {line0, line1, line2, line3};
     for (int i = 0; i < 4; i++) {
         if (lines[i] && lines[i][0] != '\0') {
-            d.drawStr(2, _INFO_CONTENT_Y[i], lines[i]);
+            d.drawStr(4, _INFO_CONTENT_Y[i], lines[i]);
         }
-    }
-
-    // Linia nad paskiem nawigacji (y=54)
-    d.drawHLine(0, 54, 256);
-
-    // Pasek nawigacji (y=63, font 5x7)
-    d.setFont(u8g2_font_5x7_tf);
-
-    // Lewa strona: WSTECZ / BACK
-    const char* backLabel = _infoT("< WSTECZ", "< BACK", "< ZURUECK", "< ZPET");
-    d.drawStr(2, 63, backLabel);
-
-    // Srodek: X/5
-    char pageStr[8];
-    snprintf(pageStr, sizeof(pageStr), "%d/%d", page + 1, _INFO_TOTAL_PAGES);
-    int pageStrW = (int)strlen(pageStr) * 5;
-    int pageStrX = (256 - pageStrW) / 2;
-    d.drawStr(pageStrX, 63, pageStr);
-
-    // Prawa strona: DALEJ / NEXT — nie na ostatniej stronie
-    if (page < _INFO_TOTAL_PAGES - 1) {
-        const char* nextLabel = _infoT("DALEJ >", "NEXT >", "WEITER >", "DALSI >");
-        d.drawStr(256 - 37 - 2, 63, nextLabel);
     }
 
     d.sendBuffer();
@@ -122,71 +104,42 @@ static void _infoDrawStaticPage(U8G2 &d, int page,
 // ---------------------------------------------------------------------------
 static void _infoDrawServerPage(U8G2 &d, int page) {
     d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-
-    const char* title = _infoT("=== Status serwera (4/5) ===",
-                                "=== Server status (4/5) ===",
-                                "=== Serverstatus (4/5) ===",
-                                "=== Stav serveru (4/5) ===");
-    d.drawStr(2, 10, title);
-    d.drawHLine(0, 12, 256);
+    _infoDrawChrome(d, page, _infoT("Status serwera", "Server status", "Serverstatus", "Stav serveru"));
 
     if (WiFi.status() == WL_CONNECTED) {
-        // WiFi polaczone
-        d.drawStr(2, _INFO_CONTENT_Y[0], _infoT("WiFi: Polaczono", "WiFi: Connected", "WiFi: Verbunden", "WiFi: Pripojeno"));
+        // WiFi polaczone: siec / IP / zasieg
+        char ssid[34], ip[20], rssi[16];
+        snprintf(ssid, sizeof(ssid), "%s", WiFi.SSID().c_str());
+        snprintf(ip, sizeof(ip), "%s", WiFi.localIP().toString().c_str());
+        int r = (int)WiFi.RSSI();
+        snprintf(rssi, sizeof(rssi), "%d dBm", r);
+        uiInfoRow(d, _INFO_CONTENT_Y[0], _infoT("Siec WiFi", "WiFi network", "WLAN-Netz", "Sit WiFi"), ssid);
+        uiInfoRow(d, _INFO_CONTENT_Y[1], _infoT("Adres IP", "IP address", "IP-Adresse", "IP adresa"), ip);
+        uiInfoRow(d, _INFO_CONTENT_Y[2], _infoT("Sygnal WiFi", "WiFi signal", "WLAN-Signal", "Signal WiFi"), rssi, 234);
+        uiSignalBars(d, 239, _INFO_CONTENT_Y[2] - 1, r);
         // Sam WL_CONNECTED nie dowodzi, ze serwer odpowiada (brak zapytania
         // HTTPS tutaj, zeby nie blokowac UI) — stad etykieta o WiFi, nie serwerze.
-        d.drawStr(2, _INFO_CONTENT_Y[1], _infoT("WiFi: OK (serwer: sprawdz w app)",
-                                                  "WiFi: OK (server: check in app)",
-                                                  "WiFi: OK (Server: siehe App)",
-                                                  "WiFi: OK (server: viz aplikace)"));
-
-        // IP
-        char ipLine[40];
-        snprintf(ipLine, sizeof(ipLine), "IP: %s",
-                 WiFi.localIP().toString().c_str());
-        d.drawStr(2, _INFO_CONTENT_Y[2], ipLine);
-
-        // RSSI
-        char rssiLine[32];
-        snprintf(rssiLine, sizeof(rssiLine), "RSSI: %d dBm", (int)WiFi.RSSI());
-        d.drawStr(2, _INFO_CONTENT_Y[3], rssiLine);
+        d.setFont(UI_FONT_SMALL);
+        d.drawStr(4, _INFO_CONTENT_Y[3], _infoT("WiFi: OK (serwer: sprawdz w app)",
+                                                 "WiFi: OK (server: check in app)",
+                                                 "WiFi: OK (Server: siehe App)",
+                                                 "WiFi: OK (server: viz aplikace)"));
+        d.setFont(UI_FONT);
     } else {
-        // Brak polaczenia
-        d.drawStr(2, _INFO_CONTENT_Y[0], _infoT("WiFi: Brak polaczenia",
-                                                  "WiFi: Not connected",
-                                                  "WiFi: Nicht verbunden",
-                                                  "WiFi: Nepripojeno"));
-        d.drawStr(2, _INFO_CONTENT_Y[1], _infoT("Polacz sie z WiFi w",
-                                                  "Connect to WiFi in",
-                                                  "WiFi verbinden in",
-                                                  "Pripojte se k WiFi v"));
-        d.drawStr(2, _INFO_CONTENT_Y[2], _infoT("Ustawieniach aby korzystac",
-                                                  "Settings to use",
-                                                  "den Einstellungen fuer",
-                                                  "Nastaveni pro pouziti"));
-        d.drawStr(2, _INFO_CONTENT_Y[3], _infoT("z funkcji AI",
-                                                  "AI features",
-                                                  "KI-Funktionen",
-                                                  "funkci AI"));
-    }
-
-    d.drawHLine(0, 54, 256);
-    d.setFont(u8g2_font_5x7_tf);
-
-    const char* backLabel = _infoT("< WSTECZ", "< BACK", "< ZURUECK", "< ZPET");
-    d.drawStr(2, 63, backLabel);
-
-    char pageStr[8];
-    snprintf(pageStr, sizeof(pageStr), "%d/%d", page + 1, _INFO_TOTAL_PAGES);
-    int pageStrW = (int)strlen(pageStr) * 5;
-    int pageStrX = (256 - pageStrW) / 2;
-    d.drawStr(pageStrX, 63, pageStr);
-
-    // Nie ostatnia strona — pokaz DALEJ
-    if (page < _INFO_TOTAL_PAGES - 1) {
-        const char* nextLabel = _infoT("DALEJ >", "NEXT >", "WEITER >", "DALSI >");
-        d.drawStr(256 - 37 - 2, 63, nextLabel);
+        // Brak polaczenia: ikona + komunikat, podpowiedz mniejszym fontem
+        const char* l0 = _infoT("WiFi: Brak polaczenia", "WiFi: Not connected", "WiFi: Nicht verbunden", "WiFi: Nepripojeno");
+        d.setFont(UI_FONT);
+        int w = d.getStrWidth(l0);
+        int x = (UI_W - (w + 12)) / 2;
+        d.setBitmapMode(1);
+        d.drawXBM(x, 17, 8, 8, UI_ICO_WIFI);
+        d.setBitmapMode(0);
+        d.drawStr(x + 12, 25, l0);
+        d.setFont(UI_FONT_SMALL);
+        uiCenter(d, 36, _infoT("Polacz sie z WiFi w", "Connect to WiFi in", "WiFi verbinden in", "Pripojte se k WiFi v"));
+        uiCenter(d, 44, _infoT("Ustawieniach aby korzystac", "Settings to use", "den Einstellungen fuer", "Nastaveni pro pouziti"));
+        uiCenter(d, 52, _infoT("z funkcji AI", "AI features", "KI-Funktionen", "funkci AI"));
+        d.setFont(UI_FONT);
     }
 
     d.sendBuffer();
@@ -200,10 +153,7 @@ static void _infoDrawPage(U8G2 &d, int page) {
 
         case 0: // Jak uzywac (1/5)
             _infoDrawStaticPage(d, page,
-                _infoT("=== Jak uzywac (1/5) ===",
-                        "=== How to use (1/5) ===",
-                        "=== Bedienung (1/5) ===",
-                        "=== Jak pouzivat (1/5) ==="),
+                _infoT("Jak uzywac", "How to use", "Bedienung", "Jak pouzivat"),
                 _infoT("1. Zrob zdjecie zadania",
                         "1. Take a photo of task",
                         "1. Aufgabe fotografieren",
@@ -225,10 +175,7 @@ static void _infoDrawPage(U8G2 &d, int page) {
 
         case 1: // Wskazowki (2/5)
             _infoDrawStaticPage(d, page,
-                _infoT("=== Wskazowki (2/5) ===",
-                        "=== Tips (2/5) ===",
-                        "=== Tipps (2/5) ===",
-                        "=== Tipy (2/5) ==="),
+                _infoT("Wskazowki", "Tips", "Tipps", "Tipy"),
                 _infoT("Dobre oswietlenie zadania",
                         "Good lighting on the task",
                         "Aufgabe gut beleuchten",
@@ -250,10 +197,7 @@ static void _infoDrawPage(U8G2 &d, int page) {
 
         case 2: // Obsługiwane przedmioty (3/5)
             _infoDrawStaticPage(d, page,
-                _infoT("=== Przedmioty (3/5) ===",
-                        "=== Subjects (3/5) ===",
-                        "=== Faecher (3/5) ===",
-                        "=== Predmety (3/5) ==="),
+                _infoT("Przedmioty", "Subjects", "Faecher", "Predmety"),
                 _infoT("Matematyka - wszystkie dzialy",
                         "Math - all topics",
                         "Mathematik - alle Themen",
@@ -279,10 +223,7 @@ static void _infoDrawPage(U8G2 &d, int page) {
 
         case 4: // FAQ (5/5)
             _infoDrawStaticPage(d, page,
-                _infoT("=== FAQ (5/5) ===",
-                        "=== FAQ (5/5) ===",
-                        "=== FAQ (5/5) ===",
-                        "=== FAQ (5/5) ==="),
+                "FAQ",
                 _infoT("Brak odpowiedzi? Sprawdz WiFi",
                         "No response? Check WiFi",
                         "Keine Antwort? WiFi pruefen",

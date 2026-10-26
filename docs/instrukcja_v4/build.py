@@ -251,9 +251,62 @@ def calc_front(x, y, w, hl=None, screen=None, overlay=None, labels=True, wordmar
     return "".join(o), pos
 
 
-def oled(x, y, w, h, rows=None, title=None, big=None, foot=None, fs=None, sel=None, big_align="middle", big_fs=None):
+# Ikony 8x8 z firmware (XBM, bit 0 = lewy piksel): main.cpp _MENU_ICO_*, settings_screen.h _SET_ICO_*.
+ICO = {
+    "camera":  (0x1C, 0xFF, 0x99, 0xA5, 0xA5, 0x99, 0xFF, 0x00),
+    "notes":   (0x7E, 0x42, 0x5A, 0x42, 0x5A, 0x42, 0x7E, 0x00),
+    "test":    (0x00, 0xC0, 0xE0, 0x70, 0x3B, 0x1F, 0x0E, 0x04),
+    "gear":    (0x18, 0x7E, 0x66, 0xC3, 0xC3, 0x66, 0x7E, 0x18),
+    "display": (0xFF, 0x81, 0x81, 0x81, 0xFF, 0x18, 0x3C, 0x00),
+    "globe":   (0x3C, 0x5A, 0x99, 0xFF, 0x99, 0x5A, 0x3C, 0x00),
+    "wifi":    (0x7E, 0x81, 0x3C, 0x42, 0x18, 0x24, 0x00, 0x18),
+    "lock":    (0x3C, 0x42, 0x42, 0xFF, 0xE7, 0xE7, 0xFF, 0x00),
+    "battery": (0x00, 0x7F, 0x41, 0xDD, 0xDD, 0x41, 0x7F, 0x00),
+    "info":    (0x3C, 0x66, 0xFF, 0xE7, 0xE7, 0xE7, 0x7E, 0x3C),
+    "pulse":   (0x00, 0x08, 0x14, 0x14, 0xD3, 0x20, 0x00, 0x00),
+}
+# Menu glowne (fw 2.0.5+): Rozwiaz zadanie, Notatki, Sprawdzian, Ustawienia — ikony jak w main.cpp _MENU_ICONS.
+MENU_ICONS = ("camera", "notes", "test", "gear")
+
+
+def xbm(x, y, size, name, fill="#ffffff"):
+    """Ikona 8x8 z firmware jako jedna sciezka z pikseli (size = bok ikony)."""
+    px = size / 8
+    d = []
+    for r, byte in enumerate(ICO[name]):
+        c = 0
+        while c < 8:
+            if byte >> c & 1:
+                c0 = c
+                while c < 8 and byte >> c & 1:
+                    c += 1
+                d.append(f"M{x + c0 * px:.2f},{y + r * px:.2f}h{(c - c0) * px:.2f}v{px:.2f}h{-(c - c0) * px:.2f}z")
+            else:
+                c += 1
+    return f'<path d="{"".join(d)}" fill="{fill}" stroke="none"/>' if d else ""
+
+
+def oled_status(xr, cy, fs, pct="85%"):
+    """Pasek stanu menu glownego (main.cpp _menuDrawStatus): WiFi + procent + bateria, do prawej krawedzi xr."""
+    bw, bh = fs * 1.45, fs * 0.72
+    bx, by = xr - bw - fs * 0.18, cy - bh * 0.95
+    o = [R(bx, by, bw, bh, fill="none", stroke="#ffffff", sw=0.55),
+         R(bx + bw, by + bh * 0.28, fs * 0.18, bh * 0.44, fill="#ffffff", stroke="none"),
+         R(bx + fs * 0.17, by + fs * 0.17, (bw - fs * 0.34) * 0.85, bh - fs * 0.34, fill="#ffffff", stroke="none")]
+    ts = fs * 0.78
+    tx = bx - fs * 0.3
+    o.append(T(tx, cy - fs * 0.05, pct, size=ts, fill="#ffffff", anchor="end", font=MONO))
+    isz = fs * 0.8
+    o.append(xbm(tx - len(pct) * ts * 0.6 - fs * 0.45 - isz, cy - isz * 0.98, isz, "wifi"))
+    return "".join(o)
+
+
+def oled(x, y, w, h, rows=None, title=None, big=None, foot=None, fs=None, sel=None, big_align="middle", big_fs=None,
+         title_r=None, chev=False, icons=None, status=False):
     """Ekran OLED (czarny) z napisami jak na urzadzeniu.
-    rows: lista tekstow; sel: indeks wiersza zaznaczonego (inwersja)."""
+    rows: lista tekstow; sel: indeks wiersza zaznaczonego (inwersja).
+    title_r: napis z prawej w naglowku (licznik "4/9"); chev: ">" na koncu wierszy.
+    icons: nazwy ikon ICO per wiersz (jak na liscie menu/Ustawien); status: WiFi + bateria w naglowku."""
     o = [R(x, y, w, h, r=2.5, fill=SCR, stroke=INK, sw=1.2)]
     pad = 4
     if big is not None:
@@ -270,14 +323,28 @@ def oled(x, y, w, h, rows=None, title=None, big=None, foot=None, fs=None, sel=No
     cy = y + pad + fs * 0.95
     if title:
         o.append(T(x + pad, cy, title, size=fs * 0.95, fill="#ffffff", font=MONO))
+        if title_r:
+            o.append(T(x + w - pad, cy - fs * 0.05, title_r, size=fs * 0.8, fill="#ffffff", anchor="end", font=MONO))
+        if status:
+            o.append(oled_status(x + w - pad, cy, fs))
         o.append(L(x + 1.5, cy + fs * 0.42, x + w - 1.5, cy + fs * 0.42, sw=0.6, stroke="#ffffff"))
         cy += lh + 1.5
+    isz = fs * 0.78
     for i, rtxt in enumerate(rows or []):
+        col = SCR if sel == i else "#ffffff"
+        tx = x + pad
         if sel == i:
             o.append(R(x + 2, cy - fs * 1.0, w - 4, fs * 1.32, r=0.8, fill="#ffffff", stroke="none"))
-            o.append(T(x + pad, cy, rtxt, size=fs, weight=700, fill=SCR, font=MONO))
+        if icons and i < len(icons) and icons[i]:
+            o.append(xbm(x + pad, cy - isz * 0.97, isz, icons[i], fill=col))
+            tx += isz + fs * 0.55
+        if sel == i:
+            o.append(T(tx, cy, rtxt, size=fs, weight=700, fill=SCR, font=MONO))
         else:
-            o.append(T(x + pad, cy, rtxt, size=fs, fill="#ffffff", font=MONO))
+            o.append(T(tx, cy, rtxt, size=fs, fill="#ffffff", font=MONO))
+        if chev:
+            o.append(T(x + w - pad, cy, ">", size=fs, weight=700 if sel == i else 400,
+                       fill=SCR if sel == i else "#ffffff", anchor="end", font=MONO))
         cy += lh
     if foot:
         o.append(T(x + pad, y + h - pad + 0.5, foot, size=fs * 0.82, fill="#cfcfcf", font=MONO))
@@ -545,7 +612,9 @@ def art_code(t, d):
     o.append(A(122, 34, 132, 34, sw=1.6))
     o.append(oled(134, 14, 102, 42, big="AI"))
     o.append(A(185, 60, 185, 72, sw=1.6))
-    o.append(oled(134, 76, 102, 54, rows=[d["m1"], d["m2"]], title=d["menu_title"], sel=0, fs=6.3))
+    # menu glowne fw 2.0.5+: 4 pozycje z ikonami, w naglowku WiFi + bateria
+    o.append(oled(134, 76, 102, 54, rows=[d["m1"], d["m2"], d["m3"], d["m4"]], title=d["menu_title"], sel=0,
+                  fs=5.9, icons=MENU_ICONS, status=True, chev=True))
     # sekwencja klawiszy
     for i in range(4):
         o.append(keychip(147 + i * 25.5, 160, "1", True, w=21, h=20))
@@ -553,14 +622,22 @@ def art_code(t, d):
 
 
 def art_wifi(t, d):
+    # menu glowne (Ustawienia = 4. pozycja) -> Ustawienia (9 kategorii z ikonami, "WiFi i konto" = 4/9)
+    # -> podmenu -> lista sieci
+    set_title = d["m4"]
     o = []
-    o.append(oled(4, 4, 150, 38, rows=[d["m5"]], title=d["menu_title"], sel=0, fs=7.2))
-    o.append(A(79, 45, 79, 56, sw=1.6))
-    o.append(oled(4, 60, 150, 40, rows=[d["set_code"], d["set_wifi"]], sel=1, fs=7.2))
-    o.append(A(79, 103, 79, 114, sw=1.6))
-    o.append(oled(4, 118, 150, 54, rows=[t["ssid1"], t["ssid2"]], title=d["wifi_pick"], sel=0, fs=7.2))
+    o.append(oled(4, 2, 150, 26, rows=[d["m4"]], title=d["menu_title"], sel=0, fs=6.4,
+                  icons=[MENU_ICONS[3]], status=True, chev=True))
+    o.append(A(79, 30, 79, 38, sw=1.4, size=4.6))
+    o.append(oled(4, 41, 150, 36, rows=[d["cat_lang"], d["cat_net"]], title=set_title, title_r="4/9",
+                  sel=1, fs=6.4, chev=True, icons=["globe", "wifi"]))
+    o.append(A(79, 79, 79, 87, sw=1.4, size=4.6))
+    o.append(oled(4, 90, 150, 36, rows=[d["it_wifi"], d["it_acct"]], title="< " + d["cat_net"], title_r="1/4",
+                  sel=0, fs=6.4, chev=True))
+    o.append(A(79, 128, 79, 136, sw=1.4, size=4.6))
+    o.append(oled(4, 139, 150, 36, rows=[t["ssid1"], t["ssid2"]], title=d["wifi_pick"], sel=0, fs=6.4))
     for i in range(3):
-        o.append(R(134 + i * 5, 146 - i * 3, 3.2, 4 + i * 3, fill=SCR, stroke="none"))
+        o.append(R(136 + i * 4.5, 158 - i * 1.7, 2.8, 2.5 + i * 1.7, fill=SCR, stroke="none"))
     o.append(wifi_icon(200, 46, 32))
     o.append(R(178, 56, 44, 13, r=3, fill="#ffffff", stroke=INK, sw=1.5))
     o.append(C(186, 62.5, 1.7, fill=INK, stroke="none"))
@@ -732,16 +809,24 @@ def art_keys(t, d):
     hl = {"8": "acc", "2": "acc", "4": "acc", "6": "acc", "5": "acc", "MU": "acc", "CCE": "ring"}
     ov = {"8": "up", "2": "down", "4": "left", "6": "right", "5": "OK",
           "+": "up", "-": "down", "+-": "left", "=": "OK"}
-    scr = lambda sx, sy, sw_, sh: (T(sx + 5, sy + sh * 0.42, d["menu_title"], size=sh * 0.27, fill="#ffffff", font=MONO)
-                                     + R(sx + 3, sy + sh * 0.53, sw_ - 6, sh * 0.36, r=1, fill="#ffffff", stroke="none")
-                                     + T(sx + 5, sy + sh * 0.81, d["m1"], size=sh * 0.27, weight=700, fill=SCR, font=MONO))
+    def scr(sx, sy, sw_, sh):
+        # menu glowne: naglowek "KalkMate" + WiFi/bateria, zaznaczona 1. pozycja z ikona
+        fs = sh * 0.27
+        isz = fs * 0.78
+        return (T(sx + 5, sy + sh * 0.42, d["menu_title"], size=fs, fill="#ffffff", font=MONO)
+                + oled_status(sx + sw_ - 5, sy + sh * 0.42, fs)
+                + R(sx + 3, sy + sh * 0.53, sw_ - 6, sh * 0.36, r=1, fill="#ffffff", stroke="none")
+                + xbm(sx + 5, sy + sh * 0.81 - isz * 0.97, isz, MENU_ICONS[0], fill=SCR)
+                + T(sx + 5 + isz + fs * 0.55, sy + sh * 0.81, d["m1"], size=fs, weight=700, fill=SCR, font=MONO)
+                + T(sx + sw_ - 5, sy + sh * 0.81, ">", size=fs, weight=700, fill=SCR, anchor="end", font=MONO))
     cs, pos = calc_front(20, 4, 200, hl=hl, overlay=ov, screen=scr)
     return svg(240, 280, cs)
 
 
 def art_panic(t, d):
     o = []
-    o.append(oled(2, 10, 92, 40, rows=[d["m1"]], sel=0, fs=6.4, title=d["menu_title"]))
+    o.append(oled(2, 10, 92, 40, rows=[d["m1"]], sel=0, fs=6.4, title=d["menu_title"],
+                  icons=[MENU_ICONS[0]], status=True, chev=True))
     o.append(A(98, 30, 108, 30, sw=1.5, size=4.5))
     o.append(keychip(124, 30, "MU", True, w=28, h=20))
     o.append(A(140, 30, 150, 30, sw=1.5, size=4.5))

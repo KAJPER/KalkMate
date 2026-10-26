@@ -81,16 +81,19 @@ static const int _KB_NUMS_COUNTS[4] = {10, 10, 10, 10};
 #define _KB_ACTION_ROW   4   // rzad akcji jest zawsze 5. (indeks 4)
 #define _KB_ACTION_COUNT 4   // [BKSP][CAPS/abc/123][SPACJA][ZAPISZ]
 
-// Geometria klawiatury
+// Geometria klawiatury: pole wpisywania y 0..12, 4 rzedy znakow po 10 px
+// (y 14..53, kazdy rzad wysrodkowany), rzad akcji y 55..63.
 static const int _KB_CELL_W  = 18;
 static const int _KB_CELL_H  = 10;
-static const int _KB_START_Y = 11;
+static const int _KB_START_Y = 14;
 
-static const int _KB_ACT_Y  = 54;
-static const int _KB_ACT_H  = 10;
-// 4 bloki: 60+64+68+64 = 256
-static const int _KB_ACT_XS[4] = {0, 60, 124, 192};
-static const int _KB_ACT_WS[4] = {59, 63, 67, 64};
+static const int _KB_ACT_Y  = 55;
+static const int _KB_ACT_H  = 9;
+// 4 klawisze z przerwa 3 px: 52+52+92+51 (+3*3) = 256
+static const int _KB_ACT_XS[4] = {0, 55, 110, 205};
+static const int _KB_ACT_WS[4] = {52, 52, 92, 51};
+
+#define _WIFI_SAVED_VISIBLE 3   // lista zapamietanych: 3 wiersze + stopka
 
 // ---------------------------------------------------------------------------
 // Debounce
@@ -171,38 +174,37 @@ static void _wifiRestorePrev(const String& prevSsid) {
 // ---------------------------------------------------------------------------
 static void _drawWifiStatus(U8G2 &d) {
     d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-
-    d.drawStr(2, 10, _wifiT("=== Ustawienia WiFi ===", "=== WiFi Settings ===", "=== WiFi-Einstellungen ===", "=== Nastaveni WiFi ==="));
-    d.drawHLine(0, 12, 256);
+    uiHeader(d, "WiFi", true);
 
     bool connected = (WiFi.status() == WL_CONNECTED);
 
     if (connected) {
-        d.drawStr(2, 23, _wifiT("Stan: Polaczono", "Status: Connected", "Status: Verbunden", "Stav: Pripojeno"));
-
-        char line[52];
-        snprintf(line, sizeof(line), "SSID: %s", WiFi.SSID().c_str());
-        d.drawStr(2, 33, line);
-
-        snprintf(line, sizeof(line), "IP: %s", WiFi.localIP().toString().c_str());
-        d.drawStr(2, 43, line);
-
-        snprintf(line, sizeof(line), "RSSI: %d dBm", WiFi.RSSI());
-        d.drawStr(2, 53, line);
+        char ssid[34], ip[20], rssi[16];
+        snprintf(ssid, sizeof(ssid), "%s", WiFi.SSID().c_str());
+        snprintf(ip, sizeof(ip), "%s", WiFi.localIP().toString().c_str());
+        int r = WiFi.RSSI();
+        snprintf(rssi, sizeof(rssi), "%d dBm", r);
+        uiInfoRow(d, 24, _wifiT("Siec WiFi", "WiFi network", "WLAN-Netz", "Sit WiFi"), ssid);
+        uiInfoRow(d, 36, _wifiT("Adres IP", "IP address", "IP-Adresse", "IP adresa"), ip);
+        uiInfoRow(d, 48, _wifiT("Sygnal WiFi", "WiFi signal", "WLAN-Signal", "Signal WiFi"), rssi, 234);
+        uiSignalBars(d, 239, 47, r);
     } else {
-        d.drawStr(2, 25, _wifiT("Stan: Rozlaczone", "Status: Disconnected", "Status: Getrennt", "Stav: Odpojeno"));
-        d.drawStr(2, 40, _wifiT("Brak polaczenia z siecia.", "No network connection.", "Keine Netzwerkverbindung.", "Zadne pripojeni k siti."));
+        const char* st = _wifiT("Stan: Rozlaczone", "Status: Disconnected", "Status: Getrennt", "Stav: Odpojeno");
+        d.setFont(UI_FONT);
+        int w = d.getStrWidth(st);
+        int x = (UI_W - (w + 12)) / 2;
+        d.setBitmapMode(1);
+        d.drawXBM(x, 25, 8, 8, UI_ICO_WIFI);
+        d.setBitmapMode(0);
+        d.drawStr(x + 12, 33, st);
+        d.setFont(UI_FONT_SMALL);
+        uiCenter(d, 45, _wifiT("Brak polaczenia z siecia.", "No network connection.", "Keine Netzwerkverbindung.", "Zadne pripojeni k siti."));
     }
 
-    // Trzy podpowiedzi na dole: [< Wstecz] [OK Skanuj] [v Zapisane(N)]
-    d.drawHLine(0, 54, 256);
-    d.setFont(u8g2_font_5x7_tf);
+    // Podpowiedzi: OK = skanuj, v = zapamietane (< wstecz — "<" w naglowku)
     char sav[24];
     snprintf(sav, sizeof(sav), _wifiT("v Zapisane(%d)", "v Saved(%d)", "v Gespeichert(%d)", "v Ulozene(%d)"), wifiSavedCount());
-    d.drawStr(2,   62, _wifiT("< Wstecz", "< Back", "< Zurueck", "< Zpet"));
-    d.drawStr(62,  62, _wifiT("OK Skanuj", "OK Scan", "OK Suchen", "OK Hledat"));
-    d.drawStr(150, 62, sav);
+    uiFooter(d, _wifiT("OK Skanuj", "OK Scan", "OK Suchen", "OK Hledat"), sav);
 
     d.sendBuffer();
 }
@@ -211,66 +213,80 @@ static void _drawWifiStatus(U8G2 &d) {
 // Ekran skanowania sieci
 // ---------------------------------------------------------------------------
 static void _drawScanning(U8G2 &d) {
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, _wifiT("Skanowanie...", "Scanning...", "Suche laeuft...", "Hledam site..."));
-    d.sendBuffer();
+    uiBusy(d, "WiFi", UI_ICO_WIFI, _wifiT("Skanowanie...", "Scanning...", "Suche laeuft...", "Hledam site..."));
 }
 
-// Rysuje liste sieci WiFi.
+// Czy SSID jest na liscie zapamietanych sieci. Cache odswiezany co 3 s —
+// lista skanu jest przerysowywana co ~20 ms, a to czyta NVS.
+static bool _wifiIsSavedSsid(const char* ssid) {
+    static char cache[_WP_MAX_NETS][33];
+    static uint8_t cnt = 0;
+    static unsigned long at = 0;
+    if (at == 0 || millis() - at > 3000) {
+        cnt = wifiSavedCount();
+        for (uint8_t i = 0; i < cnt; i++) {
+            if (!wifiGetSavedNet(i, cache[i], sizeof(cache[i]), nullptr, 0)) cache[i][0] = '\0';
+        }
+        at = millis();
+        if (at == 0) at = 1;
+    }
+    if (!ssid || !ssid[0]) return false;
+    for (uint8_t i = 0; i < cnt; i++) {
+        if (strcmp(cache[i], ssid) == 0) return true;
+    }
+    return false;
+}
+
+// Naglowek listy: "Wybierz siec WiFi:" bez koncowego dwukropka.
+static void _wifiListTitle(char* out, size_t n) {
+    snprintf(out, n, "%s", _wifiT("Wybierz siec WiFi:", "Select WiFi network:", "WiFi-Netzwerk waehlen:", "Vyberte sit WiFi:"));
+    int len = strlen(out);
+    while (len > 0 && (out[len - 1] == ':' || out[len - 1] == ' ')) out[--len] = '\0';
+}
+
+// Rysuje liste sieci WiFi (jak w telefonie): nazwa z lewej, z prawej
+// "zapamietana" (check), klodka (zabezpieczona) i slupki zasiegu.
 //   networks  — wynik WiFi.scanNetworks() (liczba znalezionych)
 //   scroll    — indeks pierwszej widocznej sieci
 //   selected  — indeks zaznaczonej sieci (absolutny)
 static void _drawNetworkList(U8G2 &d, int networks, int scroll, int selected) {
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-
-    d.drawStr(2, 10, _wifiT("Wybierz siec WiFi:", "Select WiFi network:", "WiFi-Netzwerk waehlen:", "Vyberte sit WiFi:"));
-    d.drawHLine(0, 12, 256);
-
-    if (networks == 0) {
-        d.drawStr(2, 36, _wifiT("Brak sieci.", "No networks found.", "Keine Netze gefunden.", "Zadne site nenalezeny."));
-        d.drawStr(2, 50, _wifiT("OK = skanuj ponownie", "OK = scan again", "OK = erneut suchen", "OK = hledat znovu"));
-        d.sendBuffer();
+    if (networks <= 0) {
+        uiMessage(d, "WiFi", UI_ICO_WIFI,
+                  _wifiT("Brak sieci.", "No networks found.", "Keine Netze gefunden.", "Zadne site nenalezeny."),
+                  nullptr, nullptr,
+                  _wifiT("OK = skanuj ponownie", "OK = scan again", "OK = erneut suchen", "OK = hledat znovu"));
         return;
     }
 
-    // Rzedy: y=14,25,36,47 (4 widoczne, odstep 11px)
+    d.clearBuffer();
+    char title[40];
+    _wifiListTitle(title, sizeof(title));
+    uiHeaderCount(d, title, true, selected, networks);
+
+    d.setBitmapMode(1);
     for (int i = 0; i < WIFI_SCAN_VISIBLE; i++) {
         int idx = scroll + i;
         if (idx >= networks) break;
 
-        int y = 23 + i * 11;  // baseline wiersza
+        const int y = UI_ROW_Y0 + i * UI_ROW_H;   // baseline wiersza
+        const bool sel = (idx == selected);
 
-        char lineBuf[52];
-        int32_t rssi = WiFi.RSSI(idx);
-        snprintf(lineBuf, sizeof(lineBuf), "%s (%d dBm)",
-                 WiFi.SSID(idx).c_str(), (int)rssi);
-        // Przytnij do max 40 znakow aby nie wyjsc poza ekran
-        lineBuf[40] = '\0';
+        char ssid[34];
+        snprintf(ssid, sizeof(ssid), "%s", WiFi.SSID(idx).c_str());
+        const bool hidden = (ssid[0] == '\0');
+        uiRow(d, i, sel, nullptr,
+              hidden ? _wifiT("(ukryta)", "(hidden)", "(versteckt)", "(skryta)") : ssid);
 
-        bool sel = (idx == selected);
-        if (sel) {
-            int tw = (int)strlen(lineBuf) * 6;
-            int bw = (tw + 4 < 254) ? tw + 4 : 254;
-            d.drawBox(0, y - 9, bw, 11);
-            d.setDrawColor(0);
-            d.drawStr(2, y, lineBuf);
-            d.setDrawColor(1);
-        } else {
-            d.drawStr(2, y, lineBuf);
-        }
+        // Ikony z prawej — na zaznaczonym pasku kolorem 0
+        d.setDrawColor(sel ? 0 : 1);
+        d.setBitmapMode(1);
+        uiSignalBars(d, 238, y - 1, WiFi.RSSI(idx));
+        if (WiFi.encryptionType(idx) != WIFI_AUTH_OPEN) d.drawXBM(225, y - 8, 8, 8, UI_ICO_LOCK);
+        if (!hidden && _wifiIsSavedSsid(ssid))          d.drawXBM(212, y - 8, 8, 8, UI_ICO_CHECK);
+        d.setDrawColor(1);
     }
-
-    // Wskazniki przewijania
-    if (scroll > 0) {
-        // Strzalka gora (trojkat)
-        d.drawStr(248, 18, "^");
-    }
-    if (scroll + WIFI_SCAN_VISIBLE < networks) {
-        // Strzalka dol
-        d.drawStr(248, 58, "v");
-    }
+    d.setBitmapMode(0);
+    uiScrollbar(d, scroll, networks);
 
     d.sendBuffer();
 }
@@ -304,20 +320,12 @@ static int _runNetworkList(U8G2 &d) {
 
         // Rysowanie: jesli n<0 lub n==0, pokaz info o braku sieci + komunikat
         if (n <= 0) {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 14, _wifiT("=== Skanowanie WiFi ===", "=== WiFi scan ===", "=== WiFi-Suche ===", "=== Hledani WiFi ==="));
-            d.drawHLine(0, 16, 256);
-            d.setFont(u8g2_font_6x10_tf);
-            if (n < 0) {
-                d.drawStr(2, 32, _wifiT("Blad skanu radia.", "Radio scan error.", "Fehler beim Scannen.", "Chyba skenovani."));
-            } else {
-                d.drawStr(2, 32, _wifiT("Brak sieci w zasiegu.", "No networks in range.", "Keine Netze in Reichweite.", "Zadne site v dosahu."));
-            }
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 50, _wifiT("OK = skanuj ponownie", "OK = scan again", "OK = erneut suchen", "OK = hledat znovu"));
-            d.drawStr(2, 60, _wifiT("< = wyjscie", "< = cancel", "< = abbrechen", "< = zrusit"));
-            d.sendBuffer();
+            uiMessage(d, "WiFi", n < 0 ? UI_ICO_WARN : UI_ICO_WIFI,
+                      n < 0 ? _wifiT("Blad skanu radia.", "Radio scan error.", "Fehler beim Scannen.", "Chyba skenovani.")
+                            : _wifiT("Brak sieci w zasiegu.", "No networks in range.", "Keine Netze in Reichweite.", "Zadne site v dosahu."),
+                      nullptr, nullptr,
+                      _wifiT("OK = skanuj ponownie", "OK = scan again", "OK = erneut suchen", "OK = hledat znovu"),
+                      _wifiT("< = wyjscie", "< = cancel", "< = abbrechen", "< = zrusit"));
         } else {
             _drawNetworkList(d, n, scroll, selected);
         }
@@ -368,9 +376,9 @@ static const int* _kbGetCounts(int mode) {
     if (mode == _KB_MODE_NUMS)  return _KB_NUMS_COUNTS;
     return _KB_LOWER_COUNTS;
 }
-// Etykieta przycisku trybu
+// Etykieta przycisku trybu (biezacy tryb)
 static const char* _kbModeLabel(int mode) {
-    if (mode == _KB_MODE_UPPER) return "CAPS";
+    if (mode == _KB_MODE_UPPER) return "ABC";
     if (mode == _KB_MODE_NUMS)  return "123";
     return "abc";
 }
@@ -391,16 +399,18 @@ static void _drawKeyboard(U8G2 &d,
                            bool mask = false,
                            unsigned long revealUntil = 0) {
     d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
+    d.setDrawColor(1);
 
-    // --- Linia 0: label + wpisany tekst ---
+    // --- Pole wpisywania: ramka, etykieta malym fontem, tekst + kursor ---
+    d.drawRFrame(0, 0, UI_W, 13, 3);
     const char* lbl = label ? label : _wifiT("Haslo:", "Password:", "Passwort:", "Heslo:");
-    d.drawStr(2, 8, lbl);
-    // Szerokosc etykiety: strlen * 6px (font 6x10) + 4px margines
-    int lblW = (int)strlen(lbl) * 6 + 6;
-    char disp[40];
-    // Ile znakow zmiesci sie po etykiecie (256 - lblW - 2px margines) / 6px
-    int maxVis = (256 - lblW - 2) / 6;
+    d.setFont(UI_FONT_SMALL);
+    d.drawStr(5, 9, lbl);
+    const int lblW = 5 + d.getStrWidth(lbl) + 5;
+    d.setFont(UI_FONT);
+    char disp[48];
+    // Ile znakow zmiesci sie po etykiecie (6 px/znak, margines na kursor)
+    int maxVis = (UI_W - lblW - 8) / 6;
     if (maxVis < 1) maxVis = 1;
     int si = (inputLen > maxVis) ? inputLen - maxVis : 0;
     int vl = inputLen - si;
@@ -414,62 +424,64 @@ static void _drawKeyboard(U8G2 &d,
             disp[i] = '*';
         }
     }
+    d.drawStr(lblW, 10, disp);
     bool showCursor = ((millis() - blinkTimer) % 800) < 400;
-    if (showCursor && inputLen < WIFI_INPUT_MAX_LEN)
-        strncat(disp, "_", sizeof(disp) - strlen(disp) - 1);
-    d.drawStr(lblW, 8, disp);
-    d.drawHLine(0, 10, 256);
+    if (showCursor && inputLen < WIFI_INPUT_MAX_LEN) {
+        d.drawVLine(lblW + d.getStrWidth(disp) + 1, 2, 9);
+    }
 
-    // --- Rzedy znakow (4 rzedy) ---
+    // --- Rzedy znakow (4 rzedy, kazdy wysrodkowany) ---
     const char** rows   = _kbGetRows(mode);
     const int*   counts = _kbGetCounts(mode);
 
     for (int row = 0; row < 4; row++) {
         int count = counts[row];
+        int x0 = (UI_W - count * _KB_CELL_W) / 2;
+        int y  = _KB_START_Y + row * _KB_CELL_H;
         for (int col = 0; col < count; col++) {
-            int x = col * _KB_CELL_W;
-            int y = _KB_START_Y + row * _KB_CELL_H;
+            int x = x0 + col * _KB_CELL_W;
             bool sel = (curRow == row && curCol == col);
             char ch[2] = {rows[row][col], '\0'};
+            int cx = x + (_KB_CELL_W - d.getStrWidth(ch)) / 2;
             if (sel) {
-                d.drawBox(x, y, _KB_CELL_W - 1, _KB_CELL_H - 1);
+                d.drawRBox(x, y, _KB_CELL_W, _KB_CELL_H, 2);
                 d.setDrawColor(0);
-                d.drawStr(x + 6, y + 8, ch);
+                d.drawStr(cx, y + 8, ch);
                 d.setDrawColor(1);
             } else {
-                d.drawStr(x + 6, y + 8, ch);
+                d.drawStr(cx, y + 8, ch);
             }
         }
     }
 
-    // --- Rzad akcji: [BKSP][CAPS/abc/123][SPACJA][ZAPISZ] ---
-    // Etykiety dynamiczne dla przycisku trybu
+    // --- Rzad akcji: [BKSP][abc/ABC/123][SPACE][OK] ---
     const char* actLabels[4] = {
         "BKSP",
         _kbModeLabel(mode),
-        "SPC",
+        "SPACE",
         "OK"
     };
 
+    d.setFont(UI_FONT_SMALL);
     for (int col = 0; col < _KB_ACTION_COUNT; col++) {
         int x  = _KB_ACT_XS[col];
         int w  = _KB_ACT_WS[col];
         int y  = _KB_ACT_Y;
         bool sel = (curRow == _KB_ACTION_ROW && curCol == col);
-        const char* lbl = actLabels[col];
-        int tw = (int)strlen(lbl) * 6;
-        int tx = x + (w - tw) / 2;
+        const char* al = actLabels[col];
+        int tx = x + (w - d.getStrWidth(al)) / 2;
 
         if (sel) {
-            d.drawBox(x, y, w - 1, _KB_ACT_H - 1);
+            d.drawRBox(x, y, w, _KB_ACT_H, 2);
             d.setDrawColor(0);
-            d.drawStr(tx, y + 8, lbl);
+            d.drawStr(tx, y + 7, al);
             d.setDrawColor(1);
         } else {
-            d.drawFrame(x, y, w - 1, _KB_ACT_H - 1);
-            d.drawStr(tx, y + 8, lbl);
+            d.drawRFrame(x, y, w, _KB_ACT_H, 2);
+            d.drawStr(tx, y + 7, al);
         }
     }
+    d.setFont(UI_FONT);
 
     d.sendBuffer();
 }
@@ -573,34 +585,25 @@ static bool _runKeyboard(U8G2 &d, char* outBuf, int bufSize, const char* label =
 // Ekran laczenia
 // ---------------------------------------------------------------------------
 static void _drawConnecting(U8G2 &d, const char* ssid, int dots) {
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, _wifiT("Laczenie z:", "Connecting to:", "Verbinde mit:", "Pripojuji k:"));
-    d.drawStr(2, 34, ssid);
-    char dotStr[8] = "";
-    for (int i = 0; i < dots; i++) strncat(dotStr, ".", sizeof(dotStr) - 1);
-    d.drawStr(2, 50, dotStr);
-    d.sendBuffer();
+    (void)dots;   // animacje robi uiSpinner (wg millis)
+    uiBusy(d, "WiFi", UI_ICO_WIFI,
+           _wifiT("Laczenie z:", "Connecting to:", "Verbinde mit:", "Pripojuji k:"), ssid);
 }
 
 static void _drawConnectError(U8G2 &d) {
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 18, _wifiT("Blad polaczenia!", "Connection failed!", "Verbindung fehlgeschlagen!", "Pripojeni selhalo!"));
-    d.drawStr(2, 32, _wifiT("Sprawdz SSID i haslo.", "Check SSID and password.", "SSID und Passwort pruefen.", "Zkontrolujte SSID a heslo."));
-    d.drawStr(2, 48, _wifiT("OK = powrot", "OK = back", "OK = zurueck", "OK = zpet"));
-    d.sendBuffer();
+    uiMessage(d, "WiFi", UI_ICO_CROSS,
+              _wifiT("Blad polaczenia!", "Connection failed!", "Verbindung fehlgeschlagen!", "Pripojeni selhalo!"),
+              _wifiT("Sprawdz SSID i haslo.", "Check SSID and password.", "SSID und Passwort pruefen.", "Zkontrolujte SSID a heslo."),
+              nullptr,
+              _wifiT("OK = powrot", "OK = back", "OK = zurueck", "OK = zpet"));
 }
 
 static void _drawConnectOk(U8G2 &d) {
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, _wifiT("Polaczono!", "Connected!", "Verbunden!", "Pripojeno!"));
-    char ipLine[48];
+    char ssid[34], ipLine[48];
+    snprintf(ssid, sizeof(ssid), "%s", WiFi.SSID().c_str());
     snprintf(ipLine, sizeof(ipLine), "IP: %s", WiFi.localIP().toString().c_str());
-    d.drawStr(2, 36, ipLine);
-    d.drawStr(2, 52, _wifiT("Powrot za chwile...", "Returning shortly...", "Rueckkehr in Kuerze...", "Navrat za chvili..."));
-    d.sendBuffer();
+    uiMessage(d, "WiFi", UI_ICO_CHECK,
+              _wifiT("Polaczono!", "Connected!", "Verbunden!", "Pripojeno!"), ssid, ipLine);
     delay(2000);
 }
 
@@ -640,14 +643,10 @@ static bool _runSavedNetworks(U8G2 &d) {
         uint8_t cnt = wifiSavedCount();
 
         if (cnt == 0) {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 12, _wifiT("Zapamietane sieci", "Saved networks", "Gespeicherte Netze", "Ulozene site"));
-            d.drawHLine(0, 14, 256);
-            d.drawStr(2, 34, _wifiT("Brak zapisanych sieci.", "No saved networks.", "Keine gespeicherten Netze.", "Zadne ulozene site."));
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _wifiT("< wstecz", "< back", "< zurueck", "< zpet"));
-            d.sendBuffer();
+            uiMessage(d, _wifiT("Zapamietane sieci", "Saved networks", "Gespeicherte Netze", "Ulozene site"), UI_ICO_WIFI,
+                      _wifiT("Brak zapisanych sieci.", "No saved networks.", "Keine gespeicherten Netze.", "Zadne ulozene site."),
+                      nullptr, nullptr,
+                      _wifiT("< wstecz", "< back", "< zurueck", "< zpet"));
             if (_wifiBtn(BTN_LEFT) || _wifiBtn(BTN_OK)) { _wifiWaitRelease(); return false; }
             delay(20);
             continue;
@@ -655,46 +654,39 @@ static bool _runSavedNetworks(U8G2 &d) {
         if (sel >= cnt) sel = cnt - 1;
 
         d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        char hdr[40];
-        snprintf(hdr, sizeof(hdr), _wifiT("Zapamietane (%d)", "Saved (%d)", "Gespeichert (%d)", "Ulozene (%d)"), cnt);
-        d.drawStr(2, 10, hdr);
-        d.drawHLine(0, 12, 256);
+        uiHeaderCount(d, _wifiT("Zapamietane sieci", "Saved networks", "Gespeicherte Netze", "Ulozene site"), true, sel, cnt);
 
         String curSsid = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : String("");
-        for (int i = 0; i < WIFI_SCAN_VISIBLE; i++) {
+        d.setBitmapMode(1);
+        for (int i = 0; i < _WIFI_SAVED_VISIBLE; i++) {
             int idx = scroll + i;
             if (idx >= cnt) break;
-            int y = 23 + i * 11;
             char s[33];
             wifiGetSavedNet((uint8_t)idx, s, sizeof(s), nullptr, 0);
-            char line[48];
             bool isCur = (curSsid.length() > 0 && curSsid == String(s));
-            snprintf(line, sizeof(line), "%s%s", s,
-                     isCur ? _wifiT(" (akt.)", " (now)", " (akt.)", " (akt.)") : "");
-            line[40] = '\0';
-            if (idx == sel) {
-                int tw = (int)strlen(line) * 6;
-                int bw = (tw + 4 < 254) ? tw + 4 : 254;
-                d.drawBox(0, y - 9, bw, 11);
-                d.setDrawColor(0); d.drawStr(2, y, line); d.setDrawColor(1);
-            } else {
-                d.drawStr(2, y, line);
+            bool rowSel = (idx == sel);
+            // Aktualna siec: check z prawej (jak w telefonie)
+            uiRow(d, i, rowSel, nullptr, s);
+            if (isCur) {
+                const int y = UI_ROW_Y0 + i * UI_ROW_H;
+                d.setDrawColor(rowSel ? 0 : 1);
+                d.setBitmapMode(1);
+                d.drawXBM(238, y - 8, 8, 8, UI_ICO_CHECK);
+                d.setDrawColor(1);
             }
         }
-        if (scroll > 0) d.drawStr(248, 18, "^");
-        if (scroll + WIFI_SCAN_VISIBLE < cnt) d.drawStr(248, 50, "v");
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 63, _wifiT("OK polacz  > zapomnij  < wstecz",
-                                "OK connect  > forget  < back",
-                                "OK verbind.  > loeschen  < zurueck",
-                                "OK pripojit  > zapomenout  < zpet"));
+        d.setBitmapMode(0);
+        uiScrollbar(d, scroll, cnt, _WIFI_SAVED_VISIBLE);
+        uiFooter(d, _wifiT("OK polacz  > zapomnij  < wstecz",
+                           "OK connect  > forget  < back",
+                           "OK verbind.  > loeschen  < zurueck",
+                           "OK pripojit  > zapomenout  < zpet"));
         d.sendBuffer();
 
         if (_wifiBtn(BTN_UP)) {
             if (sel > 0) { sel--; if (sel < scroll) scroll = sel; }
         } else if (_wifiBtn(BTN_DOWN)) {
-            if (sel < cnt - 1) { sel++; if (sel >= scroll + WIFI_SCAN_VISIBLE) scroll = sel - WIFI_SCAN_VISIBLE + 1; }
+            if (sel < cnt - 1) { sel++; if (sel >= scroll + _WIFI_SAVED_VISIBLE) scroll = sel - _WIFI_SAVED_VISIBLE + 1; }
         } else if (_wifiBtn(BTN_OK)) {
             char ssid[33] = "", pass[64] = "";
             wifiGetSavedNet((uint8_t)sel, ssid, sizeof(ssid), pass, sizeof(pass));

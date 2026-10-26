@@ -34,6 +34,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include "input.h"
+#include "ui_kit.h"          // wyglad dialogu (naglowek, przyciski, komunikat)
 #include "wifi_persist.h"     // wifiLoad/SaveDeviceToken, wifiStaOnLimited, _WP_*
 #include "settings_screen.h"  // kalkSettings, T() — pragma once: no-op gdy wlaczany z settings_screen.h
 
@@ -127,33 +128,55 @@ static void factoryResetWipe() {
 }
 
 // ---------------------------------------------------------------------
-// Ekran potwierdzenia. Rysowany RAZ (bez odswiezania co 20 ms — nic sie na
-// nim nie zmienia). OK (= / 5) = TAK. Anulowanie: C/CE, "<" (+/- / 4),
+// Para przyciskow dialogu (jak w uiConfirm): "cancel" w ramce, "confirm"
+// wypelniony, wysrodkowane, baseline y. Uzywane tez w settings_screen.h
+// (Kolejka offline).
+// ---------------------------------------------------------------------
+static void _frDrawButtons(U8G2& d, int y, const char* cancel, const char* confirm) {
+    d.setFont(UI_FONT_SMALL);
+    int wc = d.getStrWidth(cancel) + 8, wo = d.getStrWidth(confirm) + 8;
+    int gap = 16, x = (UI_W - (wc + gap + wo)) / 2;
+    uiButton(d, x, y, cancel, false);
+    uiButton(d, x + wc + gap, y, confirm, true);
+}
+
+// Dialog potwierdzenia: ostrzezenie, co zostanie skasowane, przyciski;
+// w naglowku odliczanie do automatycznego anulowania.
+static void _frDrawConfirm(U8G2& d, int secLeft) {
+    d.clearBuffer();
+    char right[8];
+    snprintf(right, sizeof(right), "%d s", secLeft);
+    uiHeader(d, T("Reset fabryczny", "Factory reset", "Werksreset", "Tovarni reset"), false, right);
+    d.setFont(UI_FONT);
+    const char* q = T("Skasowac wszystkie dane?", "Erase all data?", "Alle Daten loeschen?", "Smazat vsechna data?");
+    int w = d.getStrWidth(q), x = (UI_W - (w + 12)) / 2;
+    d.setBitmapMode(1);
+    d.drawXBM(x, 18, 8, 8, UI_ICO_WARN);
+    d.setBitmapMode(0);
+    d.drawStr(x + 12, 26, q);
+    d.setFont(UI_FONT_SMALL);
+    uiCenter(d, 37, T("Skasuje: WiFi, kod AI, historie, kolejke,",
+                      "Deletes: WiFi, AI code, history, queue,",
+                      "Loescht: WLAN, KI-Code, Verlauf, Warteschl.,",
+                      "Smaze: WiFi, kod AI, historii, frontu,"));
+    uiCenter(d, 45, T("notatki, sprawdziany, powiazanie z kontem.",
+                      "notes, tests, account link.",
+                      "Notizen, Tests, Kontoverknuepfung.",
+                      "poznamky, testy, propojeni s uctem."));
+    _frDrawButtons(d, 61, T("C/CE anuluj", "C/CE cancel", "C/CE abbrechen", "C/CE zrusit"),
+                   T("OK resetuj", "OK reset", "OK zuruecksetzen", "OK resetovat"));
+    d.sendBuffer();
+}
+
+// ---------------------------------------------------------------------
+// Ekran potwierdzenia. Przerysowywany tylko gdy zmienia sie odliczanie
+// (raz na sekunde). OK (= / 5) = TAK. Anulowanie: C/CE, "<" (+/- / 4),
 // 30 s bez decyzji, panic (tylko gdy honorPanic — w kalkulatorze panic nie
 // ma znaczenia, a jego flaga moze byc ustawiona z wczesniejszych klawiszy).
 // ---------------------------------------------------------------------
 static bool _factoryResetConfirm(U8G2& d, bool honorPanic) {
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 10, T("=== Reset fabryczny ===", "=== Factory reset ===", "=== Werksreset ===", "=== Tovarni reset ==="));
-    d.drawHLine(0, 12, 256);
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 23, T("Skasuje: WiFi, kod AI, historie, kolejke,",
-                       "Deletes: WiFi, AI code, history, queue,",
-                       "Loescht: WLAN, KI-Code, Verlauf, Warteschl.,",
-                       "Smaze: WiFi, kod AI, historii, frontu,"));
-    d.drawStr(2, 32, T("notatki, sprawdziany, powiazanie z kontem.",
-                       "notes, tests, account link.",
-                       "Notizen, Tests, Kontoverknuepfung.",
-                       "poznamky, testy, propojeni s uctem."));
-    d.drawStr(2, 41, T("Brak decyzji przez 30 s = anuluj.",
-                       "No choice within 30 s = cancel.",
-                       "Keine Wahl in 30 s = Abbruch.",
-                       "Bez volby do 30 s = zruseni."));
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 53, T("OK = TAK, resetuj", "OK = YES, reset", "OK = JA, zuruecksetzen", "OK = ANO, resetovat"));
-    d.drawStr(2, 63, T("C/CE lub < = anuluj", "C/CE or < = cancel", "C/CE oder < = abbrechen", "C/CE nebo < = zrusit"));
-    d.sendBuffer();
+    int shownSec = (int)(_FR_CONFIRM_TIMEOUT_MS / 1000);
+    _frDrawConfirm(d, shownSec);
 
     static const KalkKey kOk[] = { KEY_EQ, KEY_5 };
     static const KalkKey kNo[] = { KEY_CCE, KEY_PLUSMINUS, KEY_4 };
@@ -164,6 +187,8 @@ static bool _factoryResetConfirm(U8G2& d, bool honorPanic) {
 
     const uint32_t t0 = millis();
     while (millis() - t0 < _FR_CONFIRM_TIMEOUT_MS) {
+        int sec = (int)((_FR_CONFIRM_TIMEOUT_MS - (millis() - t0) + 999) / 1000);
+        if (sec != shownSec) { shownSec = sec; _frDrawConfirm(d, sec); }
         if (honorPanic) {
             if (_panicRequested) return false;
             KalkKey pk = (KalkKey)kalkSettings.panicKey;
@@ -187,20 +212,21 @@ static bool _factoryResetConfirm(U8G2& d, bool honorPanic) {
 static bool factoryResetRun(U8G2& d, bool honorPanic) {
     if (!_factoryResetConfirm(d, honorPanic)) return false;
 
+    const char* title = T("Reset fabryczny", "Factory reset", "Werksreset", "Tovarni reset");
     d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 14, T("Reset fabryczny...", "Factory reset...", "Werksreset...", "Tovarni reset..."));
-    d.drawHLine(0, 16, 256);
-    d.drawStr(2, 32, T("Kasuje dane, prosze czekac...", "Erasing data, please wait...", "Loesche Daten, bitte warten...", "Mazu data, prosim cekejte..."));
+    uiHeader(d, title, false);
+    d.setFont(UI_FONT);
+    uiCenter(d, 30, T("Kasuje dane, prosze czekac...", "Erasing data, please wait...", "Loesche Daten, bitte warten...", "Mazu data, prosim cekejte..."));
+    uiSpinner(d, UI_W / 2, 41);
+    d.setFont(UI_FONT_SMALL);
+    uiCenter(d, 56, T("Nie wylaczaj urzadzenia!", "Do not turn off the device!", "Geraet nicht ausschalten!", "Nevypinejte zarizeni!"));
     d.sendBuffer();
 
     factoryResetWipe();
 
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(6, 25, T("Zresetowano fabrycznie", "Factory reset done", "Werksreset abgeschlossen", "Tovarni reset dokoncen"));
-    d.drawStr(6, 40, T("Restart...", "Restarting...", "Neustart...", "Restartuji..."));
-    d.sendBuffer();
+    uiMessage(d, title, UI_ICO_CHECK,
+              T("Zresetowano fabrycznie", "Factory reset done", "Werksreset abgeschlossen", "Tovarni reset dokoncen"),
+              T("Restart...", "Restarting...", "Neustart...", "Restartuji..."));
     delay(1500);
     ESP.restart();
     while (true) delay(1000);   // niedosiegniete

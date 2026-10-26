@@ -32,6 +32,7 @@
 #include "wifi_persist.h"   // wifiLoadSaved / wifiFastBegin / wifiStaOnLimited — reconnect po wybudzeniu
 #include "panic.h"
 #include "battery.h"        // VBAT watchdog w trybie kalkulatora i w uspieniu
+#include "ui_kit.h"         // uiCenter / fonty UI (ekran niskiej baterii)
 
 // Pin EN boosta MT3608 (12V dla OLED). MUSI byc rowny KALK_BOOST_EN_PIN
 // z main.cpp — tamto makro jest definiowane dopiero PO wszystkich include,
@@ -102,24 +103,37 @@ static const char* _powT(const char* pl, const char* en, const char* de, const c
     }
 }
 
+// Ekran "niska bateria" (wspolny: wylaczenie krytyczne tutaj + ekran przy
+// starcie / watchdog VBAT w main.cpp). Ikona pustej baterii + tytul duzym
+// fontem, pod linia napiecie i podpowiedz. Rysuje caly ekran (z sendBuffer).
+static void powerDrawLowBatteryScreen(U8G2 &d, uint16_t mv, const char* title, const char* hint) {
+    d.clearBuffer();
+    d.setDrawColor(1);
+    d.setFont(UI_FONT_BIG);
+    const int tw = d.getStrWidth(title);
+    const int x0 = (UI_W - (40 + 12 + tw)) / 2;
+    d.drawRFrame(x0, 8, 36, 20, 3);      // obudowa baterii
+    d.drawBox(x0 + 36, 14, 3, 8);        // biegun
+    d.drawBox(x0 + 3, 11, 5, 14);        // resztka naladowania
+    d.drawStr(x0 + 52, 25, title);
+    d.drawHLine(0, 34, UI_W);
+    d.setFont(UI_FONT);
+    char buf[40];
+    snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", mv / 1000, (mv % 1000) / 10);
+    uiCenter(d, 46, buf);
+    uiCenter(d, 58, hint);
+    d.sendBuffer();
+}
+
 static void _powerCriticalShutdown(uint16_t mv, bool displayOn) {
     Serial.printf("[POWER] VBAT=%u mV - CRITICAL, shutdown\n", mv);
     Serial.flush();
 
     if (displayOn && _powerU8g2) {
-        U8G2 &d = *_powerU8g2;
-        d.clearBuffer();
-        d.setFont(u8g2_font_10x20_tf);
-        const char* title = _powT("NISKA BATERIA", "LOW BATTERY", "AKKU SCHWACH", "SLABA BATERIE");
-        d.drawStr((256 - d.getStrWidth(title)) / 2, 22, title);
-        d.setFont(u8g2_font_6x10_tf);
-        char buf[40];
-        snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", mv / 1000, (mv % 1000) / 10);
-        d.drawStr(80, 40, buf);
-        const char* hint = _powT("Podlacz ladowarke USB-C", "Connect a USB-C charger",
-                                 "USB-C-Ladegeraet anschliessen", "Pripojte nabijecku USB-C");
-        d.drawStr((256 - d.getStrWidth(hint)) / 2, 55, hint);
-        d.sendBuffer();
+        powerDrawLowBatteryScreen(*_powerU8g2, mv,
+                                  _powT("NISKA BATERIA", "LOW BATTERY", "AKKU SCHWACH", "SLABA BATERIE"),
+                                  _powT("Podlacz ladowarke USB-C", "Connect a USB-C charger",
+                                        "USB-C-Ladegeraet anschliessen", "Pripojte nabijecku USB-C"));
         delay(3000);
     }
 

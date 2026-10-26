@@ -287,13 +287,15 @@ static void _stAnimation(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _stShowInfo(U8G2 &d, int testNum, int total, const char* name) {
     d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    char buf[32];
-    snprintf(buf, sizeof(buf), _stT("Test %d/%d:", "Test %d/%d:", "Test %d/%d:", "Test %d/%d:"), testNum, total);
-    d.drawStr(2, 12, buf);
-    d.drawStr(2, 26, name);
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 45, _stT("OK/> = dalej   < = wyjdz", "OK/> = next   < = exit", "OK/> = weiter   < = Ende", "OK/> = dale   < = konec"));
+    // Naglowek "< Test ekranu" + licznik "3/10"
+    uiHeaderCount(d, _stT("Test ekranu", "Screen test", "Bildschirmtest", "Test displeje"), true, testNum - 1, total);
+    // Nazwa testu duzym fontem (fallback 6x10 gdy za dluga), pod nia
+    // pasek postepu calej serii
+    d.setFont(UI_FONT_BIG);
+    if (d.getStrWidth(name) > UI_W - 16) d.setFont(UI_FONT);
+    uiCenter(d, 36, name);
+    uiProgress(d, 48, 42, UI_W - 96, (testNum - 1) * 100 / total);
+    uiFooter(d, _stT("OK/> = dalej   < = wyjdz", "OK/> = next   < = exit", "OK/> = weiter   < = Ende", "OK/> = dale   < = konec"));
     d.sendBuffer();
     delay(800);
 }
@@ -341,10 +343,8 @@ void showScreenTest(U8G2 &display) {
     }
 
     // Koniec testow
-    display.clearBuffer();
-    display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(40, 28, _stT("Testy zakonczone!", "Tests complete!", "Tests abgeschlossen!", "Testy dokonceny!"));
-    display.drawStr(50, 44, _stT("Ekran dziala OK", "Display OK", "Display OK", "Displej OK"));
-    display.sendBuffer();
+    uiMessage(display, _stT("Test ekranu", "Screen test", "Bildschirmtest", "Test displeje"), UI_ICO_CHECK,
+              _stT("Testy zakonczone!", "Tests complete!", "Tests abgeschlossen!", "Testy dokonceny!"),
+              _stT("Ekran dziala OK", "Display OK", "Display OK", "Displej OK"));
     delay(2000);
 }

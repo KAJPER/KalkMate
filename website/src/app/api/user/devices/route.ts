@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
   }
   if (!unlockCode || unlockCode.length > 16) {
     return NextResponse.json(
-      { ok: false, error: "Wpisz kod odblokowania (Settings -> Kod AI w kalkulatorze)" },
+      { ok: false, error: "Wpisz kod odblokowania (Ustawienia -> Bezpieczenstwo -> Kod AI w kalkulatorze)" },
       { status: 400 }
     );
   }
@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
         ok: false,
         code: "default_unlock_code",
         error:
-          "Zmien kod AI na urzadzeniu (Ustawienia -> Kod AI) przed sparowaniem. Potem otworz na kalkulatorze ekran Konto (polaczony z WiFi), zeby zglosil nowy kod, i sprobuj ponownie.",
+          "Zmien kod AI na urzadzeniu (Ustawienia -> Bezpieczenstwo -> Kod AI) przed sparowaniem. Potem otworz na kalkulatorze Ustawienia -> WiFi i konto -> Status konta (polaczony z WiFi), zeby zglosil nowy kod, i sprobuj ponownie.",
       },
       { status: 400 }
     );

@@ -287,16 +287,25 @@ void remoteHeartbeatTick() {
 // ---------------------------------------------------------------------------
 void _editRemoteHelp(U8G2 &d) {
     _setWaitRelease();
+    const char* title = T("Zdalna pomoc", "Remote help", "Fernhilfe", "Vzdalena pomoc");
 
     if (remoteSessionActive()) {
+        // Bez tekstu z prawej w naglowku — tam (x 246..251) rysowany jest
+        // kwadracik aktywnej sesji.
         d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 14, T("Zdalna pomoc: AKTYWNA", "Remote help: ACTIVE", "Fernhilfe: AKTIV", "Vzdalena pomoc: AKTIVNI"));
-        d.drawHLine(0, 16, 256);
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 32, T("Ktos moze widziec i sterowac", "Someone can see and control", "Jemand kann sehen und steuern", "Nekdo muze videt a ovladat"));
-        d.drawStr(2, 42, T("tym kalkulatorem zdalnie.", "this calculator remotely.", "diesen Rechner aus der Ferne.", "tuto kalkulacku na dalku."));
-        d.drawStr(2, 62, T("OK = zakoncz   < = wstecz", "OK = end   < = back", "OK = beenden  < = zurueck", "OK = ukoncit  < = zpet"));
+        uiHeader(d, title, true);
+        d.setFont(UI_FONT);
+        const char* st = T("Zdalna pomoc: AKTYWNA", "Remote help: ACTIVE", "Fernhilfe: AKTIV", "Vzdalena pomoc: AKTIVNI");
+        int w = d.getStrWidth(st);
+        int x = (UI_W - (w + 12)) / 2;
+        d.setBitmapMode(1);
+        d.drawXBM(x, 20, 8, 8, UI_ICO_PULSE);
+        d.setBitmapMode(0);
+        d.drawStr(x + 12, 28, st);
+        d.setFont(UI_FONT_SMALL);
+        uiCenter(d, 40, T("Ktos moze widziec i sterowac", "Someone can see and control", "Jemand kann sehen und steuern", "Nekdo muze videt a ovladat"));
+        uiCenter(d, 49, T("tym kalkulatorem zdalnie.", "this calculator remotely.", "diesen Rechner aus der Ferne.", "tuto kalkulacku na dalku."));
+        uiFooter(d, T("OK = zakoncz   < = wstecz", "OK = end   < = back", "OK = beenden  < = zurueck", "OK = ukoncit  < = zpet"));
         d.sendBuffer();
         while (true) {
             if (_panicRequested) return;
@@ -311,10 +320,7 @@ void _editRemoteHelp(U8G2 &d) {
     }
 
     // Start nowej sesji — polacz WiFi (jak _solProcessQueue).
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 32, T("Laczenie z WiFi...", "Connecting to WiFi...", "Verbinde mit WLAN...", "Pripojuji k WiFi..."));
-    d.sendBuffer();
+    uiBusy(d, title, UI_ICO_WIFI, T("Laczenie z WiFi...", "Connecting to WiFi...", "Verbinde mit WLAN...", "Pripojuji k WiFi..."));
 
     char ssid[33] = "", pass[64] = "";
     wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
@@ -341,15 +347,16 @@ void _editRemoteHelp(U8G2 &d) {
     powerSetInhibit(true);   // sen wylaczylby WiFi = zerwana sesja
 
     d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 14, T("Zdalna pomoc aktywna", "Remote help active", "Fernhilfe aktiv", "Vzdalena pomoc aktivni"));
-    d.drawHLine(0, 16, 256);
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 30, T("Podaj wsparciu Device ID:", "Give support this Device ID:", "Geraete-ID fuer den Support:", "Sdelte podpore Device ID:"));
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 44, _remoteDeviceId().c_str());
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 62, T("Kwadracik w rogu = sesja trwa", "Corner square = session live", "Eckquadrat = Sitzung aktiv", "Ctverecek v rohu = relace bezi"));
+    uiHeader(d, T("Zdalna pomoc aktywna", "Remote help active", "Fernhilfe aktiv", "Vzdalena pomoc aktivni"), false);
+    d.setFont(UI_FONT_SMALL);
+    uiCenter(d, 24, T("Podaj wsparciu Device ID:", "Give support this Device ID:", "Geraete-ID fuer den Support:", "Sdelte podpore Device ID:"));
+    // Device ID duzym fontem w zaokraglonej ramce
+    d.setFont(UI_FONT_BIG);
+    String id = _remoteDeviceId();
+    int iw = d.getStrWidth(id.c_str());
+    d.drawRFrame((UI_W - iw) / 2 - 8, 28, iw + 16, 22, 3);
+    d.drawStr((UI_W - iw) / 2, 45, id.c_str());
+    uiFooter(d, T("Kwadracik w rogu = sesja trwa", "Corner square = session live", "Eckquadrat = Sitzung aktiv", "Ctverecek v rohu = relace bezi"));
     d.sendBuffer();
     _setWaitRelease();
     delay(2500);

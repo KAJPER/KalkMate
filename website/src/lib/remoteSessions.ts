@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 // z panelu admina. Wzorem Coupon/TokenPurchase: tabela poza Prisma schema,
 // tworzona lazy raw SQL (CREATE TABLE IF NOT EXISTS).
 //
-// Firmware wchodzi w ten tryb przez Ustawienia -> Zdalna pomoc (jawna zgoda
+// Firmware wchodzi w ten tryb przez Ustawienia -> WiFi i konto -> Zdalna pomoc (jawna zgoda
 // uzytkownika, widoczny kwadracik w rogu ekranu przez caly czas trwania
 // sesji — patrz src/remote_session.h). Kalkulator odpytuje
 // POST /api/device/remote/checkin co ~500ms: wysyla biezacy zrzut ekranu

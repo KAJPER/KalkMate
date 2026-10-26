@@ -39,7 +39,7 @@ SET_LOOP_TASK_STACK_SIZE(24 * 1024);
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "2.0.4"
+#define FW_VERSION "2.0.5"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -124,40 +124,38 @@ void     remoteSendBuffer()      { u8g2.sendBuffer(); }
 static_assert(KALK_BOOST_EN_PIN == _PWR_BOOST_EN_PIN, "power.h: _PWR_BOOST_EN_PIN != KALK_BOOST_EN_PIN");
 
 // === Menu ===
+// Ekran glowny po wpisaniu kodu: 4 pozycje z ikonami (jak w telefonie).
+// Informacje i O programie sa w Ustawienia -> Informacje.
 const char* menuItemsPL[] = {
-    "1. Rozwiaz zadanie",
-    "2. Notatki",
-    "3. Sprawdzian",
-    "4. Informacje",
-    "5. Ustawienia",
-    "6. O programie",
+    "Rozwiaz zadanie",
+    "Notatki",
+    "Sprawdzian",
+    "Ustawienia",
 };
 const char* menuItemsEN[] = {
-    "1. Solve problem",
-    "2. Notes",
-    "3. Test mode",
-    "4. Information",
-    "5. Settings",
-    "6. About",
+    "Solve problem",
+    "Notes",
+    "Test mode",
+    "Settings",
 };
 const char* menuItemsDE[] = {
-    "1. Aufgabe loesen",
-    "2. Notizen",
-    "3. Testmodus",
-    "4. Informationen",
-    "5. Einstellungen",
-    "6. Ueber",
+    "Aufgabe loesen",
+    "Notizen",
+    "Testmodus",
+    "Einstellungen",
 };
 const char* menuItemsCS[] = {
-    "1. Vyresit ulohu",
-    "2. Poznamky",
-    "3. Pisemka",
-    "4. Informace",
-    "5. Nastaveni",
-    "6. O programu",
+    "Vyresit ulohu",
+    "Poznamky",
+    "Pisemka",
+    "Nastaveni",
 };
-const int MENU_COUNT = 6;
+const int MENU_COUNT = 4;
 const int VISIBLE_LINES = 4;
+
+static const uint8_t* const _MENU_ICONS[MENU_COUNT] = {
+    UI_ICO_CAMERA, UI_ICO_NOTES, UI_ICO_CHECK, UI_ICO_GEAR,
+};
 
 // mT() zdefiniowane wczesniej w pliku (zaraz po include settings_screen.h) —
 // patrz komentarz tam.
@@ -187,46 +185,73 @@ static void _wifiAutoConnectLazy();
 // Te helpery zostawione jako kompat alias.
 inline void resetActivity() { inputActivityReset(); }
 
+// Pasek stanu w naglowku: WiFi (gdy polaczone) + bateria z procentem.
+static void _menuDrawStatus() {
+    int x = 250;
+    if (batteryIsAvailable()) {
+        const int BX = 232, BY = 2, BW = 16, BH = 8;
+        u8g2.drawFrame(BX, BY, BW, BH);
+        u8g2.drawBox(BX + BW, BY + 2, 2, BH - 4);
+        uint8_t pct = batteryReadPercent();
+        int fill = (BW - 4) * pct / 100;
+        if (fill > 0) u8g2.drawBox(BX + 2, BY + 2, fill, BH - 4);
+        if (batteryIsCharging()) {   // blyskawica (inwersja) przy ladowaniu
+            u8g2.setDrawColor(2);
+            u8g2.drawLine(BX + 9, BY + 1, BX + 6, BY + 4);
+            u8g2.drawLine(BX + 6, BY + 4, BX + 10, BY + 4);
+            u8g2.drawLine(BX + 10, BY + 4, BX + 7, BY + 7);
+            u8g2.setDrawColor(1);
+        }
+        char p[6];
+        snprintf(p, sizeof(p), "%u%%", (unsigned)pct);
+        u8g2.setFont(u8g2_font_5x7_tf);
+        x = BX - 3 - u8g2.getStrWidth(p);
+        u8g2.drawStr(x, 9, p);
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+        u8g2.setBitmapMode(1);
+        u8g2.drawXBM(x - 12, 2, 8, 8, UI_ICO_WIFI);
+        u8g2.setBitmapMode(0);
+    }
+}
+
 void drawMenu() {
     u8g2.clearBuffer();
-
     u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.drawStr(2, 10, "=== KalkMate ===");
+    u8g2.drawStr(2, 10, "KalkMate");
+    _menuDrawStatus();
     u8g2.drawHLine(0, 12, 256);
 
     u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.setBitmapMode(1);
     for (int i = 0; i < VISIBLE_LINES; i++) {
         int itemIndex = scrollOffset + i;
         if (itemIndex >= MENU_COUNT) break;
-        int y = 25 + i * 13;
-        const char* label = mMenuItem(itemIndex);
-        if (itemIndex == selectedItem) {
-            u8g2.setDrawColor(1);
-            u8g2.drawBox(0, y - 9, 256, 12);
-            u8g2.setDrawColor(0);
-            u8g2.drawStr(4, y, label);
-            u8g2.setDrawColor(1);
-        } else {
-            u8g2.drawStr(4, y, label);
-        }
+        _setDrawRow(u8g2, i, itemIndex == selectedItem, _MENU_ICONS[itemIndex],
+                    mMenuItem(itemIndex), "", true, -1);
     }
-
-    if (MENU_COUNT > VISIBLE_LINES) {
-        int barHeight = 52 * VISIBLE_LINES / MENU_COUNT;
-        int barY = 13 + 52 * scrollOffset / MENU_COUNT;
-        u8g2.drawBox(253, barY, 3, barHeight);
-    }
-
+    u8g2.setBitmapMode(0);
+    _setDrawScrollbar(u8g2, scrollOffset, MENU_COUNT);
     u8g2.sendBuffer();
 }
 
 void showSelected() {
     u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_10x20_tf);
-    u8g2.drawStr(10, 30, mT("Wybrano:", "Selected:", "Ausgewaehlt:", "Vybrano:"));
-    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.setFont(UI_FONT_SMALL);
+    uiCenter(u8g2, 26, mT("Wybrano:", "Selected:", "Ausgewaehlt:", "Vybrano:"));
+    // Ikona pozycji menu + nazwa, wysrodkowane
+    u8g2.setFont(UI_FONT);
     const char* label = mMenuItem(selectedItem);
-    u8g2.drawStr(10, 50, label);
+    const uint8_t* icon = (selectedItem >= 0 && selectedItem < MENU_COUNT) ? _MENU_ICONS[selectedItem] : nullptr;
+    int w = u8g2.getStrWidth(label);
+    int x = (UI_W - (w + (icon ? 12 : 0))) / 2;
+    if (icon) {
+        u8g2.setBitmapMode(1);
+        u8g2.drawXBM(x, 33, 8, 8, icon);
+        u8g2.setBitmapMode(0);
+        x += 12;
+    }
+    u8g2.drawStr(x, 41, label);
     u8g2.sendBuffer();
     delay(1500);
 }
@@ -235,18 +260,11 @@ void showSelected() {
 // Teksty w jezyku interfejsu — przy starcie kalkSettings nie sa jeszcze
 // wczytane, wiec caller ustawia najpierw kalkSettings.language z NVS.
 static void _drawLowBatteryScreen(uint16_t vbatMv) {
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_10x20_tf);
-    const char* title = mT("NISKA BATERIA", "LOW BATTERY", "AKKU SCHWACH", "SLABA BATERIE");
-    u8g2.drawStr((256 - u8g2.getStrWidth(title)) / 2, 22, title);
-    u8g2.setFont(u8g2_font_6x10_tf);
-    char buf[40];
-    snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", vbatMv/1000, (vbatMv%1000)/10);
-    u8g2.drawStr(80, 40, buf);
-    const char* hint = mT("Podlacz ladowarke USB-C", "Connect USB-C charger",
-                          "USB-C-Ladegeraet anschliessen", "Pripojte nabijecku USB-C");
-    u8g2.drawStr((256 - u8g2.getStrWidth(hint)) / 2, 55, hint);
-    u8g2.sendBuffer();
+    // Wspolny wyglad z wylaczeniem krytycznym w power.h
+    powerDrawLowBatteryScreen(u8g2, vbatMv,
+                              mT("NISKA BATERIA", "LOW BATTERY", "AKKU SCHWACH", "SLABA BATERIE"),
+                              mT("Podlacz ladowarke USB-C", "Connect USB-C charger",
+                                 "USB-C-Ladegeraet anschliessen", "Pripojte nabijecku USB-C"));
 }
 
 void setup() {
@@ -708,6 +726,13 @@ void loop() {
 
     bool changed = false;
 
+    // Pasek stanu (bateria / WiFi) w naglowku — odswiez co 5 s.
+    static uint32_t _menuStatusAt = 0;
+    if (millis() - _menuStatusAt > 5000) {
+        _menuStatusAt = millis();
+        changed = true;
+    }
+
     if (btnPressed(BTN_UP)) {
         resetActivity();
         if (selectedItem > 0) {
@@ -739,9 +764,7 @@ void loop() {
             case 0: showSolveScreen(u8g2);  break;
             case 1: showNotesScreen(u8g2);  break;
             case 2: showTestsScreen(u8g2);  break;   // Sprawdzian
-            case 3: showInfo(u8g2);         break;
-            case 4: showSettings(u8g2);     break;   // WiFi/Test/Camera teraz tutaj
-            case 5: showAboutScreen(u8g2);  break;
+            case 3: showSettings(u8g2);     break;   // tez Informacje / O programie
             default: showSelected();        break;
         }
         // Jesli panic byl wywolany w trakcie ekranu, przejdz do kalkulatora

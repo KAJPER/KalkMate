@@ -21,7 +21,8 @@
 #include "esp_heap_caps.h"
 #include "input.h"
 #include "settings_screen.h"
-#include "i18n_extra.h"     // kalkTrExtra — _solT dla jezykow 4..10
+#include "ui_kit.h"         // wspolny wyglad ekranow (naglowek, wiersze, komunikaty)
+#include "i18n_extra.h"    // kalkTrExtra — _solT dla jezykow 4..10
 #include "kalk_translit.h"  // _kalkUtf8ToAscii — wspolna transliteracja UTF-8 -> ASCII
 #include "wifi_persist.h"
 #include "kalkmate_certs.h"
@@ -151,17 +152,127 @@ static const char* _solT(const char* pl, const char* en, const char* de, const c
 }
 
 // ---------------------------------------------------------------------------
-// Pomocnik: rysowanie "spinera" ladowania
+// Wyglad ekranow (ui_kit.h, styl "telefon"): naglowek + linia y=12, listy po
+// 12 px z pelnym paskiem zaznaczenia, komunikaty wysrodkowane z ikona.
 // ---------------------------------------------------------------------------
-static void _solDrawLoading(U8G2 &d, const char* msg, int frame) {
+// Ikony 8x8 tylko dla tego ekranu (XBM, bit 0 = lewy piksel wiersza).
+static const uint8_t _SOL_ICO_TEXT[8] = {0xFF, 0x99, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00};  // "T" = tekst
+static const uint8_t _SOL_ICO_CALC[8] = {0x7F, 0x41, 0x7F, 0x55, 0x7F, 0x55, 0x7F, 0x00};  // kalkulator = offline
+
+// Etykieta do naglowka/wiersza z istniejacego tekstu (te same klucze
+// tlumaczen co dawniej): "[1] Zdjecie" -> "Zdjecie", "=== Ciagi ===" ->
+// "Ciagi", "! Blad !" -> "Blad". Zwraca s, wskaznik w s albo jeden z dwoch
+// rotowanych buforow statycznych (wystarczy na tytul + 1 tekst naraz).
+static const char* _solLabel(const char* s) {
+    static char bufs[2][56];
+    static uint8_t k = 0;
+    if (!s) return "";
+    if (s[0] == '[' && s[1] >= '0' && s[1] <= '9' && s[2] == ']' && s[3] == ' ') return s + 4;
+    const char* b = s;
+    while (*b == '=' || *b == '!' || *b == ' ') b++;
+    size_t n = strlen(b);
+    while (n > 0 && (b[n - 1] == '=' || b[n - 1] == '!' || b[n - 1] == ' ')) n--;
+    if (b == s && n == strlen(s)) return s;
+    k ^= 1;
+    if (n >= sizeof(bufs[0])) n = sizeof(bufs[0]) - 1;
+    memcpy(bufs[k], b, n);
+    bufs[k][n] = '\0';
+    return bufs[k];
+}
+
+// Tekst przyciety ".." do maxW px w AKTUALNYM foncie (3 rotowane bufory).
+static const char* _solFit(U8G2 &d, const char* s, int maxW) {
+    static char bufs[3][96];
+    static uint8_t k = 0;
+    if (!s) return "";
+    if (d.getStrWidth(s) <= maxW) return s;
+    k = (k + 1) % 3;
+    char* out = bufs[k];
+    snprintf(out, sizeof(bufs[0]), "%s", s);
+    int len = strlen(out);
+    while (len > 2 && d.getStrWidth(out) > maxW) {
+        len--;
+        out[len - 2] = '.';
+        out[len - 1] = '.';
+        out[len] = '\0';
+    }
+    return out;
+}
+
+static const char* _solTitleSolve() {
+    return _solT("Rozwiaz zadanie", "Solve problem", "Aufgabe loesen", "Resit ulohu");
+}
+static const char* _solTitleCamera() {
+    return _solLabel(_solT("[1] Zdjecie kamery", "[1] Camera photo", "[1] Kamerafoto", "[1] Foto kamerou"));
+}
+
+// Ekran komunikatu: naglowek, do 3 linii wysrodkowanych w pionie i poziomie
+// (ikona przed pierwsza), opcjonalna stopka. smallMask: bit i = linia i
+// malym fontem (5x7). Linia za szeroka na 6x10 przechodzi na 5x7, a gdy i to
+// za malo — ucinana "..". Tylko rysuje (sendBuffer robi wolajacy).
+static void _solDrawNotice(U8G2 &d, const char* title, bool back, const uint8_t* icon,
+                           const char* l1, const char* l2, const char* l3,
+                           const char* footL = nullptr, const char* footR = nullptr,
+                           uint8_t smallMask = 0x04) {
     d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, msg);
-    // Prosta animacja: [/ - \ |]
-    const char* frames[] = {"/", "-", "\\", "|"};
-    char anim[4];
-    snprintf(anim, sizeof(anim), "[%s]", frames[frame % 4]);
-    d.drawStr(120, 40, anim);
+    uiHeader(d, title, back);
+    const char* ln[3] = {l1, l2, l3};
+    int totalH = 0;
+    for (int i = 0; i < 3; i++)
+        if (ln[i] && ln[i][0]) totalH += ((smallMask >> i) & 1) ? 10 : 12;
+    const bool foot = (footL && footL[0]) || (footR && footR[0]);
+    const int top = 13, bot = foot ? 54 : 63;
+    int y = top + ((bot - top) - totalH) / 2 + 1;   // gora pierwszej linii
+    bool first = true;
+    for (int i = 0; i < 3; i++) {
+        if (!ln[i] || !ln[i][0]) continue;
+        const bool sm = (smallMask >> i) & 1;
+        const int lh = sm ? 10 : 12;
+        const int iw = (icon && first) ? 12 : 0;
+        d.setFont(sm ? UI_FONT_SMALL : UI_FONT);
+        int base = y + (sm ? 8 : 9);
+        if (!sm && d.getStrWidth(ln[i]) > 248 - iw) d.setFont(UI_FONT_SMALL);
+        const char* s = _solFit(d, ln[i], 248 - iw);
+        int x = (UI_W - (d.getStrWidth(s) + iw)) / 2;
+        if (iw) {
+            d.setBitmapMode(1);
+            d.drawXBM(x, base - 8, 8, 8, icon);
+            d.setBitmapMode(0);
+            x += iw;
+        }
+        d.drawStr(x, base, s);
+        y += lh;
+        first = false;
+    }
+    if (foot) uiFooter(d, footL, footR);
+    d.setFont(UI_FONT);
+}
+
+// ---------------------------------------------------------------------------
+// Pomocnik: ekran "trwa..." — naglowek, ikona + komunikat, kropki uiSpinner
+// (animowane wg millis() — wolajacy odswieza co ~150 ms). frame zostal dla
+// zgodnosci wywolan. title == nullptr -> "Rozwiaz zadanie".
+// ---------------------------------------------------------------------------
+static void _solDrawLoading(U8G2 &d, const char* msg, int frame, const uint8_t* icon = nullptr,
+                            const char* title = nullptr, const char* foot = nullptr) {
+    (void)frame;
+    d.clearBuffer();
+    uiHeader(d, title ? title : _solTitleSolve(), false);
+    const int bot = foot ? 54 : 63;
+    const int base = (13 + bot) / 2 - 2;   // grupa tekst+kropki wysrodkowana
+    d.setFont(UI_FONT);
+    const int iw = icon ? 12 : 0;
+    const char* s = _solFit(d, msg, 248 - iw);
+    int x = (UI_W - (d.getStrWidth(s) + iw)) / 2;
+    if (icon) {
+        d.setBitmapMode(1);
+        d.drawXBM(x, base - 8, 8, 8, icon);
+        d.setBitmapMode(0);
+        x += iw;
+    }
+    d.drawStr(x, base, s);
+    uiSpinner(d, UI_W / 2, base + 10);
+    if (foot) uiFooter(d, foot);
     d.sendBuffer();
 }
 
@@ -172,18 +283,13 @@ static void _solDrawLoading(U8G2 &d, const char* msg, int frame) {
 // ---------------------------------------------------------------------------
 static void _solDrawError(U8G2 &d, const char* line1, const char* line2, const char* line3 = nullptr) {
     if (panicTriggered()) return;
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 16, _solT("! Blad !", "! Error !", "! Fehler !", "! Chyba !"));
-    d.drawHLine(0, 18, 256);
     // Polskie znaki w komunikatach z serwera -> ASCII (bo font nie ma glyphow)
     String l1 = _solUtf8ToAscii(String(line1 ? line1 : ""));
     String l2 = _solUtf8ToAscii(String(line2 ? line2 : ""));
-    d.drawStr(2, 31, l1.c_str());
-    if (l2.length() > 0) d.drawStr(2, 43, l2.c_str());
-    d.setFont(u8g2_font_5x7_tf);
-    if (line3 && line3[0]) d.drawStr(2, 53, _solUtf8ToAscii(String(line3)).c_str());
-    d.drawStr(2, 62, _solT("OK = powrot", "OK = back", "OK = zurueck", "OK = zpet"));
+    String l3 = _solUtf8ToAscii(String(line3 ? line3 : ""));
+    _solDrawNotice(d, _solLabel(_solT("! Blad !", "! Error !", "! Fehler !", "! Chyba !")), false,
+                   UI_ICO_WARN, l1.c_str(), l2.c_str(), l3.c_str(),
+                   _solT("OK = powrot", "OK = back", "OK = zurueck", "OK = zpet"));
     d.sendBuffer();
     _solWaitRelease();
     while (true) {
@@ -196,14 +302,11 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2, const c
 }
 
 // Pomocnik: krotki komunikat informacyjny (OK / < / C/CE albo ms).
-static void _solShowInfo(U8G2 &d, const char* l1, const char* l2, const char* l3, uint32_t ms) {
+// title == nullptr -> "Rozwiaz zadanie"; icon przed pierwsza linia.
+static void _solShowInfo(U8G2 &d, const char* l1, const char* l2, const char* l3, uint32_t ms,
+                         const char* title = nullptr, const uint8_t* icon = nullptr) {
     if (panicTriggered()) return;
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    if (l1) d.drawStr(2, 18, l1);
-    if (l2) d.drawStr(2, 32, l2);
-    d.setFont(u8g2_font_5x7_tf);
-    if (l3) d.drawStr(2, 48, l3);
+    _solDrawNotice(d, title ? title : _solTitleSolve(), false, icon, l1, l2, l3);
     d.sendBuffer();
     _solWaitRelease();
     uint32_t t0 = millis();
@@ -681,13 +784,13 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
         return;
     }
 
-    // Font 6x10, ekran 256x64
-    // Uklad: naglowek y=8 (linia 0-9), separtor y=10
-    // Linie tekstu: y=21, 33, 45 (3 widoczne, odstep 12px)
-    // Pasek dolny: y=57-63
-    const int VISIBLE  = 3;   // 3 linie tekstu na raz
+    // Ekran 256x64, tekst fontem 6x12 (drawUTF8)
+    // Uklad: naglowek ui_kit (tytul "<", pozycja z prawej), linia y=12
+    // Linie tekstu: y=24, 36, 48, 60 (4 widoczne, odstep 12px) — bez stopki
+    // (UP/DN oczywiste, "<" w naglowku), pasek przewijania x=253..255.
+    const int VISIBLE  = 4;   // 4 linie tekstu na raz
     const int LINE_H   = 12;  // wysokosc linii px
-    const int LINE_Y0  = 21;  // y bazowe pierwszej linii
+    const int LINE_Y0  = 24;  // y bazowe pierwszej linii
     // Maks znakow na linie przy foncie 6px: (256-4)/6 = 42
     const int LINE_CHARS = 41;
 
@@ -749,6 +852,10 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
     powerSetMinTimeout(_SOL_READ_SLEEP_MS);
     bool needRedraw = true;
     int scroll = 0;
+    // Tytul: "Rozwiazanie" (AI) albo "Offline" (lokalny solver).
+    const char* title = (headerLabel && strcmp(headerLabel, "OFFLINE") == 0)
+        ? _solLabel(_solT("[4] Offline", "[4] Offline", "[4] Offline", "[4] Offline"))
+        : _solT("Rozwiazanie", "Solution", "Loesung", "Reseni");
 
     while (true) {
         // panicCheck + sen (po _SOL_READ_SLEEP_MS bez klawisza) w _solTick()
@@ -760,18 +867,12 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
         if (needRedraw) {
             d.clearBuffer();
 
-            // Naglowek
-            d.setFont(u8g2_font_5x7_tf);
-            char hdr[32];
-            snprintf(hdr, sizeof(hdr), "%s %d-%d/%d", headerLabel,
-                     scroll + 1,
-                     min(scroll + VISIBLE, lineCount),
-                     lineCount);
-            d.drawStr(2, 8, hdr);
-            // Strzalki w naglowku
-            if (scroll > 0)                        d.drawStr(240, 8, "^");
-            if (scroll + VISIBLE < lineCount)       d.drawStr(248, 8, "v");
-            d.drawHLine(0, 10, 256);
+            // Naglowek: "< Rozwiazanie" + przeczytane linie "8/23" (tylko gdy
+            // tekst sie nie miesci na jednym ekranie)
+            char pos[16] = "";
+            if (lineCount > VISIBLE)
+                snprintf(pos, sizeof(pos), "%d/%d", min(scroll + VISIBLE, lineCount), lineCount);
+            uiHeader(d, title, true, pos);
 
             // Linie tekstu z obsluga poteg
             for (int i = 0; i < VISIBLE; i++) {
@@ -784,10 +885,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
                 _solDrawMathLine(d, 2, LINE_Y0 + i * LINE_H, lb);
             }
 
-            // Stopka
-            d.drawHLine(0, 55, 256);
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 63, _solT("< wyjdz  UP/DN scroll", "< exit  UP/DN scroll", "< raus  UP/DN scroll", "< konec  UP/DN posun"));
+            uiScrollbar(d, scroll, lineCount, VISIBLE);
 
             d.sendBuffer();
             needRedraw = false;
@@ -838,7 +936,7 @@ static void _solRegisterWithSpinner(U8G2 &d) {
     ctx.done = false;
     TaskHandle_t t = nullptr;
     if (xTaskCreatePinnedToCore(_solRegTaskFn, "solReg", 16384, &ctx, 1, &t, 0) != pdPASS) {
-        _solDrawLoading(d, msg, 0);
+        _solDrawLoading(d, msg, 0, UI_ICO_CLOUD);
         accountRegisterOnce();   // brak pamieci na zadanie — po staremu (blokujaco)
         return;
     }
@@ -848,7 +946,7 @@ static void _solRegisterWithSpinner(U8G2 &d) {
         panicCheck();
         if (last == 0 || millis() - last >= 150) {
             last = millis();
-            _solDrawLoading(d, msg, frame++);
+            _solDrawLoading(d, msg, frame++, UI_ICO_CLOUD);
         }
         delay(10);
     }
@@ -939,18 +1037,10 @@ static bool _solEnsureWifi(U8G2 &d) {
                 _solT("Sprawdz haslo.", "Check password.", "Passwort pruefen.", "Zkontrolujte heslo."));
             return false;
         }
-        if (lastFrame == 0 || millis() - lastFrame >= 250) {
+        if (lastFrame == 0 || millis() - lastFrame >= 150) {
             lastFrame = millis();
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 20, ln);
-            const char* frames[] = {"/", "-", "\\", "|"};
-            char anim[4];
-            snprintf(anim, sizeof(anim), "[%s]", frames[frame++ % 4]);
-            d.drawStr(120, 40, anim);
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _solT("C/CE = anuluj (zadanie do kolejki)", "C/CE = cancel (task to queue)", "C/CE = abbrechen (in Warteschlange)", "C/CE = zrusit (uloha do fronty)"));
-            d.sendBuffer();
+            _solDrawLoading(d, ln, frame++, UI_ICO_WIFI, nullptr,
+                _solT("C/CE = anuluj (zadanie do kolejki)", "C/CE = cancel (task to queue)", "C/CE = abbrechen (in Warteschlange)", "C/CE = zrusit (uloha do fronty)"));
         }
         delay(30);
     }
@@ -1102,7 +1192,7 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
 
     bool panicAborted = false;
     uint32_t lastFrame = 0;
-    int frame = 0;
+    const uint32_t waitStart = millis();   // licznik sekund w naglowku
     while (!ctx.done) {
         panicCheck();
         if (panicTriggered() && !panicAborted) {
@@ -1110,16 +1200,23 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
             ctx.abort = true;   // przerwie petle prob DNS miedzy strategiami
             client.stop();      // odblokuje http.POST() w tasku prawie od razu
         }
-        if (!panicAborted && millis() - lastFrame >= 400) {
+        if (!panicAborted && millis() - lastFrame >= 150) {
             lastFrame = millis();
+            char el[12];
+            snprintf(el, sizeof(el), "%lus", (unsigned long)((millis() - waitStart) / 1000UL));
             d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe", "AI resi ulohu"));
-            d.setFont(u8g2_font_5x7_tf);
-            const char* frames[] = {".", "..", "...", ""};
-            char ln[32];
-            snprintf(ln, sizeof(ln), "%s%s", _solT("Prosze czekac", "Please wait", "Bitte warten", "Prosim cekejte"), frames[frame++ % 4]);
-            d.drawStr(2, 40, ln);
+            uiHeader(d, _solTitleSolve(), false, el);
+            d.setFont(UI_FONT);
+            const char* m = _solFit(d, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe", "AI resi ulohu"), 236);
+            int x = (UI_W - (d.getStrWidth(m) + 12)) / 2;
+            d.setBitmapMode(1);
+            d.drawXBM(x, 23, 8, 8, UI_ICO_CLOUD);
+            d.setBitmapMode(0);
+            d.drawStr(x + 12, 31, m);
+            uiSpinner(d, UI_W / 2, 42);
+            d.setFont(UI_FONT_SMALL);
+            uiCenter(d, 58, _solT("Prosze czekac", "Please wait", "Bitte warten", "Prosim cekejte"));
+            d.setFont(UI_FONT);
             d.sendBuffer();
         }
         delay(30);
@@ -1268,11 +1365,12 @@ static void _solShowQueued(U8G2 &d, uint8_t q, bool photo) {
         return;
     }
     _solShowInfo(d,
-        _solT("Brak WiFi.", "No WiFi.", "Kein WLAN.", "Neni WiFi."),
         photo ? _solT("Zdjecie w kolejce.", "Photo queued.", "Foto in Warteschlange.", "Foto ve fronte.")
               : _solT("Zadanie w kolejce.", "Task queued.", "Aufgabe in Warteschlange.", "Uloha ve fronte."),
+        _solT("Brak WiFi.", "No WiFi.", "Kein WLAN.", "Neni WiFi."),
         _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available.", "Senden nach WLAN-Verbindung.", "Odeslani po pripojeni WiFi."),
-        2500);
+        2500,
+        _solT("Kolejka offline", "Offline queue", "Offline-Warteschlange", "Offline fronta"), UI_ICO_CHECK);
 }
 
 // ---------------------------------------------------------------------------
@@ -1341,6 +1439,37 @@ static void _solDrawCorners(U8G2 &d, int x, int y, int w, int h) {
 // podglad sie zamyka, a dalej usypia juz zwykly ekran wyboru trybu.
 // ---------------------------------------------------------------------------
 #define _SOL_PREVIEW_IDLE_MS  120000UL
+
+// Prawy panel podgladu (obraz zajmuje x 0..159): naglowek z ikona kamery,
+// ostrosc (procent + pasek), przyciski OK (wypelniony) i < (ramka).
+static void _solDrawPreviewPanel(U8G2 &d, int pct) {
+    const int PX = 163, PW = UI_W - PX;   // 93 px
+    d.setDrawColor(1);
+    d.setBitmapMode(1);
+    d.drawXBM(PX + 2, 2, 8, 8, UI_ICO_CAMERA);
+    d.setBitmapMode(0);
+    d.setFont(UI_FONT_SMALL);
+    d.drawStr(PX + 14, 9, _solFit(d, _solT("PODGLAD", "PREVIEW", "VORSCHAU", "NAHLED"), PW - 16));
+    d.drawHLine(PX, UI_HEADER_LINE, PW);
+
+    char pctbuf[8];
+    snprintf(pctbuf, sizeof(pctbuf), "%d%%", pct);
+    d.drawStr(PX + 2, 23, _solFit(d, _solT("Ostrosc", "Sharp", "Schaerfe", "Ostrost"), PW - 26));
+    d.drawStr(UI_W - 3 - d.getStrWidth(pctbuf), 23, pctbuf);
+    uiProgress(d, PX + 2, 26, PW - 4, pct);
+
+    // Przyciski na cala szerokosc panelu
+    const char* ok  = _solFit(d, _solT("OK = foto", "OK = photo", "OK = Foto", "OK = foto"), PW - 8);
+    const char* esc = _solFit(d, _solT("< = wyjdz", "< = exit", "< = raus", "< = konec"), PW - 8);
+    d.setFont(UI_FONT_SMALL);
+    d.drawRBox(PX + 2, 40, PW - 4, 11, 2);
+    d.setDrawColor(0);
+    d.drawStr(PX + (PW - d.getStrWidth(ok)) / 2, 48, ok);
+    d.setDrawColor(1);
+    d.drawRFrame(PX + 2, 53, PW - 4, 11, 2);
+    d.drawStr(PX + (PW - d.getStrWidth(esc)) / 2, 61, esc);
+    d.setFont(UI_FONT);
+}
 
 static int _solPreviewAndConfirm(U8G2 &d) {
     static const int PV_W = 160;                 // szerokosc viewfinder = szerokosc QQVGA
@@ -1423,20 +1552,8 @@ static int _solPreviewAndConfirm(U8G2 &d) {
         d.drawXBM(0, 0, PV_W, PV_H, xbm);     // obraz na lewej polowie
         _solDrawCorners(d, 0, 0, PV_W, PV_H); // bramki kadrowania (XOR)
 
-        // Prawy panel (x:164..255)
-        d.setDrawColor(1);
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(166, 8,  _solT("PODGLAD", "PREVIEW", "VORSCHAU", "NAHLED"));
-        d.drawStr(166, 24, _solT("Ostrosc", "Sharp", "Schaerfe", "Ostrost"));
-        // Pasek ostrosci 84px
-        const int bx = 166, by = 28, bw = 84, bh = 8;
-        d.drawFrame(bx, by, bw, bh);
-        d.drawBox(bx + 1, by + 1, (bw - 2) * pct / 100, bh - 2);
-        char pctbuf[8];
-        snprintf(pctbuf, sizeof(pctbuf), "%d%%", pct);
-        d.drawStr(166, 44, pctbuf);
-        d.drawStr(166, 53, _solT("OK = foto", "OK = photo", "OK = Foto", "OK = foto"));
-        d.drawStr(166, 62, _solT("< = wyjdz", "< = exit", "< = raus", "< = konec"));
+        // Prawy panel (x:162..255): mini-naglowek, ostrosc, dwa "przyciski"
+        _solDrawPreviewPanel(d, pct);
         d.sendBuffer();
 
         // Przyciski — po wolnej klatce kamery (~80ms) robimy krotki burst
@@ -1474,7 +1591,8 @@ static void _solRunPhotoMode(U8G2 &d) {
     // === Faza 1: podglad na zywo (mono viewfinder) ===
     // Kamera w trybie GRAYSCALE QQVGA — uzytkownik kadruje zadanie i ustawia
     // odleglosc (pasek ostrosci pomaga trafic w sweet-spot stalej ostrosci).
-    _solDrawLoading(d, _solT("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau...", "Spoustim nahled..."), 0);
+    _solDrawLoading(d, _solT("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau...", "Spoustim nahled..."), 0,
+                    UI_ICO_CAMERA, _solTitleCamera());
 
     if (camBeginPreview()) {
         int pv = _solPreviewAndConfirm(d);
@@ -1487,14 +1605,11 @@ static void _solRunPhotoMode(U8G2 &d) {
         if (pv == 0) return;      // anulowano w podgladzie
     } else {
         // Fallback (blad preview): statyczny ekran jak dawniej
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 16, _solT("Tryb: Zdjecie", "Mode: Photo", "Modus: Foto", "Rezim: Foto"));
-        d.drawHLine(0, 18, 256);
-        d.drawStr(2, 32, _solT("Skieruj na zadanie.", "Point at the problem.", "Auf Aufgabe richten.", "Namirte na ulohu."));
-        d.drawStr(2, 46, _solT("OK = zrob zdjecie", "OK = take photo", "OK = Foto machen", "OK = vyfotit"));
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, _solT("< = anuluj", "< = cancel", "< = abbrechen", "< = zrusit"));
+        _solDrawNotice(d, _solTitleCamera(), true, UI_ICO_CAMERA,
+            _solT("Skieruj na zadanie.", "Point at the problem.", "Auf Aufgabe richten.", "Namirte na ulohu."),
+            nullptr, nullptr,
+            _solT("< = anuluj", "< = cancel", "< = abbrechen", "< = zrusit"),
+            _solT("OK = zrob zdjecie", "OK = take photo", "OK = Foto machen", "OK = vyfotit"));
         d.sendBuffer();
 
         _solWaitRelease();
@@ -1511,7 +1626,8 @@ static void _solRunPhotoMode(U8G2 &d) {
     // === Faza 2: finalne zdjecie JPEG/UXGA ===
     // camBegin: PWDN low, RESET pulse (przez MCP23017), esp_camera_init().
     // I2C dzielony z MCP23017 (sccb_i2c_port=0 w camera.h).
-    _solDrawLoading(d, _solT("Wlaczam kamere...", "Powering camera...", "Kamera wird gestartet...", "Zapinam kameru..."), 0);
+    _solDrawLoading(d, _solT("Wlaczam kamere...", "Powering camera...", "Kamera wird gestartet...", "Zapinam kameru..."), 0,
+                    UI_ICO_CAMERA, _solTitleCamera());
 
     if (!camBegin()) {
         _solDrawError(d, _solT("Init kamery!", "Camera init!", "Kamera-Init!", "Init kamery!"), "esp_camera_init");
@@ -1521,7 +1637,8 @@ static void _solRunPhotoMode(U8G2 &d) {
     // Warm-up - po switchu z podgladu AEC/AGC zbiega na nowo (3 klatki)
     camWarmup(3);
 
-    _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo...", "Foto wird gemacht...", "Fotim..."), 0);
+    _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo...", "Foto wird gemacht...", "Fotim..."), 0,
+                    UI_ICO_CAMERA, _solTitleCamera());
     camera_fb_t* fb = camCapture();
     if (!fb) {
         camEnd();
@@ -1576,47 +1693,32 @@ static void _solModeSelect(U8G2 &d, int &mode) {
     // mode: 0 = zdjecie, 1 = tekst, 2 = historia, 3 = offline (lokalne solvery)
     _solWaitRelease();
 
+    // Liczba wpisow historii jako wartosc wiersza "Historia" (odczyt raz na wejscie)
+    char histVal[6] = "";
+    {
+        uint8_t hc = historyCount();
+        if (hc > 0) snprintf(histVal, sizeof(histVal), "%u", (unsigned)hc);
+    }
+
     bool needRedraw = true;
     while (true) {
         if (_solTick()) needRedraw = true;
         if (panicTriggered()) return;
         if (needRedraw) {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ===", "=== Aufgabe loesen ===", "=== Resit ulohu ==="));
-            d.drawHLine(0, 12, 256);
-
             // Etykiety przez _solT (jezyki 4..10 -> i18n_extra.h po tekscie EN);
-            // prefiks "> " / "  " doklejany przy rysowaniu.
+            // prefiks "[n] " obcinany przy rysowaniu (_solLabel).
             const char* labels[4] = {
                 _solT("[1] Zdjecie kamery", "[1] Camera photo", "[1] Kamerafoto",    "[1] Foto kamerou"),
                 _solT("[2] Wpisz tekst",    "[2] Enter text",   "[2] Text eingeben", "[2] Zadat text"),
                 _solT("[3] Historia",       "[3] History",      "[3] Verlauf",       "[3] Historie"),
                 _solT("[4] Offline",        "[4] Offline",      "[4] Offline",       "[4] Offline"),
             };
+            const uint8_t* icons[4] = {UI_ICO_CAMERA, _SOL_ICO_TEXT, UI_ICO_CLOCK, _SOL_ICO_CALC};
 
-            const int Y[4] = {13, 23, 33, 43};   // top y kazdej pozycji (4 widoczne)
-            const int TEXT_Y[4] = {22, 32, 42, 52};
-
-            for (int i = 0; i < 4; i++) {
-                char lbl[48];
-                snprintf(lbl, sizeof(lbl), "%s%s", mode == i ? "> " : "  ", labels[i]);
-                if (mode == i) {
-                    d.drawBox(0, Y[i], 256, 10);
-                    d.setDrawColor(0);
-                    d.drawStr(4, TEXT_Y[i], lbl);
-                    d.setDrawColor(1);
-                } else {
-                    d.drawStr(4, TEXT_Y[i], lbl);
-                }
-            }
-
-            d.drawHLine(0, 53, 256);
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
-                                    "^/v select   OK: start   < back",
-                                    "^/v waehlen  OK: Start  < zurueck",
-                                    "^/v vyber   OK: start   < zpet"));
+            d.clearBuffer();
+            uiHeaderCount(d, _solTitleSolve(), true, mode, 4);
+            for (int i = 0; i < 4; i++)
+                uiRow(d, i, mode == i, icons[i], _solLabel(labels[i]), i == 2 ? histVal : nullptr, true);
             d.sendBuffer();
             needRedraw = false;
         }
@@ -1642,12 +1744,14 @@ static void _solModeSelect(U8G2 &d, int &mode) {
 // Zwraca wybrany indeks (0..count-1), albo -1 jesli uzytkownik wyszedl (LEFT).
 // Rysowane tylko po zmianie.
 // ---------------------------------------------------------------------------
+// Kontekst (tytul naglowka) dla pol liczbowych bez wlasnego "Tytul: pole"
+// (np. "b =") — ostatnio wybrana pozycja menu albo ostatni tytul pola.
+static char _solNumCtx[48] = "";
+
 static int _solListMenu(U8G2 &d, const char* title, const char* const* items, int count) {
     _solWaitRelease();
     int sel = 0;
     int scroll = 0;
-    const int VISIBLE = 4;   // wiersze widoczne na raz (13..53 / 10px = 4)
-    const int ROW_H = 10;
 
     bool needRedraw = true;
     while (true) {
@@ -1655,37 +1759,16 @@ static int _solListMenu(U8G2 &d, const char* title, const char* const* items, in
         if (panicTriggered()) return -1;
 
         if (needRedraw) {
-            if (sel < scroll) scroll = sel;
-            if (sel >= scroll + VISIBLE) scroll = sel - VISIBLE + 1;
+            uiFitScroll(sel, count, scroll);
 
             d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 10, title);
-            d.drawHLine(0, 12, 256);
-
-            for (int row = 0; row < VISIBLE; row++) {
+            uiHeaderCount(d, title, true, sel, count);
+            for (int row = 0; row < UI_ROWS; row++) {
                 int i = scroll + row;
                 if (i >= count) break;
-                int y = 13 + row * ROW_H;
-                int textY = y + ROW_H - 2;
-                if (i == sel) {
-                    d.drawBox(0, y, 256, ROW_H);
-                    d.setDrawColor(0);
-                    d.drawStr(4, textY, items[i]);
-                    d.setDrawColor(1);
-                } else {
-                    d.drawStr(4, textY, items[i]);
-                }
+                uiRow(d, row, i == sel, nullptr, items[i], nullptr, true);
             }
-
-            d.drawHLine(0, 53, 256);
-            d.setFont(u8g2_font_5x7_tf);
-            if (scroll > 0)                  d.drawStr(240, 8, "^");
-            if (scroll + VISIBLE < count)     d.drawStr(248, 8, "v");
-            d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
-                                    "^/v select   OK: start   < back",
-                                    "^/v waehlen  OK: Start  < zurueck",
-                                    "^/v vyber   OK: start   < zpet"));
+            uiScrollbar(d, scroll, count);
             d.sendBuffer();
             needRedraw = false;
         }
@@ -1696,6 +1779,7 @@ static int _solListMenu(U8G2 &d, const char* title, const char* const* items, in
             if (sel < count - 1) { sel++; needRedraw = true; }
         } else if (_solBtn(BTN_OK)) {
             _solWaitRelease();
+            snprintf(_solNumCtx, sizeof(_solNumCtx), "%s", items[sel]);
             return sel;
         } else if (_solBtn(BTN_LEFT)) {
             _solWaitRelease();
@@ -1742,6 +1826,23 @@ static bool _numEditField(U8G2 &d, const char* label, double &outValue) {
     bool awaitingFirst = true;
     _solWaitRelease();
 
+    // "Rownanie ax+b=0:   a =" -> tytul "Rownanie ax+b=0" + pole "a =".
+    // Bez ':' (np. "b =") tytulem zostaje kontekst (_solNumCtx).
+    char title[48];
+    const char* field = label;
+    const char* colon = strrchr(label, ':');
+    if (colon) {
+        size_t n = (size_t)(colon - label);
+        if (n >= sizeof(title)) n = sizeof(title) - 1;
+        memcpy(title, label, n);
+        title[n] = '\0';
+        field = colon + 1;
+        while (*field == ' ') field++;
+        snprintf(_solNumCtx, sizeof(_solNumCtx), "%s", title);
+    } else {
+        snprintf(title, sizeof(title), "%s", _solNumCtx);
+    }
+
     uint32_t blink = millis();
     bool blinkOn = true;
     bool needRedraw = true;
@@ -1753,23 +1854,30 @@ static bool _numEditField(U8G2 &d, const char* label, double &outValue) {
 
         if (needRedraw) {
             d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 10, label);
-            d.drawHLine(0, 12, 256);
+            d.setFont(UI_FONT);   // _solFit mierzy w aktualnym foncie
+            uiHeader(d, _solFit(d, title, 244), false);
+
+            // Nazwa pola duzym fontem z lewej, wartosc w zaokraglonej ramce
+            d.setFont(UI_FONT_BIG);
+            const char* fl = field;
+            int fw = d.getStrWidth(fl);
+            int fy = 40;
+            if (fw > 96) { d.setFont(UI_FONT); fl = _solFit(d, field, 96); fw = d.getStrWidth(fl); fy = 38; }
+            d.drawStr(6, fy, fl);
+            const int bx = 6 + fw + 8, by = 17, bw = 250 - bx, bh = 34;
+            d.drawRFrame(bx, by, bw, bh, 3);
 
             d.setFont(u8g2_font_logisoso22_tn);
             int textW = d.getStrWidth(buf);
-            int x = 256 - textW - 8;
-            if (x < 4) x = 4;
+            int x = bx + bw - 8 - textW - 4;   // do prawej, miejsce na kursor
+            if (x < bx + 4) x = bx + 4;
             d.drawStr(x, 45, buf);
-            if (blinkOn) d.drawBox(x + textW + 2, 32, 10, 3);
+            if (blinkOn) d.drawBox(x + textW + 3, 23, 2, 23);
 
-            d.drawHLine(0, 53, 256);
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _solT("+/- znak   =: dalej   C: kasuj/wyjdz",
-                                    "+/- sign   =: next   C: clear/exit",
-                                    "+/- Vorz.  =: weiter  C: loesch/raus",
-                                    "+/- znam.   =: dale   C: smazat/konec"));
+            uiFooter(d, _solT("+/- znak   =: dalej   C: kasuj/wyjdz",
+                              "+/- sign   =: next   C: clear/exit",
+                              "+/- Vorz.  =: weiter  C: loesch/raus",
+                              "+/- znam.   =: dale   C: smazat/konec"));
             d.sendBuffer();
             needRedraw = false;
         }
@@ -1956,7 +2064,7 @@ static void _solOfflinePercent(U8G2 &d) {
         _solT("X% z Y", "X% of Y", "X% von Y", "X% z Y"),
         _solT("Proporcja a:b=c:x", "Proportion a:b=c:x", "Verhaeltnis a:b=c:x", "Pomer a:b=c:x"),
     };
-    int sel = _solListMenu(d, _solT("=== Procenty ===", "=== Percentages ===", "=== Prozente ===", "=== Procenta ==="), items, 2);
+    int sel = _solListMenu(d, _solLabel(_solT("=== Procenty ===", "=== Percentages ===", "=== Prozente ===", "=== Procenta ===")), items, 2);
     if (sel < 0) return;
 
     if (sel == 0) {
@@ -1997,7 +2105,7 @@ static void _solOfflineDerivative(U8G2 &d) {
         _solT("Stopien 2 (ax^2+bx+c)", "Degree 2 (ax^2+bx+c)", "Grad 2 (ax^2+bx+c)", "Stupen 2 (ax^2+bx+c)"),
         _solT("Stopien 3 (ax^3+bx^2+cx+d)", "Degree 3 (ax^3+bx^2+cx+d)", "Grad 3 (ax^3+bx^2+cx+d)", "Stupen 3 (ax^3+bx^2+cx+d)"),
     };
-    int sel = _solListMenu(d, _solT("=== Pochodna ===", "=== Derivative ===", "=== Ableitung ===", "=== Derivace ==="), items, 2);
+    int sel = _solListMenu(d, _solLabel(_solT("=== Pochodna ===", "=== Derivative ===", "=== Ableitung ===", "=== Derivace ===")), items, 2);
     if (sel < 0) return;
 
     int degree = (sel == 0) ? 2 : 3;
@@ -2073,7 +2181,7 @@ static void _solOfflinePythagoras(U8G2 &d) {
         _solT("Znam obie przyprostokatne", "Know both legs", "Kenne beide Katheten", "Znam obe odvesny"),
         _solT("Znam przeciwprost.+bok", "Know hypotenuse+leg", "Kenne Hypotenuse+Kathete", "Znam preponu+odvesnu"),
     };
-    int sel = _solListMenu(d, _solT("=== Pitagoras ===", "=== Pythagoras ===", "=== Pythagoras ===", "=== Pythagoras ==="), items, 2);
+    int sel = _solListMenu(d, _solLabel(_solT("=== Pitagoras ===", "=== Pythagoras ===", "=== Pythagoras ===", "=== Pythagoras ===")), items, 2);
     if (sel < 0) return;
 
     if (sel == 0) {
@@ -2117,7 +2225,7 @@ static void _solOfflineSequence(U8G2 &d) {
         _solT("Arytmetyczny", "Arithmetic", "Arithmetisch", "Aritmeticka"),
         _solT("Geometryczny", "Geometric", "Geometrisch", "Geometricka"),
     };
-    int sel = _solListMenu(d, _solT("=== Ciagi ===", "=== Sequences ===", "=== Folgen ===", "=== Posloupnosti ==="), items, 2);
+    int sel = _solListMenu(d, _solLabel(_solT("=== Ciagi ===", "=== Sequences ===", "=== Folgen ===", "=== Posloupnosti ===")), items, 2);
     if (sel < 0) return;
 
     double a1, diffOrRatio, nD;
@@ -2152,7 +2260,7 @@ static void _solOfflineArea(U8G2 &d) {
         _solT("Kolo", "Circle", "Kreis", "Kruh"),
         _solT("Trapez", "Trapezoid", "Trapez", "Lichobeznik"),
     };
-    int sel = _solListMenu(d, _solT("=== Pola i obwody ===", "=== Areas ===", "=== Flaechen ===", "=== Obsahy a obvody ==="), items, 4);
+    int sel = _solListMenu(d, _solLabel(_solT("=== Pola i obwody ===", "=== Areas ===", "=== Flaechen ===", "=== Obsahy a obvody ===")), items, 4);
     if (sel < 0) return;
 
     String result, histLabel;
@@ -2238,7 +2346,7 @@ static void runOfflineSolver(U8G2 &d) {
     };
     while (true) {
         if (panicTriggered()) return;
-        int sel = _solListMenu(d, _solT("=== Offline ===", "=== Offline ===", "=== Offline ===", "=== Offline ==="), items, 9);
+        int sel = _solListMenu(d, _solLabel(_solT("=== Offline ===", "=== Offline ===", "=== Offline ===", "=== Offline ===")), items, 9);
         if (sel < 0) return;   // wyjscie do _solModeSelect
 
         switch (sel) {
@@ -2270,14 +2378,14 @@ static bool _solHistResendable(const String& q) {
 
 static void _solRunHistoryMode(U8G2 &d) {
     _solWaitRelease();
+    const char* histTitle = _solLabel(_solT("[3] Historia", "[3] History", "[3] Verlauf", "[3] Historie"));
 
     uint8_t count = historyCount();
     if (count == 0) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 28, _solT("Brak zapisanych zadan", "No saved tasks", "Keine gespeicherten Aufgaben", "Zadne ulozene ulohy"));
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 56, _solT("OK / < = powrot", "OK / < = back", "OK / < = zurueck", "OK / < = zpet"));
+        _solDrawNotice(d, histTitle, true, UI_ICO_CLOCK,
+            _solT("Brak zapisanych zadan", "No saved tasks", "Keine gespeicherten Aufgaben", "Zadne ulozene ulohy"),
+            nullptr, nullptr,
+            _solT("OK / < = powrot", "OK / < = back", "OK / < = zurueck", "OK / < = zpet"));
         d.sendBuffer();
         while (true) {
             if (_solTick()) d.sendBuffer();
@@ -2293,7 +2401,8 @@ static void _solRunHistoryMode(U8G2 &d) {
     int cursor = 0;            // 0 = najnowszy
     int cachedIdx = -1;        // dla ktorego kursora jest cache (-1 = brak)
     bool cachedResend = false;
-    String cq, cl1, cl2;       // gotowe do rysowania (ASCII, przyciete)
+    uint8_t cachedKind = 0;    // ikona wpisu: 0 = tekst, 1 = zdjecie, 2 = offline
+    String cq, cl1, cl2;       // gotowe do rysowania (ASCII; przyciecie do px przy rysowaniu)
     bool needRedraw = true;
 
     while (true) {
@@ -2304,11 +2413,18 @@ static void _solRunHistoryMode(U8G2 &d) {
             HistoryEntry entry;
             cq = ""; cl1 = ""; cl2 = "";
             cachedResend = false;
+            cachedKind = 0;
             if (historyGet(cursor, entry)) {
                 // Polskie znaki UTF-8 -> ASCII (font 6x10/5x7 nie ma glyphow ą/ł/...).
                 // Konwersja PRZED obcieciem, zeby nie urwac w srodku znaku wielobajtowego.
-                cq = _solUtf8ToAscii(entry.question);
-                if (cq.length() > 40) cq = cq.substring(0, 38) + "..";
+                if (entry.question == "[Zdjecie]") {
+                    cachedKind = 1;
+                    cq = _solTitleCamera();           // zamiast surowego "[Zdjecie]"
+                } else {
+                    cq = _solUtf8ToAscii(entry.question);
+                    if (cq.startsWith("[Offline]")) { cachedKind = 2; cq = cq.substring(9); cq.trim(); }
+                    if (cq.length() > 90) cq = cq.substring(0, 90);
+                }
                 // Pierwsze 2 linie odpowiedzi
                 String a = _solUtf8ToAscii(entry.answer);
                 int nl = a.indexOf('\n');
@@ -2316,8 +2432,8 @@ static void _solRunHistoryMode(U8G2 &d) {
                 String rest = nl >= 0 ? a.substring(nl + 1) : "";
                 int nl2 = rest.indexOf('\n');
                 cl2 = nl2 >= 0 ? rest.substring(0, nl2) : rest;
-                if (cl1.length() > 50) cl1 = cl1.substring(0, 48) + "..";
-                if (cl2.length() > 50) cl2 = cl2.substring(0, 48) + "..";
+                if (cl1.length() > 90) cl1 = cl1.substring(0, 90);
+                if (cl2.length() > 90) cl2 = cl2.substring(0, 90);
                 cachedResend = _solHistResendable(entry.question);
             }
             cachedIdx = cursor;
@@ -2326,25 +2442,27 @@ static void _solRunHistoryMode(U8G2 &d) {
 
         if (needRedraw) {
             d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            char hdr[32];
-            snprintf(hdr, sizeof(hdr), _solT("Historia (%d/%d)", "History (%d/%d)", "Verlauf (%d/%d)", "Historie (%d/%d)"),
-                     cursor + 1, count);
-            d.drawStr(2, 10, hdr);
-            d.drawHLine(0, 12, 256);
+            uiHeaderCount(d, histTitle, true, cursor, count);
 
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 24, cq.c_str());
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 36, cl1.c_str());
-            d.drawStr(2, 46, cl2.c_str());
+            // Pytanie z ikona rodzaju wpisu, pod nim 2 linie odpowiedzi
+            // (maly font, wciete, z pionowa kreska jak cytat).
+            const uint8_t* ico = cachedKind == 1 ? UI_ICO_CAMERA
+                               : cachedKind == 2 ? _SOL_ICO_CALC : _SOL_ICO_TEXT;
+            d.setBitmapMode(1);
+            d.drawXBM(4, 17, 8, 8, ico);
+            d.setBitmapMode(0);
+            d.setFont(UI_FONT);
+            d.drawStr(17, 25, _solFit(d, cq.c_str(), 248 - 17));
+            d.drawVLine(7, 30, 19);
+            d.setFont(UI_FONT_SMALL);
+            d.drawStr(17, 38, _solFit(d, cl1.c_str(), 248 - 17));
+            d.drawStr(17, 48, _solFit(d, cl2.c_str(), 248 - 17));
+            uiScrollbar(d, cursor, count, 1);
 
-            d.drawHLine(0, 53, 256);
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _solT("^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
-                                    "^/v OK:show  >:edit+resend  <:back",
-                                    "^/v OK:zeigen >:bearb+senden <:zurueck",
-                                    "^/v OK:ukaz  >:upravit+odeslat  <:zpet"));
+            uiFooter(d, _solT("^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
+                              "^/v OK:show  >:edit+resend  <:back",
+                              "^/v OK:zeigen >:bearb+senden <:zurueck",
+                              "^/v OK:ukaz  >:upravit+odeslat  <:zpet"));
             d.sendBuffer();
             needRedraw = false;
         }
@@ -2368,7 +2486,7 @@ static void _solRunHistoryMode(U8G2 &d) {
                     _solT("Tego wpisu nie mozna", "This entry cannot", "Dieser Eintrag kann", "Tento zaznam nelze"),
                     _solT("wyslac ponownie.", "be resent.", "nicht erneut gesendet werden.", "znovu odeslat."),
                     _solT("(zdjecie / wynik offline)", "(photo / offline result)", "(Foto / Offline-Ergebnis)", "(foto / offline vysledek)"),
-                    2000);
+                    2000, histTitle, UI_ICO_WARN);
                 needRedraw = true;
             } else {
                 // Edytuj pytanie z historii i wyslij ponownie do AI
@@ -2414,20 +2532,29 @@ static void _solRunHistoryMode(U8G2 &d) {
 static uint32_t _solQueueSkipAt = 0;   // millis() ostatniego "pomin" (0 = brak)
 
 static void _solQueueDraw(U8G2 &d, const char* status, int idx, int total) {
+    char cnt[12] = "";
+    if (idx > 0) snprintf(cnt, sizeof(cnt), "%d/%d", idx, total);
     d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    char hdr[48];
-    snprintf(hdr, sizeof(hdr), _solT("Kolejka offline: %d zadan", "Offline queue: %d tasks", "Offline-Warteschl.: %d Aufg.", "Offline fronta: %d uloh"), total);
-    d.drawStr(2, 12, hdr);
-    d.drawHLine(0, 15, 256);
-    d.drawStr(2, 32, status);
+    uiHeader(d, _solT("Kolejka offline", "Offline queue", "Offline-Warteschlange", "Offline fronta"), false, cnt);
+
+    // Status z ikona (WiFi = laczenie, chmura = wysylka), pod nim postep
+    // pozycji albo liczba zadan w kolejce.
+    d.setFont(UI_FONT);
+    const char* st = _solFit(d, status, 236);
+    int x = (UI_W - (d.getStrWidth(st) + 12)) / 2;
+    d.setBitmapMode(1);
+    d.drawXBM(x, 22, 8, 8, idx > 0 ? UI_ICO_CLOUD : UI_ICO_WIFI);
+    d.setBitmapMode(0);
+    d.drawStr(x + 12, 30, st);
     if (idx > 0) {
-        char ln[24];
-        snprintf(ln, sizeof(ln), "%d / %d", idx, total);
-        d.drawStr(2, 46, ln);
+        uiProgress(d, 48, 38, 160, idx * 100 / (total > 0 ? total : 1));
+    } else {
+        char ln[48];
+        snprintf(ln, sizeof(ln), _solT("Kolejka offline: %d zadan", "Offline queue: %d tasks", "Offline-Warteschl.: %d Aufg.", "Offline fronta: %d uloh"), total);
+        d.setFont(UI_FONT_SMALL);
+        uiCenter(d, 45, _solFit(d, ln, 248));
     }
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 62, _solT("C/CE = pomin (na 10 min)", "C/CE = skip (for 10 min)", "C/CE = ueberspringen (10 Min.)", "C/CE = preskocit (na 10 min)"));
+    uiFooter(d, _solT("C/CE = pomin (na 10 min)", "C/CE = skip (for 10 min)", "C/CE = ueberspringen (10 Min.)", "C/CE = preskocit (na 10 min)"));
     d.sendBuffer();
 }
 
@@ -2574,12 +2701,11 @@ static void _solEnsureFs(U8G2 &d) {
     if (SPIFFS.begin(false)) return;
     if (_solFsFormatTried) return;
     _solFsFormatTried = true;
-    d.clearBuffer();
-    d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, _solT("Przygotowuje pamiec...", "Preparing storage...", "Speicher wird vorbereitet...", "Pripravuji pamet..."));
-    d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 36, _solT("Jednorazowo, moze potrwac do 1 min.", "One-time, may take up to 1 min.", "Einmalig, dauert bis zu 1 Min.", "Jednorazove, muze trvat az 1 min."));
-    d.drawStr(2, 46, _solT("Nie wylaczaj kalkulatora.", "Do not switch off.", "Nicht ausschalten.", "Nevypinejte kalkulacku."));
+    _solDrawNotice(d, _solTitleSolve(), false, UI_ICO_CLOCK,
+        _solT("Przygotowuje pamiec...", "Preparing storage...", "Speicher wird vorbereitet...", "Pripravuji pamet..."),
+        _solT("Jednorazowo, moze potrwac do 1 min.", "One-time, may take up to 1 min.", "Einmalig, dauert bis zu 1 Min.", "Jednorazove, muze trvat az 1 min."),
+        _solT("Nie wylaczaj kalkulatora.", "Do not switch off.", "Nicht ausschalten.", "Nevypinejte kalkulacku."),
+        nullptr, nullptr, 0x06);
     d.sendBuffer();
     uint32_t t0 = millis();
     bool ok = SPIFFS.begin(true);   // format + mount

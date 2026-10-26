@@ -664,55 +664,34 @@ inline void showTestsScreen(U8G2 &d) {
     inputWaitRelease();
     testsBuildTitleCache();   // raz na wejscie - eliminuje lagi listy
 
-    auto drawList = [&](int cursor, int count) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        char hdr[40];
-        snprintf(hdr, sizeof(hdr),
-            _testsTr("Sprawdzian (%d)", "Tests (%d)", "Tests (%d)", "Pisemky (%d)"), count);
-        d.drawStr(2, 10, hdr);
-        d.drawHLine(0, 12, 256);
+    const char* screenTitle = _testsTr("Sprawdzian", "Test mode", "Testmodus", "Pisemka");
+    int listScroll = 0;
 
+    auto drawList = [&](int cursor, int count) {
         if (count == 0) {
-            d.drawStr(2, 30, _testsTr("Brak sprawdzianow.",
-                                    "No tests.",
-                                    "Keine Tests.",
-                                    "Zadne pisemky."));
-            d.drawStr(2, 42, _testsTr("Dodaj w panelu klienta i sync.",
-                                    "Add in user panel and sync.",
-                                    "Im Kundenpanel hinzufuegen u. sync.",
-                                    "Pridejte v panelu zakaznika a sync."));
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _testsTr("OK = sync   < = wyjscie",
-                                    "OK = sync   < = exit",
-                                    "OK = sync   < = beenden",
-                                    "OK = sync   < = konec"));
-        } else {
-            int scroll = (cursor < 4) ? 0 : cursor - 3;
-            for (int i = 0; i < 4 && (scroll + i) < count; i++) {
-                int idx = scroll + i;
-                int y = 25 + i * 10;
-                // Cache tytulow - bez I/O na kazda ramke
-                String title = testsTitleAt(idx);
-                if (title.length() == 0) title = "(bez tytulu)";
-                if (title.length() > 38) title = title.substring(0, 36) + "..";
-                if (idx == cursor) {
-                    d.setDrawColor(1);
-                    d.drawBox(0, y - 9, 256, 11);
-                    d.setDrawColor(0);
-                    d.drawStr(4, y, title.c_str());
-                    d.setDrawColor(1);
-                } else {
-                    d.drawStr(4, y, title.c_str());
-                }
-            }
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _testsTr("OK=otworz  v=sync  <=wyjscie",
-                                    "OK=open  v=sync  <=exit",
-                                    "OK=oeffnen v=sync <=beenden",
-                                    "OK=otevrit  v=sync  <=konec"));
+            uiMessage(d, screenTitle, UI_ICO_CHECK,
+                _testsTr("Brak sprawdzianow.",
+                         "No tests.",
+                         "Keine Tests.",
+                         "Zadne pisemky."),
+                _testsTr("Dodaj w panelu klienta i sync.",
+                         "Add in user panel and sync.",
+                         "Im Kundenpanel hinzufuegen u. sync.",
+                         "Pridejte v panelu zakaznika a sync."),
+                nullptr,
+                _testsTr("OK = sync   < = wyjscie",
+                         "OK = sync   < = exit",
+                         "OK = sync   < = beenden",
+                         "OK = sync   < = konec"));
+            return;
         }
-        d.sendBuffer();
+        // Cache tytulow - bez I/O na kazda ramke
+        _kalkDrawEntryList(d, screenTitle, cursor, count, listScroll,
+            [&](int idx) { return testsTitleAt(idx); },
+            _testsTr("OK = otworz   v = sync   < = wyjscie",
+                     "OK = open   v = sync   < = exit",
+                     "OK = oeffnen  v = sync  < = beenden",
+                     "OK = otevrit   v = sync   < = konec"));
     };
 
     auto drawDetail = [&](const TestEntry& t) {
@@ -725,9 +704,6 @@ inline void showTestsScreen(U8G2 &d) {
         formatted = "";
 
         // Tytul juz ASCII (testsGet) — polskie znaki nie rysuja sie jako krzaki
-        String title = t.title.length() == 0 ? String("(bez tytulu)") : t.title;
-        if (title.length() > 40) title = title.substring(0, 38) + "..";
-
         int scrollLine = 0;
         bool needRedraw = true;   // rysuj tylko po zmianie (bez sendBuffer co 20 ms)
         while (true) {
@@ -737,24 +713,15 @@ inline void showTestsScreen(U8G2 &d) {
             if (needRedraw) {
                 needRedraw = false;
                 d.clearBuffer();
-                d.setFont(u8g2_font_6x10_tf);
-                d.drawStr(2, 10, title.c_str());
-                d.drawHLine(0, 12, 256);
+                _kalkViewerHeader(d, t.title, scrollLine, (int)lines.size());
 
+                d.setFont(UI_FONT);
                 for (int i = 0; i < 4; i++) {
                     int idx = scrollLine + i;
                     if (idx >= (int)lines.size()) break;
-                    testsDrawLine(d, 2, 24 + i * 11, lines[idx]);
+                    testsDrawLine(d, 2, _KALK_VIEW_Y(i), lines[idx]);
                 }
-
-                d.setFont(u8g2_font_5x7_tf);
-                char info[24];
-                snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
-                d.drawStr(220, 62, info);
-                d.drawStr(2, 62, _testsTr("^/v scroll  < wstecz",
-                                        "^/v scroll  < back",
-                                        "^/v scroll  < zurueck",
-                                        "^/v posun  < zpet"));
+                _kalkViewerScrollbar(d, scrollLine, (int)lines.size(), 4);
                 d.sendBuffer();
             }
 
@@ -776,25 +743,30 @@ inline void showTestsScreen(U8G2 &d) {
     };
 
     auto syncFromServer = [&]() {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 30, _testsTr("Synchronizacja...", "Syncing...", "Synchronisiere...", "Synchronizace..."));
-        d.sendBuffer();
+        auto drawSyncing = [&]() {
+            _kalkDrawSyncing(d, screenTitle,
+                _testsTr("Synchronizacja...", "Syncing...", "Synchronisiere...", "Synchronizace..."),
+                _testsTr("Lacze z serwerem", "Connecting to server", "Verbinde mit Server", "Pripojuji k serveru"));
+        };
+        drawSyncing();
 
         if (WiFi.status() != WL_CONNECTED) {
             char ssid[33] = "", pass[64] = "";
             if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
                 wifiConnectStart(ssid, pass);   // STA + TxPower; nie restartuje trwajacego laczenia
                 uint32_t t0 = millis();
-                while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) delay(100);
+                while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
+                    delay(100);
+                    drawSyncing();   // animacja kropek
+                }
             }
             memset(pass, 0, sizeof(pass));
         }
         if (WiFi.status() != WL_CONNECTED) {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 30, _testsTr("Brak WiFi", "No WiFi", "Kein WLAN", "Bez WiFi"));
-            d.sendBuffer();
+            uiMessage(d, screenTitle, UI_ICO_WIFI,
+                _testsTr("Brak WiFi", "No WiFi", "Kein WLAN", "Bez WiFi"),
+                _testsTr("Ustawienia -> WiFi i konto", "Settings -> WiFi & account",
+                         "Einstellungen -> WLAN & Konto", "Nastaveni -> WiFi a ucet"));
             delay(2000);
             return -1;
         }
@@ -804,17 +776,15 @@ inline void showTestsScreen(U8G2 &d) {
         int n = testsSync(licKey, KALK_API_KEY);
         // Plik sie zmienil - przebuduj cache tytulow
         testsBuildTitleCache();
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
         if (n < 0) {
-            d.drawStr(2, 30, _testsTr("Blad synchronizacji", "Sync error", "Sync-Fehler", "Chyba synchronizace"));
+            uiMessage(d, screenTitle, UI_ICO_WARN,
+                _testsTr("Blad synchronizacji", "Sync error", "Sync-Fehler", "Chyba synchronizace"));
         } else {
             char buf[40];
             snprintf(buf, sizeof(buf),
                 _testsTr("Pobrano: %d sprawdz.", "Downloaded: %d tests", "Geladen: %d Tests", "Stazeno: %d pisemek"), n);
-            d.drawStr(2, 30, buf);
+            uiMessage(d, screenTitle, UI_ICO_CHECK, buf);
         }
-        d.sendBuffer();
         delay(1500);
         return n;
     };

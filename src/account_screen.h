@@ -38,6 +38,16 @@ static void _accSleepCheck(U8G2 &d) {
     inputWaitRelease();
 }
 
+// "Status:  PODLACZONE" -> "PODLACZONE" (krotki status do prawej strony
+// naglowka; ten sam tlumaczony napis co wczesniej w tresci ekranu).
+static const char* _accStatusWord(const char* s) {
+    const char* c = strchr(s, ':');
+    if (!c) return s;
+    c++;
+    while (*c == ' ') c++;
+    return *c ? c : s;
+}
+
 // Pokazuje status sparowania urzadzenia z kontem (Settings -> Status konta).
 // Wymaga WiFi. Pyta serwer GET /api/device/account-status.
 inline void showAccountStatusScreen(U8G2 &d) {
@@ -53,13 +63,9 @@ inline void showAccountStatusScreen(U8G2 &d) {
     };
 
     // Render: laczenie / rejestracja
+    const char* title = mT("Status konta", "Account status", "Kontostatus", "Stav uctu");
     auto drawBusy = [&](const char* msg) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus", "Stav uctu"));
-        d.drawHLine(0, 12, 256);
-        d.drawStr(2, 32, msg);
-        d.sendBuffer();
+        uiBusy(d, title, UI_ICO_CLOUD, msg);
     };
 
     drawBusy(mT("Sprawdzam WiFi...", "Checking WiFi...", "Pruefe WLAN...", "Kontroluji WiFi..."));
@@ -67,15 +73,11 @@ inline void showAccountStatusScreen(U8G2 &d) {
         char ssid[33] = "", pass[64] = "";
         wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
         if (ssid[0] == '\0') {
-            d.clearBuffer();
-            d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus", "Stav uctu"));
-            d.drawHLine(0, 12, 256);
-            d.drawStr(2, 32, mT("Brak zapisanego WiFi.", "No saved WiFi.", "Kein gespeichertes WLAN.", "Zadna ulozena WiFi."));
-            d.drawStr(2, 44, mT("Settings -> Ustaw WiFi", "Settings -> Set up WiFi", "Settings -> WLAN einrichten", "Nastaveni -> Nastavit WiFi"));
-            d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden", "C/CE = konec"));
-            d.sendBuffer();
+            uiMessage(d, title, UI_ICO_WIFI,
+                      mT("Brak zapisanego WiFi.", "No saved WiFi.", "Kein gespeichertes WLAN.", "Zadna ulozena WiFi."),
+                      mT("Ustawienia -> WiFi i konto", "Settings -> WiFi & account", "Einstellungen -> WLAN & Konto", "Nastaveni -> WiFi a ucet"),
+                      nullptr,
+                      mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden", "C/CE = konec"));
             powerSetInhibit(false);
             while (true) {
                 if (_panicRequested) { exitWait(); return; }
@@ -91,14 +93,10 @@ inline void showAccountStatusScreen(U8G2 &d) {
     }
 
     if (WiFi.status() != WL_CONNECTED) {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus", "Stav uctu"));
-        d.drawHLine(0, 12, 256);
-        d.drawStr(2, 32, mT("Brak polaczenia z WiFi.", "No WiFi connection.", "Keine WLAN-Verbindung.", "Zadne pripojeni WiFi."));
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden", "C/CE = konec"));
-        d.sendBuffer();
+        uiMessage(d, title, UI_ICO_WARN,
+                  mT("Brak polaczenia z WiFi.", "No WiFi connection.", "Keine WLAN-Verbindung.", "Zadne pripojeni WiFi."),
+                  nullptr, nullptr,
+                  mT("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden", "C/CE = konec"));
         powerSetInhibit(false);
         while (true) {
             if (_panicRequested) { exitWait(); return; }
@@ -122,62 +120,76 @@ inline void showAccountStatusScreen(U8G2 &d) {
         if (_panicRequested) { exitWait(); return; }
         _accSleepCheck(d);
         d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, mT("Status konta", "Account status", "Kontostatus", "Stav uctu"));
-        d.drawHLine(0, 12, 256);
-
-        d.setFont(u8g2_font_5x7_tf);
+        const char* foot = mT("C/CE = wyjscie   OK = odswiez", "C/CE = exit   OK = refresh", "C/CE = beenden   OK = aktualisieren", "C/CE = konec   OK = obnovit");
         char line[80];
         if (!ok) {
-            d.drawStr(2, 22, mT("Blad pobierania:", "Fetch error:", "Ladefehler:", "Chyba nacteni:"));
+            uiHeader(d, title, true);
+            d.setFont(UI_FONT);
+            const char* l1 = mT("Blad pobierania:", "Fetch error:", "Ladefehler:", "Chyba nacteni:");
+            int w = d.getStrWidth(l1);
+            int x = (UI_W - (w + 12)) / 2;
+            d.setBitmapMode(1);
+            d.drawXBM(x, 23, 8, 8, UI_ICO_CROSS);
+            d.setBitmapMode(0);
+            d.drawStr(x + 12, 31, l1);
             snprintf(line, sizeof(line), "%s", st.error.c_str());
-            d.drawStr(2, 32, line);
+            d.setFont(UI_FONT_SMALL);
+            uiCenter(d, 44, line);
         } else if (!st.paired) {
-            d.drawStr(2, 22, mT("Status:  NIEPODLACZONE", "Status:  NOT LINKED", "Status:  NICHT VERBUNDEN", "Stav:    NEPROPOJENO"));
-            d.drawStr(2, 34, mT("Sparuj na stronie:", "Pair on the website:", "Koppeln auf der Website:", "Sparujte na webu:"));
-            d.drawStr(2, 44, "kalkmate.pl/panel -> Kalkulator");
-            d.drawStr(2, 54, mT("Wpisz Device ID + kod odblokowania.",
-                                 "Enter Device ID + unlock code.",
-                                 "Geraete-ID + Freischaltcode eingeben.",
-                                 "Zadejte ID zarizeni + odemykaci kod."));
+            uiHeader(d, title, true, _accStatusWord(mT("Status:  NIEPODLACZONE", "Status:  NOT LINKED", "Status:  NICHT VERBUNDEN", "Stav:    NEPROPOJENO")));
+            d.setFont(UI_FONT);
+            const char* l1 = mT("Sparuj na stronie:", "Pair on the website:", "Koppeln auf der Website:", "Sparujte na webu:");
+            int w = d.getStrWidth(l1);
+            int x = (UI_W - (w + 12)) / 2;
+            d.setBitmapMode(1);
+            d.drawXBM(x, 18, 8, 8, UI_ICO_KEY);
+            d.setBitmapMode(0);
+            d.drawStr(x + 12, 26, l1);
+            uiCenter(d, 38, "kalkmate.pl/panel -> Kalkulator");
+            d.setFont(UI_FONT_SMALL);
+            uiCenter(d, 49, mT("Wpisz Device ID + kod odblokowania.",
+                               "Enter Device ID + unlock code.",
+                               "Geraete-ID + Freischaltcode eingeben.",
+                               "Zadejte ID zarizeni + odemykaci kod."));
         } else {
-            d.drawStr(2, 21, mT("Status:  PODLACZONE", "Status:  LINKED", "Status:  VERBUNDEN", "Stav:    PROPOJENO"));
-            snprintf(line, sizeof(line), mT("Konto: %.34s", "Account: %.34s", "Konto: %.34s", "Ucet: %.34s"), st.userEmail.c_str());
-            d.drawStr(2, 30, line);
+            uiHeader(d, title, true, _accStatusWord(mT("Status:  PODLACZONE", "Status:  LINKED", "Status:  VERBUNDEN", "Stav:    PROPOJENO")));
+            // Wiersze informacyjne (10 px): Konto / Licencja / Dni / Model
+            int y = 22;
+            uiInfoRow(d, y, mT("Konto", "Account", "Konto", "Ucet"), st.userEmail.c_str());
+            y += 10;
             if (st.hasLicense) {
                 const char* lic_s = (st.licenseStatus == "active") ? "OK" :
                                     (st.licenseStatus == "trial")  ? mT("trial", "trial", "Test", "zkusebni")
                                                                     : mT("wygas", "expired", "abgelaufen", "vyprsela");
-                snprintf(line, sizeof(line), mT("Lic: %.14s (%s)", "Lic: %.14s (%s)", "Lizenz: %.14s (%s)", "Lic: %.14s (%s)"),
-                         st.licenseCode.c_str(), lic_s);
-                d.drawStr(2, 39, line);
-
-                // Dni + aktywny model AI na jednej linii
-                char combo[64] = "";
-                if (st.daysLeft >= 0)
-                    snprintf(combo, sizeof(combo), mT("Dni: %d", "Days: %d", "Tage: %d", "Dny: %d"), st.daysLeft);
-                if (st.aiModel.length() > 0) {
-                    // Skroc do nazwy po '/' (np. "google/gemini-2.5-pro" -> "gemini-2.5-pro")
+                snprintf(line, sizeof(line), "%.14s (%s)", st.licenseCode.c_str(), lic_s);
+                uiInfoRow(d, y, mT("Licencja", "License", "Lizenz", "Licence"), line);
+                y += 10;
+                if (st.daysLeft >= 0) {
+                    snprintf(line, sizeof(line), "%d", st.daysLeft);
+                    uiInfoRow(d, y, mT("Pozostalo dni", "Days left", "Resttage", "Zbyva dni"), line);
+                    y += 10;
+                }
+                // Model AI (po '/', np. "google/gemini-2.5-pro" -> "gemini-2.5-pro") + tryb
+                if (st.aiModel.length() > 0 || st.aiMode.length() > 0) {
                     int sl = st.aiModel.lastIndexOf('/');
                     String m = (sl >= 0) ? st.aiModel.substring(sl + 1) : st.aiModel;
-                    if (m.length() > 13) m = m.substring(0, 11) + "..";
-                    char tmp[40];
-                    snprintf(tmp, sizeof(tmp), "%sAI:%s",
-                             combo[0] ? "  " : "", m.c_str());
-                    strncat(combo, tmp, sizeof(combo) - strlen(combo) - 1);
-                }
-                if (combo[0]) d.drawStr(2, 48, combo);
-
-                if (st.aiMode.length() > 0) {
-                    snprintf(line, sizeof(line), mT("Tryb: %.28s", "Mode: %.28s", "Modus: %.28s", "Rezim: %.28s"), st.aiMode.c_str());
-                    d.drawStr(2, 57, line);
+                    if (m.length() > 0 && st.aiMode.length() > 0) m += " / ";
+                    m += st.aiMode;
+                    uiInfoRow(d, y, mT("Model", "Model", "Modell", "Model"), m.c_str());
                 }
             } else {
-                d.drawStr(2, 39, mT("Brak licencji na koncie", "No license on account", "Keine Lizenz im Konto", "Na uctu neni licence"));
+                d.setFont(UI_FONT);
+                d.setBitmapMode(1);
+                const char* nl = mT("Brak licencji na koncie", "No license on account", "Keine Lizenz im Konto", "Na uctu neni licence");
+                int w = d.getStrWidth(nl);
+                int x = (UI_W - (w + 12)) / 2;
+                d.drawXBM(x, 34, 8, 8, UI_ICO_WARN);
+                d.setBitmapMode(0);
+                d.drawStr(x + 12, 42, nl);
             }
         }
 
-        d.drawStr(2, 63, mT("C/CE = wyjscie   OK = odswiez", "C/CE = exit   OK = refresh", "C/CE = beenden   OK = aktualisieren", "C/CE = konec   OK = obnovit"));
+        uiFooter(d, foot);
         d.sendBuffer();
 
         if (inputKeyConsume(KEY_CCE) || _setBtn(BTN_LEFT)) { exitWait(); return; }
@@ -200,12 +212,8 @@ inline void showDeviceIdQrScreen(U8G2 &d) {
     // Sprobuj zarejestrowac device na serwerze (zapisac unlockCode).
     // Robi sie raz — jesli WiFi off, ladujemy zapisane creds i probujemy.
     {
-        d.clearBuffer();
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, "Device ID + QR");
-        d.drawHLine(0, 12, 256);
-        d.drawStr(2, 32, mT("Rejestruje na serwerze...", "Registering with server...", "Registriere beim Server...", "Registruji na serveru..."));
-        d.sendBuffer();
+        uiBusy(d, "Device ID + QR", UI_ICO_CLOUD,
+               mT("Rejestruje na serwerze...", "Registering with server...", "Registriere beim Server...", "Registruji na serveru..."));
 
         if (WiFi.status() != WL_CONNECTED) {
             char ssid[33] = "", pass[64] = "";
@@ -239,39 +247,46 @@ inline void showDeviceIdQrScreen(U8G2 &d) {
         _accSleepCheck(d);
         d.clearBuffer();
 
-        // Lewa strona: device ID + info
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 8, "Device ID:");
-        d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 20, deviceId.c_str());
-        d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 32, mT("Skanuj QR -> podlaczenie",
-                             "Scan QR -> link to account",
-                             "QR scannen -> Konto verknuepfen",
-                             "Naskenujte QR -> propojeni"));
-        d.drawStr(2, 42, mT("do panelu klienta.",
-                             "in user panel.",
-                             "im Kundenpanel.",
-                             "v zakaznickem panelu."));
-        d.drawStr(2, 60, mT("OK / < = wyjscie",
-                             "OK / < = exit",
-                             "OK / < = beenden",
-                             "OK / < = konec"));
-
-        // Prawa strona: QR (po prawej, 64x64 px max)
-        // QR wersja 4 = 33 modules, kazdy 1px = 33x33. Mieści się prawo.
-        int qrSize = qrcode.size;   // 33
-        int scale = 1;              // 1px per module
-        int qrPx = qrSize * scale;
-        int xOff = 256 - qrPx - 4;
-        int yOff = (64 - qrPx) / 2;
+        // Lewa strona: kod QR w normalnej polaryzacji (ciemne moduly na jasnym
+        // polu + strefa ciszy 3 moduly) — czytelny dla kazdego skanera.
+        // Wersja 4 = 33x33 moduly, 1 px/modul (2 px = 66 px > 64).
+        const int qrSize = qrcode.size;      // 33
+        const int qz     = 3;                // strefa ciszy
+        const int box    = qrSize + 2 * qz;  // 39
+        const int bx     = 4;
+        const int by     = (UI_H - box) / 2;
+        d.setDrawColor(1);
+        d.drawBox(bx, by, box, box);
+        d.setDrawColor(0);
         for (uint8_t y = 0; y < qrSize; y++) {
             for (uint8_t x = 0; x < qrSize; x++) {
                 if (qrcode_getModule(&qrcode, x, y)) {
-                    d.drawPixel(xOff + x * scale, yOff + y * scale);
+                    d.drawPixel(bx + qz + x, by + qz + y);
                 }
             }
         }
+        d.setDrawColor(1);
+
+        // Prawa strona: naglowek, Device ID duzym fontem, podpowiedz
+        const int tx = bx + box + 10;
+        d.setFont(UI_FONT);
+        d.drawStr(tx, 10, "<");
+        d.drawStr(tx + 10, 10, "Device ID + QR");
+        d.drawHLine(tx - 4, UI_HEADER_LINE, UI_W - (tx - 4));
+        d.setFont(UI_FONT_SMALL);
+        d.drawStr(tx, 22, "Device ID");
+        d.setFont(UI_FONT_BIG);
+        d.drawStr(tx, 39, deviceId.c_str());
+        d.setFont(UI_FONT_SMALL);
+        d.drawStr(tx, 51, mT("Skanuj QR -> podlaczenie",
+                             "Scan QR -> link to account",
+                             "QR scannen -> Konto verknuepfen",
+                             "Naskenujte QR -> propojeni"));
+        d.drawStr(tx, 60, mT("do panelu klienta.",
+                             "in user panel.",
+                             "im Kundenpanel.",
+                             "v zakaznickem panelu."));
+        d.setFont(UI_FONT);
 
         d.sendBuffer();
 

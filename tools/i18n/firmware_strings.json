@@ -1,32 +1,25 @@
 {
- "=== About ===": {
-  "pl": "=== O programie ===",
-  "de": "=== Ueber ===",
-  "cs": "=== O programu ===",
+ "About KalkMate": {
+  "pl": "O programie",
+  "de": "Ueber KalkMate",
+  "cs": "O programu",
+  "files": [
+   "about_screen.h",
+   "settings_screen.h"
+  ]
+ },
+ "Authors": {
+  "pl": "Tworcy",
+  "de": "Autoren",
+  "cs": "Autori",
   "files": [
    "about_screen.h"
   ]
  },
- "=== Authors ===": {
-  "pl": "=== Tworcy ===",
-  "de": "=== Autoren ===",
-  "cs": "=== Autori ===",
-  "files": [
-   "about_screen.h"
-  ]
- },
- "=== Version ===": {
-  "pl": "=== Wersja ===",
-  "de": "=== Version ===",
-  "cs": "=== Verze ===",
-  "files": [
-   "about_screen.h"
-  ]
- },
- "Firmware version: %s": {
-  "pl": "Wersja firmware: %s",
-  "de": "Firmware-Version: %s",
-  "cs": "Verze firmwaru: %s",
+ "Version": {
+  "pl": "Wersja",
+  "de": "Version",
+  "cs": "Verze",
   "files": [
    "about_screen.h"
   ]
@@ -71,27 +64,55 @@
    "about_screen.h"
   ]
  },
- "Display: OLED 256x64": {
-  "pl": "Wyswietlacz: OLED 256x64",
-  "de": "Display: OLED 256x64",
-  "cs": "Displej: OLED 256x64",
+ "Firmware": {
+  "pl": "Firmware",
+  "de": "Firmware",
+  "cs": "Firmware",
   "files": [
-   "about_screen.h"
+   "about_screen.h",
+   "settings_screen.h"
   ]
  },
- "< BACK": {
-  "pl": "< WSTECZ",
-  "de": "< ZURUECK",
-  "cs": "< ZPET",
+ "Processor": {
+  "pl": "Procesor",
+  "de": "Prozessor",
+  "cs": "Procesor",
+  "files": [
+   "about_screen.h",
+   "settings_screen.h"
+  ]
+ },
+ "Flash memory": {
+  "pl": "Pamiec flash",
+  "de": "Flash-Speicher",
+  "cs": "Pamet flash",
+  "files": [
+   "about_screen.h",
+   "settings_screen.h"
+  ]
+ },
+ "Display": {
+  "pl": "Ekran",
+  "de": "Anzeige",
+  "cs": "Displej",
+  "files": [
+   "about_screen.h",
+   "settings_screen.h"
+  ]
+ },
+ "< Back": {
+  "pl": "< Wstecz",
+  "de": "< Zurueck",
+  "cs": "< Zpet",
   "files": [
    "about_screen.h",
    "info_screen.h"
   ]
  },
- "NEXT >": {
-  "pl": "DALEJ >",
-  "de": "WEITER>",
-  "cs": "DALSI >",
+ "Next >": {
+  "pl": "Dalej >",
+  "de": "Weiter >",
+  "cs": "Dalsi >",
   "files": [
    "about_screen.h",
    "info_screen.h"
@@ -122,12 +143,14 @@
    "account_screen.h"
   ]
  },
- "Settings -> Set up WiFi": {
-  "pl": "Settings -> Ustaw WiFi",
-  "de": "Settings -> WLAN einrichten",
-  "cs": "Nastaveni -> Nastavit WiFi",
+ "Settings -> WiFi & account": {
+  "pl": "Ustawienia -> WiFi i konto",
+  "de": "Einstellungen -> WLAN & Konto",
+  "cs": "Nastaveni -> WiFi a ucet",
   "files": [
-   "account_screen.h"
+   "account_screen.h",
+   "notes.h",
+   "tests.h"
   ]
  },
  "C/CE = exit": {
@@ -135,8 +158,7 @@
   "de": "C/CE = beenden",
   "cs": "C/CE = konec",
   "files": [
-   "account_screen.h",
-   "settings_screen.h"
+   "account_screen.h"
   ]
  },
  "Connecting to WiFi...": {
@@ -168,6 +190,14 @@
   "pl": "Pobieram status...",
   "de": "Lade Status...",
   "cs": "Nacitam stav...",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "C/CE = exit   OK = refresh": {
+  "pl": "C/CE = wyjscie   OK = odswiez",
+  "de": "C/CE = beenden   OK = aktualisieren",
+  "cs": "C/CE = konec   OK = obnovit",
   "files": [
    "account_screen.h"
   ]
@@ -212,10 +242,10 @@
    "account_screen.h"
   ]
  },
- "Account: %.34s": {
-  "pl": "Konto: %.34s",
-  "de": "Konto: %.34s",
-  "cs": "Ucet: %.34s",
+ "Account": {
+  "pl": "Konto",
+  "de": "Konto",
+  "cs": "Ucet",
   "files": [
    "account_screen.h"
   ]
@@ -236,42 +266,35 @@
    "account_screen.h"
   ]
  },
- "Lic: %.14s (%s)": {
-  "pl": "Lic: %.14s (%s)",
-  "de": "Lizenz: %.14s (%s)",
-  "cs": "Lic: %.14s (%s)",
+ "License": {
+  "pl": "Licencja",
+  "de": "Lizenz",
+  "cs": "Licence",
   "files": [
    "account_screen.h"
   ]
  },
- "Days: %d": {
-  "pl": "Dni: %d",
-  "de": "Tage: %d",
-  "cs": "Dny: %d",
+ "Days left": {
+  "pl": "Pozostalo dni",
+  "de": "Resttage",
+  "cs": "Zbyva dni",
   "files": [
    "account_screen.h"
   ]
  },
- "Mode: %.28s": {
-  "pl": "Tryb: %.28s",
-  "de": "Modus: %.28s",
-  "cs": "Rezim: %.28s",
+ "Model": {
+  "pl": "Model",
+  "de": "Modell",
+  "cs": "Model",
   "files": [
-   "account_screen.h"
+   "account_screen.h",
+   "settings_screen.h"
   ]
  },
  "No license on account": {
   "pl": "Brak licencji na koncie",
   "de": "Keine Lizenz im Konto",
   "cs": "Na uctu neni licence",
-  "files": [
-   "account_screen.h"
-  ]
- },
- "C/CE = exit   OK = refresh": {
-  "pl": "C/CE = wyjscie   OK = odswiez",
-  "de": "C/CE = beenden   OK = aktualisieren",
-  "cs": "C/CE = konec   OK = obnovit",
   "files": [
    "account_screen.h"
   ]
@@ -308,19 +331,19 @@
    "account_screen.h"
   ]
  },
- "OK / < = exit": {
-  "pl": "OK / < = wyjscie",
-  "de": "OK / < = beenden",
-  "cs": "OK / < = konec",
+ "Factory reset": {
+  "pl": "Reset fabryczny",
+  "de": "Werksreset",
+  "cs": "Tovarni reset",
   "files": [
-   "account_screen.h",
+   "factory_reset.h",
    "settings_screen.h"
   ]
  },
- "=== Factory reset ===": {
-  "pl": "=== Reset fabryczny ===",
-  "de": "=== Werksreset ===",
-  "cs": "=== Tovarni reset ===",
+ "Erase all data?": {
+  "pl": "Skasowac wszystkie dane?",
+  "de": "Alle Daten loeschen?",
+  "cs": "Smazat vsechna data?",
   "files": [
    "factory_reset.h"
   ]
@@ -341,34 +364,19 @@
    "factory_reset.h"
   ]
  },
- "No choice within 30 s = cancel.": {
-  "pl": "Brak decyzji przez 30 s = anuluj.",
-  "de": "Keine Wahl in 30 s = Abbruch.",
-  "cs": "Bez volby do 30 s = zruseni.",
+ "C/CE cancel": {
+  "pl": "C/CE anuluj",
+  "de": "C/CE abbrechen",
+  "cs": "C/CE zrusit",
   "files": [
-   "factory_reset.h"
+   "factory_reset.h",
+   "settings_screen.h"
   ]
  },
- "OK = YES, reset": {
-  "pl": "OK = TAK, resetuj",
-  "de": "OK = JA, zuruecksetzen",
-  "cs": "OK = ANO, resetovat",
-  "files": [
-   "factory_reset.h"
-  ]
- },
- "C/CE or < = cancel": {
-  "pl": "C/CE lub < = anuluj",
-  "de": "C/CE oder < = abbrechen",
-  "cs": "C/CE nebo < = zrusit",
-  "files": [
-   "factory_reset.h"
-  ]
- },
- "Factory reset...": {
-  "pl": "Reset fabryczny...",
-  "de": "Werksreset...",
-  "cs": "Tovarni reset...",
+ "OK reset": {
+  "pl": "OK resetuj",
+  "de": "OK zuruecksetzen",
+  "cs": "OK resetovat",
   "files": [
    "factory_reset.h"
   ]
@@ -379,6 +387,15 @@
   "cs": "Mazu data, prosim cekejte...",
   "files": [
    "factory_reset.h"
+  ]
+ },
+ "Do not turn off the device!": {
+  "pl": "Nie wylaczaj urzadzenia!",
+  "de": "Geraet nicht ausschalten!",
+  "cs": "Nevypinejte zarizeni!",
+  "files": [
+   "factory_reset.h",
+   "ota_update.h"
   ]
  },
  "Factory reset done": {
@@ -397,20 +414,42 @@
    "factory_reset.h"
   ]
  },
- "=== Server status (4/5) ===": {
-  "pl": "=== Status serwera (4/5) ===",
-  "de": "=== Serverstatus (4/5) ===",
-  "cs": "=== Stav serveru (4/5) ===",
+ "Server status": {
+  "pl": "Status serwera",
+  "de": "Serverstatus",
+  "cs": "Stav serveru",
   "files": [
    "info_screen.h"
   ]
  },
- "WiFi: Connected": {
-  "pl": "WiFi: Polaczono",
-  "de": "WiFi: Verbunden",
-  "cs": "WiFi: Pripojeno",
+ "WiFi network": {
+  "pl": "Siec WiFi",
+  "de": "WLAN-Netz",
+  "cs": "Sit WiFi",
   "files": [
-   "info_screen.h"
+   "info_screen.h",
+   "settings_screen.h",
+   "wifi_settings.h"
+  ]
+ },
+ "IP address": {
+  "pl": "Adres IP",
+  "de": "IP-Adresse",
+  "cs": "IP adresa",
+  "files": [
+   "info_screen.h",
+   "settings_screen.h",
+   "wifi_settings.h"
+  ]
+ },
+ "WiFi signal": {
+  "pl": "Sygnal WiFi",
+  "de": "WLAN-Signal",
+  "cs": "Signal WiFi",
+  "files": [
+   "info_screen.h",
+   "settings_screen.h",
+   "wifi_settings.h"
   ]
  },
  "WiFi: OK (server: check in app)": {
@@ -453,10 +492,10 @@
    "info_screen.h"
   ]
  },
- "=== How to use (1/5) ===": {
-  "pl": "=== Jak uzywac (1/5) ===",
-  "de": "=== Bedienung (1/5) ===",
-  "cs": "=== Jak pouzivat (1/5) ===",
+ "How to use": {
+  "pl": "Jak uzywac",
+  "de": "Bedienung",
+  "cs": "Jak pouzivat",
   "files": [
    "info_screen.h"
   ]
@@ -493,10 +532,10 @@
    "info_screen.h"
   ]
  },
- "=== Tips (2/5) ===": {
-  "pl": "=== Wskazowki (2/5) ===",
-  "de": "=== Tipps (2/5) ===",
-  "cs": "=== Tipy (2/5) ===",
+ "Tips": {
+  "pl": "Wskazowki",
+  "de": "Tipps",
+  "cs": "Tipy",
   "files": [
    "info_screen.h"
   ]
@@ -533,10 +572,10 @@
    "info_screen.h"
   ]
  },
- "=== Subjects (3/5) ===": {
-  "pl": "=== Przedmioty (3/5) ===",
-  "de": "=== Faecher (3/5) ===",
-  "cs": "=== Predmety (3/5) ===",
+ "Subjects": {
+  "pl": "Przedmioty",
+  "de": "Faecher",
+  "cs": "Predmety",
   "files": [
    "info_screen.h"
   ]
@@ -573,14 +612,6 @@
    "info_screen.h"
   ]
  },
- "=== FAQ (5/5) ===": {
-  "pl": "=== FAQ (5/5) ===",
-  "de": "=== FAQ (5/5) ===",
-  "cs": "=== FAQ (5/5) ===",
-  "files": [
-   "info_screen.h"
-  ]
- },
  "No response? Check WiFi": {
   "pl": "Brak odpowiedzi? Sprawdz WiFi",
   "de": "Keine Antwort? WiFi pruefen",
@@ -605,11 +636,20 @@
    "info_screen.h"
   ]
  },
- "Notes (%d)": {
-  "pl": "Notatki (%d)",
-  "de": "Notizen (%d)",
-  "cs": "Poznamky (%d)",
+ "(no title)": {
+  "pl": "(bez tytulu)",
+  "de": "(ohne Titel)",
+  "cs": "(bez nazvu)",
   "files": [
+   "notes.h"
+  ]
+ },
+ "Notes": {
+  "pl": "Notatki",
+  "de": "Notizen",
+  "cs": "Poznamky",
+  "files": [
+   "main.cpp",
    "notes.h"
   ]
  },
@@ -643,15 +683,8 @@
   "de": "OK = oeffnen  v = sync  < = beenden",
   "cs": "OK = otevrit   v = sync   < = konec",
   "files": [
-   "notes.h"
-  ]
- },
- "^/v scroll   < = back": {
-  "pl": "^/v scroll   < = wstecz",
-  "de": "^/v scroll   < = zurueck",
-  "cs": "^/v posun   < = zpet",
-  "files": [
-   "notes.h"
+   "notes.h",
+   "tests.h"
   ]
  },
  "Syncing...": {
@@ -668,7 +701,8 @@
   "de": "Verbinde mit Server",
   "cs": "Pripojuji k serveru",
   "files": [
-   "notes.h"
+   "notes.h",
+   "tests.h"
   ]
  },
  "No WiFi": {
@@ -697,12 +731,13 @@
    "notes.h"
   ]
  },
- "Do not turn off the device!": {
-  "pl": "Nie wylaczaj urzadzenia!",
-  "de": "Geraet nicht ausschalten!",
-  "cs": "Nevypinejte zarizeni!",
+ "Software update": {
+  "pl": "Aktualizacja",
+  "de": "Software-Update",
+  "cs": "Aktualizace",
   "files": [
-   "ota_update.h"
+   "ota_update.h",
+   "settings_screen.h"
   ]
  },
  "Battery too low for update": {
@@ -891,6 +926,15 @@
    "power.h"
   ]
  },
+ "Remote help": {
+  "pl": "Zdalna pomoc",
+  "de": "Fernhilfe",
+  "cs": "Vzdalena pomoc",
+  "files": [
+   "remote_session.h",
+   "settings_screen.h"
+  ]
+ },
  "Remote help: ACTIVE": {
   "pl": "Zdalna pomoc: AKTYWNA",
   "de": "Fernhilfe: AKTIV",
@@ -963,12 +1007,13 @@
    "remote_session.h"
   ]
  },
- "Test %d/%d:": {
-  "pl": "Test %d/%d:",
-  "de": "Test %d/%d:",
-  "cs": "Test %d/%d:",
+ "Screen test": {
+  "pl": "Test ekranu",
+  "de": "Bildschirmtest",
+  "cs": "Test displeje",
   "files": [
-   "screen_test.h"
+   "screen_test.h",
+   "settings_screen.h"
   ]
  },
  "OK/> = next   < = exit": {
@@ -995,42 +1040,66 @@
    "screen_test.h"
   ]
  },
- "=== Settings ===": {
-  "pl": "=== Ustawienia ===",
-  "de": "=== Einstellungen ===",
-  "cs": "=== Nastaveni ===",
+ "Problem solving": {
+  "pl": "Rozwiazywanie",
+  "de": "Aufgaben loesen",
+  "cs": "Reseni uloh",
   "files": [
    "settings_screen.h"
   ]
  },
- "Bright:   ": {
-  "pl": "Jasnosc:  ",
-  "de": "Hell:     ",
-  "cs": "Jas:      ",
+ "Language": {
+  "pl": "Jezyk",
+  "de": "Sprache",
+  "cs": "Jazyk",
   "files": [
    "settings_screen.h"
   ]
  },
- "Rotate:   ": {
-  "pl": "Obrot:    ",
-  "de": "Drehung:  ",
-  "cs": "Otoceni:  ",
+ "WiFi & account": {
+  "pl": "WiFi i konto",
+  "de": "WLAN & Konto",
+  "cs": "WiFi a ucet",
   "files": [
    "settings_screen.h"
   ]
  },
- "Camera...": {
-  "pl": "Kamera...",
-  "de": "Kamera...",
-  "cs": "Kamera...",
+ "Security": {
+  "pl": "Bezpieczenstwo",
+  "de": "Sicherheit",
+  "cs": "Zabezpeceni",
   "files": [
    "settings_screen.h"
   ]
  },
- "Language: ": {
-  "pl": "Jezyk:    ",
-  "de": "Sprache:  ",
-  "cs": "Jazyk:    ",
+ "Battery": {
+  "pl": "Bateria",
+  "de": "Akku",
+  "cs": "Baterie",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "System": {
+  "pl": "System",
+  "de": "System",
+  "cs": "System",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Information": {
+  "pl": "Informacje",
+  "de": "Informationen",
+  "cs": "Informace",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Diagnostics": {
+  "pl": "Diagnostyka",
+  "de": "Diagnose",
+  "cs": "Diagnostika",
   "files": [
    "settings_screen.h"
   ]
@@ -1059,34 +1128,58 @@
    "settings_screen.h"
   ]
  },
- "Mode:     ": {
-  "pl": "Tryb:     ",
-  "de": "Modus:    ",
-  "cs": "Rezim:    ",
+ "no network": {
+  "pl": "brak sieci",
+  "de": "kein Netz",
+  "cs": "zadna sit",
   "files": [
    "settings_screen.h"
   ]
  },
- "AI code:  ": {
-  "pl": "Kod AI:   ",
-  "de": "KI-Code:  ",
-  "cs": "Kod AI:   ",
+ "charging": {
+  "pl": "ladowanie",
+  "de": "laedt",
+  "cs": "nabiji",
   "files": [
    "settings_screen.h"
   ]
  },
- "Panic key:": {
-  "pl": "Panic:    ",
-  "de": "Panik:    ",
-  "cs": "Panik:    ",
+ "Brightness": {
+  "pl": "Jasnosc",
+  "de": "Helligkeit",
+  "cs": "Jas",
   "files": [
    "settings_screen.h"
   ]
  },
- "WiFi (network + pass)": {
-  "pl": "WiFi (siec + haslo)",
-  "de": "WLAN (Netz + Passwort)",
-  "cs": "WiFi (sit + heslo)",
+ "Screen rotation": {
+  "pl": "Obrot ekranu",
+  "de": "Bilddrehung",
+  "cs": "Otoceni displeje",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Auto sleep": {
+  "pl": "Usypianie",
+  "de": "Auto-Ruhe",
+  "cs": "Uspani",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Solution mode": {
+  "pl": "Tryb rozwiazan",
+  "de": "Loesungsmodus",
+  "cs": "Rezim reseni",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Camera image": {
+  "pl": "Obraz kamery",
+  "de": "Kamerabild",
+  "cs": "Obraz kamery",
   "files": [
    "settings_screen.h"
   ]
@@ -1099,60 +1192,45 @@
    "settings_screen.h"
   ]
  },
- "Remote help": {
-  "pl": "Zdalna pomoc",
-  "de": "Fernhilfe",
-  "cs": "Vzdalena pomoc",
+ "AI code": {
+  "pl": "Kod AI",
+  "de": "KI-Code",
+  "cs": "Kod AI",
   "files": [
    "settings_screen.h"
   ]
  },
- "ACTIVE": {
-  "pl": "AKTYWNA",
-  "de": "AKTIV",
-  "cs": "AKTIVNI",
+ "Panic key": {
+  "pl": "Klawisz panic",
+  "de": "Panik-Taste",
+  "cs": "Panik klavesa",
   "files": [
    "settings_screen.h"
   ]
  },
- "off": {
-  "pl": "wylaczona",
-  "de": "aus",
-  "cs": "vypnuto",
+ "About device": {
+  "pl": "O urzadzeniu",
+  "de": "Geraeteinfo",
+  "cs": "O zarizeni",
   "files": [
    "settings_screen.h"
   ]
  },
- "Updates:  ": {
-  "pl": "Aktual.:  ",
-  "de": "Update:   ",
-  "cs": "Aktualiz.:",
+ "Help & tips": {
+  "pl": "Pomoc i porady",
+  "de": "Hilfe & Tipps",
+  "cs": "Napoveda a tipy",
   "files": [
    "settings_screen.h"
   ]
  },
- "Factory reset": {
-  "pl": "Reset fabryczny",
-  "de": "Werksreset",
-  "cs": "Tovarni reset",
+ "Offline queue": {
+  "pl": "Kolejka offline",
+  "de": "Offline-Warteschlange",
+  "cs": "Offline fronta",
   "files": [
-   "settings_screen.h"
-  ]
- },
- "Clear offline queue": {
-  "pl": "Wyczysc kolejke offline",
-  "de": "Offline-Warteschl. leeren",
-  "cs": "Vymazat offline frontu",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "Screen test": {
-  "pl": "Test ekranu",
-  "de": "Bildschirmtest",
-  "cs": "Test displeje",
-  "files": [
-   "settings_screen.h"
+   "settings_screen.h",
+   "solve_screen.h"
   ]
  },
  "Camera test": {
@@ -1172,7 +1250,7 @@
   ]
  },
  "Keyboard scanner": {
-  "pl": "Skaner kl. (debug)",
+  "pl": "Skaner klawiatury",
   "de": "Tastatur-Scanner",
   "cs": "Skener klavesnice",
   "files": [
@@ -1187,50 +1265,84 @@
    "settings_screen.h"
   ]
  },
- "Battery...": {
-  "pl": "Bateria...",
-  "de": "Akku...",
-  "cs": "Baterie...",
+ "off": {
+  "pl": "wylaczone",
+  "de": "aus",
+  "cs": "vypnuto",
   "files": [
    "settings_screen.h"
   ]
  },
- "< BACK      OK: edit": {
-  "pl": "< WSTECZ    OK: edytuj",
-  "de": "< ZURUECK   OK: bearbeiten",
-  "cs": "< ZPET      OK: upravit",
+ "ACTIVE": {
+  "pl": "AKTYWNA",
+  "de": "AKTIV",
+  "cs": "AKTIVNI",
   "files": [
    "settings_screen.h"
   ]
  },
- "Brightness:": {
-  "pl": "Jasnosc:",
-  "de": "Helligkeit:",
-  "cs": "Jas:",
+ "Settings": {
+  "pl": "Ustawienia",
+  "de": "Einstellungen",
+  "cs": "Nastaveni",
+  "files": [
+   "main.cpp",
+   "settings_screen.h"
+  ]
+ },
+ "OK save": {
+  "pl": "OK zapisz",
+  "de": "OK speichern",
+  "cs": "OK ulozit",
   "files": [
    "settings_screen.h"
   ]
  },
- "< -   OK: confirm   + >": {
-  "pl": "< -   OK: zatwierdz   + >",
-  "de": "< -   OK: bestaetigen + >",
-  "cs": "< -   OK: potvrdit   + >",
+ "C/CE exit": {
+  "pl": "C/CE wyjscie",
+  "de": "C/CE beenden",
+  "cs": "C/CE konec",
   "files": [
    "settings_screen.h"
   ]
  },
- "Screen rotation:": {
-  "pl": "Obrot ekranu:",
-  "de": "Bildschirmdrehung:",
-  "cs": "Otoceni displeje:",
+ "< back": {
+  "pl": "< wstecz",
+  "de": "< zurueck",
+  "cs": "< zpet",
+  "files": [
+   "settings_screen.h",
+   "wifi_settings.h"
+  ]
+ },
+ "^/v select": {
+  "pl": "^/v wybierz",
+  "de": "^/v waehlen",
+  "cs": "^/v vybrat",
   "files": [
    "settings_screen.h"
   ]
  },
- "< / > toggle   OK: confirm": {
-  "pl": "< / > przelacz   OK: zatwierdz",
-  "de": "< / > umschalten OK: bestaetigen",
-  "cs": "< / > prepnout   OK: potvrdit",
+ "</> change": {
+  "pl": "</> zmien",
+  "de": "</> aendern",
+  "cs": "</> zmenit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Upside down": {
+  "pl": "Odwrocony",
+  "de": "Kopfueber",
+  "cs": "Obraceny",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Normal": {
+  "pl": "Normalnie",
+  "de": "Normal",
+  "cs": "Normalne",
   "files": [
    "settings_screen.h"
   ]
@@ -1244,35 +1356,19 @@
    "solve_screen.h"
   ]
  },
- "=== Camera ===": {
-  "pl": "=== Kamera ===",
-  "de": "=== Kamera ===",
-  "cs": "=== Kamera ===",
+ "Camera not responding": {
+  "pl": "Kamera nie odpowiada",
+  "de": "Kamera antwortet nicht",
+  "cs": "Kamera neodpovida",
   "files": [
-   "settings_screen.h"
+   "settings_screen.h",
+   "solve_screen.h"
   ]
  },
  "Init FAILED": {
   "pl": "Init NIEUDANY",
   "de": "Init FEHLGESCHLAGEN",
   "cs": "Init SELHAL",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "< = exit": {
-  "pl": "< = wyjscie",
-  "de": "< = beenden",
-  "cs": "< = konec",
-  "files": [
-   "settings_screen.h",
-   "solve_screen.h"
-  ]
- },
- "CAMERA": {
-  "pl": "KAMERA",
-  "de": "KAMERA",
-  "cs": "KAMERA",
   "files": [
    "settings_screen.h"
   ]
@@ -1285,54 +1381,6 @@
    "settings_screen.h"
   ]
  },
- "UP/DN field": {
-  "pl": "UP/DN pole",
-  "de": "UP/DN Feld",
-  "cs": "UP/DN pole",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "</> change": {
-  "pl": "</> zmien",
-  "de": "</> aendern",
-  "cs": "</> zmenit",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "OK=save  CCE=cancel": {
-  "pl": "OK=zapisz  CCE=anuluj",
-  "de": "OK=speichern CCE=abbr.",
-  "cs": "OK=ulozit  CCE=zrusit",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "Language:": {
-  "pl": "Jezyk:",
-  "de": "Sprache:",
-  "cs": "Jazyk:",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "< / > change   OK: confirm": {
-  "pl": "< / > zmien   OK: zatwierdz",
-  "de": "< / > wechseln OK: bestaetigen",
-  "cs": "< / > zmenit   OK: potvrdit",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "Solve mode:": {
-  "pl": "Tryb rozwiazan:",
-  "de": "Loesungsmodus:",
-  "cs": "Rezim reseni:",
-  "files": [
-   "settings_screen.h"
-  ]
- },
  "Result only": {
   "pl": "Tylko wynik",
   "de": "Nur Ergebnis",
@@ -1341,50 +1389,18 @@
    "settings_screen.h"
   ]
  },
- "Time": {
-  "pl": "Czas",
-  "de": "Zeit",
-  "cs": "Cas",
+ "Off": {
+  "pl": "Wylaczone",
+  "de": "Aus",
+  "cs": "Vypnuto",
   "files": [
    "settings_screen.h"
   ]
  },
- "< / > time   OK: confirm": {
-  "pl": "< / > czas   OK: zatwierdz",
-  "de": "< / > Zeit   OK: bestaetigen",
-  "cs": "< / > cas   OK: potvrdit",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "OK: enable   < / > OFF": {
-  "pl": "OK: wlacz   < / > OFF",
-  "de": "OK: aktivieren < / > OFF",
-  "cs": "OK: zapnout   < / > OFF",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "AI code (UP/DOWN digit, LEFT/RIGHT pos)": {
-  "pl": "Kod AI (UP/DOWN cyfra, LEFT/RIGHT pozycja)",
-  "de": "KI-Code (UP/DOWN Ziffer, LEFT/RIGHT Pos.)",
-  "cs": "Kod AI (UP/DOWN cislice, LEFT/RIGHT poz.)",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "OK=save  C/CE=cancel": {
-  "pl": "OK=zapisz  C/CE=anuluj",
-  "de": "OK=speichern C/CE=abbrechen",
-  "cs": "OK=ulozit  C/CE=zrusit",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "Press key for panic:": {
-  "pl": "Nacisnij klawisz na panic:",
-  "de": "Taste fuer Panik druecken:",
-  "cs": "Stisknete klavesu pro panik:",
+ "OK enable": {
+  "pl": "OK wlacz",
+  "de": "OK aktivieren",
+  "cs": "OK zapnout",
   "files": [
    "settings_screen.h"
   ]
@@ -1397,26 +1413,26 @@
    "settings_screen.h"
   ]
  },
- "Not allowed! Use: * / M+ M- MR MC sqrt % MU": {
-  "pl": "Niedozwolony! Wybierz: * / M+ M- MR MC sqrt % MU",
-  "de": "Nicht erlaubt! Nimm: * / M+ M- MR MC sqrt % MU",
-  "cs": "Nepovoleno! Pouzijte: * / M+ M- MR MC sqrt % MU",
+ "This key is not allowed": {
+  "pl": "Ten klawisz jest niedozwolony",
+  "de": "Diese Taste ist nicht erlaubt",
+  "cs": "Tato klavesa neni povolena",
   "files": [
    "settings_screen.h"
   ]
  },
- "C/CE=cancel  (* / M+ M- MR MC sqrt % MU)": {
-  "pl": "C/CE=anuluj  (* / M+ M- MR MC sqrt % MU)",
-  "de": "C/CE=abbr.  (* / M+ M- MR MC sqrt % MU)",
-  "cs": "C/CE=zrusit  (* / M+ M- MR MC sqrt % MU)",
+ "Press the new key": {
+  "pl": "Nacisnij nowy klawisz",
+  "de": "Neue Taste druecken",
+  "cs": "Stisknete novou klavesu",
   "files": [
    "settings_screen.h"
   ]
  },
- "=== Updates ===": {
-  "pl": "=== Aktualizacje ===",
-  "de": "=== Updates ===",
-  "cs": "=== Aktualizace ===",
+ "OK check": {
+  "pl": "OK sprawdz",
+  "de": "OK pruefen",
+  "cs": "OK zkontrolovat",
   "files": [
    "settings_screen.h"
   ]
@@ -1429,22 +1445,6 @@
    "settings_screen.h"
   ]
  },
- "OK = check for updates": {
-  "pl": "OK = sprawdz aktualizacje",
-  "de": "OK = nach Updates suchen",
-  "cs": "OK = zkontrolovat aktualizace",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "Checking server...": {
-  "pl": "Sprawdzam serwer...",
-  "de": "Server wird geprueft...",
-  "cs": "Kontroluji server...",
-  "files": [
-   "settings_screen.h"
-  ]
- },
  "Available: v%s": {
   "pl": "Dostepna: v%s",
   "de": "Verfuegbar: v%s",
@@ -1453,18 +1453,10 @@
    "settings_screen.h"
   ]
  },
- "OK = install": {
-  "pl": "OK = zainstaluj",
-  "de": "OK = installieren",
-  "cs": "OK = instalovat",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "C/CE = cancel": {
-  "pl": "C/CE = anuluj",
-  "de": "C/CE = abbrechen",
-  "cs": "C/CE = zrusit",
+ "OK install": {
+  "pl": "OK zainstaluj",
+  "de": "OK installieren",
+  "cs": "OK instalovat",
   "files": [
    "settings_screen.h"
   ]
@@ -1485,10 +1477,42 @@
    "settings_screen.h"
   ]
  },
- "=== Offline queue ===": {
-  "pl": "=== Kolejka offline ===",
-  "de": "=== Offline-Warteschl. ===",
-  "cs": "=== Offline fronta ===",
+ "Checking server...": {
+  "pl": "Sprawdzam serwer...",
+  "de": "Server wird geprueft...",
+  "cs": "Kontroluji server...",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Multimeter on this MCP pin -> 0V": {
+  "pl": "Multimetr na ten pin MCP -> 0V",
+  "de": "Multimeter an diesen MCP-Pin -> 0V",
+  "cs": "Multimetr na tento pin MCP -> 0V",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "^/v change": {
+  "pl": "^/v zmien",
+  "de": "^/v aendern",
+  "cs": "^/v zmenit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Shorted: %d": {
+  "pl": "Zwarte: %d",
+  "de": "Kurzschluss: %d",
+  "cs": "Zkrat: %d",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Press any key": {
+  "pl": "Nacisnij klawisz",
+  "de": "Taste druecken",
+  "cs": "Stisknete klavesu",
   "files": [
    "settings_screen.h"
   ]
@@ -1509,10 +1533,10 @@
    "settings_screen.h"
   ]
  },
- "OK = clear   C/CE / < = back": {
-  "pl": "OK = wyczysc   C/CE / < = wstecz",
-  "de": "OK = leeren   C/CE / < = zurueck",
-  "cs": "OK = vymazat   C/CE / < = zpet",
+ "OK clear": {
+  "pl": "OK wyczysc",
+  "de": "OK leeren",
+  "cs": "OK vymazat",
   "files": [
    "settings_screen.h"
   ]
@@ -1525,26 +1549,10 @@
    "settings_screen.h"
   ]
  },
- "OK / C/CE / < = back": {
-  "pl": "OK / C/CE / < = wstecz",
-  "de": "OK / C/CE / < = zurueck",
-  "cs": "OK / C/CE / < = zpet",
-  "files": [
-   "settings_screen.h"
-  ]
- },
  "Queue cleared": {
   "pl": "Kolejka wyczyszczona",
   "de": "Warteschlange geleert",
   "cs": "Fronta vymazana",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "CAMERA TEST": {
-  "pl": "TEST KAMERY",
-  "de": "KAMERATEST",
-  "cs": "TEST KAMERY",
   "files": [
    "settings_screen.h"
   ]
@@ -1566,18 +1574,10 @@
    "settings_screen.h"
   ]
  },
- "OK=JPEG shot  CCE=exit": {
-  "pl": "OK=zdjecie JPEG  CCE=wyjscie",
-  "de": "OK=JPEG-Foto  CCE=Ende",
-  "cs": "OK=foto JPEG  CCE=konec",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "=== Camera test ===": {
-  "pl": "=== Test kamery ===",
-  "de": "=== Kameratest ===",
-  "cs": "=== Test kamery ===",
+ "OK photo": {
+  "pl": "OK zdjecie",
+  "de": "OK Foto",
+  "cs": "OK foto",
   "files": [
    "settings_screen.h"
   ]
@@ -1590,14 +1590,6 @@
    "settings_screen.h"
   ]
  },
- "=== Battery ===": {
-  "pl": "=== Bateria ===",
-  "de": "=== Akku ===",
-  "cs": "=== Baterie ===",
-  "files": [
-   "settings_screen.h"
-  ]
- },
  "No sensor": {
   "pl": "Brak czujnika",
   "de": "Kein Sensor",
@@ -1606,26 +1598,18 @@
    "settings_screen.h"
   ]
  },
- "Voltage: ": {
-  "pl": "Napiecie:",
-  "de": "Spannung:",
-  "cs": "Napeti:  ",
+ "Voltage": {
+  "pl": "Napiecie",
+  "de": "Spannung",
+  "cs": "Napeti",
   "files": [
    "settings_screen.h"
   ]
  },
- "Percent: ": {
-  "pl": "Procent: ",
-  "de": "Prozent: ",
-  "cs": "Procenta:",
-  "files": [
-   "settings_screen.h"
-  ]
- },
- "Status:  ": {
-  "pl": "Status:  ",
-  "de": "Status:  ",
-  "cs": "Stav:    ",
+ "Status": {
+  "pl": "Status",
+  "de": "Status",
+  "cs": "Stav",
   "files": [
    "settings_screen.h"
   ]
@@ -1658,6 +1642,86 @@
   "pl": "OK",
   "de": "OK",
   "cs": "OK",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "USB connected": {
+  "pl": "USB podlaczone",
+  "de": "USB verbunden",
+  "cs": "USB pripojeno",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "yes": {
+  "pl": "tak",
+  "de": "ja",
+  "cs": "ano",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "no": {
+  "pl": "nie",
+  "de": "nein",
+  "cs": "ne",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Gauge": {
+  "pl": "Pomiar",
+  "de": "Messung",
+  "cs": "Mereni",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Device ID": {
+  "pl": "Device ID",
+  "de": "Geraete-ID",
+  "cs": "ID zarizeni",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "WiFi": {
+  "pl": "WiFi",
+  "de": "WLAN",
+  "cs": "WiFi",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "disconnected": {
+  "pl": "rozlaczone",
+  "de": "getrennt",
+  "cs": "odpojeno",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "PSRAM (free)": {
+  "pl": "PSRAM (wolne)",
+  "de": "PSRAM (frei)",
+  "cs": "PSRAM (volne)",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "RAM (free)": {
+  "pl": "RAM (wolne)",
+  "de": "RAM (frei)",
+  "cs": "RAM (volne)",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Uptime": {
+  "pl": "Czas pracy",
+  "de": "Laufzeit",
+  "cs": "Doba behu",
   "files": [
    "settings_screen.h"
   ]
@@ -1702,6 +1766,23 @@
    "settings_screen.h"
   ]
  },
+ "Solve problem": {
+  "pl": "Rozwiaz zadanie",
+  "de": "Aufgabe loesen",
+  "cs": "Resit ulohu",
+  "files": [
+   "main.cpp",
+   "solve_screen.h"
+  ]
+ },
+ "[1] Camera photo": {
+  "pl": "[1] Zdjecie kamery",
+  "de": "[1] Kamerafoto",
+  "cs": "[1] Foto kamerou",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
  "! Error !": {
   "pl": "! Blad !",
   "de": "! Fehler !",
@@ -1735,10 +1816,18 @@
    "solve_screen.h"
   ]
  },
- "< exit  UP/DN scroll": {
-  "pl": "< wyjdz  UP/DN scroll",
-  "de": "< raus  UP/DN scroll",
-  "cs": "< konec  UP/DN posun",
+ "[4] Offline": {
+  "pl": "[4] Offline",
+  "de": "[4] Offline",
+  "cs": "[4] Offline",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Solution": {
+  "pl": "Rozwiazanie",
+  "de": "Loesung",
+  "cs": "Reseni",
   "files": [
    "solve_screen.h"
   ]
@@ -1967,10 +2056,10 @@
    "solve_screen.h"
   ]
  },
- "Camera not responding": {
-  "pl": "Kamera nie odpowiada",
-  "de": "Kamera antwortet nicht",
-  "cs": "Kamera neodpovida",
+ "< = exit": {
+  "pl": "< = wyjdz",
+  "de": "< = raus",
+  "cs": "< = konec",
   "files": [
    "solve_screen.h"
   ]
@@ -1983,26 +2072,10 @@
    "solve_screen.h"
   ]
  },
- "Mode: Photo": {
-  "pl": "Tryb: Zdjecie",
-  "de": "Modus: Foto",
-  "cs": "Rezim: Foto",
-  "files": [
-   "solve_screen.h"
-  ]
- },
  "Point at the problem.": {
   "pl": "Skieruj na zadanie.",
   "de": "Auf Aufgabe richten.",
   "cs": "Namirte na ulohu.",
-  "files": [
-   "solve_screen.h"
-  ]
- },
- "OK = take photo": {
-  "pl": "OK = zrob zdjecie",
-  "de": "OK = Foto machen",
-  "cs": "OK = vyfotit",
   "files": [
    "solve_screen.h"
   ]
@@ -2014,6 +2087,14 @@
   "files": [
    "solve_screen.h",
    "wifi_settings.h"
+  ]
+ },
+ "OK = take photo": {
+  "pl": "OK = zrob zdjecie",
+  "de": "OK = Foto machen",
+  "cs": "OK = vyfotit",
+  "files": [
+   "solve_screen.h"
   ]
  },
  "Powering camera...": {
@@ -2048,22 +2129,6 @@
    "solve_screen.h"
   ]
  },
- "=== Solve problem ===": {
-  "pl": "=== Rozwiaz zadanie ===",
-  "de": "=== Aufgabe loesen ===",
-  "cs": "=== Resit ulohu ===",
-  "files": [
-   "solve_screen.h"
-  ]
- },
- "[1] Camera photo": {
-  "pl": "[1] Zdjecie kamery",
-  "de": "[1] Kamerafoto",
-  "cs": "[1] Foto kamerou",
-  "files": [
-   "solve_screen.h"
-  ]
- },
  "[2] Enter text": {
   "pl": "[2] Wpisz tekst",
   "de": "[2] Text eingeben",
@@ -2076,22 +2141,6 @@
   "pl": "[3] Historia",
   "de": "[3] Verlauf",
   "cs": "[3] Historie",
-  "files": [
-   "solve_screen.h"
-  ]
- },
- "[4] Offline": {
-  "pl": "[4] Offline",
-  "de": "[4] Offline",
-  "cs": "[4] Offline",
-  "files": [
-   "solve_screen.h"
-  ]
- },
- "^/v select   OK: start   < back": {
-  "pl": "^/v wybor   OK: start   < wstecz",
-  "de": "^/v waehlen  OK: Start  < zurueck",
-  "cs": "^/v vyber   OK: start   < zpet",
   "files": [
    "solve_screen.h"
   ]
@@ -2616,14 +2665,6 @@
    "solve_screen.h"
   ]
  },
- "History (%d/%d)": {
-  "pl": "Historia (%d/%d)",
-  "de": "Verlauf (%d/%d)",
-  "cs": "Historie (%d/%d)",
-  "files": [
-   "solve_screen.h"
-  ]
- },
  "^/v OK:show  >:edit+resend  <:back": {
   "pl": "^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
   "de": "^/v OK:zeigen >:bearb+senden <:zurueck",
@@ -2736,11 +2777,12 @@
    "solve_screen.h"
   ]
  },
- "Tests (%d)": {
-  "pl": "Sprawdzian (%d)",
-  "de": "Tests (%d)",
-  "cs": "Pisemky (%d)",
+ "Test mode": {
+  "pl": "Sprawdzian",
+  "de": "Testmodus",
+  "cs": "Pisemka",
   "files": [
+   "main.cpp",
    "tests.h"
   ]
  },
@@ -2760,44 +2802,12 @@
    "tests.h"
   ]
  },
- "OK=open  v=sync  <=exit": {
-  "pl": "OK=otworz  v=sync  <=wyjscie",
-  "de": "OK=oeffnen v=sync <=beenden",
-  "cs": "OK=otevrit  v=sync  <=konec",
-  "files": [
-   "tests.h"
-  ]
- },
- "^/v scroll  < back": {
-  "pl": "^/v scroll  < wstecz",
-  "de": "^/v scroll  < zurueck",
-  "cs": "^/v posun  < zpet",
-  "files": [
-   "tests.h"
-  ]
- },
  "Downloaded: %d tests": {
   "pl": "Pobrano: %d sprawdz.",
   "de": "Geladen: %d Tests",
   "cs": "Stazeno: %d pisemek",
   "files": [
    "tests.h"
-  ]
- },
- "=== WiFi Settings ===": {
-  "pl": "=== Ustawienia WiFi ===",
-  "de": "=== WiFi-Einstellungen ===",
-  "cs": "=== Nastaveni WiFi ===",
-  "files": [
-   "wifi_settings.h"
-  ]
- },
- "Status: Connected": {
-  "pl": "Stan: Polaczono",
-  "de": "Status: Verbunden",
-  "cs": "Stav: Pripojeno",
-  "files": [
-   "wifi_settings.h"
   ]
  },
  "Status: Disconnected": {
@@ -2820,14 +2830,6 @@
   "pl": "v Zapisane(%d)",
   "de": "v Gespeichert(%d)",
   "cs": "v Ulozene(%d)",
-  "files": [
-   "wifi_settings.h"
-  ]
- },
- "< Back": {
-  "pl": "< Wstecz",
-  "de": "< Zurueck",
-  "cs": "< Zpet",
   "files": [
    "wifi_settings.h"
   ]
@@ -2872,10 +2874,10 @@
    "wifi_settings.h"
   ]
  },
- "=== WiFi scan ===": {
-  "pl": "=== Skanowanie WiFi ===",
-  "de": "=== WiFi-Suche ===",
-  "cs": "=== Hledani WiFi ===",
+ "(hidden)": {
+  "pl": "(ukryta)",
+  "de": "(versteckt)",
+  "cs": "(skryta)",
   "files": [
    "wifi_settings.h"
   ]
@@ -2936,14 +2938,6 @@
    "wifi_settings.h"
   ]
  },
- "Returning shortly...": {
-  "pl": "Powrot za chwile...",
-  "de": "Rueckkehr in Kuerze...",
-  "cs": "Navrat za chvili...",
-  "files": [
-   "wifi_settings.h"
-  ]
- },
  "Saved networks": {
   "pl": "Zapamietane sieci",
   "de": "Gespeicherte Netze",
@@ -2960,30 +2954,6 @@
    "wifi_settings.h"
   ]
  },
- "< back": {
-  "pl": "< wstecz",
-  "de": "< zurueck",
-  "cs": "< zpet",
-  "files": [
-   "wifi_settings.h"
-  ]
- },
- "Saved (%d)": {
-  "pl": "Zapamietane (%d)",
-  "de": "Gespeichert (%d)",
-  "cs": "Ulozene (%d)",
-  "files": [
-   "wifi_settings.h"
-  ]
- },
- " (now)": {
-  "pl": " (akt.)",
-  "de": " (akt.)",
-  "cs": " (akt.)",
-  "files": [
-   "wifi_settings.h"
-  ]
- },
  "OK connect  > forget  < back": {
   "pl": "OK polacz  > zapomnij  < wstecz",
   "de": "OK verbind.  > loeschen  < zurueck",
@@ -2996,54 +2966,6 @@
   "pl": "Wybrano:",
   "de": "Ausgewaehlt:",
   "cs": "Vybrano:",
-  "files": [
-   "main.cpp"
-  ]
- },
- "1. Solve problem": {
-  "pl": "1. Rozwiaz zadanie",
-  "de": "1. Aufgabe loesen",
-  "cs": "1. Vyresit ulohu",
-  "files": [
-   "main.cpp"
-  ]
- },
- "2. Notes": {
-  "pl": "2. Notatki",
-  "de": "2. Notizen",
-  "cs": "2. Poznamky",
-  "files": [
-   "main.cpp"
-  ]
- },
- "3. Test mode": {
-  "pl": "3. Sprawdzian",
-  "de": "3. Testmodus",
-  "cs": "3. Pisemka",
-  "files": [
-   "main.cpp"
-  ]
- },
- "4. Information": {
-  "pl": "4. Informacje",
-  "de": "4. Informationen",
-  "cs": "4. Informace",
-  "files": [
-   "main.cpp"
-  ]
- },
- "5. Settings": {
-  "pl": "5. Ustawienia",
-  "de": "5. Einstellungen",
-  "cs": "5. Nastaveni",
-  "files": [
-   "main.cpp"
-  ]
- },
- "6. About": {
-  "pl": "6. O programie",
-  "de": "6. Ueber",
-  "cs": "6. O programu",
   "files": [
    "main.cpp"
   ]

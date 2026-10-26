@@ -3,7 +3,7 @@ import { getRemoteSession, isSessionLive, setRemoteFrame, consumePendingKey } fr
 import { verifyDeviceAuth } from "@/lib/device-auth";
 
 // POST /api/device/remote/checkin — wywolywane przez kalkulator co ~500ms
-// PODCZAS aktywnej sesji "Zdalna pomoc" (Ustawienia -> Zdalna pomoc).
+// PODCZAS aktywnej sesji "Zdalna pomoc" (Ustawienia -> WiFi i konto -> Zdalna pomoc).
 // Headers: x-api-key, x-device-id, x-device-token (fw >= 1.9.6).
 // Body: { frame?: "<base64, 2048 B, 1bpp u8g2 vertical_top_lsb>" }
 // Response: { active: bool, key: number|null }
