@@ -25,6 +25,7 @@
 #include <vector>
 #include "kalkmate_certs.h"
 #include "wifi_persist.h"
+#include "i18n_extra.h"   // kalkTrExtra — _notesTr dla jezykow 4..10
 
 #ifndef KALK_SERVER_URL
 #error "notes.h wymaga KALK_SERVER_URL"
@@ -232,92 +233,9 @@ static inline String _jsonUnescape(const char* s, int len) {
     return out;
 }
 
-// =====================================================================
-//  UTF-8 -> ASCII (fonty u8g2 _tf rysuja Latin-1 bajt po bajcie, wiec
-//  "a z ogonkiem" (C4 85) wychodzilo jako 2 krzaki). Wspolne dla notatek i sprawdzianow.
-//  Nieznany znak -> "?". Wynik czysto ASCII, wiec zawijanie po N znakow
-//  nie moze juz przeciac znaku wielobajtowego.
-// =====================================================================
-struct _KalkTranslit { uint16_t cp; const char* ascii; };
-static const _KalkTranslit _KALK_TRANSLIT[] = {
-    // Polskie
-    { 0x0104, "A" }, { 0x0105, "a" }, { 0x0106, "C" }, { 0x0107, "c" },
-    { 0x0118, "E" }, { 0x0119, "e" }, { 0x0141, "L" }, { 0x0142, "l" },
-    { 0x0143, "N" }, { 0x0144, "n" }, { 0x00D3, "O" }, { 0x00F3, "o" },
-    { 0x015A, "S" }, { 0x015B, "s" }, { 0x0179, "Z" }, { 0x017A, "z" },
-    { 0x017B, "Z" }, { 0x017C, "z" },
-    // Niemieckie (UI ma wersje DE — ta sama konwencja "ue"/"oe" co w napisach)
-    { 0x00C4, "Ae" }, { 0x00E4, "ae" }, { 0x00D6, "Oe" }, { 0x00F6, "oe" },
-    { 0x00DC, "Ue" }, { 0x00FC, "ue" }, { 0x00DF, "ss" },
-    // Inne czeste lacinskie
-    { 0x00C9, "E" }, { 0x00E9, "e" }, { 0x00E8, "e" }, { 0x00EA, "e" },
-    { 0x00E0, "a" }, { 0x00E1, "a" }, { 0x00ED, "i" }, { 0x00FA, "u" },
-    { 0x010C, "C" }, { 0x010D, "c" }, { 0x011B, "e" }, { 0x0159, "r" },
-    { 0x0160, "S" }, { 0x0161, "s" }, { 0x017D, "Z" }, { 0x017E, "z" },
-    // Typografia / niewidoczne
-    { 0x00A0, " " }, { 0x00AD, "" }, { 0x200B, "" }, { 0xFEFF, "" },
-    { 0x2013, "-" }, { 0x2014, "-" }, { 0x2212, "-" }, { 0x2026, "..." },
-    { 0x201E, "\"" }, { 0x201D, "\"" }, { 0x201C, "\"" },
-    { 0x00AB, "\"" }, { 0x00BB, "\"" },
-    { 0x2018, "'" }, { 0x2019, "'" }, { 0x201A, "," }, { 0x2022, "*" },
-    { 0x2032, "'" }, { 0x2033, "''" },
-    // Matematyka / fizyka
-    { 0x00D7, "x" }, { 0x00F7, "/" }, { 0x00B0, "deg" }, { 0x00B7, "*" },
-    { 0x2264, "<=" }, { 0x2265, ">=" }, { 0x2260, "!=" }, { 0x00B1, "+/-" },
-    { 0x2248, "~=" }, { 0x221E, "inf" }, { 0x221A, "sqrt" },
-    { 0x2192, "->" }, { 0x2190, "<-" }, { 0x2194, "<->" },
-    { 0x21D2, "=>" }, { 0x21D0, "<=" }, { 0x21D4, "<=>" },
-    { 0x00B2, "^2" }, { 0x00B3, "^3" }, { 0x00B9, "^1" },
-    { 0x00BC, "1/4" }, { 0x00BD, "1/2" }, { 0x00BE, "3/4" },
-    { 0x2208, " in " }, { 0x2209, " not in " }, { 0x2205, "{}" },
-    { 0x222A, " U " }, { 0x2229, " I " },
-    { 0x2211, "SUM" }, { 0x220F, "PROD" }, { 0x222B, "INT" }, { 0x2202, "d" },
-    { 0x00B5, "mu" },
-    // Greckie
-    { 0x0394, "delta" }, { 0x03A3, "SUM" }, { 0x03A9, "Omega" },
-    { 0x03B1, "alfa" }, { 0x03B2, "beta" }, { 0x03B3, "gamma" }, { 0x03B4, "delta" },
-    { 0x03B5, "eps" }, { 0x03B7, "eta" }, { 0x03B8, "theta" }, { 0x03BB, "lambda" },
-    { 0x03BC, "mu" }, { 0x03BD, "nu" }, { 0x03C0, "pi" }, { 0x03C1, "rho" },
-    { 0x03C3, "sigma" }, { 0x03C4, "tau" }, { 0x03C6, "fi" }, { 0x03C9, "omega" },
-};
-static const uint16_t _KALK_TRANSLIT_LEN = sizeof(_KALK_TRANSLIT) / sizeof(_KALK_TRANSLIT[0]);
-
-static inline const char* _kalkTranslitCp(uint32_t cp) {
-    if (cp <= 0xFFFF) {
-        for (uint16_t k = 0; k < _KALK_TRANSLIT_LEN; k++) {
-            if (_KALK_TRANSLIT[k].cp == cp) return _KALK_TRANSLIT[k].ascii;
-        }
-    }
-    return "?";
-}
-
-static inline String _kalkUtf8ToAscii(const String& in) {
-    const char* s = in.c_str();
-    const int len = (int)in.length();
-    String out;
-    out.reserve(len);
-    int i = 0;
-    while (i < len) {
-        uint8_t c = (uint8_t)s[i];
-        if (c < 0x80) { out += (char)c; i++; continue; }
-        uint32_t cp;
-        int n;
-        if      ((c & 0xE0) == 0xC0) { cp = c & 0x1F; n = 1; }
-        else if ((c & 0xF0) == 0xE0) { cp = c & 0x0F; n = 2; }
-        else if ((c & 0xF8) == 0xF0) { cp = c & 0x07; n = 3; }
-        else { out += '?'; i++; continue; }      // bajt kontynuacji bez poczatku
-        bool ok = (i + n < len);
-        for (int k = 1; ok && k <= n; k++) {
-            uint8_t cc = (uint8_t)s[i + k];
-            if ((cc & 0xC0) != 0x80) ok = false;
-            else cp = (cp << 6) | (cc & 0x3F);
-        }
-        if (!ok) { out += '?'; i++; continue; }  // uciety / zly ciag
-        i += n + 1;
-        out += _kalkTranslitCp(cp);
-    }
-    return out;
-}
+// UTF-8 -> ASCII (_KALK_TRANSLIT / _kalkTranslitCp / _kalkUtf8ToAscii)
+// przeniesione do kalk_translit.h — wspolne z solve_screen.h.
+#include "kalk_translit.h"
 
 // =====================================================================
 //  Pliki wpisow [{"t":"..","c":".."},...] na SPIFFS (notes + tests)
@@ -639,10 +557,22 @@ inline void notesClear() {
 //  Ekran Notatki — lista offline + sync z serwera
 //
 //  Przeniesione tu z main.cpp (bylo jedynym ekranem UI trzymanym poza
-//  swoim plikiem). Uzywa mT()/btnPressed() zdefiniowanych w main.cpp
+//  swoim plikiem). Uzywa btnPressed() zdefiniowanego w main.cpp
 //  zaraz po include settings_screen.h — notes.h jest wlaczany PO tym
 //  punkcie, wiec sa juz widoczne.
 // =====================================================================
+// Lokalny helper tlumaczen: 0=PL, 1=EN, 2=DE, 3=CS (bez diakrytykow).
+// Wlasny (nie mT() z main.cpp), zeby ten plik obslugiwal 4 jezyki niezaleznie.
+static inline const char* _notesTr(const char* pl, const char* en, const char* de, const char* cs) {
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..10
+    switch (kalkSettings.language) {
+        case 0:  return pl;
+        case 2:  return de;
+        case 3:  return cs;
+        default: return en;
+    }
+}
+
 inline void showNotesScreen(U8G2 &d) {
     inputWaitRelease();
     notesBuildTitleCache();   // raz na wejscie — lista bez czytania pliku co klatke
@@ -652,25 +582,28 @@ inline void showNotesScreen(U8G2 &d) {
         d.setFont(u8g2_font_6x10_tf);
         char hdr[40];
         snprintf(hdr, sizeof(hdr),
-                 mT("Notatki (%d)", "Notes (%d)", "Notizen (%d)"),
+                 _notesTr("Notatki (%d)", "Notes (%d)", "Notizen (%d)", "Poznamky (%d)"),
                  count);
         d.drawStr(2, 10, hdr);
         d.drawHLine(0, 12, 256);
 
         if (count == 0) {
             d.drawStr(2, 30,
-                mT("Brak notatek. Dodaj je",
+                _notesTr("Brak notatek. Dodaj je",
                    "No notes. Add them",
-                   "Keine Notizen. Fuege sie"));
+                   "Keine Notizen. Fuege sie",
+                   "Zadne poznamky. Pridejte je"));
             d.drawStr(2, 42,
-                mT("w panelu klienta i zsynchron.",
+                _notesTr("w panelu klienta i zsynchron.",
                    "in user panel and sync.",
-                   "im Kundenpanel hinzu und sync."));
+                   "im Kundenpanel hinzu und sync.",
+                   "v zakaznickem panelu a synch."));
             d.setFont(u8g2_font_5x7_tf);
             d.drawStr(2, 62,
-                mT("OK = sync   < = wyjscie",
+                _notesTr("OK = sync   < = wyjscie",
                    "OK = sync   < = exit",
-                   "OK = sync   < = beenden"));
+                   "OK = sync   < = beenden",
+                   "OK = sync   < = konec"));
         } else {
             // Pokaz 4 widoczne tytuly (z cache — bez I/O)
             int scroll = (cursor < 4) ? 0 : cursor - 3;
@@ -693,9 +626,10 @@ inline void showNotesScreen(U8G2 &d) {
             }
             d.setFont(u8g2_font_5x7_tf);
             d.drawStr(2, 62,
-                mT("OK = otworz   v = sync   < = wyjscie",
+                _notesTr("OK = otworz   v = sync   < = wyjscie",
                    "OK = open   v = sync   < = exit",
-                   "OK = oeffnen  v = sync  < = beenden"));
+                   "OK = oeffnen  v = sync  < = beenden",
+                   "OK = otevrit   v = sync   < = konec"));
         }
         d.sendBuffer();
     };
@@ -734,9 +668,10 @@ inline void showNotesScreen(U8G2 &d) {
                 snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
                 d.drawStr(220, 62, info);
                 d.drawStr(2, 62,
-                    mT("^/v scroll   < = wstecz",
+                    _notesTr("^/v scroll   < = wstecz",
                        "^/v scroll   < = back",
-                       "^/v scroll   < = zurueck"));
+                       "^/v scroll   < = zurueck",
+                       "^/v posun   < = zpet"));
                 d.sendBuffer();
             }
 
@@ -761,9 +696,9 @@ inline void showNotesScreen(U8G2 &d) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 24,
-            mT("Synchronizacja...", "Syncing...", "Synchronisiere..."));
+            _notesTr("Synchronizacja...", "Syncing...", "Synchronisiere...", "Synchronizace..."));
         d.drawStr(2, 38,
-            mT("Lacze z serwerem", "Connecting to server", "Verbinde mit Server"));
+            _notesTr("Lacze z serwerem", "Connecting to server", "Verbinde mit Server", "Pripojuji k serveru"));
         d.sendBuffer();
 
         // Ensure WiFi connected (uzyj zapisanego SSID/pass)
@@ -782,7 +717,7 @@ inline void showNotesScreen(U8G2 &d) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
             d.drawStr(2, 30,
-                mT("Brak WiFi", "No WiFi", "Kein WLAN"));
+                _notesTr("Brak WiFi", "No WiFi", "Kein WLAN", "Bez WiFi"));
             d.sendBuffer();
             delay(2000);
             return -1;
@@ -798,11 +733,11 @@ inline void showNotesScreen(U8G2 &d) {
         d.setFont(u8g2_font_6x10_tf);
         if (n < 0) {
             d.drawStr(2, 30,
-                mT("Blad synchronizacji", "Sync error", "Sync-Fehler"));
+                _notesTr("Blad synchronizacji", "Sync error", "Sync-Fehler", "Chyba synchronizace"));
         } else {
             char buf[40];
             snprintf(buf, sizeof(buf),
-                mT("Pobrano: %d notatek", "Downloaded: %d notes", "Geladen: %d Notizen"),
+                _notesTr("Pobrano: %d notatek", "Downloaded: %d notes", "Geladen: %d Notizen", "Stazeno: %d poznamek"),
                 n);
             d.drawStr(2, 30, buf);
         }

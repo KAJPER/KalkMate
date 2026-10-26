@@ -24,7 +24,7 @@ Peryferia podłączone do MCU:
 - Ekspander GPIO **MCP23017** — interfejs I²C (adres `0x20`) — obsługa klawiatury matrycowej 27 klawiszy oraz sterowanie zasilaniem peryferiów
 - Moduł aparatu **OmniVision OV2640** (2 Mpx) — interfejs równoległy 8-bit + SCCB (I²C)
 - Przetwornica step-up **MT3608** generująca 14,5 V dla szyny zasilania OLED
-- Bateria LiPo 3,7 V 2000 mAh z układem ładowania MCP73831 + zabezpieczeniem DW01A/FS8205A
+- Bateria LiPo 3,7 V 1500 mAh z układem ładowania MCP73831 + zabezpieczeniem DW01A/FS8205A
 
 ### 1.2 Warstwa oprogramowania układowego (Firmware)
 

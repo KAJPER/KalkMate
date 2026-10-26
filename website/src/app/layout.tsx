@@ -56,6 +56,19 @@ export const metadata: Metadata = {
     "KI Taschenrechner",
     "ki taschenrechner mit kamera",
     "calculator ai kaufen",
+    "ai kalkulačka",
+    "kalkulačka s kamerou",
+    "inteligentná kalkulačka",
+    "DI skaičiuotuvas",
+    "skaičiuotuvas su kamera",
+    "калькулятар ШІ",
+    "calculadora IA",
+    "calculadora con cámara",
+    "calculadora com câmara",
+    "calculatrice IA",
+    "calculatrice avec caméra",
+    "calcolatrice IA",
+    "calcolatrice con fotocamera",
   ],
   authors: [{ name: "KalkMate" }],
   creator: "KalkMate",
@@ -78,7 +91,8 @@ export const metadata: Metadata = {
   // UWAGA: NIE ustawiamy tu alternates.canonical — w App Router metadata roota
   // dziedziczą wszystkie podstrony, więc canonical wyciekłby na /pomoc, /regulamin
   // itd. (Google traktowałby je jako duplikaty strony głównej). Canonical + hreflang
-  // ustawiamy per-strona (/, /en, /de, /pomoc, /regulamin, /polityka-prywatnosci).
+  // ustawiamy per-strona (/, /en, /de, /cs, /sk, /lt, /be, /es, /pt, /fr, /it,
+  // /pomoc i jej wersje językowe, /regulamin, /polityka-prywatnosci).
   openGraph: {
     title: "KalkMate — Kalkulator AI",
     description:

@@ -78,9 +78,10 @@ export async function translateMatchingLanguage(draftText: string, referenceText
 }
 
 // === Newsletter (/admin/newsletter) ===
-// Admin pisze po polsku, odbiorcy dostaja PL / DE (kraje niemieckojezyczne) /
-// EN (reszta swiata). Jedno wywolanie na jezyk, wszystkie pola naraz w JSON,
-// zeby temat, tytul i tresc byly spojne.
+// Admin pisze po polsku, odbiorcy dostaja wersje w swoim jezyku (wszystkie
+// jezyki strony poza pl — lib/newsletter.ts NL_TRANSLATED_LANGS). Jedno
+// wywolanie na jezyk, wszystkie pola naraz w JSON, zeby temat, tytul i tresc
+// byly spojne.
 
 export interface NewsletterTexts {
   subject: string;
@@ -91,17 +92,58 @@ export interface NewsletterTexts {
   ctaText: string;
 }
 
-const LANG_NAMES = { en: "English", de: "German (Deutsch)" } as const;
+export type NewsletterTargetLang = "en" | "de" | "cs" | "sk" | "lt" | "be" | "es" | "pt" | "fr" | "it";
 
-export async function translateNewsletter(src: NewsletterTexts, target: "en" | "de"): Promise<NewsletterTexts> {
+const LANG_NAMES: Record<NewsletterTargetLang, string> = {
+  en: "English",
+  de: "German (Deutsch)",
+  cs: "Czech (čeština)",
+  sk: "Slovak (slovenčina)",
+  lt: "Lithuanian (lietuvių)",
+  be: "Belarusian (беларуская, Cyrillic script)",
+  es: "Spanish (español, Spain)",
+  pt: "European Portuguese (português de Portugal)",
+  fr: "French (français)",
+  it: "Italian (italiano)",
+};
+
+// Ton jak na stronie KalkMate (forma "ty" / odpowiednik) + poprawna pisownia.
+const LANG_STYLE: Record<NewsletterTargetLang, string> = {
+  en: "",
+  de: " Use informal \"du\" (as on the KalkMate website).",
+  cs: " Use informal \"ty\" (as on the KalkMate website) and proper Czech diacritics.",
+  sk: " Use informal \"ty\" (as on the KalkMate website) and proper Slovak diacritics.",
+  lt: " Use informal \"tu\" (as on the KalkMate website) and proper Lithuanian diacritics.",
+  be: " Use informal \"ты\", standard modern Belarusian orthography in Cyrillic (not Russian, not Łacinka).",
+  es: " Use informal \"tú\" (as on the KalkMate website), European Spanish.",
+  pt: " Use informal \"tu\" (as on the KalkMate website), European Portuguese spelling (not Brazilian).",
+  fr: " Use informal \"tu\" (as on the KalkMate website) and French typography (non-breaking space before ? ! : ;).",
+  it: " Use informal \"tu\" (as on the KalkMate website).",
+};
+
+// Nazwa polskiej matury w danym jezyku (tam, gdzie brzmi naturalnie).
+const MATURA_HINT: Record<NewsletterTargetLang, string> = {
+  en: "\"final exams (Matura)\"",
+  de: "\"Abitur/Matura\" only where it reads naturally",
+  cs: "\"maturita\"",
+  sk: "\"maturita\"",
+  lt: "\"brandos egzaminai\"",
+  be: "\"выпускныя экзамены\"",
+  es: "\"selectividad / exámenes finales\"",
+  pt: "\"exames nacionais\"",
+  fr: "\"bac\"",
+  it: "\"maturità\"",
+};
+
+export async function translateNewsletter(src: NewsletterTexts, target: NewsletterTargetLang): Promise<NewsletterTexts> {
   const system =
     `You translate marketing newsletters of KalkMate (an AI calculator for students, kalkmate.pl) from Polish to ${LANG_NAMES[target]}.\n` +
     "Rules:\n" +
     "- Natural, friendly, native-sounding copy for students and parents — not word-for-word." +
-    (target === "de" ? " Use informal \"du\" (as on the KalkMate website).\n" : "\n") +
+    LANG_STYLE[target] + "\n" +
     "- Keep the lightweight formatting EXACTLY: lines starting with \"## \" (heading) and \"- \" (list), **bold**, *italic*, [link text](url), blank lines between paragraphs.\n" +
     "- Keep the placeholder {{imie}} unchanged (it becomes the recipient's first name). Keep URLs, numbers, prices and the name KalkMate unchanged.\n" +
-    "- Polish exam names: \"matura\" -> in English \"final exams (Matura)\", in German \"Abitur/Matura\" only where it reads naturally.\n" +
+    `- The Polish exam name "matura" -> ${MATURA_HINT[target]}.\n` +
     "- Empty input fields stay empty strings.\n" +
     "- Answer with ONLY a JSON object with the same keys: subject, preheader, eyebrow, title, body, ctaText. No comments, no code fences.";
   const input = JSON.stringify(src);

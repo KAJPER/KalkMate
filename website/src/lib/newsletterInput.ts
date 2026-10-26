@@ -1,5 +1,5 @@
 // Walidacja danych z /admin/newsletter (wspolna dla testu i wysylki).
-import type { AudienceFilter, CampaignContent } from "@/lib/newsletter";
+import { NL_TRANSLATED_LANGS, isNlLang, type AudienceFilter, type CampaignContent } from "@/lib/newsletter";
 import type { NewsletterTexts } from "@/lib/translate";
 
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -24,12 +24,12 @@ export function parseContent(raw: unknown): { ok: true; content: CampaignContent
     image = { filename: str(img.filename, 100) || "image.jpg", contentType, data };
   }
 
-  const lang = b.lang === "en" || b.lang === "de" ? b.lang : "pl";
+  const lang = isNlLang(b.lang) ? b.lang : "pl";
 
-  // Tlumaczenia (EN/DE) z podgladu w panelu — po recznych poprawkach admina.
+  // Tlumaczenia (wszystkie jezyki poza PL) z podgladu w panelu — po recznych poprawkach admina.
   const translations: CampaignContent["translations"] = {};
   const tr = (b.translations || {}) as Record<string, Record<string, unknown> | undefined>;
-  for (const l of ["en", "de"] as const) {
+  for (const l of NL_TRANSLATED_LANGS) {
     const t = tr[l];
     if (!t || typeof t.body !== "string" || !t.body.trim()) continue;
     const texts: NewsletterTexts = {

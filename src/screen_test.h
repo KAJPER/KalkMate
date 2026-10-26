@@ -6,6 +6,7 @@
 #include <U8g2lib.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "i18n_extra.h"   // kalkTrExtra — _stT dla jezykow 4..10
 #include "power.h"
 
 // BTN_xx = wirtualne ID z input.h (>=200). Dawne fallbacki "#define BTN_OK 27"
@@ -45,9 +46,12 @@ static bool _stWaitNext() {
     }
 }
 
-static const char* _stT(const char* pl, const char* en, const char* de) {
+// 0=PL, 1=EN, 2=DE, 3=CS (bez diakrytykow); brak cs -> EN
+static const char* _stT(const char* pl, const char* en, const char* de, const char* cs = nullptr) {
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..10
     if (kalkSettings.language == 0) return pl;
     if (kalkSettings.language == 1) return en;
+    if (kalkSettings.language == 3) return cs ? cs : en;
     return de;
 }
 
@@ -285,11 +289,11 @@ static void _stShowInfo(U8G2 &d, int testNum, int total, const char* name) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
     char buf[32];
-    snprintf(buf, sizeof(buf), _stT("Test %d/%d:", "Test %d/%d:", "Test %d/%d:"), testNum, total);
+    snprintf(buf, sizeof(buf), _stT("Test %d/%d:", "Test %d/%d:", "Test %d/%d:", "Test %d/%d:"), testNum, total);
     d.drawStr(2, 12, buf);
     d.drawStr(2, 26, name);
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 45, _stT("OK/> = dalej   < = wyjdz", "OK/> = next   < = exit", "OK/> = weiter   < = Ende"));
+    d.drawStr(2, 45, _stT("OK/> = dalej   < = wyjdz", "OK/> = next   < = exit", "OK/> = weiter   < = Ende", "OK/> = dale   < = konec"));
     d.sendBuffer();
     delay(800);
 }
@@ -309,21 +313,21 @@ void showScreenTest(U8G2 &display) {
 
     const int TOTAL = 10;
 
-    struct { const char* pl; const char* en; const char* de; void(*fn)(U8G2&); } tests[] = {
-        {"Bialy ekran",     "Full white",       "Weisser Bildschirm", _stFullWhite      },
-        {"Czarny ekran",    "Full black",       "Schwarzer Bildschirm", _stFullBlack    },
-        {"Szachownica",     "Checkerboard",     "Schachbrett",       _stCheckerboard   },
-        {"Pasy poziome",    "Horiz. bands",     "Horiz. Streifen",   _stHorizontalBands},
-        {"Pasy pionowe",    "Vert. bands",      "Vert. Streifen",    _stVerticalBands  },
-        {"Geometria",       "Geometry",         "Geometrie",         _stGeometry       },
-        {"Czcionki",        "Fonts",            "Schriftarten",      _stFonts          },
-        {"Logo",            "Logo",             "Logo",              _stLogo           },
-        {"Cien tekstu",     "Shadow text",      "Schatten-Text",     _stShadowText     },
-        {"Animacja",        "Animation",        "Animation",         _stAnimation      },
+    struct { const char* pl; const char* en; const char* de; const char* cs; void(*fn)(U8G2&); } tests[] = {
+        {"Bialy ekran",     "Full white",       "Weisser Bildschirm", "Bila obrazovka", _stFullWhite      },
+        {"Czarny ekran",    "Full black",       "Schwarzer Bildschirm", "Cerna obrazovka", _stFullBlack    },
+        {"Szachownica",     "Checkerboard",     "Schachbrett",       "Sachovnice",     _stCheckerboard   },
+        {"Pasy poziome",    "Horiz. bands",     "Horiz. Streifen",   "Vodorovne pruhy", _stHorizontalBands},
+        {"Pasy pionowe",    "Vert. bands",      "Vert. Streifen",    "Svisle pruhy",   _stVerticalBands  },
+        {"Geometria",       "Geometry",         "Geometrie",         "Geometrie",      _stGeometry       },
+        {"Czcionki",        "Fonts",            "Schriftarten",      "Pisma",          _stFonts          },
+        {"Logo",            "Logo",             "Logo",              "Logo",           _stLogo           },
+        {"Cien tekstu",     "Shadow text",      "Schatten-Text",     "Stin textu",     _stShadowText     },
+        {"Animacja",        "Animation",        "Animation",         "Animace",        _stAnimation      },
     };
 
     for (int i = 0; i < TOTAL; i++) {
-        const char* name = _stT(tests[i].pl, tests[i].en, tests[i].de);
+        const char* name = _stT(tests[i].pl, tests[i].en, tests[i].de, tests[i].cs);
         _stShowInfo(display, i + 1, TOTAL, name);
 
         // Czekaj na przycisk przed uruchomieniem testu
@@ -339,8 +343,8 @@ void showScreenTest(U8G2 &display) {
     // Koniec testow
     display.clearBuffer();
     display.setFont(u8g2_font_6x10_tf);
-    display.drawStr(40, 28, _stT("Testy zakonczone!", "Tests complete!", "Tests abgeschlossen!"));
-    display.drawStr(50, 44, _stT("Ekran dziala OK", "Display OK", "Display OK"));
+    display.drawStr(40, 28, _stT("Testy zakonczone!", "Tests complete!", "Tests abgeschlossen!", "Testy dokonceny!"));
+    display.drawStr(50, 44, _stT("Ekran dziala OK", "Display OK", "Display OK", "Displej OK"));
     display.sendBuffer();
     delay(2000);
 }

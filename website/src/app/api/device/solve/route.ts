@@ -153,12 +153,30 @@ const FORMAT_RULES = `Formatowanie pod mały ekran kalkulatora:
 - Każdy krok w osobnej linii. ZAWSZE dokończ całe rozwiązanie — nie przerywaj w połowie.`;
 
 // Jezyk odpowiedzi — sterowany ustawieniem kalkulatora (kalkSettings.language),
-// wysylanym w naglowku x-language: "pl" (domyslnie), "en", "de".
+// wysylanym w naglowku x-language: "pl" (domyslnie), "en", "de", "cs", "sk",
+// "lt", "be", "es", "pt", "fr", "it" (te same kody co jezyki strony, lib/i18n.ts).
+// Czeskie/slowackie/litewskie litery (á č ď ě ľ ĺ ň ŕ ř š ť ů ž ą ę ė į ų ū)
+// oraz hiszpanskie/portugalskie/francuskie/wloskie (ñ ç ã õ é è ê à ù œ ...)
+// leza w Latin-1 / Latin Extended-A — tak jak polskie ą/ł/ż, ktore font OLED
+// (u8g2_font_6x12_te, zakres 32..701) ma i rysuje. Dlatego NIE zamieniamy ich
+// na ASCII w normalizeForCalc.
+// "be" (bialoruski): odpowiedz cyrylica (U+0400..U+04FF, w tym ў i apostrof ’).
+// Font 6x12_te jej nie ma, ale ekran rozwiazania (fw 2.0.4+) rysuje cyrylice
+// osobnym fontem — jak grecke litery — wiec tez jej NIE transliterujemy.
 const LANGUAGE_NAMES: Record<string, string> = {
   pl: "polskim",
   en: "angielskim (English)",
   de: "niemieckim (Deutsch)",
+  cs: "czeskim (čeština)",
+  sk: "słowackim (slovenčina)",
+  lt: "litewskim (lietuvių kalba)",
+  be: "białoruskim (беларуская мова), zapisanym cyrylicą — współczesna oficjalna ortografia białoruska, NIE rosyjski i NIE łacinka",
+  es: "hiszpańskim (español)",
+  pt: "portugalskim (português europeu)",
+  fr: "francuskim (français)",
+  it: "włoskim (italiano)",
 };
+const SUPPORTED_LANGUAGES = new Set(Object.keys(LANGUAGE_NAMES));
 function buildSystemPrompt(aiMode: string, solveMode: number, language: string): string {
   const base = aiMode === "raw" ? BASE_RAW : BASE_MATURA;
   const detail = DETAIL_PROMPTS[solveMode] ?? DETAIL_PROMPTS[0];
@@ -455,8 +473,9 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
   const solveMode = Math.max(0, Math.min(2, parseInt(request.headers.get("x-solve-mode") || "0", 10) || 0));
   // Jezyk odpowiedzi (kalkSettings.language -> naglowek x-language).
   // Domyslnie "pl" (stary firmware bez tego naglowka).
-  const langHeader = (request.headers.get("x-language") || "pl").toLowerCase();
-  const language = langHeader === "en" || langHeader === "de" ? langHeader : "pl";
+  // Tolerujemy tez warianty regionalne ("pt-PT", "fr_FR") — liczy sie kod jezyka.
+  const langHeader = (request.headers.get("x-language") || "pl").trim().toLowerCase().split(/[-_]/)[0];
+  const language = SUPPORTED_LANGUAGES.has(langHeader) ? langHeader : "pl";
   const systemPrompt = buildSystemPrompt(aiMode, solveMode, language);
   let modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
     ? aiModel

@@ -4,7 +4,9 @@
 //
 // Ustawienia:
 //   brightness   — kontrast OLED 0-15
-//   language     — 0=Polski, 1=English, 2=Deutsch
+//   language     — 0=Polski, 1=English, 2=Deutsch, 3=Cestina, 4=Slovencina,
+//                  5=Lietuviu, 6=Belaruskaja, 7=Espanol, 8=Portugues,
+//                  9=Francais, 10=Italiano (4..10: tabela i18n_extra.h)
 //   solveMode    — 0=Szczegolowy, 1=Tylko obliczenia, 2=Tylko wynik
 //   autoSleep    — ON/OFF
 //   sleepMinutes — indeks 0-10 w tablicy czasow {0.5,1,2,3,4,5,10,15,20,25,30 min}
@@ -15,6 +17,7 @@
 #include <SPIFFS.h>
 #include "input.h"
 #include "wifi_persist.h"
+#include "i18n_extra.h"   // kalkTrExtra — jezyki 4..10 (przed ota_update.h i T())
 #include "ota_update.h"
 #include "battery.h"
 #include "camera.h"
@@ -45,7 +48,7 @@ extern volatile bool _panicRequested;
 // ---------------------------------------------------------------------------
 struct KalkMateSettings {
     uint8_t brightness;   // 0-15 (kontrast OLED)
-    uint8_t language;     // 0=Polski, 1=English, 2=Deutsch
+    uint8_t language;     // 0=PL, 1=EN, 2=DE, 3=CS, 4=SK, 5=LT, 6=BE, 7=ES, 8=PT, 9=FR, 10=IT
     uint8_t solveMode;    // 0=Szczegolowy, 1=Tylko obliczenia, 2=Tylko wynik
     bool    autoSleep;    // auto sleep ON/OFF
     uint8_t sleepMinutes; // indeks 0-10 w tablicy czasow
@@ -90,7 +93,7 @@ static void kalkLoadSettings() {
     kalkSettings.camWbMode    = prefs.getUChar("camWb",     0);
     kalkSettings.camBrightness = prefs.getChar("camBright", 0);
     if (kalkSettings.brightness > 15)   kalkSettings.brightness = 8;
-    if (kalkSettings.language > 2)      kalkSettings.language = 1;
+    if (kalkSettings.language > 10)     kalkSettings.language = 1;
     if (kalkSettings.solveMode > 2)     kalkSettings.solveMode = 0;
     if (kalkSettings.sleepMinutes > 10) kalkSettings.sleepMinutes = 4;
     if (kalkSettings.camWbMode > 4)     kalkSettings.camWbMode = 0;
@@ -114,12 +117,38 @@ static const char* _SET_SLEEP_LABELS[11] = {
 };
 
 // ---------------------------------------------------------------------------
-// Pomocnik dwujezycznosci
+// Pomocnik tlumaczen (0=PL, 1=EN, 2=DE, 3=CS). cs == nullptr -> EN
+// (kompatybilnosc z wywolaniami 3-argumentowymi). Jezyki 4..10 -> tabela
+// wyszukiwana po tekscie EN (i18n_extra.h, generowana z tools/i18n).
 // ---------------------------------------------------------------------------
-static const char* T(const char* pl, const char* en, const char* de) {
-    if (kalkSettings.language == 0) return pl;
-    if (kalkSettings.language == 1) return en;
-    return de;
+static const char* T(const char* pl, const char* en, const char* de, const char* cs = nullptr) {
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);
+    switch (kalkSettings.language) {
+        case 0:  return pl;
+        case 2:  return de;
+        case 3:  return cs ? cs : en;
+        default: return en;
+    }
+}
+
+// Jezyki interfejsu: indeks = kalkSettings.language. Nazwy ASCII (fonty OLED
+// _tf nie maja diakrytykow/cyrylicy), kody ISO 639-1 dla serwera (x-language)
+// i KALKPROV:SETLANG — kolejnosc musi sie zgadzac z LANG_CODES we flasherze
+// (tools/flasher/flasher_common.py) i LANGS w tools/i18n/gen_firmware_i18n.py.
+#define _LANG_MAX 10
+static const char* const _LANG_NAMES[_LANG_MAX + 1] = {
+    "Polski", "English", "Deutsch", "Cestina", "Slovencina", "Lietuviu",
+    "Belaruskaja", "Espanol", "Portugues", "Francais", "Italiano"
+};
+static const char* const KALK_LANG_CODES[_LANG_MAX + 1] = {
+    "pl", "en", "de", "cs", "sk", "lt", "be", "es", "pt", "fr", "it"
+};
+static_assert(KALK_TR_EXTRA_FIRST + KALK_TR_EXTRA_LANGS == _LANG_MAX + 1,
+              "i18n_extra.h: liczba jezykow != _LANG_MAX + 1");
+
+// Kod jezyka UI ("pl".."it"); poza zakresem -> "en".
+static inline const char* kalkLangCode(uint8_t lang) {
+    return lang <= _LANG_MAX ? KALK_LANG_CODES[lang] : "en";
 }
 
 // Implementacja forward-deklaracji z ota_update.h (patrz komentarz tam) —
@@ -287,7 +316,7 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
     d.setFont(u8g2_font_6x10_tf);
 
     // Naglowek
-    const char* title = T("=== Ustawienia ===", "=== Settings ===", "=== Einstellungen ===");
+    const char* title = T("=== Ustawienia ===", "=== Settings ===", "=== Einstellungen ===", "=== Nastaveni ===");
     d.drawStr(2, 10, title);
     d.drawHLine(0, 12, 256);
 
@@ -307,37 +336,36 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
         char bar[20];
         _setBrightnessBar(bar, sizeof(bar), kalkSettings.brightness);
         snprintf(lines[_SET_BRIGHTNESS], sizeof(lines[0]), "%s%s %s", prefix,
-                 T("Jasnosc:  ", "Bright:   ", "Hell:     "), bar);
+                 T("Jasnosc:  ", "Bright:   ", "Hell:     ", "Jas:      "), bar);
     }
     // 1: Obrot ekranu 180
     {
         prefix[0] = (cursor == _SET_ROTATION) ? '>' : ' ';
         snprintf(lines[_SET_ROTATION], sizeof(lines[0]), "%s%s [%-10s]", prefix,
-                 T("Obrot:    ", "Rotate:   ", "Drehung:  "), kalkSettings.rotate180 ? "180" : "0");
+                 T("Obrot:    ", "Rotate:   ", "Drehung:  ", "Otoceni:  "), kalkSettings.rotate180 ? "180" : "0");
     }
     // 2: Kamera (WB + jasnosc)
     {
         prefix[0] = (cursor == _SET_CAMERA) ? '>' : ' ';
         snprintf(lines[_SET_CAMERA], sizeof(lines[0]), "%s%s",
-                 prefix, T("Kamera...", "Camera...", "Kamera..."));
+                 prefix, T("Kamera...", "Camera...", "Kamera...", "Kamera..."));
     }
     // 3: Jezyk
     {
         prefix[0] = (cursor == _SET_LANGUAGE) ? '>' : ' ';
-        static const char* const _LANG_NAMES[3] = {"Polski", "English", "Deutsch"};
-        const char* langStr = _LANG_NAMES[kalkSettings.language];
+        const char* langStr = _LANG_NAMES[kalkSettings.language <= _LANG_MAX ? kalkSettings.language : 1];
         snprintf(lines[_SET_LANGUAGE], sizeof(lines[0]), "%s%s [%-10s]", prefix,
-                 T("Jezyk:    ", "Language: ", "Sprache:  "), langStr);
+                 T("Jezyk:    ", "Language: ", "Sprache:  ", "Jazyk:    "), langStr);
     }
     // 2: Tryb
     {
         prefix[0] = (cursor == _SET_SOLVEMODE) ? '>' : ' ';
         const char* modeStr;
-        if (kalkSettings.solveMode == 0)      modeStr = T("Szczegolowy", "Detailed", "Detailliert");
-        else if (kalkSettings.solveMode == 1) modeStr = T("Obliczenia", "Calc only", "Rechnung");
-        else                                   modeStr = T("Wynik", "Result", "Ergebnis");
+        if (kalkSettings.solveMode == 0)      modeStr = T("Szczegolowy", "Detailed", "Detailliert", "Podrobny");
+        else if (kalkSettings.solveMode == 1) modeStr = T("Obliczenia", "Calc only", "Rechnung", "Jen vypocet");
+        else                                   modeStr = T("Wynik", "Result", "Ergebnis", "Vysledek");
         snprintf(lines[_SET_SOLVEMODE], sizeof(lines[0]), "%s%s [%-12s]", prefix,
-                 T("Tryb:     ", "Mode:     ", "Modus:    "), modeStr);
+                 T("Tryb:     ", "Mode:     ", "Modus:    ", "Rezim:    "), modeStr);
     }
     // 3: Auto-sleep
     {
@@ -353,14 +381,14 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
     {
         prefix[0] = (cursor == _SET_AICODE) ? '>' : ' ';
         snprintf(lines[_SET_AICODE], sizeof(lines[0]), "%s%s [%-10s]", prefix,
-                 T("Kod AI:   ", "AI code:  ", "KI-Code:  "), kalkSettings.aiUnlockCode);
+                 T("Kod AI:   ", "AI code:  ", "KI-Code:  ", "Kod AI:   "), kalkSettings.aiUnlockCode);
     }
     // 5: Panic key
     {
         prefix[0] = (cursor == _SET_PANICKEY) ? '>' : ' ';
         const char* lab = kalkKeyLabel((KalkKey)kalkSettings.panicKey);
         snprintf(lines[_SET_PANICKEY], sizeof(lines[0]), "%s%s [%-10s]", prefix,
-                 T("Panic:    ", "Panic key:", "Panik:    "), lab);
+                 T("Panic:    ", "Panic key:", "Panik:    ", "Panik:    "), lab);
     }
 
     // === KONTO / SIEC ===
@@ -368,26 +396,26 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
     {
         prefix[0] = (cursor == _SET_WIFI) ? '>' : ' ';
         snprintf(lines[_SET_WIFI], sizeof(lines[0]), "%s%s",
-                 prefix, T("WiFi (siec + haslo)", "WiFi (network + pass)", "WLAN (Netz + Passwort)"));
+                 prefix, T("WiFi (siec + haslo)", "WiFi (network + pass)", "WLAN (Netz + Passwort)", "WiFi (sit + heslo)"));
     }
     // 7: Status konta
     {
         prefix[0] = (cursor == _SET_ACCOUNT) ? '>' : ' ';
         snprintf(lines[_SET_ACCOUNT], sizeof(lines[0]), "%s%s",
-                 prefix, T("Status konta", "Account status", "Kontostatus"));
+                 prefix, T("Status konta", "Account status", "Kontostatus", "Stav uctu"));
     }
     // 8: Device ID + QR
     {
         prefix[0] = (cursor == _SET_DEVICEID) ? '>' : ' ';
         snprintf(lines[_SET_DEVICEID], sizeof(lines[0]), "%s%s",
-                 prefix, T("Device ID + QR", "Device ID + QR", "Geraete-ID + QR"));
+                 prefix, T("Device ID + QR", "Device ID + QR", "Geraete-ID + QR", "ID zarizeni + QR"));
     }
     // 9: Zdalna pomoc
     {
         prefix[0] = (cursor == _SET_REMOTE) ? '>' : ' ';
         snprintf(lines[_SET_REMOTE], sizeof(lines[0]), "%s%s [%-8s]",
-                 prefix, T("Zdalna pomoc", "Remote help", "Fernhilfe"),
-                 remoteSessionActive() ? T("AKTYWNA", "ACTIVE", "AKTIV") : T("wylaczona", "off", "aus"));
+                 prefix, T("Zdalna pomoc", "Remote help", "Fernhilfe", "Vzdalena pomoc"),
+                 remoteSessionActive() ? T("AKTYWNA", "ACTIVE", "AKTIV", "AKTIVNI") : T("wylaczona", "off", "aus", "vypnuto"));
     }
 
     // === SYSTEM ===
@@ -395,20 +423,20 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
     {
         prefix[0] = (cursor == _SET_UPDATE) ? '>' : ' ';
         snprintf(lines[_SET_UPDATE], sizeof(lines[0]), "%s%s [v%-8s]", prefix,
-                 T("Aktual.:  ", "Updates:  ", "Update:   "), FW_VERSION);
+                 T("Aktual.:  ", "Updates:  ", "Update:   ", "Aktualiz.:"), FW_VERSION);
     }
     // 10: Reset fabryczny
     {
         prefix[0] = (cursor == _SET_FACTORY) ? '>' : ' ';
         snprintf(lines[_SET_FACTORY], sizeof(lines[0]), "%s%s",
-                 prefix, T("Reset fabryczny", "Factory reset", "Werksreset"));
+                 prefix, T("Reset fabryczny", "Factory reset", "Werksreset", "Tovarni reset"));
     }
     // Kolejka offline (liczba zadan dopiero po wejsciu — lista rysuje sie
     // co 20 ms, bez czytania NVS w kazdej klatce)
     {
         prefix[0] = (cursor == _SET_OQCLEAR) ? '>' : ' ';
         snprintf(lines[_SET_OQCLEAR], sizeof(lines[0]), "%s%s",
-                 prefix, T("Wyczysc kolejke offline", "Clear offline queue", "Offline-Warteschl. leeren"));
+                 prefix, T("Wyczysc kolejke offline", "Clear offline queue", "Offline-Warteschl. leeren", "Vymazat offline frontu"));
     }
 
     // === DIAGNOSTYKA ===
@@ -416,38 +444,38 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
     {
         prefix[0] = (cursor == _SET_SCREENTEST) ? '>' : ' ';
         snprintf(lines[_SET_SCREENTEST], sizeof(lines[0]), "%s%s",
-                 prefix, T("Test ekranu", "Screen test", "Bildschirmtest"));
+                 prefix, T("Test ekranu", "Screen test", "Bildschirmtest", "Test displeje"));
     }
     // 11: Test kamery
     {
         prefix[0] = (cursor == _SET_CAMTEST) ? '>' : ' ';
         snprintf(lines[_SET_CAMTEST], sizeof(lines[0]), "%s%s",
-                 prefix, T("Test kamery", "Camera test", "Kameratest"));
+                 prefix, T("Test kamery", "Camera test", "Kameratest", "Test kamery"));
     }
     // 12: Test klawiatury
     {
         prefix[0] = (cursor == _SET_KEYTEST) ? '>' : ' ';
         snprintf(lines[_SET_KEYTEST], sizeof(lines[0]), "%s%s",
-                 prefix, T("Test klawiatury", "Keyboard test", "Tastaturtest"));
+                 prefix, T("Test klawiatury", "Keyboard test", "Tastaturtest", "Test klavesnice"));
     }
     // 13: Skaner klawiatury
     {
         prefix[0] = (cursor == _SET_KEYSCAN) ? '>' : ' ';
         snprintf(lines[_SET_KEYSCAN], sizeof(lines[0]), "%s%s",
-                 prefix, T("Skaner kl. (debug)", "Keyboard scanner", "Tastatur-Scanner"));
+                 prefix, T("Skaner kl. (debug)", "Keyboard scanner", "Tastatur-Scanner", "Skener klavesnice"));
     }
     // 14: Pin Driver Test
     {
         prefix[0] = (cursor == _SET_PINDRIVER) ? '>' : ' ';
         snprintf(lines[_SET_PINDRIVER], sizeof(lines[0]), "%s%s",
-                 prefix, T("Pin Driver Test", "Pin Driver Test", "Pin-Treiber-Test"));
+                 prefix, T("Pin Driver Test", "Pin Driver Test", "Pin-Treiber-Test", "Pin Driver Test"));
     }
     // 16: Bateria — bez czytania ADC z listy menu (cache w battery.h trzyma
     // stara wartosc; szczegoly i charging detect dopiero po wejsciu w pozycje)
     {
         prefix[0] = (cursor == _SET_BATTERY) ? '>' : ' ';
         snprintf(lines[_SET_BATTERY], sizeof(lines[0]), "%s%s", prefix,
-                 T("Bateria...", "Battery...", "Akku..."));
+                 T("Bateria...", "Battery...", "Akku...", "Baterie..."));
     }
 
     // Rysuj widoczne pozycje
@@ -475,7 +503,7 @@ static void _drawSettingsList(U8G2 &d, int cursor) {
     // Separator i pasek dolny
     d.drawHLine(0, 57, 256);
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 63, T("< WSTECZ    OK: edytuj", "< BACK      OK: edit", "< ZURUECK   OK: bearbeiten"));
+    d.drawStr(2, 63, T("< WSTECZ    OK: edytuj", "< BACK      OK: edit", "< ZURUECK   OK: bearbeiten", "< ZPET      OK: upravit"));
 
     d.sendBuffer();
 }
@@ -491,7 +519,7 @@ static void _editBrightness(U8G2 &d) {
         if (_panicRequested) return;
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, T("Jasnosc:", "Brightness:", "Helligkeit:"));
+        d.drawStr(2, 10, T("Jasnosc:", "Brightness:", "Helligkeit:", "Jas:"));
         d.drawHLine(0, 12, 256);
 
         char bar[24];
@@ -503,7 +531,7 @@ static void _editBrightness(U8G2 &d) {
 
         d.drawHLine(0, 57, 256);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 63, T("< -   OK: zatwierdz   + >", "< -   OK: confirm   + >", "< -   OK: bestaetigen + >"));
+        d.drawStr(2, 63, T("< -   OK: zatwierdz   + >", "< -   OK: confirm   + >", "< -   OK: bestaetigen + >", "< -   OK: potvrdit   + >"));
         d.sendBuffer();
 
         // PCB v4 cap 0-105 (anty-brownout), nie 0-255
@@ -539,12 +567,12 @@ static void _editRotation(U8G2 &d) {
 
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, T("Obrot ekranu:", "Screen rotation:", "Bildschirmdrehung:"));
+        d.drawStr(2, 10, T("Obrot ekranu:", "Screen rotation:", "Bildschirmdrehung:", "Otoceni displeje:"));
         d.drawHLine(0, 12, 256);
         d.drawStr(2, 35, val ? "[180]" : "[0  ]");
         d.drawHLine(0, 57, 256);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 63, T("< / > przelacz   OK: zatwierdz", "< / > toggle   OK: confirm", "< / > umschalten OK: bestaetigen"));
+        d.drawStr(2, 63, T("< / > przelacz   OK: zatwierdz", "< / > toggle   OK: confirm", "< / > umschalten OK: bestaetigen", "< / > prepnout   OK: potvrdit"));
         d.sendBuffer();
 
         if (_setBtn(BTN_LEFT) || _setBtn(BTN_RIGHT)) {
@@ -577,20 +605,21 @@ static void _editCameraTuning(U8G2 &d) {
     static const char* const _WB_NAMES_PL[5] = {"Auto", "Sloneczny", "Pochmurno", "Biuro", "Dom"};
     static const char* const _WB_NAMES_EN[5] = {"Auto", "Sunny", "Cloudy", "Office", "Home"};
     static const char* const _WB_NAMES_DE[5] = {"Auto", "Sonnig", "Bewoelkt", "Buero", "Zuhause"};
+    static const char* const _WB_NAMES_CS[5] = {"Auto", "Slunecno", "Zatazeno", "Kancelar", "Doma"};
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 32, T("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau..."));
+    d.drawStr(2, 32, T("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau...", "Spoustim nahled..."));
     d.sendBuffer();
 
     if (!camBeginPreview()) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 14, T("=== Kamera ===", "=== Camera ===", "=== Kamera ==="));
+        d.drawStr(2, 14, T("=== Kamera ===", "=== Camera ===", "=== Kamera ===", "=== Kamera ==="));
         d.drawHLine(0, 16, 256);
-        d.drawStr(2, 32, T("Init NIEUDANY", "Init FAILED", "Init FEHLGESCHLAGEN"));
+        d.drawStr(2, 32, T("Init NIEUDANY", "Init FAILED", "Init FEHLGESCHLAGEN", "Init SELHAL"));
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, T("< = wyjscie", "< = exit", "< = beenden"));
+        d.drawStr(2, 62, T("< = wyjscie", "< = exit", "< = beenden", "< = konec"));
         d.sendBuffer();
         _setWaitRelease();
         while (true) {
@@ -642,20 +671,24 @@ static void _editCameraTuning(U8G2 &d) {
         d.drawFrame(0, 0, PV_W, PV_H);
 
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(166, 8, T("KAMERA", "CAMERA", "KAMERA"));
+        d.drawStr(166, 8, T("KAMERA", "CAMERA", "KAMERA", "KAMERA"));
 
         const char* const* wbNames = (kalkSettings.language == 0) ? _WB_NAMES_PL
-                                    : (kalkSettings.language == 1) ? _WB_NAMES_EN : _WB_NAMES_DE;
+                                    : (kalkSettings.language == 2) ? _WB_NAMES_DE
+                                    : (kalkSettings.language == 3) ? _WB_NAMES_CS : _WB_NAMES_EN;
+        const char* wbName = (kalkSettings.language >= KALK_TR_EXTRA_FIRST)
+                           ? kalkTrExtra(_WB_NAMES_EN[wbVal], kalkSettings.language) : wbNames[wbVal];
         char line[24];
-        snprintf(line, sizeof(line), "%cWB: %s", field == 0 ? '>' : ' ', wbNames[wbVal]);
+        snprintf(line, sizeof(line), "%cWB: %s", field == 0 ? '>' : ' ', wbName);
         d.drawStr(166, 22, line);
-        snprintf(line, sizeof(line), "%cJasn: %+d", field == 1 ? '>' : ' ', brVal);
+        snprintf(line, sizeof(line), "%c%s: %+d", field == 1 ? '>' : ' ',
+                 T("Jasn", "Bright", "Hell", "Jas"), brVal);
         d.drawStr(166, 34, line);
 
         d.setFont(u8g2_font_4x6_tf);
-        d.drawStr(166, 48, T("UP/DN pole", "UP/DN field", "UP/DN Feld"));
-        d.drawStr(166, 56, T("</> zmien", "</> change", "</> aendern"));
-        d.drawStr(2, 63, T("OK=zapisz  CCE=anuluj", "OK=save  CCE=cancel", "OK=speichern CCE=abbr."));
+        d.drawStr(166, 48, T("UP/DN pole", "UP/DN field", "UP/DN Feld", "UP/DN pole"));
+        d.drawStr(166, 56, T("</> zmien", "</> change", "</> aendern", "</> zmenit"));
+        d.drawStr(2, 63, T("OK=zapisz  CCE=anuluj", "OK=save  CCE=cancel", "OK=speichern CCE=abbr.", "OK=ulozit  CCE=zrusit"));
         d.sendBuffer();
 
         if (_setBtn(BTN_OK)) {
@@ -701,10 +734,9 @@ static void _editLanguage(U8G2 &d) {
 
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, T("Jezyk:", "Language:", "Sprache:"));
+        d.drawStr(2, 10, T("Jezyk:", "Language:", "Sprache:", "Jazyk:"));
         d.drawHLine(0, 12, 256);
 
-        static const char* const _LANG_NAMES[3] = {"Polski", "English", "Deutsch"};
         const char* langStr = _LANG_NAMES[val];
         char line[32];
         snprintf(line, sizeof(line), "[%s]", langStr);
@@ -712,7 +744,7 @@ static void _editLanguage(U8G2 &d) {
 
         d.drawHLine(0, 57, 256);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 63, T("< / > zmien   OK: zatwierdz", "< / > change   OK: confirm", "< / > wechseln OK: bestaetigen"));
+        d.drawStr(2, 63, T("< / > zmien   OK: zatwierdz", "< / > change   OK: confirm", "< / > wechseln OK: bestaetigen", "< / > zmenit   OK: potvrdit"));
         d.sendBuffer();
 
         kalkSettings.language = prevLang; // przywroc do zatwierdzenia
@@ -720,10 +752,10 @@ static void _editLanguage(U8G2 &d) {
         bool pressed = false;
         while (!pressed) {
             if (_setBtn(BTN_LEFT)) {
-                val = (val == 0) ? 2 : val - 1;
+                val = (val == 0) ? _LANG_MAX : val - 1;
                 pressed = true;
             } else if (_setBtn(BTN_RIGHT)) {
-                val = (val == 2) ? 0 : val + 1;
+                val = (val >= _LANG_MAX) ? 0 : val + 1;
                 pressed = true;
             } else if (_setBtn(BTN_OK)) {
                 kalkSettings.language = val;
@@ -747,13 +779,13 @@ static void _editSolveMode(U8G2 &d) {
         if (_panicRequested) return;
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, T("Tryb rozwiazan:", "Solve mode:", "Loesungsmodus:"));
+        d.drawStr(2, 10, T("Tryb rozwiazan:", "Solve mode:", "Loesungsmodus:", "Rezim reseni:"));
         d.drawHLine(0, 12, 256);
 
         const char* modeStr;
-        if (val == 0)      modeStr = T("Szczegolowy",      "Detailed",    "Detailliert");
-        else if (val == 1) modeStr = T("Tylko obliczenia", "Calc only",   "Nur Rechnung");
-        else               modeStr = T("Tylko wynik",      "Result only", "Nur Ergebnis");
+        if (val == 0)      modeStr = T("Szczegolowy",      "Detailed",    "Detailliert", "Podrobny");
+        else if (val == 1) modeStr = T("Tylko obliczenia", "Calc only",   "Nur Rechnung", "Jen vypocet");
+        else               modeStr = T("Tylko wynik",      "Result only", "Nur Ergebnis", "Jen vysledek");
 
         char line[40];
         snprintf(line, sizeof(line), "[%s]", modeStr);
@@ -761,7 +793,7 @@ static void _editSolveMode(U8G2 &d) {
 
         d.drawHLine(0, 57, 256);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 63, T("< / > zmien   OK: zatwierdz", "< / > change   OK: confirm", "< / > wechseln OK: bestaetigen"));
+        d.drawStr(2, 63, T("< / > zmien   OK: zatwierdz", "< / > change   OK: confirm", "< / > wechseln OK: bestaetigen", "< / > zmenit   OK: potvrdit"));
         d.sendBuffer();
 
         if (_setBtn(BTN_LEFT)) {
@@ -801,16 +833,16 @@ static void _editAutoSleep(U8G2 &d) {
         if (onOff) {
             char timeLine[32];
             snprintf(timeLine, sizeof(timeLine), "%s: %s",
-                     T("Czas", "Time", "Zeit"), _SET_SLEEP_LABELS[idx]);
+                     T("Czas", "Time", "Zeit", "Cas"), _SET_SLEEP_LABELS[idx]);
             d.drawStr(2, 44, timeLine);
         }
 
         d.drawHLine(0, 57, 256);
         d.setFont(u8g2_font_5x7_tf);
         if (onOff) {
-            d.drawStr(2, 63, T("< / > czas   OK: zatwierdz", "< / > time   OK: confirm", "< / > Zeit   OK: bestaetigen"));
+            d.drawStr(2, 63, T("< / > czas   OK: zatwierdz", "< / > time   OK: confirm", "< / > Zeit   OK: bestaetigen", "< / > cas   OK: potvrdit"));
         } else {
-            d.drawStr(2, 63, T("OK: wlacz   < / > OFF", "OK: enable   < / > OFF", "OK: aktivieren < / > OFF"));
+            d.drawStr(2, 63, T("OK: wlacz   < / > OFF", "OK: enable   < / > OFF", "OK: aktivieren < / > OFF", "OK: zapnout   < / > OFF"));
         }
         d.sendBuffer();
 
@@ -871,7 +903,8 @@ static void _editAiCode(U8G2 &d) {
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, T("Kod AI (UP/DOWN cyfra, LEFT/RIGHT pozycja)",
                            "AI code (UP/DOWN digit, LEFT/RIGHT pos)",
-                           "KI-Code (UP/DOWN Ziffer, LEFT/RIGHT Pos.)"));
+                           "KI-Code (UP/DOWN Ziffer, LEFT/RIGHT Pos.)",
+                           "Kod AI (UP/DOWN cislice, LEFT/RIGHT poz.)"));
 
         d.setFont(u8g2_font_logisoso22_tn);
         int charW = d.getStrWidth("0");
@@ -886,7 +919,7 @@ static void _editAiCode(U8G2 &d) {
         }
 
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 63, T("OK=zapisz  C/CE=anuluj", "OK=save  C/CE=cancel", "OK=speichern C/CE=abbrechen"));
+        d.drawStr(2, 63, T("OK=zapisz  C/CE=anuluj", "OK=save  C/CE=cancel", "OK=speichern C/CE=abbrechen", "OK=ulozit  C/CE=zrusit"));
         d.sendBuffer();
 
         if (_setBtn(BTN_OK)) {
@@ -942,20 +975,23 @@ static void _editPanicKey(U8G2 &d) {
         d.setFont(u8g2_font_6x10_tf);
         d.drawStr(2, 10, T("Nacisnij klawisz na panic:",
                            "Press key for panic:",
-                           "Taste fuer Panik druecken:"));
+                           "Taste fuer Panik druecken:",
+                           "Stisknete klavesu pro panik:"));
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 30, T("Aktualny:", "Current:", "Aktuell:"));
+        d.drawStr(2, 30, T("Aktualny:", "Current:", "Aktuell:", "Aktualni:"));
         d.setFont(u8g2_font_logisoso22_tn);
         d.drawStr(80, 50, kalkKeyLabel((KalkKey)kalkSettings.panicKey));
         d.setFont(u8g2_font_5x7_tf);
         if ((int32_t)(rejectUntil - millis()) > 0) {
             d.drawStr(2, 63, T("Niedozwolony! Wybierz: * / M+ M- MR MC sqrt % MU",
                                "Not allowed! Use: * / M+ M- MR MC sqrt % MU",
-                               "Nicht erlaubt! Nimm: * / M+ M- MR MC sqrt % MU"));
+                               "Nicht erlaubt! Nimm: * / M+ M- MR MC sqrt % MU",
+                               "Nepovoleno! Pouzijte: * / M+ M- MR MC sqrt % MU"));
         } else {
             d.drawStr(2, 63, T("C/CE=anuluj  (* / M+ M- MR MC sqrt % MU)",
                                "C/CE=cancel  (* / M+ M- MR MC sqrt % MU)",
-                               "C/CE=abbr.  (* / M+ M- MR MC sqrt % MU)"));
+                               "C/CE=abbr.  (* / M+ M- MR MC sqrt % MU)",
+                               "C/CE=zrusit  (* / M+ M- MR MC sqrt % MU)"));
         }
         d.sendBuffer();
 
@@ -1001,39 +1037,39 @@ static void _editUpdate(U8G2 &d) {
         // Render
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, T("=== Aktualizacje ===", "=== Updates ===", "=== Updates ==="));
+        d.drawStr(2, 10, T("=== Aktualizacje ===", "=== Updates ===", "=== Updates ===", "=== Aktualizace ==="));
 
         char line[40];
-        snprintf(line, sizeof(line), T("Aktualna wersja: v%s", "Current version: v%s", "Aktuelle Version: v%s"), FW_VERSION);
+        snprintf(line, sizeof(line), T("Aktualna wersja: v%s", "Current version: v%s", "Aktuelle Version: v%s", "Aktualni verze: v%s"), FW_VERSION);
         d.drawStr(2, 24, line);
 
         d.setFont(u8g2_font_5x7_tf);
         switch (state) {
             case ST_IDLE:
-                d.drawStr(2, 40, T("OK = sprawdz aktualizacje", "OK = check for updates", "OK = nach Updates suchen"));
-                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
+                d.drawStr(2, 40, T("OK = sprawdz aktualizacje", "OK = check for updates", "OK = nach Updates suchen", "OK = zkontrolovat aktualizace"));
+                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden", "C/CE = konec"));
                 break;
             case ST_CHECKING:
-                d.drawStr(2, 40, T("Sprawdzam serwer...", "Checking server...", "Server wird geprueft..."));
+                d.drawStr(2, 40, T("Sprawdzam serwer...", "Checking server...", "Server wird geprueft...", "Kontroluji server..."));
                 break;
             case ST_AVAILABLE: {
                 char av[40];
-                snprintf(av, sizeof(av), T("Dostepna: v%s", "Available: v%s", "Verfuegbar: v%s"),
+                snprintf(av, sizeof(av), T("Dostepna: v%s", "Available: v%s", "Verfuegbar: v%s", "Dostupna: v%s"),
                          info.latestVersion.c_str());
                 d.drawStr(2, 38, av);
-                d.drawStr(2, 48, T("OK = zainstaluj", "OK = install", "OK = installieren"));
-                d.drawStr(2, 58, T("C/CE = anuluj", "C/CE = cancel", "C/CE = abbrechen"));
+                d.drawStr(2, 48, T("OK = zainstaluj", "OK = install", "OK = installieren", "OK = instalovat"));
+                d.drawStr(2, 58, T("C/CE = anuluj", "C/CE = cancel", "C/CE = abbrechen", "C/CE = zrusit"));
                 break;
             }
             case ST_NO_UPDATE:
-                d.drawStr(2, 40, T("Masz najnowsza wersje :)", "You have the latest :)", "Du hast die neueste Version :)"));
-                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
+                d.drawStr(2, 40, T("Masz najnowsza wersje :)", "You have the latest :)", "Du hast die neueste Version :)", "Mate nejnovejsi verzi :)"));
+                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden", "C/CE = konec"));
                 break;
             case ST_ERROR: {
                 char eb[60];
-                snprintf(eb, sizeof(eb), T("Blad: %.40s", "Error: %.40s", "Fehler: %.40s"), info.error.c_str());
+                snprintf(eb, sizeof(eb), T("Blad: %.40s", "Error: %.40s", "Fehler: %.40s", "Chyba: %.40s"), info.error.c_str());
                 d.drawStr(2, 40, eb);
-                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden"));
+                d.drawStr(2, 50, T("C/CE = wyjscie", "C/CE = exit", "C/CE = beenden", "C/CE = konec"));
                 break;
             }
         }
@@ -1055,7 +1091,7 @@ static void _editUpdate(U8G2 &d) {
                 state = ST_CHECKING;
                 d.clearBuffer();
                 d.setFont(u8g2_font_6x10_tf);
-                d.drawStr(2, 32, T("Sprawdzam serwer...", "Checking server...", "Server wird geprueft..."));
+                d.drawStr(2, 32, T("Sprawdzam serwer...", "Checking server...", "Server wird geprueft...", "Kontroluji server..."));
                 d.sendBuffer();
 
                 info = otaCheck();
@@ -1312,18 +1348,18 @@ static void _editOfflineQueue(U8G2 &d) {
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 10, T("=== Kolejka offline ===", "=== Offline queue ===", "=== Offline-Warteschl. ==="));
+    d.drawStr(2, 10, T("=== Kolejka offline ===", "=== Offline queue ===", "=== Offline-Warteschl. ===", "=== Offline fronta ==="));
     d.drawHLine(0, 12, 256);
     char line[48];
-    snprintf(line, sizeof(line), T("Zadan w kolejce: %u", "Queued tasks: %u", "Aufgaben in Warteschl.: %u"), (unsigned)n);
+    snprintf(line, sizeof(line), T("Zadan w kolejce: %u", "Queued tasks: %u", "Aufgaben in Warteschl.: %u", "Uloh ve fronte: %u"), (unsigned)n);
     d.drawStr(2, 28, line);
     d.setFont(u8g2_font_5x7_tf);
     if (n > 0) {
-        d.drawStr(2, 42, T("Niewyslane zadania przepadna.", "Unsent tasks will be lost.", "Ungesendete Aufgaben gehen verloren."));
-        d.drawStr(2, 62, T("OK = wyczysc   C/CE / < = wstecz", "OK = clear   C/CE / < = back", "OK = leeren   C/CE / < = zurueck"));
+        d.drawStr(2, 42, T("Niewyslane zadania przepadna.", "Unsent tasks will be lost.", "Ungesendete Aufgaben gehen verloren.", "Neodeslane ulohy budou ztraceny."));
+        d.drawStr(2, 62, T("OK = wyczysc   C/CE / < = wstecz", "OK = clear   C/CE / < = back", "OK = leeren   C/CE / < = zurueck", "OK = vymazat   C/CE / < = zpet"));
     } else {
-        d.drawStr(2, 42, T("Kolejka jest pusta.", "Queue is empty.", "Warteschlange ist leer."));
-        d.drawStr(2, 62, T("OK / C/CE / < = wstecz", "OK / C/CE / < = back", "OK / C/CE / < = zurueck"));
+        d.drawStr(2, 42, T("Kolejka jest pusta.", "Queue is empty.", "Warteschlange ist leer.", "Fronta je prazdna."));
+        d.drawStr(2, 62, T("OK / C/CE / < = wstecz", "OK / C/CE / < = back", "OK / C/CE / < = zurueck", "OK / C/CE / < = zpet"));
     }
     d.sendBuffer();
 
@@ -1334,7 +1370,7 @@ static void _editOfflineQueue(U8G2 &d) {
                 offlineQueueClear();
                 d.clearBuffer();
                 d.setFont(u8g2_font_6x10_tf);
-                d.drawStr(2, 32, T("Kolejka wyczyszczona", "Queue cleared", "Warteschlange geleert"));
+                d.drawStr(2, 32, T("Kolejka wyczyszczona", "Queue cleared", "Warteschlange geleert", "Fronta vymazana"));
                 d.sendBuffer();
                 delay(1200);
             }
@@ -1409,8 +1445,8 @@ static int _setCamPreviewLoop(U8G2 &d, uint32_t shotCount, uint32_t lastSize, in
 
         // Prawy panel (x:164..255)
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(166, 8, T("TEST KAMERY", "CAMERA TEST", "KAMERATEST"));
-        d.drawStr(166, 20, T("Ostrosc", "Sharp", "Schaerfe"));
+        d.drawStr(166, 8, T("TEST KAMERY", "CAMERA TEST", "KAMERATEST", "TEST KAMERY"));
+        d.drawStr(166, 20, T("Ostrosc", "Sharp", "Schaerfe", "Ostrost"));
         const int bx = 166, by = 24, bw = 84, bh = 8;
         d.drawFrame(bx, by, bw, bh);
         d.drawBox(bx + 1, by + 1, (bw - 2) * pct / 100, bh - 2);
@@ -1423,10 +1459,10 @@ static int _setCamPreviewLoop(U8G2 &d, uint32_t shotCount, uint32_t lastSize, in
             snprintf(buf, sizeof(buf), "%lu KB", (unsigned long)(lastSize / 1024));
             d.drawStr(166, 58, buf);
         } else {
-            d.drawStr(166, 50, T("Brak zdjec", "No shots", "Kein Foto"));
+            d.drawStr(166, 50, T("Brak zdjec", "No shots", "Kein Foto", "Zadne foto"));
         }
         d.setFont(u8g2_font_4x6_tf);
-        d.drawStr(2, 63, T("OK=zdjecie JPEG  CCE=wyjscie", "OK=JPEG shot  CCE=exit", "OK=JPEG-Foto  CCE=Ende"));
+        d.drawStr(2, 63, T("OK=zdjecie JPEG  CCE=wyjscie", "OK=JPEG shot  CCE=exit", "OK=JPEG-Foto  CCE=Ende", "OK=foto JPEG  CCE=konec"));
         d.sendBuffer();
 
         for (int k = 0; k < 3; k++) {
@@ -1451,17 +1487,17 @@ static void _editCamTest(U8G2 &d) {
     while (true) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 32, T("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau..."));
+        d.drawStr(2, 32, T("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau...", "Spoustim nahled..."));
         d.sendBuffer();
 
         if (!camBeginPreview()) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 14, T("=== Test kamery ===", "=== Camera test ===", "=== Kameratest ==="));
+            d.drawStr(2, 14, T("=== Test kamery ===", "=== Camera test ===", "=== Kameratest ===", "=== Test kamery ==="));
             d.drawHLine(0, 16, 256);
-            d.drawStr(2, 32, T("Init NIEUDANY", "Init FAILED", "Init FEHLGESCHLAGEN"));
+            d.drawStr(2, 32, T("Init NIEUDANY", "Init FAILED", "Init FEHLGESCHLAGEN", "Init SELHAL"));
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, T("< = wyjscie", "< = exit", "< = beenden"));
+            d.drawStr(2, 62, T("< = wyjscie", "< = exit", "< = beenden", "< = konec"));
             d.sendBuffer();
             _setWaitRelease();
             while (true) {
@@ -1479,7 +1515,7 @@ static void _editCamTest(U8G2 &d) {
         // === OK: realne zdjecie JPEG/UXGA (ten sam tryb co w rozwiazywaniu zadania) ===
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 30, T("Robie zdjecie...", "Capturing...", "Aufnahme laeuft..."));
+        d.drawStr(2, 30, T("Robie zdjecie...", "Capturing...", "Aufnahme laeuft...", "Fotim..."));
         d.sendBuffer();
 
         if (camBegin()) {
@@ -1515,7 +1551,7 @@ static void _editBattery(U8G2 &d) {
 
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 10, T("=== Bateria ===", "=== Battery ===", "=== Akku ==="));
+        d.drawStr(2, 10, T("=== Bateria ===", "=== Battery ===", "=== Akku ===", "=== Baterie ==="));
         if (batteryIsAvailable()) {
             // Zrodlo pomiaru: "MAX17048" (fuel gauge) albo "ADC" (dzielnik).
             const char* src = batterySourceName();
@@ -1524,7 +1560,7 @@ static void _editBattery(U8G2 &d) {
         d.drawHLine(0, 12, 256);
 
         if (!batteryIsAvailable()) {
-            d.drawStr(2, 30, T("Brak czujnika", "No sensor", "Kein Sensor"));
+            d.drawStr(2, 30, T("Brak czujnika", "No sensor", "Kein Sensor", "Chybi senzor"));
         } else {
             uint16_t mv   = batteryReadMillivolts();
             uint8_t  pct  = batteryReadPercent();
@@ -1532,17 +1568,17 @@ static void _editBattery(U8G2 &d) {
             bool     full = batteryIsChargeComplete();
 
             char buf[48];
-            snprintf(buf, sizeof(buf), "%s %u.%03u V", T("Napiecie:", "Voltage: ", "Spannung:"),
+            snprintf(buf, sizeof(buf), "%s %u.%03u V", T("Napiecie:", "Voltage: ", "Spannung:", "Napeti:  "),
                      mv / 1000, mv % 1000);
             d.drawStr(2, 26, buf);
 
-            snprintf(buf, sizeof(buf), "%s %u %%", T("Procent: ", "Percent: ", "Prozent: "), pct);
+            snprintf(buf, sizeof(buf), "%s %u %%", T("Procent: ", "Percent: ", "Prozent: ", "Procenta:"), pct);
             d.drawStr(2, 38, buf);
 
-            snprintf(buf, sizeof(buf), "%s %s", T("Status:  ", "Status:  ", "Status:  "),
-                     chg  ? T("LADOWANIE", "CHARGING", "LADEN")
-                   : full ? T("NALADOWANA", "FULL", "VOLL")
-                          : (batteryIsLow() ? T("NISKI", "LOW", "NIEDRIG") : T("OK", "OK", "OK")));
+            snprintf(buf, sizeof(buf), "%s %s", T("Status:  ", "Status:  ", "Status:  ", "Stav:    "),
+                     chg  ? T("LADOWANIE", "CHARGING", "LADEN", "NABIJENI")
+                   : full ? T("NALADOWANA", "FULL", "VOLL", "NABITO")
+                          : (batteryIsLow() ? T("NISKI", "LOW", "NIEDRIG", "NIZKA") : T("OK", "OK", "OK", "OK")));
             d.drawStr(2, 50, buf);
 
             // Duza ikonka baterii po prawej (32x14)
@@ -1562,7 +1598,7 @@ static void _editBattery(U8G2 &d) {
 
         d.drawHLine(0, 57, 256);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 63, T("OK / < = wyjscie", "OK / < = exit", "OK / < = beenden"));
+        d.drawStr(2, 63, T("OK / < = wyjscie", "OK / < = exit", "OK / < = beenden", "OK / < = konec"));
         d.sendBuffer();
 
         // Wyjscie

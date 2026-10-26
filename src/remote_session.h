@@ -291,12 +291,12 @@ void _editRemoteHelp(U8G2 &d) {
     if (remoteSessionActive()) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 14, T("Zdalna pomoc: AKTYWNA", "Remote help: ACTIVE", "Fernhilfe: AKTIV"));
+        d.drawStr(2, 14, T("Zdalna pomoc: AKTYWNA", "Remote help: ACTIVE", "Fernhilfe: AKTIV", "Vzdalena pomoc: AKTIVNI"));
         d.drawHLine(0, 16, 256);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 32, T("Ktos moze widziec i sterowac", "Someone can see and control", "Jemand kann sehen und steuern"));
-        d.drawStr(2, 42, T("tym kalkulatorem zdalnie.", "this calculator remotely.", "diesen Rechner aus der Ferne."));
-        d.drawStr(2, 62, T("OK = zakoncz   < = wstecz", "OK = end   < = back", "OK = beenden  < = zurueck"));
+        d.drawStr(2, 32, T("Ktos moze widziec i sterowac", "Someone can see and control", "Jemand kann sehen und steuern", "Nekdo muze videt a ovladat"));
+        d.drawStr(2, 42, T("tym kalkulatorem zdalnie.", "this calculator remotely.", "diesen Rechner aus der Ferne.", "tuto kalkulacku na dalku."));
+        d.drawStr(2, 62, T("OK = zakoncz   < = wstecz", "OK = end   < = back", "OK = beenden  < = zurueck", "OK = ukoncit  < = zpet"));
         d.sendBuffer();
         while (true) {
             if (_panicRequested) return;
@@ -313,13 +313,13 @@ void _editRemoteHelp(U8G2 &d) {
     // Start nowej sesji — polacz WiFi (jak _solProcessQueue).
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 32, T("Laczenie z WiFi...", "Connecting to WiFi...", "Verbinde mit WLAN..."));
+    d.drawStr(2, 32, T("Laczenie z WiFi...", "Connecting to WiFi...", "Verbinde mit WLAN...", "Pripojuji k WiFi..."));
     d.sendBuffer();
 
     char ssid[33] = "", pass[64] = "";
     wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
     if (ssid[0] == '\0') {
-        _solDrawError(d, T("Brak zapisanej sieci WiFi", "No saved WiFi network", "Kein gespeichertes WLAN"), "");
+        _solDrawError(d, T("Brak zapisanej sieci WiFi", "No saved WiFi network", "Kein gespeichertes WLAN", "Zadna ulozena sit WiFi"), "");
         return;
     }
     wifiStaOnLimited();   // STA + TxPower (KALK_WIFI_TX_POWER)
@@ -329,7 +329,7 @@ void _editRemoteHelp(U8G2 &d) {
     while (WiFi.status() != WL_CONNECTED && millis() - t0 < 8000 && !_panicRequested) delay(200);
     if (_panicRequested) return;
     if (WiFi.status() != WL_CONNECTED) {
-        _solDrawError(d, T("Nie polaczono z WiFi", "Could not connect", "Keine WLAN-Verbindung"), "");
+        _solDrawError(d, T("Nie polaczono z WiFi", "Could not connect", "Keine WLAN-Verbindung", "Nepripojeno k WiFi"), "");
         return;
     }
     wifiSaveBssidChannel();
@@ -342,14 +342,14 @@ void _editRemoteHelp(U8G2 &d) {
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 14, T("Zdalna pomoc aktywna", "Remote help active", "Fernhilfe aktiv"));
+    d.drawStr(2, 14, T("Zdalna pomoc aktywna", "Remote help active", "Fernhilfe aktiv", "Vzdalena pomoc aktivni"));
     d.drawHLine(0, 16, 256);
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 30, T("Podaj wsparciu Device ID:", "Give support this Device ID:", "Geraete-ID fuer den Support:"));
+    d.drawStr(2, 30, T("Podaj wsparciu Device ID:", "Give support this Device ID:", "Geraete-ID fuer den Support:", "Sdelte podpore Device ID:"));
     d.setFont(u8g2_font_6x10_tf);
     d.drawStr(2, 44, _remoteDeviceId().c_str());
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 62, T("Kwadracik w rogu = sesja trwa", "Corner square = session live", "Eckquadrat = Sitzung aktiv"));
+    d.drawStr(2, 62, T("Kwadracik w rogu = sesja trwa", "Corner square = session live", "Eckquadrat = Sitzung aktiv", "Ctverecek v rohu = relace bezi"));
     d.sendBuffer();
     _setWaitRelease();
     delay(2500);

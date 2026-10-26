@@ -2,6 +2,7 @@
 #include <U8g2lib.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "i18n_extra.h"   // kalkTrExtra — _abT dla jezykow 4..10
 #include "power.h"
 
 // Fallback gdy FW_VERSION nie jest zdefiniowany w main.cpp
@@ -29,19 +30,23 @@
 void showAboutScreen(U8G2 &display) {
 
     // --- dane stron -----------------------------------------------------------
-    // Wybor jezyka: 0 = Polski, 1 = English, 2 = Deutsch
+    // Wybor jezyka: 0 = Polski, 1 = English, 2 = Deutsch, 3 = Cestina
     uint8_t _lang = kalkSettings.language;
-    // Pomocniczy helper 3-jezyczny lokalny dla tego ekranu
-    auto _abT = [_lang](const char* pl, const char* en, const char* de) -> const char* {
-        if (_lang == 0) return pl;
-        if (_lang == 1) return en;
-        return de;
+    // Pomocniczy helper 4-jezyczny lokalny dla tego ekranu
+    auto _abT = [_lang](const char* pl, const char* en, const char* de, const char* cs) -> const char* {
+        if (_lang >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, _lang);   // 4..10
+        switch (_lang) {
+            case 0:  return pl;
+            case 2:  return de;
+            case 3:  return cs;
+            default: return en;
+        }
     };
 
     const char* const _about_titles[3] = {
-        _abT("=== O programie ===", "=== About ===", "=== Ueber ==="),
-        _abT("=== Tworcy ===", "=== Authors ===", "=== Autoren ==="),
-        _abT("=== Wersja ===", "=== Version ===", "=== Version ===")
+        _abT("=== O programie ===", "=== About ===", "=== Ueber ===", "=== O programu ==="),
+        _abT("=== Tworcy ===", "=== Authors ===", "=== Autoren ===", "=== Autori ==="),
+        _abT("=== Wersja ===", "=== Version ===", "=== Version ===", "=== Verze ===")
     };
 
     // Linie z dynamiczna wersja firmware — z FW_VERSION zdefiniowanego w main.cpp
@@ -49,28 +54,28 @@ void showAboutScreen(U8G2 &display) {
     static char _aboutFwLine[40];
     snprintf(_aboutHeaderLine, sizeof(_aboutHeaderLine), "KalkMate v%s", FW_VERSION);
     snprintf(_aboutFwLine, sizeof(_aboutFwLine),
-             _abT("Wersja firmware: %s", "Firmware version: %s", "Firmware-Version: %s"),
+             _abT("Wersja firmware: %s", "Firmware version: %s", "Firmware-Version: %s", "Verze firmwaru: %s"),
              FW_VERSION);
 
     // 4 linie tresci na strone (puste ciagi == pusta linia)
     const char* const _about_lines[3][4] = {
         {
             _aboutHeaderLine,
-            _abT("Kalkulator AI dla maturzystow", "AI calculator for students", "KI-Rechner fuer Schueler"),
-            _abT("Obsluguje: matematyke, fizyke,", "Supports: math, physics,", "Unterstuetzt: Mathe, Physik,"),
-            _abT("chemie i biologie", "chemistry and biology", "Chemie und Biologie")
+            _abT("Kalkulator AI dla maturzystow", "AI calculator for students", "KI-Rechner fuer Schueler", "AI kalkulacka pro maturanty"),
+            _abT("Obsluguje: matematyke, fizyke,", "Supports: math, physics,", "Unterstuetzt: Mathe, Physik,", "Podporuje: matematiku, fyziku,"),
+            _abT("chemie i biologie", "chemistry and biology", "Chemie und Biologie", "chemii a biologii")
         },
         {
-            _abT("Projekt i hardware:", "Project and hardware:", "Projekt und Hardware:"),
+            _abT("Projekt i hardware:", "Project and hardware:", "Projekt und Hardware:", "Projekt a hardware:"),
             "  KAJPA",
-            _abT("Oprogramowanie:", "Software:", "Software:"),
+            _abT("Oprogramowanie:", "Software:", "Software:", "Software:"),
             "  KAJPA"
         },
         {
             _aboutFwLine,
             _ABOUT_CHIP_LINE,
             _ABOUT_MEM_LINE,
-            _abT("Wyswietlacz: OLED 256x64", "Display: OLED 256x64", "Display: OLED 256x64")
+            _abT("Wyswietlacz: OLED 256x64", "Display: OLED 256x64", "Display: OLED 256x64", "Displej: OLED 256x64")
         }
     };
 
@@ -130,7 +135,7 @@ void showAboutScreen(U8G2 &display) {
         display.setFont(u8g2_font_5x7_tf);
 
         // "< WSTECZ" / "< BACK" / "< ZURUECK" — lewa strona
-        const char* backLabel = _abT("< WSTECZ", "< BACK", "< ZURUECK");
+        const char* backLabel = _abT("< WSTECZ", "< BACK", "< ZURUECK", "< ZPET");
         display.drawStr(2, 63, backLabel);
 
         // "X/3" — srodek (szerokosc ekranu 256, napis ~3 znaki*5+odst = ~18px)
@@ -144,7 +149,7 @@ void showAboutScreen(U8G2 &display) {
 
         // "DALEJ >" / "NEXT >" / "WEITER >" — prawa strona (nie na ostatniej stronie)
         if (_about_cur_page < _about_total_pages - 1) {
-            const char* nextLabel = _abT("DALEJ >", "NEXT >", "WEITER>");
+            const char* nextLabel = _abT("DALEJ >", "NEXT >", "WEITER>", "DALSI >");
             // szerokosc max 7 znakow * 5px = 35px
             display.drawStr(256 - 35 - 2, 63, nextLabel);
         }

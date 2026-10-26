@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<title>EU Declaration of Conformity — KalkMate v1.0</title>
+<title>EU Declaration of Conformity — KalkMate v1.0 (Rev. 2.0)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -180,12 +180,12 @@
     <div class="header-left">
       <div class="ce-logo">CE</div>
       <h1>EU Declaration of Conformity</h1>
-      <div class="subtitle">Deklaracja Zgodności UE · RED 2014/53/UE · RoHS II 2011/65/UE · LVD 2014/35/UE</div>
+      <div class="subtitle">Deklaracja Zgodności UE · RED 2014/53/UE + Rozp. del. (UE) 2022/30 · RoHS II 2011/65/UE · LVD 2014/35/UE</div>
     </div>
     <div class="header-right">
       Nr: KAJPA-DOC-2026-001<br>
-      Data / Date: 17.06.2026<br>
-      Rev.: 1.0
+      Data / Date: 25.10.2026<br>
+      Rev.: 2.0
     </div>
   </div>
 
@@ -197,7 +197,7 @@
       <div class="point-content">
         <div class="row"><span class="lbl">Model / Type:</span><span class="val">KalkMate-ESP32S3-v1</span></div>
         <div class="row"><span class="lbl">Product name:</span><span class="val">KalkMate v1.0 — AI Educational Calculator</span></div>
-        <div class="row"><span class="lbl">Batch / Series:</span><span class="val">PCB-v4-2026 (first commercial batch)</span></div>
+        <div class="row"><span class="lbl">Batch / Series:</span><span class="val">PCB-v4-2026 (PCB v4, ESP32-S3-WROOM-1-N16R8)</span></div>
         <div class="row"><span class="lbl">Doc. No.:</span><span class="val">KAJPA-DOC-2026-001</span></div>
       </div>
     </div>
@@ -236,12 +236,13 @@
     <div class="point-body">
       <div class="point-label">Object of the declaration — traceability / Przedmiot deklaracji</div>
       <div class="point-content">
-        <div class="row"><span class="lbl">Opis / Description:</span><span class="val">Kalkulator edukacyjny z wbudowaną kamerą i asystentem AI — Educational calculator with built-in camera and AI assistant</span></div>
-        <div class="row"><span class="lbl">MCU:</span><span class="val">Espressif ESP32-S3-WROOM-1-N16R8 — Xtensa LX7 240 MHz, WiFi 802.11 b/g/n 2,4 GHz, BLE 5.0</span></div>
+        <div class="row"><span class="lbl">Opis / Description:</span><span class="val">Kalkulator edukacyjny z wbudowaną kamerą i asystentem AI dostępnym przez WiFi 2,4 GHz — Educational calculator with built-in camera and AI assistant (WiFi 2.4 GHz)</span></div>
+        <div class="row"><span class="lbl">Hardware:</span><span class="val">PCB v4 — Espressif ESP32-S3-WROOM-1-N16R8 (Xtensa LX7 240 MHz, 16 MB flash, 8 MB PSRAM)</span></div>
+        <div class="row"><span class="lbl">Radio:</span><span class="val">WiFi IEEE 802.11 b/g/n, 2,4 GHz (2412–2472 MHz), tryb klienta (STA) / station mode only; moc nadawania ograniczona w firmware do 8,5 dBm / TX power limited in firmware to 8.5 dBm; antena PCB modułu / module PCB antenna. Bluetooth LE modułu nieużywany (stos BT nie jest uruchamiany) / module BLE not used (BT stack not started)</span></div>
         <div class="row"><span class="lbl">Display:</span><span class="val">OLED SSD1322 256×64 px, 4-wire SPI</span></div>
         <div class="row"><span class="lbl">Camera:</span><span class="val">OmniVision OV2640 2 Mpx, 8-bit parallel</span></div>
         <div class="row"><span class="lbl">Power / Zasilanie:</span><span class="val">LiPo 3,7 V 1500 mAh, ładowanie USB-C 5 V — MCP73831 charger + DW01A protection</span></div>
-        <div class="row"><span class="lbl">Firmware:</span><span class="val">v1.4.4 — PlatformIO / Arduino ESP32 Core, OTA Signed ECDSA P-256</span></div>
+        <div class="row"><span class="lbl">Firmware:</span><span class="val">v2.0.2 — PlatformIO / Arduino-ESP32 Core 2.0.17, OTA Signed ECDSA P-256, TLS (Let's Encrypt ISRG roots pinned)</span></div>
         <div class="row"><span class="lbl">Kraj prod. / Origin:</span><span class="val">Polska / Poland</span></div>
       </div>
     </div>
@@ -256,7 +257,7 @@
         <table>
           <thead><tr><th>Dyrektywa / Directive</th><th>Nr</th><th>Zakres / Scope</th></tr></thead>
           <tbody>
-            <tr><td>Radio Equipment Directive (RED)<br><em>Dyrektywa dot. urządzeń radiowych</em></td><td><strong>2014/53/UE</strong></td><td>WiFi 2,4 GHz; cybersecurity Art. 3.3(d)(e)(f)</td></tr>
+            <tr><td>Radio Equipment Directive (RED)<br><em>Dyrektywa dot. urządzeń radiowych</em></td><td><strong>2014/53/UE</strong></td><td>WiFi 2,4 GHz — art. 3(1)(a), 3(1)(b), 3(2); cyberbezpieczeństwo / cybersecurity art. 3(3)(d)(e) wg / per Delegated Regulation (EU) 2022/30; art. 3(3)(f) — nie dotyczy / not applicable (brak funkcji płatniczych / no payment functions)</td></tr>
             <tr><td>Restriction of Hazardous Substances (RoHS II)<br><em>Dyrektywa RoHS II</em></td><td><strong>2011/65/UE</strong></td><td>Substancje niebezpieczne w sprzęcie elektrycznym</td></tr>
             <tr><td>Low Voltage Directive (LVD)<br><em>Dyrektywa niskonapięciowa</em></td><td><strong>2014/35/UE</strong></td><td>Bezpieczeństwo elektryczne &lt;75 V DC (zasilanie bateryjne)</td></tr>
           </tbody>
@@ -279,7 +280,8 @@
             <tr><td><strong>EN 301 489-17 v3.2.4</strong></td><td>EMC — Broadband data transmission equipment</td></tr>
             <tr><td><strong>EN 62368-1:2020</strong></td><td>Bezpieczeństwo elektryczne urządzeń AV/IT — Electrical safety</td></tr>
             <tr><td><strong>EN 62311:2020</strong></td><td>Ekspozycja na pola EM (0 Hz–300 GHz) — EM field exposure</td></tr>
-            <tr><td><strong>EN 18031-1:2024</strong></td><td>Cyberbezpieczeństwo urządzeń radiowych — RED Art. 3.3(d)(e)(f)</td></tr>
+            <tr><td><strong>EN 18031-1:2024</strong></td><td>Cyberbezpieczeństwo urządzeń radiowych połączonych z internetem — RED art. 3(3)(d)</td></tr>
+            <tr><td><strong>EN 18031-2:2024</strong></td><td>Cyberbezpieczeństwo — ochrona danych osobowych i prywatności — RED art. 3(3)(e)</td></tr>
           </tbody>
         </table>
       </div>
@@ -311,8 +313,8 @@
     <div class="point-body">
       <div class="point-label">Additional information / Informacje dodatkowe</div>
       <div class="point-content">
-        Moduł radiowy ESP32-S3-WROOM-1 posiada własny certyfikat RED (nr: CE2021-XXXX) wystawiony przez Espressif Systems. Teczka techniczna (Technical File) zawiera: schemat elektryczny PCB v4, BOM, datasheety komponentów, certyfikaty RoHS/REACH dostawców, ocenę cyberbezpieczeństwa (EN 18031) oraz opis oprogramowania układowego. Dokumentacja przechowywana przez producenta przez min. 10 lat od daty wprowadzenia produktu do obrotu. Deklaracja dotyczy urządzeń wyprodukowanych po 01.01.2026.<br>
-        <em>The radio module ESP32-S3-WROOM-1 holds its own RED certificate issued by Espressif Systems. Technical File is held by the manufacturer for a minimum of 10 years from the date of placing on the market.</em>
+        Wbudowany moduł radiowy ESP32-S3-WROOM-1 posiada certyfikat badania typu UE (RED, moduł B) — EU Type Examination Certificate wydany 26.01.2022 przez Eurofins Electrical and Electronic Testing NA, Inc. (jednostka notyfikowana nr 0980), nr projektu 1732-01-2022-117324 (normy: EN IEC 62368-1, EN 50665, EN IEC 62311, EN 301 489-1/-17, EN 300 328 v2.2.2). Moduł jest użyty bez modyfikacji anteny; firmware ogranicza moc nadawania poniżej wartości certyfikowanej. Teczka techniczna (Technical File) zawiera: schemat elektryczny PCB v4, BOM, datasheety komponentów, certyfikaty modułu ESP32-S3-WROOM-1 i certyfikaty RoHS/REACH dostawców, ocenę cyberbezpieczeństwa (EN 18031, rev. 25.10.2026) oraz opis oprogramowania układowego (fw 2.0.2). Dokumentacja przechowywana przez producenta przez min. 10 lat od daty wprowadzenia produktu do obrotu. Deklaracja dotyczy urządzeń wyprodukowanych po 01.01.2026. Niniejsza Rev. 2.0 zastępuje Rev. 1.0 z 17.06.2026.<br>
+        <em>The integrated radio module ESP32-S3-WROOM-1 holds an EU Type Examination Certificate (RED, Module B) issued on 26 Jan 2022 by Eurofins Electrical and Electronic Testing NA, Inc. (Notified Body No. 0980), project No. 1732-01-2022-117324. The module is used without antenna modification; firmware limits TX power below the certified value. Technical File is held by the manufacturer for a minimum of 10 years from the date of placing on the market. This Rev. 2.0 supersedes Rev. 1.0 of 17 June 2026.</em>
       </div>
     </div>
   </div>
@@ -326,7 +328,7 @@
       <div class="sig-field">
         <span>Miejsce i data / Place &amp; date</span>
         <div class="sig-line"></div>
-        <div class="sig-caption">Choroszcz, 17.06.2026</div>
+        <div class="sig-caption">Choroszcz, 25.10.2026</div>
       </div>
       <div class="sig-field">
         <span>Imię i nazwisko / Name</span>
@@ -343,7 +345,7 @@
 
   <div class="footer">
     <span>KAJPA Kacper Popko · ul. Zastawie I 37, 16-070 Choroszcz · NIP 9662222951 · kontakt@kajpa.pl</span>
-    <span>KAJPA-DOC-2026-001 · Rev. 1.0 · 17.06.2026</span>
+    <span>KAJPA-DOC-2026-001 · Rev. 2.0 · 25.10.2026</span>
   </div>
 
 </div>

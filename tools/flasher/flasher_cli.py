@@ -180,7 +180,7 @@ def main():
                          "przez okno prowizjonowania zaraz po flashu. Blad wgrania = FAIL. "
                          "Nie da sie laczyc z --auto (ten sam kod poszedlby na kazda sztuke).")
     ap.add_argument("--lang", choices=list(fc.LANG_CODES), default=None,
-                    help="Jezyk interfejsu kalkulatora (pl/en/de) wgrywany w oknie "
+                    help="Jezyk interfejsu kalkulatora (" + "/".join(fc.LANG_CODES) + ") wgrywany w oknie "
                          "prowizjonowania. Brak = domyslny firmware'u (en). Blad = FAIL.")
     args = ap.parse_args()
 

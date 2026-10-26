@@ -52,7 +52,7 @@ const features = [
   {
     title: "Cały dzień bez ładowania",
     description:
-      "Bateria LiPo 2000mAh z ładowaniem USB-C. Inteligentne zarządzanie energią: ekran i kamera wyłączają się automatycznie.",
+      "Bateria LiPo 1500mAh z ładowaniem USB-C. Inteligentne zarządzanie energią: ekran i kamera wyłączają się automatycznie.",
     icon: (
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="6" y="7" width="12" height="10" rx="1" />

@@ -1,9 +1,12 @@
-// Email szablony — ciemny motyw + lokalizacja pl | de | en
+// Email szablony — ciemny motyw + lokalizacja we wszystkich językach strony
+// (pl | en | de | cs | sk | lt | be | es | pt | fr | it — patrz lib/i18n.ts).
 //
 // Lokalizacja:
 //   "pl" — domyślne (główny rynek; Accept-Language: pl*, brak dopasowania, country=PL/brak)
-//   "de" — klienci z Niemiec (Accept-Language: de* lub country=DE)
-//   "en" — Accept-Language: en* oraz zamówienia z pozostałych krajów
+//   Maile auth (rejestracja, reset hasła, zmiana e-maila): język przeglądarki
+//     (Accept-Language) — pierwszy obsługiwany; "be" (białoruski) tylko stąd.
+//   Maile zamówień: kraj wysyłki — DE→de, CZ→cs, SK→sk, LT→lt, ES→es, PT→pt,
+//     FR/BE/LU→fr, IT→it, pozostałe kraje → en. Białoruś nie jest krajem wysyłki.
 //
 // Pomocniki do wykrywania:
 //   detectLocale(acceptLanguageHeader)  — dla maili auth (request header)
@@ -14,27 +17,46 @@
 // do HTML maila surowo (audyt 2026-10-16: wstrzykiwanie linków/HTML w mailach
 // wysyłanych z naszej domeny).
 
-export type EmailLocale = "pl" | "de" | "en";
+import { locales, type Locale } from "@/lib/i18n";
+
+export type EmailLocale = Locale;
+export const EMAIL_LOCALES: readonly EmailLocale[] = locales;
+
+function isEmailLocale(v: string): v is EmailLocale {
+  return (EMAIL_LOCALES as readonly string[]).includes(v);
+}
 
 export function detectLocale(acceptLanguage: string | null | undefined): EmailLocale {
   if (typeof acceptLanguage !== "string") return "pl";
   // Kolejność w nagłówku = kolejność preferencji przeglądarki. Bierzemy pierwszy
   // język, który obsługujemy; nic nie pasuje → polski (główny rynek).
   for (const part of acceptLanguage.split(",")) {
-    const tag = part.split(";")[0].trim().toLowerCase();
-    if (/^pl\b/.test(tag)) return "pl";
-    if (/^de\b/.test(tag)) return "de";
-    if (/^en\b/.test(tag)) return "en";
+    const primary = part.split(";")[0].trim().toLowerCase().split(/[-_]/)[0];
+    if (isEmailLocale(primary)) return primary;
   }
   return "pl";
 }
 
+// Kraj wysyłki -> język maila. Białoruś (BY) celowo pominięta — nie jest
+// krajem wysyłki; "be" wybieramy tylko na podstawie przeglądarki.
+const COUNTRY_LOCALE: Record<string, EmailLocale> = {
+  PL: "pl",
+  DE: "de",
+  CZ: "cs",
+  SK: "sk",
+  LT: "lt",
+  ES: "es",
+  PT: "pt",
+  FR: "fr",
+  BE: "fr", // Belgia
+  LU: "fr",
+  IT: "it",
+};
+
 export function localeFromCountry(country: string | null | undefined): EmailLocale {
   // Brak kraju = stare/krajowe zamówienie (reszta kodu traktuje je jako PL).
   const c = (country || "PL").toUpperCase();
-  if (c === "PL") return "pl";
-  if (c === "DE") return "de";
-  return "en";
+  return COUNTRY_LOCALE[c] ?? "en";
 }
 
 // Escapowanie danych wstawianych do HTML maila (tekst i atrybuty w "…").
@@ -164,6 +186,190 @@ const TX: Record<EmailLocale, Record<string, string>> = {
     labelOr:          "Or link:",
     labelOrderId:     "Order ID:",
   },
+  cs: {
+    footerAuto:       "Automatická zpráva",
+    badgePaid:        "Zaplaceno",
+    badgeInProgress:  "Zpracovává se",
+    badgeShipped:     "Odesláno",
+    badgeFulfilled:   "Vyřízeno",
+    badgeCancelled:   "Zrušeno",
+    rowProduct:       "Produkt",
+    rowAmount:        "Částka",
+    rowLocker:        "Výdejní box",
+    rowAddress:       "Adresa",
+    rowDelivery:      "Doručovací adresa",
+    rowStatus:        "Stav",
+    rowTracking:      "Číslo zásilky",
+    btnPanel:         "Otevřít panel",
+    btnVerify:        "Potvrdit e-mail",
+    btnReset:         "Nastavit nové heslo",
+    btnTrack:         "Sledovat zásilku",
+    btnConfirmChange: "Potvrdit novou adresu",
+    btnSignin:        "Přihlásit se",
+    labelOr:          "Nebo odkaz:",
+    labelOrderId:     "Číslo objednávky:",
+  },
+  sk: {
+    footerAuto:       "Automatická správa",
+    badgePaid:        "Zaplatené",
+    badgeInProgress:  "Spracúva sa",
+    badgeShipped:     "Odoslané",
+    badgeFulfilled:   "Vybavené",
+    badgeCancelled:   "Zrušené",
+    rowProduct:       "Produkt",
+    rowAmount:        "Suma",
+    rowLocker:        "Výdajný box",
+    rowAddress:       "Adresa",
+    rowDelivery:      "Doručovacia adresa",
+    rowStatus:        "Stav",
+    rowTracking:      "Číslo zásielky",
+    btnPanel:         "Otvoriť panel",
+    btnVerify:        "Potvrdiť e-mail",
+    btnReset:         "Nastaviť nové heslo",
+    btnTrack:         "Sledovať zásielku",
+    btnConfirmChange: "Potvrdiť novú adresu",
+    btnSignin:        "Prihlásiť sa",
+    labelOr:          "Alebo odkaz:",
+    labelOrderId:     "Číslo objednávky:",
+  },
+  lt: {
+    footerAuto:       "Automatinis pranešimas",
+    badgePaid:        "Apmokėta",
+    badgeInProgress:  "Vykdoma",
+    badgeShipped:     "Išsiųsta",
+    badgeFulfilled:   "Įvykdyta",
+    badgeCancelled:   "Atšaukta",
+    rowProduct:       "Produktas",
+    rowAmount:        "Suma",
+    rowLocker:        "Paštomatas",
+    rowAddress:       "Adresas",
+    rowDelivery:      "Pristatymo adresas",
+    rowStatus:        "Būsena",
+    rowTracking:      "Siuntos numeris",
+    btnPanel:         "Atidaryti skydelį",
+    btnVerify:        "Patvirtinti el. paštą",
+    btnReset:         "Nustatyti naują slaptažodį",
+    btnTrack:         "Sekti siuntą",
+    btnConfirmChange: "Patvirtinti naują adresą",
+    btnSignin:        "Prisijungti",
+    labelOr:          "Arba nuoroda:",
+    labelOrderId:     "Užsakymo numeris:",
+  },
+  be: {
+    footerAuto:       "Аўтаматычнае паведамленне",
+    badgePaid:        "Аплачана",
+    badgeInProgress:  "Выконваецца",
+    badgeShipped:     "Адпраўлена",
+    badgeFulfilled:   "Выканана",
+    badgeCancelled:   "Скасавана",
+    rowProduct:       "Прадукт",
+    rowAmount:        "Сума",
+    rowLocker:        "Паштамат",
+    rowAddress:       "Адрас",
+    rowDelivery:      "Адрас дастаўкі",
+    rowStatus:        "Статус",
+    rowTracking:      "Нумар адпраўлення",
+    btnPanel:         "Адкрыць панэль",
+    btnVerify:        "Пацвердзіць e-mail",
+    btnReset:         "Задаць новы пароль",
+    btnTrack:         "Адсачыць пасылку",
+    btnConfirmChange: "Пацвердзіць новы адрас",
+    btnSignin:        "Увайсці",
+    labelOr:          "Або спасылка:",
+    labelOrderId:     "Нумар заказу:",
+  },
+  es: {
+    footerAuto:       "Mensaje automático",
+    badgePaid:        "Pagado",
+    badgeInProgress:  "En preparación",
+    badgeShipped:     "Enviado",
+    badgeFulfilled:   "Completado",
+    badgeCancelled:   "Cancelado",
+    rowProduct:       "Producto",
+    rowAmount:        "Importe",
+    rowLocker:        "Punto de recogida",
+    rowAddress:       "Dirección",
+    rowDelivery:      "Dirección de entrega",
+    rowStatus:        "Estado",
+    rowTracking:      "Número de seguimiento",
+    btnPanel:         "Abrir panel",
+    btnVerify:        "Confirmar correo",
+    btnReset:         "Crear nueva contraseña",
+    btnTrack:         "Seguir envío",
+    btnConfirmChange: "Confirmar nueva dirección",
+    btnSignin:        "Iniciar sesión",
+    labelOr:          "O usa este enlace:",
+    labelOrderId:     "N.º de pedido:",
+  },
+  pt: {
+    footerAuto:       "Mensagem automática",
+    badgePaid:        "Pago",
+    badgeInProgress:  "Em preparação",
+    badgeShipped:     "Enviado",
+    badgeFulfilled:   "Concluído",
+    badgeCancelled:   "Cancelado",
+    rowProduct:       "Produto",
+    rowAmount:        "Valor",
+    rowLocker:        "Cacifo",
+    rowAddress:       "Morada",
+    rowDelivery:      "Morada de entrega",
+    rowStatus:        "Estado",
+    rowTracking:      "Número de seguimento",
+    btnPanel:         "Abrir painel",
+    btnVerify:        "Confirmar e-mail",
+    btnReset:         "Definir nova palavra-passe",
+    btnTrack:         "Seguir encomenda",
+    btnConfirmChange: "Confirmar novo endereço",
+    btnSignin:        "Iniciar sessão",
+    labelOr:          "Ou usa o link:",
+    labelOrderId:     "N.º da encomenda:",
+  },
+  fr: {
+    footerAuto:       "Message automatique",
+    badgePaid:        "Payée",
+    badgeInProgress:  "En préparation",
+    badgeShipped:     "Expédiée",
+    badgeFulfilled:   "Terminée",
+    badgeCancelled:   "Annulée",
+    rowProduct:       "Produit",
+    rowAmount:        "Montant",
+    rowLocker:        "Point relais",
+    rowAddress:       "Adresse",
+    rowDelivery:      "Adresse de livraison",
+    rowStatus:        "Statut",
+    rowTracking:      "Numéro de suivi",
+    btnPanel:         "Ouvrir mon espace",
+    btnVerify:        "Confirmer l’e-mail",
+    btnReset:         "Définir un nouveau mot de passe",
+    btnTrack:         "Suivre le colis",
+    btnConfirmChange: "Confirmer la nouvelle adresse",
+    btnSignin:        "Se connecter",
+    labelOr:          "Ou le lien :",
+    labelOrderId:     "N° de commande :",
+  },
+  it: {
+    footerAuto:       "Messaggio automatico",
+    badgePaid:        "Pagato",
+    badgeInProgress:  "In lavorazione",
+    badgeShipped:     "Spedito",
+    badgeFulfilled:   "Completato",
+    badgeCancelled:   "Annullato",
+    rowProduct:       "Prodotto",
+    rowAmount:        "Importo",
+    rowLocker:        "Locker",
+    rowAddress:       "Indirizzo",
+    rowDelivery:      "Indirizzo di consegna",
+    rowStatus:        "Stato",
+    rowTracking:      "Numero di tracking",
+    btnPanel:         "Apri il pannello",
+    btnVerify:        "Conferma e-mail",
+    btnReset:         "Imposta nuova password",
+    btnTrack:         "Traccia la spedizione",
+    btnConfirmChange: "Conferma il nuovo indirizzo",
+    btnSignin:        "Accedi",
+    labelOr:          "Oppure il link:",
+    labelOrderId:     "Numero d’ordine:",
+  },
 };
 
 const t = (locale: EmailLocale, key: string): string =>
@@ -171,11 +377,15 @@ const t = (locale: EmailLocale, key: string): string =>
 
 // Kwota w walucie PŁATNOŚCI (klient z UK płaci w EUR, a mail jest po angielsku —
 // waluty nie wolno zgadywać z języka). PLN zostaje w polskim zapisie "699.00 zł".
+const INTL_LOCALE: Record<EmailLocale, string> = {
+  pl: "pl-PL", en: "en-IE", de: "de-DE", cs: "cs-CZ", sk: "sk-SK", lt: "lt-LT",
+  be: "be-BY", es: "es-ES", pt: "pt-PT", fr: "fr-FR", it: "it-IT",
+};
 export function formatMoney(cents: number, currency: string | null | undefined, locale: EmailLocale): string {
   const cur = (currency || "pln").toUpperCase();
   if (cur === "PLN") return `${(cents / 100).toFixed(2)} zł`;
   try {
-    const intlLocale = locale === "de" ? "de-DE" : locale === "pl" ? "pl-PL" : "en-IE";
+    const intlLocale = INTL_LOCALE[locale] ?? "en-IE";
     return new Intl.NumberFormat(intlLocale, { style: "currency", currency: cur }).format(cents / 100);
   } catch {
     return `${(cents / 100).toFixed(2)} ${cur}`;
@@ -194,7 +404,7 @@ function eyebrowHtml(text: string, color: string = C.signal): string {
 }
 
 interface ShellOptions {
-  htmlLang?: string;        // gdy mail jest w innym jezyku niz de/en (np. "pl")
+  htmlLang?: string;        // gdy <html lang> ma byc inny niz locale szablonu
   footerLabel?: string;     // zamiast "Automated message"
   footerExtraHtml?: string; // np. link do wypisania z newslettera
 }
@@ -314,27 +524,67 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
     pl: ["Dziękujemy za zakup.", "zakup"],
     de: ["Danke für deinen Kauf.", "Kauf"],
     en: ["Thanks for your purchase.", "purchase"],
+    cs: ["Děkujeme za nákup.", "nákup"],
+    sk: ["Ďakujeme za nákup.", "nákup"],
+    lt: ["Ačiū už pirkinį.", "pirkinį"],
+    be: ["Дзякуй за пакупку.", "пакупку"],
+    es: ["Gracias por tu compra.", "compra"],
+    pt: ["Obrigado pela tua compra.", "compra"],
+    fr: ["Merci pour ton achat.", "achat"],
+    it: ["Grazie per il tuo acquisto.", "acquisto"],
   };
   const leads: Record<EmailLocale, string> = {
     pl: `Cześć ${strongName(data.customerName)}, przyjęliśmy Twoje zamówienie. Poniżej szczegóły.`,
     de: `Hallo ${strongName(data.customerName)}, deine Bestellung wurde angenommen. Hier sind die Details.`,
     en: `Hi ${strongName(data.customerName)}, your order has been received. Here are the details.`,
+    cs: `Ahoj ${strongName(data.customerName)}, tvou objednávku jsme přijali. Níže najdeš podrobnosti.`,
+    sk: `Ahoj ${strongName(data.customerName)}, tvoju objednávku sme prijali. Nižšie nájdeš podrobnosti.`,
+    lt: `Labas, ${strongName(data.customerName)}, tavo užsakymą gavome. Žemiau rasi išsamią informaciją.`,
+    be: `Прывітанне, ${strongName(data.customerName)}! Мы прынялі твой заказ. Ніжэй — падрабязнасці.`,
+    es: `Hola, ${strongName(data.customerName)}: hemos recibido tu pedido. Aquí tienes los detalles.`,
+    pt: `Olá ${strongName(data.customerName)}, recebemos a tua encomenda. Seguem os detalhes.`,
+    fr: `Bonjour ${strongName(data.customerName)}, nous avons bien reçu ta commande. Voici le détail.`,
+    it: `Ciao ${strongName(data.customerName)}, abbiamo ricevuto il tuo ordine. Ecco i dettagli.`,
   };
   const bodies: Record<EmailLocale, string> = {
     pl: "Damy znać, gdy paczka zostanie wysłana. Status zamówienia sprawdzisz w panelu klienta.",
     de: "Wir benachrichtigen dich, sobald das Paket verschickt wird. Du kannst den Status in deinem Kundenkonto verfolgen.",
     en: "We'll let you know once the package is shipped. You can track the status in your account.",
+    cs: "Jakmile balík odešleme, dáme ti vědět. Stav objednávky můžeš sledovat ve svém zákaznickém panelu.",
+    sk: "Keď balík odošleme, dáme ti vedieť. Stav objednávky môžeš sledovať vo svojom zákazníckom paneli.",
+    lt: "Kai siuntinį išsiųsime, pranešime. Užsakymo būseną gali sekti savo kliento skydelyje.",
+    be: "Мы паведамім, калі пасылка будзе адпраўлена. Статус заказу можна сачыць у панэлі кліента.",
+    es: "Te avisaremos cuando enviemos el paquete. Puedes seguir el estado del pedido en tu panel de cliente.",
+    pt: "Avisamos-te quando a encomenda for enviada. Podes acompanhar o estado no teu painel de cliente.",
+    fr: "Nous te préviendrons dès que le colis sera expédié. Tu peux suivre l’état de ta commande dans ton espace client.",
+    it: "Ti avviseremo quando il pacco sarà spedito. Puoi seguire lo stato dell’ordine nel tuo pannello cliente.",
   };
   // Model tokenowy (2026-10): bez triala/subskrypcji — tokeny AI z licencji w pudelku.
   const licenseNote: Record<EmailLocale, string> = {
     pl: "W pudełku znajdziesz kod licencji — po aktywacji w panelu dostaniesz 2 mln tokenów AI na swoje konto. Tokeny nie wygasają; kolejne możesz dokupić w panelu.",
     de: "In der Verpackung findest du einen Lizenzcode — nach der Aktivierung im Kundenkonto erhältst du 2 Mio. KI-Tokens. Die Tokens verfallen nicht; weitere kannst du im Kundenkonto nachkaufen.",
     en: "Inside the box you'll find a license code — activate it in your account panel to get 2 million AI tokens. Tokens never expire; you can top up more in the panel.",
+    cs: "V krabičce najdeš licenční kód — po aktivaci v panelu získáš na svůj účet 2 mil. AI tokenů. Tokeny nevyprší; další si můžeš dokoupit v panelu.",
+    sk: "V krabičke nájdeš licenčný kód — po aktivácii v paneli získaš na svoj účet 2 mil. AI tokenov. Tokeny nevypršia; ďalšie si môžeš dokúpiť v paneli.",
+    lt: "Dėžutėje rasi licencijos kodą — aktyvavus jį skydelyje, į savo paskyrą gausi 2 mln. DI žetonų. Žetonai nenustoja galioti; daugiau gali nusipirkti skydelyje.",
+    be: "У каробцы ты знойдзеш ліцэнзійны код — пасля актывацыі ў панэлі атрымаеш на акаўнт 2 млн ШІ-токенаў. Токены не згараюць; дадатковыя можна дакупіць у панэлі.",
+    es: "Dentro de la caja encontrarás un código de licencia: actívalo en tu panel y recibirás 2 millones de tokens de IA. Los tokens no caducan; puedes comprar más en el panel.",
+    pt: "Dentro da caixa vais encontrar um código de licença — ativa-o no painel e recebes 2 milhões de tokens de IA. Os tokens não expiram; podes comprar mais no painel.",
+    fr: "Dans la boîte, tu trouveras un code de licence : active-le dans ton espace client pour recevoir 2 millions de tokens IA. Les tokens n’expirent pas ; tu peux en racheter dans ton espace.",
+    it: "Nella scatola trovi un codice di licenza: attivalo nel pannello e riceverai 2 milioni di token IA. I token non scadono; puoi acquistarne altri nel pannello.",
   };
   const eyebrows: Record<EmailLocale, string> = {
     pl: "Zamówienie · Potwierdzenie",
     de: "Bestellung · Bestätigung",
     en: "Order · Confirmation",
+    cs: "Objednávka · Potvrzení",
+    sk: "Objednávka · Potvrdenie",
+    lt: "Užsakymas · Patvirtinimas",
+    be: "Заказ · Пацвярджэнне",
+    es: "Pedido · Confirmación",
+    pt: "Encomenda · Confirmação",
+    fr: "Commande · Confirmation",
+    it: "Ordine · Conferma",
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -342,8 +592,8 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
   // zamaskowany — nie wysylamy sekretu mailem).
   const qty = Number.isInteger(data.quantity) && (data.quantity as number) > 1 ? (data.quantity as number) : 1;
   const productHtml = strongItem(data.product) + (qty > 1 ? ` <strong style="color:${C.signal};font-family:${FONT_MONO};">&times;&nbsp;${qty}</strong>` : "");
-  const labelsTitle: Record<EmailLocale, string> = { pl: "Etykiety", de: "Etiketten", en: "Labels" };
-  const codeWord: Record<EmailLocale, string> = { pl: "kod AI", de: "KI-Code", en: "AI code" };
+  const labelsTitle: Record<EmailLocale, string> = { pl: "Etykiety", de: "Etiketten", en: "Labels", cs: "Štítky", sk: "Štítky", lt: "Etiketės", be: "Этыкеткі", es: "Etiquetas", pt: "Etiquetas", fr: "Étiquettes", it: "Etichette" };
+  const codeWord: Record<EmailLocale, string> = { pl: "kod AI", de: "KI-Code", en: "AI code", cs: "AI kód", sk: "AI kód", lt: "DI kodas", be: "ШІ-код", es: "código IA", pt: "código IA", fr: "code IA", it: "codice IA" };
   const names = (data.unitNames || []).map((n) => String(n ?? "").trim()).filter(Boolean);
   const labelsRow = names.length
     ? infoRow(labelsTitle[locale], names.map((n, i) =>
@@ -383,21 +633,53 @@ export function statusInProgressEmail(data: FulfillmentData, locale: EmailLocale
     pl: "Status · Aktualizacja",
     de: "Status · Aktualisierung",
     en: "Status · Update",
+    cs: "Stav · Aktualizace",
+    sk: "Stav · Aktualizácia",
+    lt: "Būsena · Atnaujinimas",
+    be: "Статус · Абнаўленне",
+    es: "Estado · Actualización",
+    pt: "Estado · Atualização",
+    fr: "Statut · Mise à jour",
+    it: "Stato · Aggiornamento",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Pakujemy.", "Pakujemy"],
     de: ["Wird verpackt.", "verpackt"],
     en: ["Being packed.", "packed"],
+    cs: ["Balíme.", "Balíme"],
+    sk: ["Balíme.", "Balíme"],
+    lt: ["Pakuojame.", "Pakuojame"],
+    be: ["Пакуем.", "Пакуем"],
+    es: ["Lo estamos preparando.", "preparando"],
+    pt: ["Estamos a embalar.", "embalar"],
+    fr: ["En préparation.", "préparation"],
+    it: ["Lo stiamo imballando.", "imballando"],
   };
   const leads: Record<EmailLocale, string> = {
     pl: `Cześć ${strongName(data.customerName)}, Twoje zamówienie ${strongItem(data.product)} jest w realizacji.`,
     de: `Hallo ${strongName(data.customerName)}, deine Bestellung ${strongItem(data.product)} wird bearbeitet.`,
     en: `Hi ${strongName(data.customerName)}, your order ${strongItem(data.product)} is being processed.`,
+    cs: `Ahoj ${strongName(data.customerName)}, tvoje objednávka ${strongItem(data.product)} se zpracovává.`,
+    sk: `Ahoj ${strongName(data.customerName)}, tvoja objednávka ${strongItem(data.product)} sa spracúva.`,
+    lt: `Labas, ${strongName(data.customerName)}, tavo užsakymas ${strongItem(data.product)} vykdomas.`,
+    be: `Прывітанне, ${strongName(data.customerName)}! Твой заказ ${strongItem(data.product)} выконваецца.`,
+    es: `Hola, ${strongName(data.customerName)}: tu pedido ${strongItem(data.product)} está en preparación.`,
+    pt: `Olá ${strongName(data.customerName)}, a tua encomenda ${strongItem(data.product)} está a ser processada.`,
+    fr: `Bonjour ${strongName(data.customerName)}, ta commande ${strongItem(data.product)} est en cours de préparation.`,
+    it: `Ciao ${strongName(data.customerName)}, il tuo ordine ${strongItem(data.product)} è in lavorazione.`,
   };
   const bodies: Record<EmailLocale, string> = {
     pl: "Napiszemy ponownie, gdy paczka zostanie nadana — razem z numerem przesyłki InPost.",
     de: "Wir benachrichtigen dich erneut, wenn das Paket mit einer InPost-Sendungsnummer verschickt wurde.",
     en: "We'll notify you again once the package has been shipped with an InPost tracking number.",
+    cs: "Znovu ti napíšeme, až balík odešleme — i s číslem zásilky InPost.",
+    sk: "Znova ti napíšeme, keď balík odošleme — aj s číslom zásielky InPost.",
+    lt: "Vėl parašysime, kai siuntinys bus išsiųstas, — kartu su InPost siuntos numeriu.",
+    be: "Мы напішам зноў, калі пасылка будзе адпраўлена, — разам з нумарам адпраўлення InPost.",
+    es: "Te volveremos a escribir cuando enviemos el paquete, junto con el número de seguimiento de InPost.",
+    pt: "Voltamos a escrever-te quando a encomenda for enviada, com o número de seguimento InPost.",
+    fr: "Nous t’écrirons à nouveau à l’expédition du colis, avec le numéro de suivi InPost.",
+    it: "Ti scriveremo di nuovo alla spedizione del pacco, insieme al numero di tracking InPost.",
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -424,21 +706,53 @@ export function statusLabelCreatedEmail(data: FulfillmentData, locale: EmailLoca
     pl: "Status · Nadanie",
     de: "Status · Versandvorbereitung",
     en: "Status · Shipping",
+    cs: "Stav · Odeslání",
+    sk: "Stav · Odoslanie",
+    lt: "Būsena · Siuntimas",
+    be: "Статус · Адпраўка",
+    es: "Estado · Envío",
+    pt: "Estado · Envio",
+    fr: "Statut · Expédition",
+    it: "Stato · Spedizione",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Pakujemy i wysyłamy.", "wysyłamy"],
     de: ["Wird verpackt und verschickt.", "verschickt"],
     en: ["Packing and shipping.", "shipping"],
+    cs: ["Balíme a odesíláme.", "odesíláme"],
+    sk: ["Balíme a odosielame.", "odosielame"],
+    lt: ["Pakuojame ir siunčiame.", "siunčiame"],
+    be: ["Пакуем і адпраўляем.", "адпраўляем"],
+    es: ["Preparando y enviando.", "enviando"],
+    pt: ["A embalar e a enviar.", "enviar"],
+    fr: ["Emballage et expédition.", "expédition"],
+    it: ["Imballiamo e spediamo.", "spediamo"],
   };
   const leads: Record<EmailLocale, string> = {
     pl: `Cześć ${strongName(data.customerName)}, pakujemy Twoje zamówienie ${strongItem(data.product)} i nadaliśmy już przesyłkę.`,
     de: `Hallo ${strongName(data.customerName)}, wir verpacken deine Bestellung ${strongItem(data.product)} — die Sendung ist bereits angemeldet.`,
     en: `Hi ${strongName(data.customerName)}, we're packing your order ${strongItem(data.product)} and the shipment is already booked.`,
+    cs: `Ahoj ${strongName(data.customerName)}, balíme tvou objednávku ${strongItem(data.product)} a zásilku už jsme podali.`,
+    sk: `Ahoj ${strongName(data.customerName)}, balíme tvoju objednávku ${strongItem(data.product)} a zásielku sme už podali.`,
+    lt: `Labas, ${strongName(data.customerName)}, pakuojame tavo užsakymą ${strongItem(data.product)} — siunta jau užregistruota.`,
+    be: `Прывітанне, ${strongName(data.customerName)}! Мы пакуем твой заказ ${strongItem(data.product)} — адпраўленне ўжо аформлена.`,
+    es: `Hola, ${strongName(data.customerName)}: estamos preparando tu pedido ${strongItem(data.product)} y el envío ya está registrado.`,
+    pt: `Olá ${strongName(data.customerName)}, estamos a embalar a tua encomenda ${strongItem(data.product)} e o envio já está registado.`,
+    fr: `Bonjour ${strongName(data.customerName)}, nous emballons ta commande ${strongItem(data.product)} et l’envoi est déjà enregistré.`,
+    it: `Ciao ${strongName(data.customerName)}, stiamo imballando il tuo ordine ${strongItem(data.product)} e la spedizione è già registrata.`,
   };
   const bodies: Record<EmailLocale, string> = {
     pl: "Kurier odbierze paczkę w ciągu 1–2 dni roboczych. Do tego czasu śledzenie może pokazywać tylko „przesyłka utworzona” — to normalne.",
     de: "Der Kurier holt das Paket innerhalb von 1–2 Werktagen ab. Bis dahin zeigt die Sendungsverfolgung eventuell nur „Sendung erstellt“ — das ist normal.",
     en: "The courier will collect the package within 1–2 business days. Until then, tracking may only show “shipment created” — that's normal.",
+    cs: "Kurýr si balík vyzvedne do 1–2 pracovních dnů. Do té doby může sledování ukazovat jen „zásilka vytvořena“ — to je normální.",
+    sk: "Kuriér si balík vyzdvihne do 1–2 pracovných dní. Dovtedy môže sledovanie ukazovať len „zásielka vytvorená“ — to je normálne.",
+    lt: "Kurjeris paims siuntinį per 1–2 darbo dienas. Iki tol sekimo sistema gali rodyti tik „siunta sukurta“ — tai normalu.",
+    be: "Кур’ер забярэ пасылку на працягу 1–2 працоўных дзён. Да таго часу адсочванне можа паказваць толькі «адпраўленне створана» — гэта нармальна.",
+    es: "El mensajero recogerá el paquete en 1–2 días laborables. Hasta entonces, el seguimiento puede mostrar solo «envío creado»; es normal.",
+    pt: "A transportadora vai recolher a encomenda em 1–2 dias úteis. Até lá, o seguimento pode mostrar apenas «envio criado» — é normal.",
+    fr: "Le transporteur récupérera le colis sous 1 à 2 jours ouvrés. D’ici là, le suivi peut n’afficher que « envoi créé » — c’est normal.",
+    it: "Il corriere ritirerà il pacco entro 1–2 giorni lavorativi. Fino ad allora il tracking potrebbe mostrare solo «spedizione creata»: è normale.",
   };
   const [hl, hlAccent] = headlines[locale];
   const tracking = data.trackingNumber || "";
@@ -470,26 +784,66 @@ export function statusShippedEmail(data: FulfillmentData, locale: EmailLocale = 
     pl: "Status · Wysłane",
     de: "Status · Versand",
     en: "Status · Shipped",
+    cs: "Stav · Odesláno",
+    sk: "Stav · Odoslané",
+    lt: "Būsena · Išsiųsta",
+    be: "Статус · Адпраўлена",
+    es: "Estado · Enviado",
+    pt: "Estado · Enviado",
+    fr: "Statut · Expédiée",
+    it: "Stato · Spedito",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["W drodze.", "drodze"],
     de: ["Unterwegs.", "Unterwegs"],
     en: ["On the way.", "way"],
+    cs: ["Na cestě.", "cestě"],
+    sk: ["Na ceste.", "ceste"],
+    lt: ["Jau kelyje.", "kelyje"],
+    be: ["У дарозе.", "дарозе"],
+    es: ["En camino.", "camino"],
+    pt: ["A caminho.", "caminho"],
+    fr: ["En route.", "route"],
+    it: ["In viaggio.", "viaggio"],
   };
   const leads: Record<EmailLocale, string> = {
     pl: `Cześć ${strongName(data.customerName)}, Twoja paczka ${strongItem(data.product)} została wysłana.`,
     de: `Hallo ${strongName(data.customerName)}, dein Paket ${strongItem(data.product)} wurde verschickt.`,
     en: `Hi ${strongName(data.customerName)}, your package ${strongItem(data.product)} has been shipped.`,
+    cs: `Ahoj ${strongName(data.customerName)}, tvůj balík ${strongItem(data.product)} byl odeslán.`,
+    sk: `Ahoj ${strongName(data.customerName)}, tvoj balík ${strongItem(data.product)} bol odoslaný.`,
+    lt: `Labas, ${strongName(data.customerName)}, tavo siuntinys ${strongItem(data.product)} išsiųstas.`,
+    be: `Прывітанне, ${strongName(data.customerName)}! Твая пасылка ${strongItem(data.product)} адпраўлена.`,
+    es: `Hola, ${strongName(data.customerName)}: tu paquete ${strongItem(data.product)} ya está enviado.`,
+    pt: `Olá ${strongName(data.customerName)}, a tua encomenda ${strongItem(data.product)} foi enviada.`,
+    fr: `Bonjour ${strongName(data.customerName)}, ton colis ${strongItem(data.product)} a été expédié.`,
+    it: `Ciao ${strongName(data.customerName)}, il tuo pacco ${strongItem(data.product)} è stato spedito.`,
   };
   const trackBodies: Record<EmailLocale, string> = {
     pl: `Śledź przesyłkę na <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> po numerze podanym powyżej.`,
     de: `Verfolge deine Sendung auf <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> mit der oben angegebenen Nummer.`,
     en: `Track your shipment at <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> using the number above.`,
+    cs: `Zásilku sleduj na <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> podle čísla uvedeného výše.`,
+    sk: `Zásielku sleduj na <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> podľa čísla uvedeného vyššie.`,
+    lt: `Siuntą sek <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> pagal aukščiau nurodytą numerį.`,
+    be: `Адсочвай пасылку на <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> па нумары, пазначаным вышэй.`,
+    es: `Sigue tu envío en <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> con el número indicado arriba.`,
+    pt: `Acompanha o envio em <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> com o número indicado acima.`,
+    fr: `Suis ton colis sur <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> avec le numéro indiqué ci-dessus.`,
+    it: `Traccia la spedizione su <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> con il numero indicato sopra.`,
   };
   const pickupBodies: Record<EmailLocale, string> = {
     pl: `Odbierz paczkę z paczkomatu ${strongItem(data.pickupPoint)} po otrzymaniu SMS-a z kodem odbioru.`,
     de: `Hole dein Paket am Paketfach ${strongItem(data.pickupPoint)} ab, nachdem du die SMS mit dem Abholcode erhalten hast.`,
     en: `Pick up your package from parcel locker ${strongItem(data.pickupPoint)} after receiving the SMS with the collection code.`,
+    cs: `Balík si vyzvedni ve výdejním boxu ${strongItem(data.pickupPoint)}, jakmile ti přijde SMS s kódem pro vyzvednutí.`,
+    sk: `Balík si vyzdvihni vo výdajnom boxe ${strongItem(data.pickupPoint)}, keď ti príde SMS s kódom na vyzdvihnutie.`,
+    lt: `Siuntinį atsiimk paštomate ${strongItem(data.pickupPoint)}, kai gausi SMS su atsiėmimo kodu.`,
+    be: `Забяры пасылку з паштамата ${strongItem(data.pickupPoint)} пасля SMS з кодам атрымання.`,
+    es: `Recoge tu paquete en el punto ${strongItem(data.pickupPoint)} cuando recibas el SMS con el código de recogida.`,
+    pt: `Levanta a encomenda no cacifo ${strongItem(data.pickupPoint)} depois de receberes o SMS com o código de levantamento.`,
+    fr: `Récupère ton colis au point relais ${strongItem(data.pickupPoint)} dès réception du SMS avec le code de retrait.`,
+    it: `Ritira il pacco al locker ${strongItem(data.pickupPoint)} dopo aver ricevuto l’SMS con il codice di ritiro.`,
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -524,22 +878,54 @@ export function statusFulfilledEmail(data: FulfillmentData, locale: EmailLocale 
     pl: "Status · Zrealizowane",
     de: "Status · Abgeschlossen",
     en: "Status · Completed",
+    cs: "Stav · Vyřízeno",
+    sk: "Stav · Vybavené",
+    lt: "Būsena · Įvykdyta",
+    be: "Статус · Выканана",
+    es: "Estado · Completado",
+    pt: "Estado · Concluído",
+    fr: "Statut · Terminée",
+    it: "Stato · Completato",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Gotowe.", "Gotowe"],
     de: ["Fertig.", "Fertig"],
     en: ["Done.", "Done"],
+    cs: ["Hotovo.", "Hotovo"],
+    sk: ["Hotovo.", "Hotovo"],
+    lt: ["Atlikta.", "Atlikta"],
+    be: ["Гатова.", "Гатова"],
+    es: ["Listo.", "Listo"],
+    pt: ["Concluído.", "Concluído"],
+    fr: ["C’est fait.", "fait"],
+    it: ["Fatto.", "Fatto"],
   };
   const leads: Record<EmailLocale, string> = {
     pl: `Cześć ${strongName(data.customerName)}, Twoje zamówienie ${strongItem(data.product)} zostało zrealizowane.`,
     de: `Hallo ${strongName(data.customerName)}, deine Bestellung ${strongItem(data.product)} wurde abgeschlossen.`,
     en: `Hi ${strongName(data.customerName)}, your order ${strongItem(data.product)} has been completed.`,
+    cs: `Ahoj ${strongName(data.customerName)}, tvoje objednávka ${strongItem(data.product)} byla vyřízena.`,
+    sk: `Ahoj ${strongName(data.customerName)}, tvoja objednávka ${strongItem(data.product)} bola vybavená.`,
+    lt: `Labas, ${strongName(data.customerName)}, tavo užsakymas ${strongItem(data.product)} įvykdytas.`,
+    be: `Прывітанне, ${strongName(data.customerName)}! Твой заказ ${strongItem(data.product)} выкананы.`,
+    es: `Hola, ${strongName(data.customerName)}: tu pedido ${strongItem(data.product)} se ha completado.`,
+    pt: `Olá ${strongName(data.customerName)}, a tua encomenda ${strongItem(data.product)} foi concluída.`,
+    fr: `Bonjour ${strongName(data.customerName)}, ta commande ${strongItem(data.product)} est terminée.`,
+    it: `Ciao ${strongName(data.customerName)}, il tuo ordine ${strongItem(data.product)} è stato completato.`,
   };
   const mailLink = `<a href="mailto:kontakt@kalkmate.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">kontakt@kalkmate.pl</a>`;
   const bodies: Record<EmailLocale, string> = {
     pl: `Dziękujemy za zakup. Nie zapomnij aktywować kodu licencji z pudełka w panelu — dostaniesz 2 mln tokenów AI. W razie pytań napisz do nas: ${mailLink}.`,
     de: `Danke für deinen Kauf. Vergiss nicht, den Lizenzcode aus der Verpackung im Kundenkonto zu aktivieren — du erhältst 2 Mio. KI-Tokens. Bei Fragen schreib uns an ${mailLink}.`,
     en: `Thank you for your purchase. Don't forget to activate the license code from the box in your account panel — you'll get 2 million AI tokens. If you have any questions, contact us at ${mailLink}.`,
+    cs: `Děkujeme za nákup. Nezapomeň v panelu aktivovat licenční kód z krabičky — získáš 2 mil. AI tokenů. S případnými dotazy nám napiš: ${mailLink}.`,
+    sk: `Ďakujeme za nákup. Nezabudni v paneli aktivovať licenčný kód z krabičky — získaš 2 mil. AI tokenov. S prípadnými otázkami nám napíš: ${mailLink}.`,
+    lt: `Ačiū už pirkinį. Nepamiršk skydelyje aktyvuoti licencijos kodo iš dėžutės — gausi 2 mln. DI žetonų. Jei turi klausimų, rašyk mums: ${mailLink}.`,
+    be: `Дзякуй за пакупку. Не забудзь актываваць у панэлі ліцэнзійны код з каробкі — атрымаеш 2 млн ШІ-токенаў. Калі ёсць пытанні, пішы нам: ${mailLink}.`,
+    es: `Gracias por tu compra. No olvides activar en tu panel el código de licencia de la caja: recibirás 2 millones de tokens de IA. Si tienes alguna pregunta, escríbenos a ${mailLink}.`,
+    pt: `Obrigado pela tua compra. Não te esqueças de ativar no painel o código de licença da caixa — recebes 2 milhões de tokens de IA. Se tiveres dúvidas, escreve-nos para ${mailLink}.`,
+    fr: `Merci pour ton achat. N’oublie pas d’activer dans ton espace le code de licence de la boîte : tu recevras 2 millions de tokens IA. Pour toute question, écris-nous à ${mailLink}.`,
+    it: `Grazie per l’acquisto. Non dimenticare di attivare nel pannello il codice di licenza della scatola: riceverai 2 milioni di token IA. Per qualsiasi domanda scrivici a ${mailLink}.`,
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -563,22 +949,54 @@ export function statusCancelledEmail(data: FulfillmentData, locale: EmailLocale 
     pl: "Status · Anulowane",
     de: "Status · Storniert",
     en: "Status · Cancelled",
+    cs: "Stav · Zrušeno",
+    sk: "Stav · Zrušené",
+    lt: "Būsena · Atšaukta",
+    be: "Статус · Скасавана",
+    es: "Estado · Cancelado",
+    pt: "Estado · Cancelado",
+    fr: "Statut · Annulée",
+    it: "Stato · Annullato",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Anulowane.", "Anulowane"],
     de: ["Storniert.", "Storniert"],
     en: ["Cancelled.", "Cancelled"],
+    cs: ["Zrušeno.", "Zrušeno"],
+    sk: ["Zrušené.", "Zrušené"],
+    lt: ["Atšaukta.", "Atšaukta"],
+    be: ["Скасавана.", "Скасавана"],
+    es: ["Cancelado.", "Cancelado"],
+    pt: ["Cancelada.", "Cancelada"],
+    fr: ["Annulée.", "Annulée"],
+    it: ["Annullato.", "Annullato"],
   };
   const leads: Record<EmailLocale, string> = {
     pl: `Cześć ${strongName(data.customerName)}, Twoje zamówienie ${strongItem(data.product)} zostało anulowane.`,
     de: `Hallo ${strongName(data.customerName)}, deine Bestellung ${strongItem(data.product)} wurde storniert.`,
     en: `Hi ${strongName(data.customerName)}, your order ${strongItem(data.product)} has been cancelled.`,
+    cs: `Ahoj ${strongName(data.customerName)}, tvoje objednávka ${strongItem(data.product)} byla zrušena.`,
+    sk: `Ahoj ${strongName(data.customerName)}, tvoja objednávka ${strongItem(data.product)} bola zrušená.`,
+    lt: `Labas, ${strongName(data.customerName)}, tavo užsakymas ${strongItem(data.product)} atšauktas.`,
+    be: `Прывітанне, ${strongName(data.customerName)}! Твой заказ ${strongItem(data.product)} скасаваны.`,
+    es: `Hola, ${strongName(data.customerName)}: tu pedido ${strongItem(data.product)} se ha cancelado.`,
+    pt: `Olá ${strongName(data.customerName)}, a tua encomenda ${strongItem(data.product)} foi cancelada.`,
+    fr: `Bonjour ${strongName(data.customerName)}, ta commande ${strongItem(data.product)} a été annulée.`,
+    it: `Ciao ${strongName(data.customerName)}, il tuo ordine ${strongItem(data.product)} è stato annullato.`,
   };
   const mailLink = `<a href="mailto:kontakt@kalkmate.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">kontakt@kalkmate.pl</a>`;
   const bodies: Record<EmailLocale, string> = {
     pl: `Jeśli masz pytania albo się tego nie spodziewałeś(-aś), napisz do nas: ${mailLink}.`,
     de: `Falls du dazu Fragen hast oder das nicht erwartet hast, melde dich bitte bei uns unter ${mailLink}.`,
     en: `If you have any questions about this or didn't expect it, please reach out to us at ${mailLink}.`,
+    cs: `Pokud máš dotazy nebo jsi to nečekal(a), napiš nám: ${mailLink}.`,
+    sk: `Ak máš otázky alebo si to nečakal(a), napíš nám: ${mailLink}.`,
+    lt: `Jei turi klausimų arba to nesitikėjai, parašyk mums: ${mailLink}.`,
+    be: `Калі ў цябе ёсць пытанні або ты гэтага не чакаў(-ла), напішы нам: ${mailLink}.`,
+    es: `Si tienes preguntas o no te lo esperabas, escríbenos a ${mailLink}.`,
+    pt: `Se tiveres dúvidas ou não estavas à espera disto, escreve-nos para ${mailLink}.`,
+    fr: `Si tu as des questions ou si tu ne t’y attendais pas, écris-nous à ${mailLink}.`,
+    it: `Se hai domande o non te lo aspettavi, scrivici a ${mailLink}.`,
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -609,27 +1027,67 @@ export function verificationEmail(data: VerificationData, locale: EmailLocale = 
     pl: "Konto · Potwierdzenie e-maila",
     de: "Konto · E-Mail-Bestätigung",
     en: "Account · Email verification",
+    cs: "Účet · Ověření e-mailu",
+    sk: "Účet · Overenie e-mailu",
+    lt: "Paskyra · El. pašto patvirtinimas",
+    be: "Акаўнт · Пацвярджэнне e-mail",
+    es: "Cuenta · Verificación del correo",
+    pt: "Conta · Verificação do e-mail",
+    fr: "Compte · Vérification de l’e-mail",
+    it: "Account · Verifica e-mail",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Potwierdź e-mail.", "e-mail"],
     de: ["E-Mail bestätigen.", "bestätigen"],
     en: ["Confirm your email.", "email"],
+    cs: ["Potvrď e-mail.", "e-mail"],
+    sk: ["Potvrď e-mail.", "e-mail"],
+    lt: ["Patvirtink el. paštą.", "el. paštą"],
+    be: ["Пацвердзі e-mail.", "e-mail"],
+    es: ["Confirma tu correo.", "correo"],
+    pt: ["Confirma o teu e-mail.", "e-mail"],
+    fr: ["Confirme ton e-mail.", "e-mail"],
+    it: ["Conferma la tua e-mail.", "e-mail"],
   };
   const greetings: Record<EmailLocale, string> = {
     pl: data.customerName ? `Cześć ${strongName(data.customerName)}!` : "Cześć!",
     de: data.customerName ? `Hallo ${strongName(data.customerName)}!` : "Hallo!",
     en: data.customerName ? `Hi ${strongName(data.customerName)}!` : "Hi!",
+    cs: data.customerName ? `Ahoj ${strongName(data.customerName)}!` : "Ahoj!",
+    sk: data.customerName ? `Ahoj ${strongName(data.customerName)}!` : "Ahoj!",
+    lt: data.customerName ? `Labas, ${strongName(data.customerName)}!` : "Labas!",
+    be: data.customerName ? `Прывітанне, ${strongName(data.customerName)}!` : "Прывітанне!",
+    es: data.customerName ? `¡Hola, ${strongName(data.customerName)}!` : "¡Hola!",
+    pt: data.customerName ? `Olá ${strongName(data.customerName)}!` : "Olá!",
+    fr: data.customerName ? `Bonjour ${strongName(data.customerName)} !` : "Bonjour !",
+    it: data.customerName ? `Ciao ${strongName(data.customerName)}!` : "Ciao!",
   };
   const exp = `${data.expiresHours} h`;
   const leadTexts: Record<EmailLocale, string> = {
     pl: `${greetings.pl} Dziękujemy za rejestrację w KalkMate. Aby aktywować konto, kliknij przycisk poniżej. Link wygasa za ${expiryBadge(exp)}.`,
     de: `${greetings.de} Danke für deine Registrierung bei KalkMate. Um dein Konto zu aktivieren, klicke auf den Button unten. Der Link läuft in ${expiryBadge(exp)} ab.`,
     en: `${greetings.en} Thank you for signing up to KalkMate. To activate your account, click the button below. The link expires in ${expiryBadge(exp)}.`,
+    cs: `${greetings.cs} Děkujeme za registraci v KalkMate. Účet aktivuješ kliknutím na tlačítko níže. Odkaz vyprší za ${expiryBadge(exp)}.`,
+    sk: `${greetings.sk} Ďakujeme za registráciu v KalkMate. Účet aktivuješ kliknutím na tlačidlo nižšie. Odkaz vyprší o ${expiryBadge(exp)}.`,
+    lt: `${greetings.lt} Ačiū, kad užsiregistravai KalkMate. Paskyrai aktyvuoti spustelėk mygtuką žemiau. Nuoroda galioja ${expiryBadge(exp)}.`,
+    be: `${greetings.be} Дзякуй за рэгістрацыю ў KalkMate. Каб актываваць акаўнт, націсні кнопку ніжэй. Спасылка дзейнічае ${expiryBadge(exp)}.`,
+    es: `${greetings.es} Gracias por registrarte en KalkMate. Para activar tu cuenta, haz clic en el botón de abajo. El enlace caduca en ${expiryBadge(exp)}.`,
+    pt: `${greetings.pt} Obrigado por te registares no KalkMate. Para ativar a tua conta, clica no botão abaixo. O link expira em ${expiryBadge(exp)}.`,
+    fr: `${greetings.fr} Merci pour ton inscription sur KalkMate. Pour activer ton compte, clique sur le bouton ci-dessous. Le lien expire dans ${expiryBadge(exp)}.`,
+    it: `${greetings.it} Grazie per la registrazione su KalkMate. Per attivare l’account, clicca sul pulsante qui sotto. Il link scade tra ${expiryBadge(exp)}.`,
   };
   const noteTexts: Record<EmailLocale, string> = {
     pl: "Bez potwierdzenia nie zalogujesz się ani nie złożysz zamówienia. Jeśli to nie Ty zakładałeś(-aś) konto, zignoruj tę wiadomość.",
     de: "Ohne Bestätigung kannst du dich weder anmelden noch bestellen. Falls du kein Konto erstellt hast, ignoriere diese E-Mail.",
     en: "Without verification you won't be able to log in or place an order. If you didn't create this account, ignore this email.",
+    cs: "Bez potvrzení se nepřihlásíš ani neobjednáš. Pokud sis účet nezakládal(a) ty, tento e-mail ignoruj.",
+    sk: "Bez potvrdenia sa neprihlásiš ani neobjednáš. Ak si si účet nezakladal(a) ty, tento e-mail ignoruj.",
+    lt: "Be patvirtinimo negalėsi nei prisijungti, nei pateikti užsakymo. Jei paskyros nekūrei tu, šį laišką ignoruok.",
+    be: "Без пацвярджэння ты не зможаш увайсці або зрабіць заказ. Калі акаўнт ствараў не ты, проста праігнаруй гэты ліст.",
+    es: "Sin la verificación no podrás iniciar sesión ni hacer pedidos. Si no has creado esta cuenta, ignora este correo.",
+    pt: "Sem a confirmação não podes iniciar sessão nem fazer encomendas. Se não criaste esta conta, ignora este e-mail.",
+    fr: "Sans confirmation, tu ne pourras ni te connecter ni passer commande. Si tu n’as pas créé ce compte, ignore cet e-mail.",
+    it: "Senza conferma non potrai accedere né effettuare ordini. Se non hai creato tu questo account, ignora questa e-mail.",
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -652,21 +1110,53 @@ export function passwordResetEmail(data: PasswordResetData, locale: EmailLocale 
     pl: "Konto · Reset hasła",
     de: "Konto · Passwort zurücksetzen",
     en: "Account · Password reset",
+    cs: "Účet · Obnovení hesla",
+    sk: "Účet · Obnovenie hesla",
+    lt: "Paskyra · Slaptažodžio atkūrimas",
+    be: "Акаўнт · Скід пароля",
+    es: "Cuenta · Restablecer contraseña",
+    pt: "Conta · Redefinir palavra-passe",
+    fr: "Compte · Réinitialisation du mot de passe",
+    it: "Account · Reimpostazione password",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Reset hasła.", "hasła"],
     de: ["Passwort zurücksetzen.", "zurücksetzen"],
     en: ["Password reset.", "reset"],
+    cs: ["Obnovení hesla.", "hesla"],
+    sk: ["Obnovenie hesla.", "hesla"],
+    lt: ["Slaptažodžio atkūrimas.", "atkūrimas"],
+    be: ["Скід пароля.", "пароля"],
+    es: ["Restablecer contraseña.", "contraseña"],
+    pt: ["Redefinir palavra-passe.", "palavra-passe"],
+    fr: ["Nouveau mot de passe.", "mot de passe"],
+    it: ["Reimposta la password.", "password"],
   };
   const leadTexts: Record<EmailLocale, string> = {
     pl: `Ktoś (mamy nadzieję, że Ty) poprosił o reset hasła do konta KalkMate. Kliknij przycisk poniżej, aby ustawić nowe hasło. Link wygasa za ${expiryBadge(`${data.expiresMinutes} minut`)}.`,
     de: `Jemand (hoffentlich du) hat einen Passwort-Reset für dein KalkMate-Konto angefragt. Klicke auf den Button unten, um ein neues Passwort festzulegen. Der Link läuft in ${expiryBadge(`${data.expiresMinutes} Minuten`)} ab.`,
     en: `Someone (hopefully you) requested a password reset for your KalkMate account. Click the button below to set a new password. The link expires in ${expiryBadge(`${data.expiresMinutes} minutes`)}.`,
+    cs: `Někdo (doufáme, že ty) požádal o obnovení hesla k účtu KalkMate. Nové heslo nastavíš kliknutím na tlačítko níže. Odkaz vyprší za ${expiryBadge(`${data.expiresMinutes} minut`)}.`,
+    sk: `Niekto (dúfame, že ty) požiadal o obnovenie hesla k účtu KalkMate. Nové heslo nastavíš kliknutím na tlačidlo nižšie. Odkaz vyprší o ${expiryBadge(`${data.expiresMinutes} minút`)}.`,
+    lt: `Kažkas (tikimės, kad tu) paprašė atkurti KalkMate paskyros slaptažodį. Naujam slaptažodžiui nustatyti spustelėk mygtuką žemiau. Nuoroda galioja ${expiryBadge(`${data.expiresMinutes} min.`)}.`,
+    be: `Хтосьці (спадзяёмся, што ты) запытаў скід пароля для акаўнта KalkMate. Каб задаць новы пароль, націсні кнопку ніжэй. Спасылка дзейнічае ${expiryBadge(`${data.expiresMinutes} хв`)}.`,
+    es: `Alguien (esperamos que tú) ha solicitado restablecer la contraseña de tu cuenta de KalkMate. Haz clic en el botón de abajo para crear una nueva. El enlace caduca en ${expiryBadge(`${data.expiresMinutes} minutos`)}.`,
+    pt: `Alguém (esperamos que tu) pediu para redefinir a palavra-passe da tua conta KalkMate. Clica no botão abaixo para definir uma nova. O link expira em ${expiryBadge(`${data.expiresMinutes} minutos`)}.`,
+    fr: `Quelqu’un (toi, espérons-le) a demandé la réinitialisation du mot de passe de ton compte KalkMate. Clique sur le bouton ci-dessous pour en définir un nouveau. Le lien expire dans ${expiryBadge(`${data.expiresMinutes} minutes`)}.`,
+    it: `Qualcuno (speriamo tu) ha richiesto la reimpostazione della password del tuo account KalkMate. Clicca sul pulsante qui sotto per impostarne una nuova. Il link scade tra ${expiryBadge(`${data.expiresMinutes} minuti`)}.`,
   };
   const noteTexts: Record<EmailLocale, string> = {
     pl: "Jeśli to nie Ty wysłałeś(-aś) tę prośbę, zignoruj tę wiadomość — hasło nie zostanie zmienione.",
     de: "Falls du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail. Dein Passwort wird nicht geändert.",
     en: "If you didn't send this request, ignore this email. Your password won't be changed.",
+    cs: "Pokud jsi o to nežádal(a) ty, tento e-mail ignoruj — heslo zůstane beze změny.",
+    sk: "Ak si o to nežiadal(a) ty, tento e-mail ignoruj — heslo zostane bez zmeny.",
+    lt: "Jei to neprašei, šį laišką ignoruok — slaptažodis nebus pakeistas.",
+    be: "Калі ты гэтага не запытваў(-ла), праігнаруй ліст — пароль не зменіцца.",
+    es: "Si no has hecho esta solicitud, ignora este correo: tu contraseña no cambiará.",
+    pt: "Se não fizeste este pedido, ignora este e-mail — a tua palavra-passe não será alterada.",
+    fr: "Si tu n’es pas à l’origine de cette demande, ignore cet e-mail : ton mot de passe ne sera pas modifié.",
+    it: "Se non hai fatto tu questa richiesta, ignora questa e-mail: la password non verrà modificata.",
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -697,11 +1187,27 @@ export function accountExistsEmail(data: AccountExistsData, locale: EmailLocale 
     pl: "Konto · Próba rejestracji",
     de: "Konto · Registrierungsversuch",
     en: "Account · Sign-up attempt",
+    cs: "Účet · Pokus o registraci",
+    sk: "Účet · Pokus o registráciu",
+    lt: "Paskyra · Bandymas registruotis",
+    be: "Акаўнт · Спроба рэгістрацыі",
+    es: "Cuenta · Intento de registro",
+    pt: "Conta · Tentativa de registo",
+    fr: "Compte · Tentative d’inscription",
+    it: "Account · Tentativo di registrazione",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Masz już konto.", "konto"],
     de: ["Du hast schon ein Konto.", "Konto"],
     en: ["You already have an account.", "account"],
+    cs: ["Účet už máš.", "Účet"],
+    sk: ["Účet už máš.", "Účet"],
+    lt: ["Paskyrą jau turi.", "Paskyrą"],
+    be: ["У цябе ўжо ёсць акаўнт.", "акаўнт"],
+    es: ["Ya tienes una cuenta.", "cuenta"],
+    pt: ["Já tens uma conta.", "conta"],
+    fr: ["Tu as déjà un compte.", "compte"],
+    it: ["Hai già un account.", "account"],
   };
   const forgot = (label: string) =>
     `<a href="${escHtml(data.forgotUrl)}" style="color:${C.signal};text-decoration:underline;font-weight:600;">${label}</a>`;
@@ -709,16 +1215,40 @@ export function accountExistsEmail(data: AccountExistsData, locale: EmailLocale 
     pl: "Ktoś próbował założyć nowe konto KalkMate na ten adres e-mail. Konto na ten adres już istnieje, więc niczego nie zmieniliśmy.",
     de: "Jemand hat versucht, mit dieser E-Mail-Adresse ein neues KalkMate-Konto zu erstellen. Für diese Adresse gibt es bereits ein Konto, daher haben wir nichts geändert.",
     en: "Someone tried to create a new KalkMate account with this email address. An account with this address already exists, so nothing was changed.",
+    cs: "Někdo se pokusil na tuto e-mailovou adresu založit nový účet KalkMate. Účet s touto adresou už existuje, proto jsme nic neměnili.",
+    sk: "Niekto sa pokúsil na túto e-mailovú adresu založiť nový účet KalkMate. Účet s touto adresou už existuje, preto sme nič nemenili.",
+    lt: "Kažkas bandė šiuo el. pašto adresu sukurti naują KalkMate paskyrą. Paskyra su šiuo adresu jau yra, todėl nieko nekeitėme.",
+    be: "Хтосьці паспрабаваў стварыць новы акаўнт KalkMate на гэты адрас e-mail. Акаўнт з гэтым адрасам ужо існуе, таму мы нічога не змянялі.",
+    es: "Alguien ha intentado crear una nueva cuenta de KalkMate con esta dirección de correo. Ya existe una cuenta con esta dirección, así que no hemos cambiado nada.",
+    pt: "Alguém tentou criar uma nova conta KalkMate com este endereço de e-mail. Já existe uma conta com este endereço, por isso não alterámos nada.",
+    fr: "Quelqu’un a tenté de créer un nouveau compte KalkMate avec cette adresse e-mail. Un compte existe déjà avec cette adresse, nous n’avons donc rien modifié.",
+    it: "Qualcuno ha provato a creare un nuovo account KalkMate con questo indirizzo e-mail. Esiste già un account con questo indirizzo, quindi non abbiamo modificato nulla.",
   };
   const bodyTexts: Record<EmailLocale, string> = {
     pl: `Jeśli to Ty — zaloguj się przez Google (jeśli tak zakładałeś(-aś) konto) albo ustaw hasło przez ${forgot("reset hasła")}.`,
     de: `Falls du das warst: Melde dich mit Google an (falls du das Konto so erstellt hast) oder setze ein Passwort über ${forgot("Passwort zurücksetzen")}.`,
     en: `If this was you, sign in with Google (if that's how you created the account) or set a password using ${forgot("password reset")}.`,
+    cs: `Pokud jsi to byl(a) ty — přihlas se přes Google (pokud sis tak účet zakládal(a)) nebo si nastav heslo přes ${forgot("obnovení hesla")}.`,
+    sk: `Ak si to bol(a) ty — prihlás sa cez Google (ak si si tak účet zakladal(a)) alebo si nastav heslo cez ${forgot("obnovenie hesla")}.`,
+    lt: `Jei tai buvai tu, prisijunk per Google (jei taip kūrei paskyrą) arba nusistatyk slaptažodį per ${forgot("slaptažodžio atkūrimą")}.`,
+    be: `Калі гэта быў(-ла) ты — увайдзі праз Google (калі ты так ствараў(-ла) акаўнт) або задай пароль праз ${forgot("скід пароля")}.`,
+    es: `Si has sido tú, inicia sesión con Google (si creaste la cuenta así) o establece una contraseña con ${forgot("restablecer contraseña")}.`,
+    pt: `Se foste tu, inicia sessão com o Google (se foi assim que criaste a conta) ou define uma palavra-passe através de ${forgot("redefinir palavra-passe")}.`,
+    fr: `Si c’était toi, connecte-toi avec Google (si tu as créé ton compte ainsi) ou définis un mot de passe via ${forgot("la réinitialisation du mot de passe")}.`,
+    it: `Se eri tu, accedi con Google (se hai creato l’account così) oppure imposta una password tramite ${forgot("reimpostazione password")}.`,
   };
   const noteTexts: Record<EmailLocale, string> = {
     pl: "Jeśli to nie Ty, zignoruj tę wiadomość — Twoje konto i hasło pozostają bez zmian.",
     de: "Falls du das nicht warst, ignoriere diese E-Mail — dein Konto und Passwort bleiben unverändert.",
     en: "If this wasn't you, ignore this email — your account and password stay unchanged.",
+    cs: "Pokud jsi to nebyl(a) ty, tento e-mail ignoruj — tvůj účet i heslo zůstávají beze změny.",
+    sk: "Ak si to nebol(a) ty, tento e-mail ignoruj — tvoj účet aj heslo zostávajú bez zmeny.",
+    lt: "Jei tai buvai ne tu, šį laišką ignoruok — tavo paskyra ir slaptažodis lieka nepakitę.",
+    be: "Калі гэта быў(-ла) не ты, праігнаруй ліст — твой акаўнт і пароль застаюцца без змен.",
+    es: "Si no has sido tú, ignora este correo: tu cuenta y tu contraseña siguen igual.",
+    pt: "Se não foste tu, ignora este e-mail — a tua conta e a palavra-passe ficam iguais.",
+    fr: "Si ce n’était pas toi, ignore cet e-mail : ton compte et ton mot de passe restent inchangés.",
+    it: "Se non eri tu, ignora questa e-mail: account e password restano invariati.",
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -746,16 +1276,40 @@ export function emailChangeConfirmEmail(data: EmailChangeData, locale: EmailLoca
     pl: "Konto · Zmiana adresu e-mail",
     de: "Konto · E-Mail-Adresse ändern",
     en: "Account · Email change",
+    cs: "Účet · Změna e-mailové adresy",
+    sk: "Účet · Zmena e-mailovej adresy",
+    lt: "Paskyra · El. pašto adreso keitimas",
+    be: "Акаўнт · Змена адраса e-mail",
+    es: "Cuenta · Cambio de correo",
+    pt: "Conta · Alteração de e-mail",
+    fr: "Compte · Changement d’adresse e-mail",
+    it: "Account · Modifica e-mail",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Potwierdź nowy adres.", "nowy adres"],
     de: ["Neue Adresse bestätigen.", "Adresse"],
     en: ["Confirm your new address.", "new address"],
+    cs: ["Potvrď novou adresu.", "novou adresu"],
+    sk: ["Potvrď novú adresu.", "novú adresu"],
+    lt: ["Patvirtink naują adresą.", "naują adresą"],
+    be: ["Пацвердзі новы адрас.", "новы адрас"],
+    es: ["Confirma tu nueva dirección.", "nueva dirección"],
+    pt: ["Confirma o novo endereço.", "novo endereço"],
+    fr: ["Confirme ta nouvelle adresse.", "nouvelle adresse"],
+    it: ["Conferma il nuovo indirizzo.", "nuovo indirizzo"],
   };
   const greetings: Record<EmailLocale, string> = {
     pl: data.customerName ? `Cześć ${strongName(data.customerName)}!` : "Cześć!",
     de: data.customerName ? `Hallo ${strongName(data.customerName)}!` : "Hallo!",
     en: data.customerName ? `Hi ${strongName(data.customerName)}!` : "Hi!",
+    cs: data.customerName ? `Ahoj ${strongName(data.customerName)}!` : "Ahoj!",
+    sk: data.customerName ? `Ahoj ${strongName(data.customerName)}!` : "Ahoj!",
+    lt: data.customerName ? `Labas, ${strongName(data.customerName)}!` : "Labas!",
+    be: data.customerName ? `Прывітанне, ${strongName(data.customerName)}!` : "Прывітанне!",
+    es: data.customerName ? `¡Hola, ${strongName(data.customerName)}!` : "¡Hola!",
+    pt: data.customerName ? `Olá ${strongName(data.customerName)}!` : "Olá!",
+    fr: data.customerName ? `Bonjour ${strongName(data.customerName)} !` : "Bonjour !",
+    it: data.customerName ? `Ciao ${strongName(data.customerName)}!` : "Ciao!",
   };
   const addr = strongItem(data.newEmail);
   const exp = expiryBadge(`${data.expiresHours} h`);
@@ -763,11 +1317,27 @@ export function emailChangeConfirmEmail(data: EmailChangeData, locale: EmailLoca
     pl: `${greetings.pl} Poproszono o zmianę adresu e-mail konta KalkMate na ${addr}. Zmiana nastąpi dopiero po kliknięciu przycisku poniżej. Link wygasa za ${exp}.`,
     de: `${greetings.de} Es wurde angefragt, die E-Mail-Adresse deines KalkMate-Kontos auf ${addr} zu ändern. Die Änderung erfolgt erst, wenn du auf den Button unten klickst. Der Link läuft in ${exp} ab.`,
     en: `${greetings.en} A request was made to change your KalkMate account email to ${addr}. The change only happens after you click the button below. The link expires in ${exp}.`,
+    cs: `${greetings.cs} Byla podána žádost o změnu e-mailové adresy účtu KalkMate na ${addr}. Změna proběhne až po kliknutí na tlačítko níže. Odkaz vyprší za ${exp}.`,
+    sk: `${greetings.sk} Bola podaná žiadosť o zmenu e-mailovej adresy účtu KalkMate na ${addr}. Zmena prebehne až po kliknutí na tlačidlo nižšie. Odkaz vyprší o ${exp}.`,
+    lt: `${greetings.lt} Gautas prašymas pakeisti KalkMate paskyros el. pašto adresą į ${addr}. Pakeitimas įsigalios tik spustelėjus mygtuką žemiau. Nuoroda galioja ${exp}.`,
+    be: `${greetings.be} Паступіў запыт на змену адраса e-mail акаўнта KalkMate на ${addr}. Змена адбудзецца толькі пасля націску кнопкі ніжэй. Спасылка дзейнічае ${exp}.`,
+    es: `${greetings.es} Se ha solicitado cambiar el correo de tu cuenta de KalkMate a ${addr}. El cambio solo se aplicará cuando hagas clic en el botón de abajo. El enlace caduca en ${exp}.`,
+    pt: `${greetings.pt} Foi pedida a alteração do e-mail da tua conta KalkMate para ${addr}. A alteração só acontece depois de clicares no botão abaixo. O link expira em ${exp}.`,
+    fr: `${greetings.fr} Une demande de changement de l’adresse e-mail de ton compte KalkMate vers ${addr} a été effectuée. Le changement n’aura lieu qu’après un clic sur le bouton ci-dessous. Le lien expire dans ${exp}.`,
+    it: `${greetings.it} È stata richiesta la modifica dell’e-mail del tuo account KalkMate in ${addr}. La modifica avverrà solo dopo aver cliccato sul pulsante qui sotto. Il link scade tra ${exp}.`,
   };
   const noteTexts: Record<EmailLocale, string> = {
     pl: "Po potwierdzeniu logujesz się nowym adresem. Jeśli to nie Ty prosiłeś(-aś) o zmianę, zignoruj tę wiadomość — adres pozostanie bez zmian.",
     de: "Nach der Bestätigung meldest du dich mit der neuen Adresse an. Falls du die Änderung nicht angefragt hast, ignoriere diese E-Mail — die Adresse bleibt unverändert.",
     en: "After confirming, you sign in with the new address. If you didn't request this change, ignore this email — the address will stay the same.",
+    cs: "Po potvrzení se budeš přihlašovat novou adresou. Pokud jsi o změnu nežádal(a) ty, tento e-mail ignoruj — adresa zůstane stejná.",
+    sk: "Po potvrdení sa budeš prihlasovať novou adresou. Ak si o zmenu nežiadal(a) ty, tento e-mail ignoruj — adresa zostane rovnaká.",
+    lt: "Patvirtinus prisijungsi nauju adresu. Jei pakeitimo neprašei, šį laišką ignoruok — adresas liks tas pats.",
+    be: "Пасля пацвярджэння ты будзеш уваходзіць з новым адрасам. Калі ты не запытваў(-ла) змену, праігнаруй ліст — адрас застанецца ранейшым.",
+    es: "Tras confirmarlo, iniciarás sesión con la nueva dirección. Si no has solicitado este cambio, ignora este correo: la dirección seguirá siendo la misma.",
+    pt: "Depois de confirmares, passas a iniciar sessão com o novo endereço. Se não pediste esta alteração, ignora este e-mail — o endereço fica igual.",
+    fr: "Après confirmation, tu te connecteras avec la nouvelle adresse. Si tu n’as pas demandé ce changement, ignore cet e-mail : l’adresse restera la même.",
+    it: "Dopo la conferma accederai con il nuovo indirizzo. Se non hai richiesto tu la modifica, ignora questa e-mail: l’indirizzo resterà invariato.",
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -797,16 +1367,40 @@ export function emailChangeNoticeEmail(data: EmailChangeNoticeData, locale: Emai
     pl: "Konto · Bezpieczeństwo",
     de: "Konto · Sicherheit",
     en: "Account · Security",
+    cs: "Účet · Zabezpečení",
+    sk: "Účet · Zabezpečenie",
+    lt: "Paskyra · Saugumas",
+    be: "Акаўнт · Бяспека",
+    es: "Cuenta · Seguridad",
+    pt: "Conta · Segurança",
+    fr: "Compte · Sécurité",
+    it: "Account · Sicurezza",
   };
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Prośba o zmianę adresu.", "zmianę adresu"],
     de: ["Adressänderung angefragt.", "Adressänderung"],
     en: ["Email change requested.", "Email change"],
+    cs: ["Žádost o změnu adresy.", "změnu adresy"],
+    sk: ["Žiadosť o zmenu adresy.", "zmenu adresy"],
+    lt: ["Prašymas pakeisti adresą.", "pakeisti adresą"],
+    be: ["Запыт на змену адраса.", "змену адраса"],
+    es: ["Solicitud de cambio de correo.", "cambio de correo"],
+    pt: ["Pedido de alteração de e-mail.", "alteração de e-mail"],
+    fr: ["Demande de changement d’adresse.", "changement d’adresse"],
+    it: ["Richiesta di modifica e-mail.", "modifica e-mail"],
   };
   const greetings: Record<EmailLocale, string> = {
     pl: data.customerName ? `Cześć ${strongName(data.customerName)}!` : "Cześć!",
     de: data.customerName ? `Hallo ${strongName(data.customerName)}!` : "Hallo!",
     en: data.customerName ? `Hi ${strongName(data.customerName)}!` : "Hi!",
+    cs: data.customerName ? `Ahoj ${strongName(data.customerName)}!` : "Ahoj!",
+    sk: data.customerName ? `Ahoj ${strongName(data.customerName)}!` : "Ahoj!",
+    lt: data.customerName ? `Labas, ${strongName(data.customerName)}!` : "Labas!",
+    be: data.customerName ? `Прывітанне, ${strongName(data.customerName)}!` : "Прывітанне!",
+    es: data.customerName ? `¡Hola, ${strongName(data.customerName)}!` : "¡Hola!",
+    pt: data.customerName ? `Olá ${strongName(data.customerName)}!` : "Olá!",
+    fr: data.customerName ? `Bonjour ${strongName(data.customerName)} !` : "Bonjour !",
+    it: data.customerName ? `Ciao ${strongName(data.customerName)}!` : "Ciao!",
   };
   const addr = strongItem(data.newEmailMasked);
   const mailLink = `<a href="mailto:kontakt@kalkmate.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">kontakt@kalkmate.pl</a>`;
@@ -814,11 +1408,27 @@ export function emailChangeNoticeEmail(data: EmailChangeNoticeData, locale: Emai
     pl: `${greetings.pl} W Twoim koncie KalkMate poproszono o zmianę adresu e-mail na ${addr}. Zmiana nastąpi dopiero po potwierdzeniu linkiem wysłanym na nowy adres.`,
     de: `${greetings.de} In deinem KalkMate-Konto wurde eine Änderung der E-Mail-Adresse auf ${addr} angefragt. Sie wird erst wirksam, nachdem der Link an die neue Adresse bestätigt wurde.`,
     en: `${greetings.en} A request was made in your KalkMate account to change the email address to ${addr}. It only takes effect after the link sent to the new address is confirmed.`,
+    cs: `${greetings.cs} Ve tvém účtu KalkMate byla podána žádost o změnu e-mailové adresy na ${addr}. Změna proběhne až po potvrzení odkazu zaslaného na novou adresu.`,
+    sk: `${greetings.sk} V tvojom účte KalkMate bola podaná žiadosť o zmenu e-mailovej adresy na ${addr}. Zmena prebehne až po potvrdení odkazu zaslaného na novú adresu.`,
+    lt: `${greetings.lt} Tavo KalkMate paskyroje gautas prašymas pakeisti el. pašto adresą į ${addr}. Pakeitimas įsigalios tik patvirtinus nuorodą, išsiųstą naujuoju adresu.`,
+    be: `${greetings.be} У тваім акаўнце KalkMate паступіў запыт на змену адраса e-mail на ${addr}. Змена адбудзецца толькі пасля пацвярджэння спасылкі, адпраўленай на новы адрас.`,
+    es: `${greetings.es} En tu cuenta de KalkMate se ha solicitado cambiar la dirección de correo a ${addr}. El cambio solo se aplicará cuando se confirme el enlace enviado a la nueva dirección.`,
+    pt: `${greetings.pt} Foi pedida na tua conta KalkMate a alteração do endereço de e-mail para ${addr}. A alteração só acontece depois de confirmado o link enviado para o novo endereço.`,
+    fr: `${greetings.fr} Une demande de changement d’adresse e-mail vers ${addr} a été faite sur ton compte KalkMate. Elle ne prendra effet qu’après confirmation du lien envoyé à la nouvelle adresse.`,
+    it: `${greetings.it} Nel tuo account KalkMate è stata richiesta la modifica dell’indirizzo e-mail in ${addr}. La modifica avverrà solo dopo la conferma del link inviato al nuovo indirizzo.`,
   };
   const noteTexts: Record<EmailLocale, string> = {
     pl: `Jeśli to nie Ty — natychmiast zmień hasło w panelu i napisz do nas: ${mailLink}.`,
     de: `Falls du das nicht warst, ändere sofort dein Passwort im Kundenkonto und schreib uns an ${mailLink}.`,
     en: `If this wasn't you, change your password in the panel right away and contact us at ${mailLink}.`,
+    cs: `Pokud jsi to nebyl(a) ty, okamžitě si v panelu změň heslo a napiš nám: ${mailLink}.`,
+    sk: `Ak si to nebol(a) ty, okamžite si v paneli zmeň heslo a napíš nám: ${mailLink}.`,
+    lt: `Jei tai buvai ne tu, iš karto pakeisk slaptažodį skydelyje ir parašyk mums: ${mailLink}.`,
+    be: `Калі гэта быў(-ла) не ты, неадкладна змяні пароль у панэлі і напішы нам: ${mailLink}.`,
+    es: `Si no has sido tú, cambia ya tu contraseña en el panel y escríbenos a ${mailLink}.`,
+    pt: `Se não foste tu, muda já a palavra-passe no painel e escreve-nos para ${mailLink}.`,
+    fr: `Si ce n’était pas toi, change immédiatement ton mot de passe dans ton espace et écris-nous à ${mailLink}.`,
+    it: `Se non eri tu, cambia subito la password nel pannello e scrivici a ${mailLink}.`,
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -871,58 +1481,164 @@ export const EMAIL_SUBJECTS = {
     pl: "Potwierdź adres e-mail – KalkMate",
     de: "E-Mail-Adresse bestätigen – KalkMate",
     en: "Confirm your email – KalkMate",
+    cs: "Potvrď e-mailovou adresu – KalkMate",
+    sk: "Potvrď e-mailovú adresu – KalkMate",
+    lt: "Patvirtink el. pašto adresą – KalkMate",
+    be: "Пацвердзі адрас e-mail – KalkMate",
+    es: "Confirma tu correo – KalkMate",
+    pt: "Confirma o teu e-mail – KalkMate",
+    fr: "Confirme ton adresse e-mail – KalkMate",
+    it: "Conferma il tuo indirizzo e-mail – KalkMate",
   },
   passwordReset: {
     pl: "Reset hasła – KalkMate",
     de: "Passwort zurücksetzen – KalkMate",
     en: "Password reset – KalkMate",
+    cs: "Obnovení hesla – KalkMate",
+    sk: "Obnovenie hesla – KalkMate",
+    lt: "Slaptažodžio atkūrimas – KalkMate",
+    be: "Скід пароля – KalkMate",
+    es: "Restablecer contraseña – KalkMate",
+    pt: "Redefinir palavra-passe – KalkMate",
+    fr: "Réinitialisation du mot de passe – KalkMate",
+    it: "Reimpostazione password – KalkMate",
   },
   accountExists: {
     pl: "Próba założenia konta na Twój adres – KalkMate",
     de: "Registrierungsversuch mit deiner Adresse – KalkMate",
     en: "Sign-up attempt with your email – KalkMate",
+    cs: "Pokus o registraci s tvou adresou – KalkMate",
+    sk: "Pokus o registráciu s tvojou adresou – KalkMate",
+    lt: "Bandymas registruotis tavo adresu – KalkMate",
+    be: "Спроба рэгістрацыі з тваім адрасам – KalkMate",
+    es: "Intento de registro con tu correo – KalkMate",
+    pt: "Tentativa de registo com o teu e-mail – KalkMate",
+    fr: "Tentative d’inscription avec ton adresse – KalkMate",
+    it: "Tentativo di registrazione con il tuo indirizzo – KalkMate",
   },
   emailChange: {
     pl: "Potwierdź zmianę adresu e-mail – KalkMate",
     de: "Änderung der E-Mail-Adresse bestätigen – KalkMate",
     en: "Confirm your email change – KalkMate",
+    cs: "Potvrď změnu e-mailové adresy – KalkMate",
+    sk: "Potvrď zmenu e-mailovej adresy – KalkMate",
+    lt: "Patvirtink el. pašto adreso pakeitimą – KalkMate",
+    be: "Пацвердзі змену адраса e-mail – KalkMate",
+    es: "Confirma el cambio de correo – KalkMate",
+    pt: "Confirma a alteração de e-mail – KalkMate",
+    fr: "Confirme le changement d’adresse e-mail – KalkMate",
+    it: "Conferma la modifica dell’e-mail – KalkMate",
   },
   emailChangeNotice: {
     pl: "Prośba o zmianę adresu e-mail konta – KalkMate",
     de: "Änderung der Konto-E-Mail angefragt – KalkMate",
     en: "Account email change requested – KalkMate",
+    cs: "Žádost o změnu e-mailu účtu – KalkMate",
+    sk: "Žiadosť o zmenu e-mailu účtu – KalkMate",
+    lt: "Prašymas pakeisti paskyros el. paštą – KalkMate",
+    be: "Запыт на змену e-mail акаўнта – KalkMate",
+    es: "Solicitud de cambio del correo de la cuenta – KalkMate",
+    pt: "Pedido de alteração do e-mail da conta – KalkMate",
+    fr: "Demande de changement de l’e-mail du compte – KalkMate",
+    it: "Richiesta di modifica dell’e-mail dell’account – KalkMate",
   },
   orderInProgress: {
     pl: "Twoje zamówienie jest w realizacji – KalkMate",
     de: "Deine Bestellung wird bearbeitet – KalkMate",
     en: "Your order is being processed – KalkMate",
+    cs: "Tvoje objednávka se zpracovává – KalkMate",
+    sk: "Tvoja objednávka sa spracúva – KalkMate",
+    lt: "Tavo užsakymas vykdomas – KalkMate",
+    be: "Твой заказ выконваецца – KalkMate",
+    es: "Tu pedido está en preparación – KalkMate",
+    pt: "A tua encomenda está a ser processada – KalkMate",
+    fr: "Ta commande est en préparation – KalkMate",
+    it: "Il tuo ordine è in lavorazione – KalkMate",
   },
   orderLabelCreated: {
     pl: "Pakujemy i wysyłamy Twoje zamówienie – KalkMate",
     de: "Deine Bestellung wird verpackt und verschickt – KalkMate",
     en: "We're packing and shipping your order – KalkMate",
+    cs: "Balíme a odesíláme tvou objednávku – KalkMate",
+    sk: "Balíme a odosielame tvoju objednávku – KalkMate",
+    lt: "Pakuojame ir siunčiame tavo užsakymą – KalkMate",
+    be: "Пакуем і адпраўляем твой заказ – KalkMate",
+    es: "Estamos preparando y enviando tu pedido – KalkMate",
+    pt: "Estamos a embalar e a enviar a tua encomenda – KalkMate",
+    fr: "Nous emballons et expédions ta commande – KalkMate",
+    it: "Stiamo imballando e spedendo il tuo ordine – KalkMate",
   },
   orderShipped: {
     pl: "Twoja paczka została wysłana! – KalkMate",
     de: "Dein Paket wurde verschickt! – KalkMate",
     en: "Your package has been shipped! – KalkMate",
+    cs: "Tvůj balík byl odeslán! – KalkMate",
+    sk: "Tvoj balík bol odoslaný! – KalkMate",
+    lt: "Tavo siuntinys išsiųstas! – KalkMate",
+    be: "Твая пасылка адпраўлена! – KalkMate",
+    es: "¡Tu paquete está en camino! – KalkMate",
+    pt: "A tua encomenda foi enviada! – KalkMate",
+    fr: "Ton colis a été expédié ! – KalkMate",
+    it: "Il tuo pacco è stato spedito! – KalkMate",
   },
   orderFulfilled: {
     pl: "Zamówienie zrealizowane – KalkMate",
     de: "Bestellung abgeschlossen – KalkMate",
     en: "Order completed – KalkMate",
+    cs: "Objednávka vyřízena – KalkMate",
+    sk: "Objednávka vybavená – KalkMate",
+    lt: "Užsakymas įvykdytas – KalkMate",
+    be: "Заказ выкананы – KalkMate",
+    es: "Pedido completado – KalkMate",
+    pt: "Encomenda concluída – KalkMate",
+    fr: "Commande terminée – KalkMate",
+    it: "Ordine completato – KalkMate",
   },
   orderCancelled: {
     pl: "Twoje zamówienie zostało anulowane – KalkMate",
     de: "Deine Bestellung wurde storniert – KalkMate",
     en: "Your order has been cancelled – KalkMate",
+    cs: "Tvoje objednávka byla zrušena – KalkMate",
+    sk: "Tvoja objednávka bola zrušená – KalkMate",
+    lt: "Tavo užsakymas atšauktas – KalkMate",
+    be: "Твой заказ скасаваны – KalkMate",
+    es: "Tu pedido se ha cancelado – KalkMate",
+    pt: "A tua encomenda foi cancelada – KalkMate",
+    fr: "Ta commande a été annulée – KalkMate",
+    it: "Il tuo ordine è stato annullato – KalkMate",
   },
   orderConfirmation: {
     pl: "Potwierdzenie zamówienia – KalkMate",
     de: "Bestellbestätigung – KalkMate",
     en: "Order confirmation – KalkMate",
+    cs: "Potvrzení objednávky – KalkMate",
+    sk: "Potvrdenie objednávky – KalkMate",
+    lt: "Užsakymo patvirtinimas – KalkMate",
+    be: "Пацвярджэнне заказу – KalkMate",
+    es: "Confirmación del pedido – KalkMate",
+    pt: "Confirmação da encomenda – KalkMate",
+    fr: "Confirmation de commande – KalkMate",
+    it: "Conferma d’ordine – KalkMate",
   },
 } satisfies Record<string, Record<EmailLocale, string>>;
+
+// Temat potwierdzenia zamówienia z numerem (webhook Stripe, P24, przypomnienia).
+export function orderConfirmationSubject(locale: EmailLocale, orderNumber: string): string {
+  const s: Record<EmailLocale, string> = {
+    pl: `Potwierdzenie zamówienia ${orderNumber} – KalkMate`,
+    de: `Bestellbestätigung ${orderNumber} – KalkMate`,
+    en: `Order confirmation ${orderNumber} – KalkMate`,
+    cs: `Potvrzení objednávky ${orderNumber} – KalkMate`,
+    sk: `Potvrdenie objednávky ${orderNumber} – KalkMate`,
+    lt: `Užsakymo ${orderNumber} patvirtinimas – KalkMate`,
+    be: `Пацвярджэнне заказу ${orderNumber} – KalkMate`,
+    es: `Confirmación del pedido ${orderNumber} – KalkMate`,
+    pt: `Confirmação da encomenda ${orderNumber} – KalkMate`,
+    fr: `Confirmation de la commande ${orderNumber} – KalkMate`,
+    it: `Conferma dell’ordine ${orderNumber} – KalkMate`,
+  };
+  return s[locale];
+}
 
 // ---------------------------------------------------------------------------
 // Alert dla admina (blokada logowania do panelu admina)
@@ -1002,7 +1718,7 @@ export interface NewsletterContent {
   ctaText?: string;
   ctaUrl?: string;
   unsubscribeUrl: string;
-  lang?: "pl" | "en" | "de";
+  lang?: EmailLocale;
   // Podstawa wysyłki pokazywana w stopce. "consent" (domyślnie) = zgoda
   // marketingowa (newsletter); "service" = informacja serwisowa o produkcie,
   // który odbiorca ma (bez reklamy) — tylko gdy wysyłka idzie też do osób bez zgody.
@@ -1013,7 +1729,7 @@ export interface NewsletterContent {
 // zamówienie" — to nie jest podstawa do wysyłania newslettera (art. 398 PKE
 // wymaga zgody). Newsletter idzie wyłącznie do osób ze zgodą, więc stopka
 // mówi o zgodzie; wariant "service" zostaje dla komunikatów serwisowych.
-const NEWSLETTER_FOOTER: Record<"pl" | "en" | "de", { why: string; whyService: string; unsub: string }> = {
+const NEWSLETTER_FOOTER: Record<EmailLocale, { why: string; whyService: string; unsub: string }> = {
   pl: {
     why: "Dostajesz tę wiadomość, bo zapisałeś(-aś) się na newsletter KalkMate (zgoda na informacje handlowe). Zgodę możesz wycofać w każdej chwili.",
     whyService: "To wiadomość serwisowa o produkcie lub usłudze KalkMate, z której korzystasz.",
@@ -1029,11 +1745,51 @@ const NEWSLETTER_FOOTER: Record<"pl" | "en" | "de", { why: string; whyService: s
     whyService: "Dies ist eine Servicemitteilung zu einem KalkMate-Produkt oder -Dienst, den Sie nutzen.",
     unsub: "Abmelden",
   },
+  cs: {
+    why: "Tuto zprávu dostáváš, protože ses přihlásil(a) k odběru newsletteru KalkMate (souhlas se zasíláním obchodních sdělení). Souhlas můžeš kdykoli odvolat.",
+    whyService: "Toto je servisní zpráva k produktu nebo službě KalkMate, kterou používáš.",
+    unsub: "Odhlásit se z newsletteru",
+  },
+  sk: {
+    why: "Túto správu dostávaš, pretože si sa prihlásil(a) na odber newslettera KalkMate (súhlas so zasielaním obchodných oznámení). Súhlas môžeš kedykoľvek odvolať.",
+    whyService: "Toto je servisná správa k produktu alebo službe KalkMate, ktorú používaš.",
+    unsub: "Odhlásiť sa z newslettera",
+  },
+  lt: {
+    why: "Gauni šį laišką, nes užsiprenumeravai KalkMate naujienlaiškį (sutikimas gauti rinkodaros pranešimus). Sutikimą gali bet kada atšaukti.",
+    whyService: "Tai aptarnavimo pranešimas apie KalkMate produktą ar paslaugą, kuria naudojiesi.",
+    unsub: "Atsisakyti naujienlaiškio",
+  },
+  be: {
+    why: "Ты атрымліваеш гэты ліст, бо падпісаўся(-лася) на рассылку KalkMate (згода на атрыманне рэкламных паведамленняў). Згоду можна адклікаць у любы момант.",
+    whyService: "Гэта сэрвіснае паведамленне пра прадукт або паслугу KalkMate, якой ты карыстаешся.",
+    unsub: "Адпісацца ад рассылкі",
+  },
+  es: {
+    why: "Recibes este mensaje porque te suscribiste al boletín de KalkMate (consentimiento para comunicaciones comerciales). Puedes retirar tu consentimiento en cualquier momento.",
+    whyService: "Este es un mensaje de servicio sobre un producto o servicio de KalkMate que utilizas.",
+    unsub: "Darse de baja",
+  },
+  pt: {
+    why: "Recebes esta mensagem porque subscreveste a newsletter da KalkMate (consentimento para comunicações comerciais). Podes retirar o consentimento a qualquer momento.",
+    whyService: "Esta é uma mensagem de serviço sobre um produto ou serviço KalkMate que utilizas.",
+    unsub: "Cancelar subscrição",
+  },
+  fr: {
+    why: "Tu reçois ce message car tu t’es inscrit(e) à la newsletter KalkMate (consentement aux communications commerciales). Tu peux retirer ton consentement à tout moment.",
+    whyService: "Ceci est un message de service concernant un produit ou un service KalkMate que tu utilises.",
+    unsub: "Se désinscrire",
+  },
+  it: {
+    why: "Ricevi questo messaggio perché ti sei iscritto/a alla newsletter di KalkMate (consenso alle comunicazioni commerciali). Puoi revocare il consenso in qualsiasi momento.",
+    whyService: "Questo è un messaggio di servizio relativo a un prodotto o servizio KalkMate che utilizzi.",
+    unsub: "Annulla l’iscrizione",
+  },
 };
 
 export function newsletterEmail(c: NewsletterContent): string {
   const lang = c.lang || "pl";
-  const f = NEWSLETTER_FOOTER[lang];
+  const f = NEWSLETTER_FOOTER[lang] ?? NEWSLETTER_FOOTER.en;
   const why = c.reason === "service" ? f.whyService : f.why;
   const preheader = c.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escHtml(c.preheader)}</div>`
@@ -1049,7 +1805,7 @@ export function newsletterEmail(c: NewsletterContent): string {
     ${newsletterBodyHtml(c.body)}
     ${cta}`;
 
-  return shell(inner, lang === "de" ? "de" : "en", {
+  return shell(inner, lang, {
     htmlLang: lang,
     footerLabel: "Newsletter",
     footerExtraHtml: `

@@ -6,7 +6,7 @@ import { clientIp } from "@/lib/rate-limit";
 import { ipHashFromHeaders, resolveAttribution, saveOrderAttribution } from "@/lib/attribution";
 import { prisma } from "@/lib/db";
 import { setOrderCoupon, reserveCoupon, releaseCouponReservation, COUPON_RESERVATION_TTL_P24_MS } from "@/lib/coupons";
-import { registerTransaction, paymentUrl } from "@/lib/przelewy24";
+import { registerTransaction, paymentUrl, p24Language } from "@/lib/przelewy24";
 import { randomUUID } from "crypto";
 import {
   ensureOrderPersonalizationColumns, validateOrderUnits, serializeOrderUnits, type OrderUnit,
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
         zip: postcode || "",
         city: city || resolvedCountry,
         country: resolvedCountry === "OTHER" ? "US" : resolvedCountry,
-        language: resolvedCurrency === "PLN" ? "pl" : "en",
+        language: p24Language(resolvedCurrency, resolvedCountry),
         urlReturn: returnUrl,
         urlStatus: statusUrl,
         channel,

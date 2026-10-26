@@ -28,6 +28,7 @@
 #include <esp_sleep.h>
 #include "input.h"
 #include "settings_screen.h"
+#include "i18n_extra.h"     // kalkTrExtra — _powT dla jezykow 4..10
 #include "wifi_persist.h"   // wifiLoadSaved / wifiFastBegin / wifiStaOnLimited — reconnect po wybudzeniu
 #include "panic.h"
 #include "battery.h"        // VBAT watchdog w trybie kalkulatora i w uspieniu
@@ -90,6 +91,17 @@ inline void powerSetMinTimeout(uint32_t ms) {
 static uint32_t _powerVbatLast     = 0;
 static uint8_t  _powerVbatLowCount = 0;
 
+// 0=PL, 1=EN, 2=DE, 3=CS (bez diakrytykow); 4..10 -> i18n_extra.h po tekscie EN
+static const char* _powT(const char* pl, const char* en, const char* de, const char* cs) {
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);
+    switch (kalkSettings.language) {
+        case 0:  return pl;
+        case 2:  return de;
+        case 3:  return cs;
+        default: return en;
+    }
+}
+
 static void _powerCriticalShutdown(uint16_t mv, bool displayOn) {
     Serial.printf("[POWER] VBAT=%u mV - CRITICAL, shutdown\n", mv);
     Serial.flush();
@@ -98,12 +110,15 @@ static void _powerCriticalShutdown(uint16_t mv, bool displayOn) {
         U8G2 &d = *_powerU8g2;
         d.clearBuffer();
         d.setFont(u8g2_font_10x20_tf);
-        d.drawStr(35, 22, "NISKA BATERIA");
+        const char* title = _powT("NISKA BATERIA", "LOW BATTERY", "AKKU SCHWACH", "SLABA BATERIE");
+        d.drawStr((256 - d.getStrWidth(title)) / 2, 22, title);
         d.setFont(u8g2_font_6x10_tf);
         char buf[40];
         snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", mv / 1000, (mv % 1000) / 10);
         d.drawStr(80, 40, buf);
-        d.drawStr(40, 55, "Podlacz ladowarke USB-C");
+        const char* hint = _powT("Podlacz ladowarke USB-C", "Connect a USB-C charger",
+                                 "USB-C-Ladegeraet anschliessen", "Pripojte nabijecku USB-C");
+        d.drawStr((256 - d.getStrWidth(hint)) / 2, 55, hint);
         d.sendBuffer();
         delay(3000);
     }

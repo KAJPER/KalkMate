@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
-import { registerTransaction, paymentUrl } from "@/lib/przelewy24";
+import { registerTransaction, paymentUrl, p24Language } from "@/lib/przelewy24";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { addPaymentSession, verifyResumeToken } from "@/lib/paymentReminders";
 import { readOrderUnits } from "@/lib/orderPersonalization";
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       zip: o.customerAddressPostcode || "",
       city: o.customerAddressCity || o.customerCountry || "",
       country: o.customerCountry && o.customerCountry !== "OTHER" ? o.customerCountry : "PL",
-      language: currency === "PLN" ? "pl" : "en",
+      language: p24Language(currency, o.customerCountry),
       urlReturn: `${baseUrl}/?p24_return=true&p24_session=${sessionId}`,
       urlStatus: `${baseUrl}/api/webhooks/p24`,
       channel: 16,

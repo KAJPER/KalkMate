@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import type { Prisma } from "@prisma/client";
 import { stripe } from "@/lib/stripe";
 import { sendMail } from "@/lib/mailer";
-import { purchaseConfirmationEmail, localeFromCountry } from "@/lib/email-templates";
+import { purchaseConfirmationEmail, localeFromCountry, orderConfirmationSubject } from "@/lib/email-templates";
 import { prisma } from "@/lib/db";
 import { attributionFromMetadata, saveOrderAttribution } from "@/lib/attribution";
 import { consumeCouponUsage, setOrderCoupon } from "@/lib/coupons";
@@ -330,11 +330,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   // Send confirmation email
   try {
     const locale = localeFromCountry(meta.customer_country);
-    const subject = locale === "de"
-      ? `Bestellbestätigung ${orderNumber} – KalkMate`
-      : locale === "pl"
-        ? `Potwierdzenie zamówienia ${orderNumber} – KalkMate`
-        : `Order confirmation ${orderNumber} – KalkMate`;
+    const subject = orderConfirmationSubject(locale, orderNumber);
     await sendMail({
       to: email,
       subject,
@@ -426,11 +422,7 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
   // Send confirmation email
   try {
     const locale = localeFromCountry(session.metadata?.customer_country);
-    const subject = locale === "de"
-      ? `Bestellbestätigung ${orderNumber} – KalkMate`
-      : locale === "pl"
-        ? `Potwierdzenie zamówienia ${orderNumber} – KalkMate`
-        : `Order confirmation ${orderNumber} – KalkMate`;
+    const subject = orderConfirmationSubject(locale, orderNumber);
     await sendMail({
       to: email,
       subject,

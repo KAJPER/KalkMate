@@ -331,8 +331,8 @@ class FlasherApp:
         lrow.pack(fill=tk.X, padx=10, pady=(0, 4))
         tk.Label(lrow, text="Jezyk kalkulatora:", bg=BG,
                  fg=FG, width=22, anchor="w").pack(side=tk.LEFT)
-        self._lang_choices = {"bez zmian (domyslny EN)": None, "Polski": "pl",
-                              "English": "en", "Deutsch": "de"}
+        self._lang_choices = {"bez zmian (domyslny EN)": None}
+        self._lang_choices.update({fc.LANG_NAMES[c]: c for c in fc.LANG_CODES})
         self.client_lang_var = tk.StringVar(value="Polski")
         tk.OptionMenu(lrow, self.client_lang_var, *self._lang_choices.keys()).pack(side=tk.LEFT)
         tk.Label(lrow, text="  wgrywany razem z kodem; blad = FAIL (wymaga czystego NVS)",

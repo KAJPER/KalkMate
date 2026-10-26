@@ -6,12 +6,28 @@ const productName: Record<Locale, string> = {
   pl: "KalkMate — Kalkulator AI",
   en: "KalkMate — AI Calculator",
   de: "KalkMate — KI-Taschenrechner",
+  cs: "KalkMate — AI kalkulačka",
+  sk: "KalkMate — AI kalkulačka",
+  lt: "KalkMate — DI skaičiuotuvas",
+  be: "KalkMate — ШІ-калькулятар",
+  es: "KalkMate — Calculadora con IA",
+  pt: "KalkMate — Calculadora com IA",
+  fr: "KalkMate — Calculatrice IA",
+  it: "KalkMate — Calcolatrice con IA",
 };
 
 const productDescription: Record<Locale, string> = {
   pl: "Kalkulator z aparatem i AI do rozwiązywania zadań maturalnych. Zrób zdjęcie zadania z matematyki, fizyki, chemii lub biologii — pełne rozwiązanie krok po kroku pojawi się na ekranie OLED 256×64. Kalkulator do ściągania nowej generacji.",
   en: "AI camera calculator for exams — photograph any math, physics, chemistry or biology problem and the full step-by-step solution appears on the 256×64 OLED screen. Smart, discreet, no phone needed.",
   de: "KI Taschenrechner mit Kamera für Prüfungen. Fotografiere eine Aufgabe aus Mathematik, Physik, Chemie oder Biologie — die vollständige Schritt-für-Schritt-Lösung erscheint auf dem 256×64 OLED-Display.",
+  cs: "AI kalkulačka s kamerou na zkoušky. Vyfoť úlohu z matematiky, fyziky, chemie nebo biologie — kompletní řešení krok za krokem se zobrazí na OLED displeji 256×64. Chytrá, nenápadná, bez telefonu.",
+  sk: "AI kalkulačka s kamerou na skúšky. Odfoť úlohu z matematiky, fyziky, chémie alebo biológie — kompletné riešenie krok za krokom sa zobrazí na OLED displeji 256×64. Šikovná, nenápadná, bez telefónu.",
+  lt: "Dirbtinio intelekto skaičiuotuvas su kamera egzaminams. Nufotografuok matematikos, fizikos, chemijos ar biologijos užduotį — visas sprendimas žingsnis po žingsnio atsiras 256×64 OLED ekrane. Išmanus, nepastebimas, be telefono.",
+  be: "ШІ-калькулятар з камерай для экзаменаў. Сфатаграфуй задачу па матэматыцы, фізіцы, хіміі ці біялогіі — поўнае рашэнне крок за крокам з’явіцца на OLED-экране 256×64. Разумны, непрыкметны, без тэлефона.",
+  es: "Calculadora con IA y cámara para exámenes. Fotografía un problema de matemáticas, física, química o biología y la solución completa paso a paso aparece en la pantalla OLED de 256×64. Inteligente, discreta y sin móvil.",
+  pt: "Calculadora com IA e câmara para exames. Fotografa um exercício de matemática, física, química ou biologia e a resolução completa passo a passo aparece no ecrã OLED de 256×64. Inteligente, discreta e sem telemóvel.",
+  fr: "Calculatrice IA avec caméra pour les examens. Photographie un exercice de maths, physique, chimie ou biologie : la solution complète, étape par étape, s’affiche sur l’écran OLED 256×64. Intelligente, discrète, sans téléphone.",
+  it: "Calcolatrice con IA e fotocamera per gli esami. Fotografa un esercizio di matematica, fisica, chimica o biologia e la soluzione completa passo dopo passo compare sul display OLED 256×64. Intelligente, discreta, senza telefono.",
 };
 
 // Wysylka do danych strukturalnych — te same stawki co w koszyku

@@ -26,7 +26,9 @@ interface CheckoutFormProps {
 
 const content: Record<Locale, {
   // Etykieta przycisku musi jednoznacznie wskazywac obowiazek zaplaty
-  // (art. 17 ust. 3 u.p.k. / § 312j BGB / UK CCR "order with obligation to pay").
+  // (art. 17 ust. 3 u.p.k. / § 312j BGB / UK CCR "order with obligation to pay"
+  // / § 1826a odst. 3 OZ CZ "objednávka zavazující k platbě"; pozostale jezyki
+  // UE — odpowiednik art. 8 ust. 2 dyrektywy 2011/83/UE w danym jezyku).
   payButton: (amount: string) => string;
   processing: string;
   orPayOther: string;
@@ -49,6 +51,54 @@ const content: Record<Locale, {
     processing: "Wird verarbeitet…",
     orPayOther: "oder mit einer anderen Methode bezahlen",
     genericError: "Ein Fehler ist aufgetreten. Bitte versuche es erneut.",
+  },
+  cs: {
+    payButton: (a) => `Objednat s povinností platby – ${a}`,
+    processing: "Zpracovává se…",
+    orPayOther: "nebo zaplaťte jinou metodou",
+    genericError: "Došlo k chybě. Zkuste to prosím znovu.",
+  },
+  sk: {
+    payButton: (a) => `Objednávka s povinnosťou platby – ${a}`,
+    processing: "Spracúva sa…",
+    orPayOther: "alebo zaplaťte inou metódou",
+    genericError: "Vyskytla sa chyba. Skúste to prosím znova.",
+  },
+  lt: {
+    payButton: (a) => `Užsakymas su pareiga sumokėti – ${a}`,
+    processing: "Apdorojama…",
+    orPayOther: "arba mokėkite kitu būdu",
+    genericError: "Įvyko klaida. Bandykite dar kartą.",
+  },
+  be: {
+    payButton: (a) => `Замова з абавязкам аплаты – ${a}`,
+    processing: "Апрацоўка…",
+    orPayOther: "або аплаціце іншым спосабам",
+    genericError: "Адбылася памылка. Паспрабуйце яшчэ раз.",
+  },
+  es: {
+    payButton: (a) => `Pedido con obligación de pago – ${a}`,
+    processing: "Procesando…",
+    orPayOther: "o paga con otro método",
+    genericError: "Se ha producido un error. Inténtalo de nuevo.",
+  },
+  pt: {
+    payButton: (a) => `Encomenda com obrigação de pagamento – ${a}`,
+    processing: "A processar…",
+    orPayOther: "ou pague com outro método",
+    genericError: "Ocorreu um erro. Tente novamente.",
+  },
+  fr: {
+    payButton: (a) => `Commande avec obligation de paiement – ${a}`,
+    processing: "Traitement en cours…",
+    orPayOther: "ou payer avec un autre moyen",
+    genericError: "Une erreur s'est produite. Veuillez réessayer.",
+  },
+  it: {
+    payButton: (a) => `Ordine con obbligo di pagamento – ${a}`,
+    processing: "Elaborazione in corso…",
+    orPayOther: "o paga con un altro metodo",
+    genericError: "Si è verificato un errore. Riprova.",
   },
 };
 

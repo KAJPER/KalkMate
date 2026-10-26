@@ -28,6 +28,46 @@ const content: Record<
     h2: { before: "Fragen, ", italic: "die", after: "jeder hat." },
     sideParagraph: "Keine Antwort gefunden? Schreib mir — ich antworte innerhalb von 24h.",
   },
+  cs: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Otázky, ", italic: "které", after: "má každý." },
+    sideParagraph: "Nenašel jsi odpověď? Napiš mi — odpovídám do 24 hodin.",
+  },
+  sk: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Otázky, ", italic: "ktoré", after: "má každý." },
+    sideParagraph: "Nenašiel si odpoveď? Napíš mi — odpovedám do 24 hodín.",
+  },
+  lt: {
+    eyebrow: "[ 06 ] · DUK",
+    h2: { before: "Klausimai, ", italic: "kuriuos", after: "užduoda visi." },
+    sideParagraph: "Neradai atsakymo? Parašyk man — atsakau per 24 valandas.",
+  },
+  be: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Пытанні, ", italic: "якія", after: "ёсць у кожнага." },
+    sideParagraph: "Не знайшоў адказу? Напішы мне — адказваю на працягу 24 гадзін.",
+  },
+  es: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Preguntas ", italic: "que", after: "todos se hacen." },
+    sideParagraph: "¿No has encontrado tu respuesta? Escríbeme — respondo en menos de 24 h.",
+  },
+  pt: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Perguntas ", italic: "que", after: "todos fazem." },
+    sideParagraph: "Não encontraste a resposta? Escreve-me — respondo em 24 horas.",
+  },
+  fr: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Les questions ", italic: "que", after: "tout le monde se pose." },
+    sideParagraph: "Tu n’as pas trouvé ta réponse ? Écris-moi — je réponds sous 24 h.",
+  },
+  it: {
+    eyebrow: "[ 06 ] · FAQ",
+    h2: { before: "Domande ", italic: "che", after: "tutti si fanno." },
+    sideParagraph: "Non hai trovato la risposta? Scrivimi — rispondo entro 24 ore.",
+  },
 };
 
 function Item({ item, n }: { item: { q: string; a: string }; n: number }) {

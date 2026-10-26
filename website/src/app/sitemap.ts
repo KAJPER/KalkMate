@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { headers } from "next/headers";
-import { siteUrlFromHost } from "@/lib/i18n";
+import { locales, localeHomeUrl, localePath, siteUrlFromHost } from "@/lib/i18n";
 
 // Zastepuje dawny staly public/sitemap.xml (zawsze wskazywal na kalkmate.pl,
 // niezaleznie od domeny — dla kalkmate.eu to byloby wprost szkodliwe: mapa
@@ -14,64 +14,30 @@ const DEPLOYED_AT = new Date();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
+  // hreflang miedzy wersjami jezykowymi (lista jezykow z lib/i18n.ts).
+  const alt = { languages: Object.fromEntries(locales.map((l) => [l, localeHomeUrl(l, siteUrl)])) };
   const pomocAlt = {
-    languages: {
-      pl: `${siteUrl}/pomoc`,
-      en: `${siteUrl}/en/pomoc`,
-      de: `${siteUrl}/de/pomoc`,
-    },
-  };
-  const alt = {
-    languages: {
-      pl: `${siteUrl}/`,
-      en: `${siteUrl}/en`,
-      de: `${siteUrl}/de`,
-    },
+    languages: Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
   };
 
+  const homes: MetadataRoute.Sitemap = locales.map((l) => ({
+    url: localeHomeUrl(l, siteUrl),
+    lastModified: DEPLOYED_AT,
+    changeFrequency: "daily",
+    priority: l === "pl" ? 1.0 : 0.9,
+    alternates: alt,
+  }));
+  const pomoc: MetadataRoute.Sitemap = locales.map((l) => ({
+    url: `${siteUrl}${localePath(l, "/pomoc")}`,
+    lastModified: DEPLOYED_AT,
+    changeFrequency: "weekly",
+    priority: l === "pl" ? 0.6 : 0.5,
+    alternates: pomocAlt,
+  }));
+
   return [
-    {
-      url: `${siteUrl}/`,
-      lastModified: DEPLOYED_AT,
-      changeFrequency: "daily",
-      priority: 1.0,
-      alternates: alt,
-    },
-    {
-      url: `${siteUrl}/en`,
-      lastModified: DEPLOYED_AT,
-      changeFrequency: "daily",
-      priority: 0.9,
-      alternates: alt,
-    },
-    {
-      url: `${siteUrl}/de`,
-      lastModified: DEPLOYED_AT,
-      changeFrequency: "daily",
-      priority: 0.9,
-      alternates: alt,
-    },
-    {
-      url: `${siteUrl}/pomoc`,
-      lastModified: DEPLOYED_AT,
-      changeFrequency: "weekly",
-      priority: 0.6,
-      alternates: pomocAlt,
-    },
-    {
-      url: `${siteUrl}/en/pomoc`,
-      lastModified: DEPLOYED_AT,
-      changeFrequency: "weekly",
-      priority: 0.5,
-      alternates: pomocAlt,
-    },
-    {
-      url: `${siteUrl}/de/pomoc`,
-      lastModified: DEPLOYED_AT,
-      changeFrequency: "weekly",
-      priority: 0.5,
-      alternates: pomocAlt,
-    },
+    ...homes,
+    ...pomoc,
     {
       url: `${siteUrl}/reklamacja`,
       lastModified: DEPLOYED_AT,

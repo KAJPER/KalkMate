@@ -19,7 +19,7 @@ import { randomUUID } from "crypto";
 import { signLink, verifyLink } from "@/lib/linkTokens";
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
-import { newsletterEmail, type NewsletterContent } from "@/lib/email-templates";
+import { newsletterEmail, EMAIL_LOCALES, type EmailLocale, type NewsletterContent } from "@/lib/email-templates";
 import { SITE_URL } from "@/lib/i18n";
 import { translateNewsletter, type NewsletterTexts } from "@/lib/translate";
 
@@ -232,24 +232,42 @@ export interface Recipient {
 }
 
 // === Jezyk odbiorcy ===
-// Admin pisze po polsku; Polska -> PL, kraje niemieckojezyczne -> DE, reszta
-// swiata -> EN. Kolejnosc zrodel: kraj z zamowienia, koncowka domeny e-mail,
-// jezyk przegladarki zapisany przy rejestracji (UserLanguage), domyslnie PL.
-export type NlLang = "pl" | "en" | "de";
-export const GERMAN_COUNTRIES = new Set(["DE", "AT", "CH", "LI", "LU"]);
+// Admin pisze po polsku; odbiorca dostaje wersje w swoim jezyku (wszystkie
+// jezyki strony, lib/i18n.ts). Kolejnosc zrodel: kraj z zamowienia, koncowka
+// domeny e-mail, jezyk przegladarki zapisany przy rejestracji (UserLanguage),
+// domyslnie PL. Kraj: PL->pl, DE/AT/CH/LI->de, CZ->cs, SK->sk, LT->lt, ES->es,
+// PT->pt, FR/BE/LU->fr, IT->it, reszta swiata->en. Bialorus nie jest krajem
+// wysylki — "be" tylko z domeny .by albo z przegladarki.
+export type NlLang = EmailLocale;
+export const NL_LANGS: readonly NlLang[] = EMAIL_LOCALES;
+/** Jezyki, na ktore tlumaczymy polska tresc (wszystkie poza pl). */
+export const NL_TRANSLATED_LANGS = NL_LANGS.filter((l): l is Exclude<NlLang, "pl"> => l !== "pl");
+export type NlTranslatedLang = Exclude<NlLang, "pl">;
+export const GERMAN_COUNTRIES = new Set(["DE", "AT", "CH", "LI"]);
+const COUNTRY_LANG: Record<string, NlLang> = {
+  PL: "pl", CZ: "cs", SK: "sk", LT: "lt", ES: "es", PT: "pt",
+  FR: "fr", BE: "fr", LU: "fr", IT: "it",
+};
+const TLD_LANG: Record<string, NlLang> = {
+  pl: "pl", de: "de", at: "de", ch: "de", li: "de", cz: "cs", sk: "sk", lt: "lt",
+  by: "be", es: "es", pt: "pt", fr: "fr", be: "fr", lu: "fr", it: "it",
+};
 const GENERIC_TLDS = new Set(["com", "net", "org", "eu", "io", "info", "me", "co", "app", "dev", "edu", "biz", "xyz", "online"]);
+
+export function isNlLang(v: unknown): v is NlLang {
+  return typeof v === "string" && (NL_LANGS as readonly string[]).includes(v);
+}
 
 export function langForCountry(country: string | null | undefined): NlLang | null {
   const c = (country || "").toUpperCase();
   if (!c) return null;
-  if (c === "PL") return "pl";
-  return GERMAN_COUNTRIES.has(c) ? "de" : "en";
+  if (GERMAN_COUNTRIES.has(c)) return "de";
+  return COUNTRY_LANG[c] ?? "en";
 }
 
 function langForEmail(email: string): NlLang | null {
   const tld = email.split(".").pop()?.toLowerCase() || "";
-  if (tld === "pl") return "pl";
-  if (["de", "at", "ch", "li", "lu"].includes(tld)) return "de";
+  if (TLD_LANG[tld]) return TLD_LANG[tld];
   if (tld.length === 2 && !GENERIC_TLDS.has(tld)) return "en";
   return null;
 }
@@ -259,7 +277,8 @@ function langForEmail(email: string): NlLang | null {
 export async function rememberUserLanguage(email: string, acceptLanguage: string | null | undefined): Promise<void> {
   const primary = (acceptLanguage || "").split(",")[0]?.trim().toLowerCase() || "";
   if (!primary) return;
-  const lang: NlLang = primary.startsWith("pl") ? "pl" : primary.startsWith("de") ? "de" : "en";
+  const tag = primary.split(";")[0].split(/[-_]/)[0];
+  const lang: NlLang = isNlLang(tag) ? tag : "en";
   await ensureTables();
   await prisma.$executeRaw`
     INSERT INTO "UserLanguage" ("email", "lang", "updatedAt") VALUES (${email.toLowerCase()}, ${lang}, ${new Date().toISOString()})
@@ -346,7 +365,7 @@ export interface CampaignContent extends Omit<NewsletterContent, "unsubscribeUrl
   subject: string;
   image?: { filename: string; contentType: string; data: string } | null; // base64
   // Tlumaczenia polskiej tresci (AI, poprawiane recznie w panelu).
-  translations?: Partial<Record<"en" | "de", NewsletterTexts>>;
+  translations?: Partial<Record<NlTranslatedLang, NewsletterTexts>>;
 }
 
 export function sourceTexts(c: CampaignContent): NewsletterTexts {
@@ -359,10 +378,12 @@ export function sourceTexts(c: CampaignContent): NewsletterTexts {
 // Brakujace tlumaczenia (np. wysylka bez klikniecia "Przetlumacz") robi serwer.
 export async function ensureTranslations(c: CampaignContent, langs: NlLang[]): Promise<CampaignContent> {
   const translations = { ...(c.translations || {}) };
-  for (const l of langs) {
-    if (l === "pl" || translations[l]?.body) continue;
-    translations[l] = await translateNewsletter(sourceTexts(c), l);
-  }
+  // Rownolegle — przy 10 jezykach sekwencyjnie trwaloby to kilka minut.
+  const missing = Array.from(new Set(langs)).filter(
+    (l): l is NlTranslatedLang => l !== "pl" && !translations[l as NlTranslatedLang]?.body,
+  );
+  const done = await Promise.all(missing.map((l) => translateNewsletter(sourceTexts(c), l)));
+  missing.forEach((l, i) => { translations[l] = done[i]; });
   return { ...c, translations };
 }
 
@@ -375,7 +396,7 @@ function contentFor(c: CampaignContent, lang: NlLang): CampaignContent {
   };
 }
 
-// Link do strony glownej / pomocy -> wersja jezykowa (/en, /de).
+// Link do strony glownej / pomocy -> wersja jezykowa (/en, /de, /cs, /sk, ...).
 function localizeLinks(html: string, lang: NlLang): string {
   if (lang === "pl") return html;
   return html.replace(/href="https:\/\/(www\.)?kalkmate\.pl(\/pomoc)?\/?((?:\?|#)[^"]*)?"/g, (_m, www, pomoc, rest) =>
@@ -447,7 +468,7 @@ export function buildMail(source: CampaignContent, to: string, name: string | nu
 
 // Test w kazdym jezyku osobnym mailem ("[TEST PL] ...", "[TEST EN] ...").
 export async function sendTest(
-  content: CampaignContent, to: string, langs: NlLang[] = ["pl", "en", "de"]
+  content: CampaignContent, to: string, langs: NlLang[] = ["pl", "en", "de", "cs"]
 ): Promise<{ ok: boolean; error?: string }> {
   const c = await ensureTranslations(content, langs);
   for (const lang of langs) {
@@ -617,7 +638,7 @@ async function runWorker(id: string): Promise<void> {
     let result: { ok: boolean; error?: string } = { ok: false, error: "wypisany" };
     if (!unsub.length) {
       for (let attempt = 1; ; attempt++) {
-        result = await sendMail(buildMail(content, email, name, lang || "pl"));
+        result = await sendMail(buildMail(content, email, name, isNlLang(lang) ? lang : "pl"));
         if (result.ok) {
           consecutiveErrors = 0;
           break;

@@ -21,6 +21,8 @@
 #include "esp_heap_caps.h"
 #include "input.h"
 #include "settings_screen.h"
+#include "i18n_extra.h"     // kalkTrExtra — _solT dla jezykow 4..10
+#include "kalk_translit.h"  // _kalkUtf8ToAscii — wspolna transliteracja UTF-8 -> ASCII
 #include "wifi_persist.h"
 #include "kalkmate_certs.h"
 #include "event_log.h"      // logEvent* — bufor zdarzen wysylany do serwera
@@ -60,27 +62,13 @@ static String _solDeviceId() {
 #define _SOL_SOLVE_ENDPOINT  KALK_SERVER_URL "/api/device/solve"
 #define _SOL_TEXT_MAX        2048   // max znakow zadania (input)
 
-// UTF-8 polskie + typograficzne znaki -> ASCII (font 6x10 nie ma polskich glyphow).
+// UTF-8 -> ASCII dla fontow 6x10/5x7 (drawStr — nie maja diakrytykow ani
+// cyrylicy): podglad historii, komunikaty bledow. Wspolna tabela z notatkami
+// (kalk_translit.h): PL/DE/CS/SK/LT/ES/PT/FR/IT + cyrylica (BE) -> lacinka,
+// typografia, symbole matematyczne; nieznany znak -> "?".
 // Sygnatura jak _testsTitleToAscii w tests.h.
 inline String _solUtf8ToAscii(String s) {
-    s.replace("ą", "a"); s.replace("Ą", "A");
-    s.replace("ć", "c"); s.replace("Ć", "C");
-    s.replace("ę", "e"); s.replace("Ę", "E");
-    s.replace("ł", "l"); s.replace("Ł", "L");
-    s.replace("ń", "n"); s.replace("Ń", "N");
-    s.replace("ó", "o"); s.replace("Ó", "O");
-    s.replace("ś", "s"); s.replace("Ś", "S");
-    s.replace("ż", "z"); s.replace("Ż", "Z");
-    s.replace("ź", "z"); s.replace("Ź", "Z");
-    s.replace("–", "-"); s.replace("—", "-"); s.replace("−", "-");
-    s.replace("„", "\""); s.replace("”", "\""); s.replace("“", "\"");
-    s.replace("‘", "'"); s.replace("’", "'");
-    s.replace("…", "...");
-    s.replace("\xC2\xA0", " ");  // non-breaking space
-    s.replace("°", "deg");
-    s.replace("×", "x");  s.replace("·", "*");
-    s.replace("÷", "/");
-    return s;
+    return _kalkUtf8ToAscii(s);
 }
 #define _SOL_SOLUTION_MAX    24576  // max znakow odpowiedzi AI (24 KB, RAM)
 #define _SOL_HTTP_TIMEOUT_MS 65000  // max HTTPClient (uint16); Gemini 2.5 Pro bywa >45s (2026-10-18: 71s)
@@ -153,9 +141,12 @@ static bool _solTick() {
     return false;
 }
 
-static const char* _solT(const char* pl, const char* en, const char* de) {
+// 0=PL, 1=EN, 2=DE, 3=CS (czeski bez diakrytykow); brak cs -> EN
+static const char* _solT(const char* pl, const char* en, const char* de, const char* cs = nullptr) {
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..10
     if (kalkSettings.language == 0) return pl;
     if (kalkSettings.language == 1) return en;
+    if (kalkSettings.language == 3) return cs ? cs : en;
     return de;
 }
 
@@ -183,7 +174,7 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2, const c
     if (panicTriggered()) return;
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 16, _solT("! Blad !", "! Error !", "! Fehler !"));
+    d.drawStr(2, 16, _solT("! Blad !", "! Error !", "! Fehler !", "! Chyba !"));
     d.drawHLine(0, 18, 256);
     // Polskie znaki w komunikatach z serwera -> ASCII (bo font nie ma glyphow)
     String l1 = _solUtf8ToAscii(String(line1 ? line1 : ""));
@@ -192,7 +183,7 @@ static void _solDrawError(U8G2 &d, const char* line1, const char* line2, const c
     if (l2.length() > 0) d.drawStr(2, 43, l2.c_str());
     d.setFont(u8g2_font_5x7_tf);
     if (line3 && line3[0]) d.drawStr(2, 53, _solUtf8ToAscii(String(line3)).c_str());
-    d.drawStr(2, 62, _solT("OK = powrot", "OK = back", "OK = zurueck"));
+    d.drawStr(2, 62, _solT("OK = powrot", "OK = back", "OK = zurueck", "OK = zpet"));
     d.sendBuffer();
     _solWaitRelease();
     while (true) {
@@ -262,6 +253,7 @@ static uint32_t _utf8Decode(const char* s, int& len) {
     len = 1; return b0;
 }
 static inline bool _isGreek(uint32_t cp) { return cp >= 0x0370 && cp <= 0x03FF; }
+static inline bool _isCyrillic(uint32_t cp) { return cp >= 0x0400 && cp <= 0x04FF; }
 
 // Literalny Unicode superscript (model czasem wypisuje wprost, bez ^, np.
 // kopiujac zapis "10⁻⁵" ze zdjecia zadania) -> zwykly znak ASCII, albo 0
@@ -606,7 +598,7 @@ static _SolBufs* _solGetBufs() {
 
 // Znacznik konca obcietego rozwiazania (ASCII — font OLED nie ma "…").
 static const char* _solTruncMark() {
-    return _solT("...(obcieto)", "...(truncated)", "...(gekuerzt)");
+    return _solT("...(obcieto)", "...(truncated)", "...(gekuerzt)", "...(zkraceno)");
 }
 
 // ---------------------------------------------------------------------------
@@ -663,7 +655,14 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
             // Ten sam kodpunkt, ta sama linia bazowa — dokladnie jak w
             // tools/greek_font_test, gdzie wizualnie zweryfikowano ze tak
             // wygenerowany mix czyta sie dobrze mimo wiekszej wysokosci glifu.
-            d.setFont(_isGreek(cp) ? u8g2_font_unifont_t_greek : u8g2_font_6x12_te);
+            // Cyrylica (odpowiedzi po bialorusku, jezyk 6) -> 6x12_t_cyrillic:
+            // ten sam font bazowy (Misc-Fixed 6x12) co 6x12_te, wiec identyczna
+            // szerokosc/linia bazowa; 6x12_te nie ma bloku U+0400..04FF, a
+            // 6x12_t_cyrillic nie ma Latin-ext (polskie/czeskie) — stad
+            // przelaczanie per znak zamiast jednego fontu dla calego tekstu.
+            d.setFont(_isGreek(cp) ? u8g2_font_unifont_t_greek
+                    : _isCyrillic(cp) ? u8g2_font_6x12_t_cyrillic
+                    : u8g2_font_6x12_te);
             int w = d.drawUTF8(xi, y, ch);
             xi += (w > 0 ? w : 6);
         }
@@ -678,7 +677,7 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
 static void _solDisplaySolution(U8G2 &d, const char* solution, const char* headerLabel = "AI") {
     _SolBufs* B = _solGetBufs();
     if (!B) {
-        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!"), "");
+        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!", "Malo pameti!"), "");
         return;
     }
 
@@ -788,7 +787,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
             // Stopka
             d.drawHLine(0, 55, 256);
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 63, _solT("< wyjdz  UP/DN scroll", "< exit  UP/DN scroll", "< raus  UP/DN scroll"));
+            d.drawStr(2, 63, _solT("< wyjdz  UP/DN scroll", "< exit  UP/DN scroll", "< raus  UP/DN scroll", "< konec  UP/DN posun"));
 
             d.sendBuffer();
             needRedraw = false;
@@ -834,7 +833,7 @@ static void _solRegTaskFn(void* arg) {
     vTaskDelete(nullptr);
 }
 static void _solRegisterWithSpinner(U8G2 &d) {
-    const char* msg = _solT("Lacze z serwerem...", "Contacting server...", "Verbinde mit Server...");
+    const char* msg = _solT("Lacze z serwerem...", "Contacting server...", "Verbinde mit Server...", "Pripojuji k serveru...");
     _SolRegCtx ctx;
     ctx.done = false;
     TaskHandle_t t = nullptr;
@@ -883,14 +882,14 @@ static bool _solEnsureWifi(U8G2 &d) {
 
     if (ssid[0] == '\0') {
         _solDrawError(d,
-            _solT("Brak WiFi!", "No WiFi!", "Kein WLAN!"),
-            _solT("Ustaw siec w menu.", "Set network in menu.", "WLAN im Menue einstellen."));
+            _solT("Brak WiFi!", "No WiFi!", "Kein WLAN!", "Neni WiFi!"),
+            _solT("Ustaw siec w menu.", "Set network in menu.", "WLAN im Menue einstellen.", "Nastavte sit v menu."));
         return false;
     }
 
     // Proba polaczenia (z cache BSSID+kanal dla szybszego reconnectu)
     char ln[48];
-    snprintf(ln, sizeof(ln), _solT("Lacze z: %s", "Connecting: %s", "Verbinde: %s"), ssid);
+    snprintf(ln, sizeof(ln), _solT("Lacze z: %s", "Connecting: %s", "Verbinde: %s", "Pripojuji: %s"), ssid);
 
     // Auto-connect z loop() (3 s po wejsciu w menu) moze wlasnie trwac —
     // drugi WiFi.begin zerwalby swiezo nawiazane skojarzenie (ASSOC_LEAVE) i
@@ -936,8 +935,8 @@ static bool _solEnsureWifi(U8G2 &d) {
             memset(pass, 0, sizeof(pass));
             logEvent("WIFI", "connect timeout 20s");
             _solDrawError(d,
-                _solT("Blad WiFi!", "WiFi failed!", "WLAN Fehler!"),
-                _solT("Sprawdz haslo.", "Check password.", "Passwort pruefen."));
+                _solT("Blad WiFi!", "WiFi failed!", "WLAN Fehler!", "Chyba WiFi!"),
+                _solT("Sprawdz haslo.", "Check password.", "Passwort pruefen.", "Zkontrolujte heslo."));
             return false;
         }
         if (lastFrame == 0 || millis() - lastFrame >= 250) {
@@ -950,7 +949,7 @@ static bool _solEnsureWifi(U8G2 &d) {
             snprintf(anim, sizeof(anim), "[%s]", frames[frame++ % 4]);
             d.drawStr(120, 40, anim);
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, _solT("C/CE = anuluj (zadanie do kolejki)", "C/CE = cancel (task to queue)", "C/CE = abbrechen (in Warteschlange)"));
+            d.drawStr(2, 62, _solT("C/CE = anuluj (zadanie do kolejki)", "C/CE = cancel (task to queue)", "C/CE = abbrechen (in Warteschlange)", "C/CE = zrusit (uloha do fronty)"));
             d.sendBuffer();
         }
         delay(30);
@@ -1064,7 +1063,7 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
     http.addHeader("x-fw-version", FW_VERSION);
     if (licKey[0]) http.addHeader("x-license-key", licKey);
     http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
-    http.addHeader("x-language", kalkSettings.language == 0 ? "pl" : (kalkSettings.language == 2 ? "de" : "en"));
+    http.addHeader("x-language", kalkLangCode(kalkSettings.language));   // pl..it (settings_screen.h)
     { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); memset(dt,0,sizeof(dt)); }
     if (reqId && reqId[0]) http.addHeader("x-request-id", reqId);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
@@ -1115,11 +1114,11 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
             lastFrame = millis();
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe"));
+            d.drawStr(2, 24, _solT("AI rozwiazuje zadanie", "AI solving problem", "KI loest die Aufgabe", "AI resi ulohu"));
             d.setFont(u8g2_font_5x7_tf);
             const char* frames[] = {".", "..", "...", ""};
             char ln[32];
-            snprintf(ln, sizeof(ln), "%s%s", _solT("Prosze czekac", "Please wait", "Bitte warten"), frames[frame++ % 4]);
+            snprintf(ln, sizeof(ln), "%s%s", _solT("Prosze czekac", "Please wait", "Bitte warten", "Prosim cekejte"), frames[frame++ % 4]);
             d.drawStr(2, 40, ln);
             d.sendBuffer();
         }
@@ -1224,16 +1223,16 @@ static void _solShowSendError(U8G2 &d, const _SolSendRes& r, const char* note) {
     const int c = r.http;
     const char* l1;
     const char* l2 = r.msg;
-    if (c == _SOL_HTTP_NOMEM)       l1 = _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!");
-    else if (c <= 0)                l1 = _solT("Blad polaczenia", "Connection error", "Verbindungsfehler");
-    else if (c == 200)              l1 = _solT("Brak odpowiedzi", "No answer", "Keine Antwort");
-    else if (c == 402) {            l1 = _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!");
-                                    l2 = _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl"); }
-    else if (c == 403)              l1 = _solT("Brak dostepu (licencja/blokada)", "Access denied (license/lock)", "Kein Zugriff (Lizenz/Sperre)");
-    else if (c == 413)              l1 = _solT("Zadanie za duze", "Request too large", "Anfrage zu gross");
-    else if (c == 429)              l1 = _solT("Limit zapytan - sprobuj pozniej", "Rate limit - try later", "Limit erreicht - spaeter");
-    else if (c >= 500)              l1 = _solT("Blad serwera / AI", "Server / AI error", "Server-/KI-Fehler");
-    else                            l1 = _solT("Blad API:", "API error:", "API Fehler:");
+    if (c == _SOL_HTTP_NOMEM)       l1 = _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!", "Malo pameti!");
+    else if (c <= 0)                l1 = _solT("Blad polaczenia", "Connection error", "Verbindungsfehler", "Chyba pripojeni");
+    else if (c == 200)              l1 = _solT("Brak odpowiedzi", "No answer", "Keine Antwort", "Zadna odpoved");
+    else if (c == 402) {            l1 = _solT("Brak tokenow!", "Out of tokens!", "Keine Tokens mehr!", "Dosly tokeny!");
+                                    l2 = _solT("Dokup w sklepie: kalkmate.pl", "Buy more at kalkmate.pl", "Nachkaufen: kalkmate.pl", "Dokupte na kalkmate.pl"); }
+    else if (c == 403)              l1 = _solT("Brak dostepu (licencja/blokada)", "Access denied (license/lock)", "Kein Zugriff (Lizenz/Sperre)", "Pristup odepren (licence/zamek)");
+    else if (c == 413)              l1 = _solT("Zadanie za duze", "Request too large", "Anfrage zu gross", "Uloha je prilis velka");
+    else if (c == 429)              l1 = _solT("Limit zapytan - sprobuj pozniej", "Rate limit - try later", "Limit erreicht - spaeter", "Limit dotazu - zkuste pozdeji");
+    else if (c >= 500)              l1 = _solT("Blad serwera / AI", "Server / AI error", "Server-/KI-Fehler", "Chyba serveru / AI");
+    else                            l1 = _solT("Blad API:", "API error:", "API Fehler:", "Chyba API:");
     char codeBuf[24];
     if (!l2 || !l2[0]) {
         codeBuf[0] = '\0';
@@ -1248,13 +1247,16 @@ static void _solShowSendError(U8G2 &d, const _SolSendRes& r, const char* note) {
 static const char* _solQueueNote(uint8_t q) {
     if (q == OQ_ADDED) return _solT("Zadanie w kolejce - wysle ponownie pozniej",
                                     "Task queued - will retry later",
-                                    "In Warteschlange - spaeter erneut");
+                                    "In Warteschlange - spaeter erneut",
+                                    "Uloha ve fronte - odesle se pozdeji");
     if (q == OQ_FULL)  return _solT("Kolejka pelna (3) - zadanie NIE zapisane",
                                     "Queue full (3) - task NOT saved",
-                                    "Warteschlange voll - NICHT gespeichert");
+                                    "Warteschlange voll - NICHT gespeichert",
+                                    "Fronta plna (3) - uloha NEULOZENA");
     return _solT("Blad zapisu kolejki - zadanie NIE zapisane",
                  "Queue write error - task NOT saved",
-                 "Speicherfehler - NICHT gespeichert");
+                 "Speicherfehler - NICHT gespeichert",
+                 "Chyba zapisu fronty - uloha NEULOZENA");
 }
 
 // Po zakolejkowaniu bez WiFi: krotki komunikat; gdy sie nie udalo (pelna
@@ -1262,14 +1264,14 @@ static const char* _solQueueNote(uint8_t q) {
 static void _solShowQueued(U8G2 &d, uint8_t q, bool photo) {
     if (panicTriggered()) return;
     if (q != OQ_ADDED) {
-        _solDrawError(d, _solT("Brak WiFi.", "No WiFi.", "Kein WLAN."), "", _solQueueNote(q));
+        _solDrawError(d, _solT("Brak WiFi.", "No WiFi.", "Kein WLAN.", "Neni WiFi."), "", _solQueueNote(q));
         return;
     }
     _solShowInfo(d,
-        _solT("Brak WiFi.", "No WiFi.", "Kein WLAN."),
-        photo ? _solT("Zdjecie w kolejce.", "Photo queued.", "Foto in Warteschlange.")
-              : _solT("Zadanie w kolejce.", "Task queued.", "Aufgabe in Warteschlange."),
-        _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available.", "Senden nach WLAN-Verbindung."),
+        _solT("Brak WiFi.", "No WiFi.", "Kein WLAN.", "Neni WiFi."),
+        photo ? _solT("Zdjecie w kolejce.", "Photo queued.", "Foto in Warteschlange.", "Foto ve fronte.")
+              : _solT("Zadanie w kolejce.", "Task queued.", "Aufgabe in Warteschlange.", "Uloha ve fronte."),
+        _solT("Wysylka po polaczeniu WiFi.", "Will send when WiFi available.", "Senden nach WLAN-Verbindung.", "Odeslani po pripojeni WiFi."),
         2500);
 }
 
@@ -1290,7 +1292,7 @@ static void _solRunTextMode(U8G2 &d, const char* prefill = nullptr) {
 
     // Uzyj klawiatury z wifi_settings.h, zmien tylko naglowek
     bool saved = _runKeyboard(d, taskText, sizeof(taskText),
-                              _solT("Zadanie: ", "Problem: ", "Aufgabe: "));
+                              _solT("Zadanie: ", "Problem: ", "Aufgabe: ", "Uloha: "));
     if (!saved || taskText[0] == '\0') return;
 
     // Jedno x-request-id na cale zycie zadania (pierwsza wysylka + ponowienia).
@@ -1424,8 +1426,8 @@ static int _solPreviewAndConfirm(U8G2 &d) {
         // Prawy panel (x:164..255)
         d.setDrawColor(1);
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(166, 8,  _solT("PODGLAD", "PREVIEW", "VORSCHAU"));
-        d.drawStr(166, 24, _solT("Ostrosc", "Sharp", "Schaerfe"));
+        d.drawStr(166, 8,  _solT("PODGLAD", "PREVIEW", "VORSCHAU", "NAHLED"));
+        d.drawStr(166, 24, _solT("Ostrosc", "Sharp", "Schaerfe", "Ostrost"));
         // Pasek ostrosci 84px
         const int bx = 166, by = 28, bw = 84, bh = 8;
         d.drawFrame(bx, by, bw, bh);
@@ -1433,8 +1435,8 @@ static int _solPreviewAndConfirm(U8G2 &d) {
         char pctbuf[8];
         snprintf(pctbuf, sizeof(pctbuf), "%d%%", pct);
         d.drawStr(166, 44, pctbuf);
-        d.drawStr(166, 53, _solT("OK = foto", "OK = photo", "OK = Foto"));
-        d.drawStr(166, 62, _solT("< = wyjdz", "< = exit", "< = raus"));
+        d.drawStr(166, 53, _solT("OK = foto", "OK = photo", "OK = Foto", "OK = foto"));
+        d.drawStr(166, 62, _solT("< = wyjdz", "< = exit", "< = raus", "< = konec"));
         d.sendBuffer();
 
         // Przyciski — po wolnej klatce kamery (~80ms) robimy krotki burst
@@ -1472,14 +1474,14 @@ static void _solRunPhotoMode(U8G2 &d) {
     // === Faza 1: podglad na zywo (mono viewfinder) ===
     // Kamera w trybie GRAYSCALE QQVGA — uzytkownik kadruje zadanie i ustawia
     // odleglosc (pasek ostrosci pomaga trafic w sweet-spot stalej ostrosci).
-    _solDrawLoading(d, _solT("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau..."), 0);
+    _solDrawLoading(d, _solT("Uruchamiam podglad...", "Starting preview...", "Starte Vorschau...", "Spoustim nahled..."), 0);
 
     if (camBeginPreview()) {
         int pv = _solPreviewAndConfirm(d);
         camEnd();                 // KONIECZNE: zwolnij preview, inaczej camBegin() (JPEG) zrobi early-return
         if (pv < 0) {
-            _solDrawError(d, _solT("Kamera nie odpowiada", "Camera not responding", "Kamera antwortet nicht"),
-                          _solT("Brak obrazu z kamery.", "No image from camera.", "Kein Kamerabild."));
+            _solDrawError(d, _solT("Kamera nie odpowiada", "Camera not responding", "Kamera antwortet nicht", "Kamera neodpovida"),
+                          _solT("Brak obrazu z kamery.", "No image from camera.", "Kein Kamerabild.", "Zadny obraz z kamery."));
             return;
         }
         if (pv == 0) return;      // anulowano w podgladzie
@@ -1487,12 +1489,12 @@ static void _solRunPhotoMode(U8G2 &d) {
         // Fallback (blad preview): statyczny ekran jak dawniej
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 16, _solT("Tryb: Zdjecie", "Mode: Photo", "Modus: Foto"));
+        d.drawStr(2, 16, _solT("Tryb: Zdjecie", "Mode: Photo", "Modus: Foto", "Rezim: Foto"));
         d.drawHLine(0, 18, 256);
-        d.drawStr(2, 32, _solT("Skieruj na zadanie.", "Point at the problem.", "Auf Aufgabe richten."));
-        d.drawStr(2, 46, _solT("OK = zrob zdjecie", "OK = take photo", "OK = Foto machen"));
+        d.drawStr(2, 32, _solT("Skieruj na zadanie.", "Point at the problem.", "Auf Aufgabe richten.", "Namirte na ulohu."));
+        d.drawStr(2, 46, _solT("OK = zrob zdjecie", "OK = take photo", "OK = Foto machen", "OK = vyfotit"));
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 62, _solT("< = anuluj", "< = cancel", "< = abbrechen"));
+        d.drawStr(2, 62, _solT("< = anuluj", "< = cancel", "< = abbrechen", "< = zrusit"));
         d.sendBuffer();
 
         _solWaitRelease();
@@ -1509,21 +1511,21 @@ static void _solRunPhotoMode(U8G2 &d) {
     // === Faza 2: finalne zdjecie JPEG/UXGA ===
     // camBegin: PWDN low, RESET pulse (przez MCP23017), esp_camera_init().
     // I2C dzielony z MCP23017 (sccb_i2c_port=0 w camera.h).
-    _solDrawLoading(d, _solT("Wlaczam kamere...", "Powering camera...", "Kamera wird gestartet..."), 0);
+    _solDrawLoading(d, _solT("Wlaczam kamere...", "Powering camera...", "Kamera wird gestartet...", "Zapinam kameru..."), 0);
 
     if (!camBegin()) {
-        _solDrawError(d, _solT("Init kamery!", "Camera init!", "Kamera-Init!"), "esp_camera_init");
+        _solDrawError(d, _solT("Init kamery!", "Camera init!", "Kamera-Init!", "Init kamery!"), "esp_camera_init");
         return;
     }
 
     // Warm-up - po switchu z podgladu AEC/AGC zbiega na nowo (3 klatki)
     camWarmup(3);
 
-    _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo...", "Foto wird gemacht..."), 0);
+    _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo...", "Foto wird gemacht...", "Fotim..."), 0);
     camera_fb_t* fb = camCapture();
     if (!fb) {
         camEnd();
-        _solDrawError(d, _solT("Blad zdjecia!", "Capture error!", "Fotofehler!"), "");
+        _solDrawError(d, _solT("Blad zdjecia!", "Capture error!", "Fotofehler!", "Chyba snimku!"), "");
         return;
     }
     // Skopiuj JPEG do PSRAM, potem zwolnij bufor kamery i wylacz kamere
@@ -1533,7 +1535,7 @@ static void _solRunPhotoMode(U8G2 &d) {
     if (!jpegBuf) {
         esp_camera_fb_return(fb);
         camEnd();
-        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!"), "PSRAM");
+        _solDrawError(d, _solT("Brak pamieci!", "Out of memory!", "Kein Speicher!", "Malo pameti!"), "PSRAM");
         return;
     }
     memcpy(jpegBuf, fb->buf, jpegLen);
@@ -1581,34 +1583,31 @@ static void _solModeSelect(U8G2 &d, int &mode) {
         if (needRedraw) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ===", "=== Aufgabe loesen ==="));
+            d.drawStr(2, 10, _solT("=== Rozwiaz zadanie ===", "=== Solve problem ===", "=== Aufgabe loesen ===", "=== Resit ulohu ==="));
             d.drawHLine(0, 12, 256);
 
-            const char* labels[4][3] = {
-                { "  [1] Zdjecie kamery", "  [1] Camera photo", "  [1] Kamerafoto"    },
-                { "  [2] Wpisz tekst",    "  [2] Enter text",   "  [2] Text eingeben" },
-                { "  [3] Historia",       "  [3] History",      "  [3] Verlauf"       },
-                { "  [4] Offline",        "  [4] Offline",      "  [4] Offline"       },
-            };
-            const char* labelsSel[4][3] = {
-                { "> [1] Zdjecie kamery", "> [1] Camera photo", "> [1] Kamerafoto"    },
-                { "> [2] Wpisz tekst",    "> [2] Enter text",   "> [2] Text eingeben" },
-                { "> [3] Historia",       "> [3] History",      "> [3] Verlauf"       },
-                { "> [4] Offline",        "> [4] Offline",      "> [4] Offline"       },
+            // Etykiety przez _solT (jezyki 4..10 -> i18n_extra.h po tekscie EN);
+            // prefiks "> " / "  " doklejany przy rysowaniu.
+            const char* labels[4] = {
+                _solT("[1] Zdjecie kamery", "[1] Camera photo", "[1] Kamerafoto",    "[1] Foto kamerou"),
+                _solT("[2] Wpisz tekst",    "[2] Enter text",   "[2] Text eingeben", "[2] Zadat text"),
+                _solT("[3] Historia",       "[3] History",      "[3] Verlauf",       "[3] Historie"),
+                _solT("[4] Offline",        "[4] Offline",      "[4] Offline",       "[4] Offline"),
             };
 
             const int Y[4] = {13, 23, 33, 43};   // top y kazdej pozycji (4 widoczne)
             const int TEXT_Y[4] = {22, 32, 42, 52};
-            int lang = kalkSettings.language > 2 ? 0 : kalkSettings.language;
 
             for (int i = 0; i < 4; i++) {
+                char lbl[48];
+                snprintf(lbl, sizeof(lbl), "%s%s", mode == i ? "> " : "  ", labels[i]);
                 if (mode == i) {
                     d.drawBox(0, Y[i], 256, 10);
                     d.setDrawColor(0);
-                    d.drawStr(4, TEXT_Y[i], labelsSel[i][lang]);
+                    d.drawStr(4, TEXT_Y[i], lbl);
                     d.setDrawColor(1);
                 } else {
-                    d.drawStr(4, TEXT_Y[i], labels[i][lang]);
+                    d.drawStr(4, TEXT_Y[i], lbl);
                 }
             }
 
@@ -1616,7 +1615,8 @@ static void _solModeSelect(U8G2 &d, int &mode) {
             d.setFont(u8g2_font_5x7_tf);
             d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
                                     "^/v select   OK: start   < back",
-                                    "^/v waehlen  OK: Start  < zurueck"));
+                                    "^/v waehlen  OK: Start  < zurueck",
+                                    "^/v vyber   OK: start   < zpet"));
             d.sendBuffer();
             needRedraw = false;
         }
@@ -1684,7 +1684,8 @@ static int _solListMenu(U8G2 &d, const char* title, const char* const* items, in
             if (scroll + VISIBLE < count)     d.drawStr(248, 8, "v");
             d.drawStr(2, 62, _solT("^/v wybor   OK: start   < wstecz",
                                     "^/v select   OK: start   < back",
-                                    "^/v waehlen  OK: Start  < zurueck"));
+                                    "^/v waehlen  OK: Start  < zurueck",
+                                    "^/v vyber   OK: start   < zpet"));
             d.sendBuffer();
             needRedraw = false;
         }
@@ -1767,7 +1768,8 @@ static bool _numEditField(U8G2 &d, const char* label, double &outValue) {
             d.setFont(u8g2_font_5x7_tf);
             d.drawStr(2, 62, _solT("+/- znak   =: dalej   C: kasuj/wyjdz",
                                     "+/- sign   =: next   C: clear/exit",
-                                    "+/- Vorz.  =: weiter  C: loesch/raus"));
+                                    "+/- Vorz.  =: weiter  C: loesch/raus",
+                                    "+/- znam.   =: dale   C: smazat/konec"));
             d.sendBuffer();
             needRedraw = false;
         }
@@ -1833,8 +1835,8 @@ static bool _numEditField(U8G2 &d, const char* label, double &outValue) {
 // ---------------------------------------------------------------------------
 static void _solOfflineLinear(U8G2 &d) {
     double a, b;
-    if (!_numEditField(d, _solT("Rownanie ax+b=0:   a =", "Linear eq. ax+b=0:   a =", "Lin. Gl. ax+b=0:   a ="), a)) return;
-    if (!_numEditField(d, _solT("Rownanie ax+b=0:   b =", "Linear eq. ax+b=0:   b =", "Lin. Gl. ax+b=0:   b ="), b)) return;
+    if (!_numEditField(d, _solT("Rownanie ax+b=0:   a =", "Linear eq. ax+b=0:   a =", "Lin. Gl. ax+b=0:   a =", "Rovnice ax+b=0: a ="), a)) return;
+    if (!_numEditField(d, _solT("Rownanie ax+b=0:   b =", "Linear eq. ax+b=0:   b =", "Lin. Gl. ax+b=0:   b =", "Rovnice ax+b=0: b ="), b)) return;
 
     LinearResult r = offlineSolveLinear(a, b);
     char aS[24], bS[24];
@@ -1843,9 +1845,9 @@ static void _solOfflineLinear(U8G2 &d) {
 
     String result = String("ax+b=0\na = ") + aS + ", b = " + bS + "\n\n";
     if (r.infinite) {
-        result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
+        result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen", "Nekonecne mnoho reseni");
     } else if (r.none) {
-        result += _solT("Brak rozwiazan", "No solution", "Keine Loesung");
+        result += _solT("Brak rozwiazan", "No solution", "Keine Loesung", "Zadne reseni");
     } else {
         char xS[24];
         offlineFmtNum(r.x, xS, sizeof(xS));
@@ -1861,9 +1863,9 @@ static void _solOfflineLinear(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflineQuadratic(U8G2 &d) {
     double a, b, c;
-    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   a =", "Quadr. ax^2+bx+c=0:   a =", "Quadr. ax^2+bx+c=0:   a ="), a)) return;
-    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   b =", "Quadr. ax^2+bx+c=0:   b =", "Quadr. ax^2+bx+c=0:   b ="), b)) return;
-    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   c =", "Quadr. ax^2+bx+c=0:   c =", "Quadr. ax^2+bx+c=0:   c ="), c)) return;
+    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   a =", "Quadr. ax^2+bx+c=0:   a =", "Quadr. ax^2+bx+c=0:   a =", "Kvadr. ax^2+bx+c=0: a ="), a)) return;
+    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   b =", "Quadr. ax^2+bx+c=0:   b =", "Quadr. ax^2+bx+c=0:   b =", "Kvadr. ax^2+bx+c=0: b ="), b)) return;
+    if (!_numEditField(d, _solT("Rown. ax^2+bx+c=0:   c =", "Quadr. ax^2+bx+c=0:   c =", "Quadr. ax^2+bx+c=0:   c =", "Kvadr. ax^2+bx+c=0: c ="), c)) return;
 
     QuadraticResult r = offlineSolveQuadratic(a, b, c);
     char aS[24], bS[24], cS[24];
@@ -1874,11 +1876,11 @@ static void _solOfflineQuadratic(U8G2 &d) {
     String result = String("ax^2+bx+c=0\na=") + aS + " b=" + bS + " c=" + cS + "\n\n";
 
     if (r.usedLinear) {
-        result += _solT("a=0 -> rownanie liniowe\n", "a=0 -> linear equation\n", "a=0 -> lineare Gleichung\n");
+        result += _solT("a=0 -> rownanie liniowe\n", "a=0 -> linear equation\n", "a=0 -> lineare Gleichung\n", "a=0 -> linearni rovnice\n");
         if (r.linear.infinite) {
-            result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
+            result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen", "Nekonecne mnoho reseni");
         } else if (r.linear.none) {
-            result += _solT("Brak rozwiazan", "No solution", "Keine Loesung");
+            result += _solT("Brak rozwiazan", "No solution", "Keine Loesung", "Zadne reseni");
         } else {
             char xS[24];
             offlineFmtNum(r.linear.x, xS, sizeof(xS));
@@ -1896,12 +1898,12 @@ static void _solOfflineQuadratic(U8G2 &d) {
         } else if (r.realRoots == 1) {
             char xS[24];
             offlineFmtNum(r.x1, xS, sizeof(xS));
-            result += String(_solT("x (podwojny) = ", "x (double) = ", "x (doppelt) = ")) + xS;
+            result += String(_solT("x (podwojny) = ", "x (double) = ", "x (doppelt) = ", "x (dvojnasobny) = ")) + xS;
         } else {
             char reS[24], imS[24];
             offlineFmtNum(r.reP, reS, sizeof(reS));
             offlineFmtNum(fabs(r.imP), imS, sizeof(imS));
-            result += _solT("Brak pierwiastkow rzeczywistych\n", "No real roots\n", "Keine reellen Nullstellen\n");
+            result += _solT("Brak pierwiastkow rzeczywistych\n", "No real roots\n", "Keine reellen Nullstellen\n", "Zadne realne koreny\n");
             result += String("x = ") + reS + " \\pm " + imS + "i";
         }
     }
@@ -1917,12 +1919,12 @@ static void _solOfflineQuadratic(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflineSystem(U8G2 &d) {
     double a1, b1, c1, a2, b2, c2;
-    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   a1 =", "Eq.1 a1x+b1y=c1:   a1 =", "Gl.1 a1x+b1y=c1:   a1 ="), a1)) return;
-    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   b1 =", "Eq.1 a1x+b1y=c1:   b1 =", "Gl.1 a1x+b1y=c1:   b1 ="), b1)) return;
-    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   c1 =", "Eq.1 a1x+b1y=c1:   c1 =", "Gl.1 a1x+b1y=c1:   c1 ="), c1)) return;
-    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   a2 =", "Eq.2 a2x+b2y=c2:   a2 =", "Gl.2 a2x+b2y=c2:   a2 ="), a2)) return;
-    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   b2 =", "Eq.2 a2x+b2y=c2:   b2 =", "Gl.2 a2x+b2y=c2:   b2 ="), b2)) return;
-    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   c2 =", "Eq.2 a2x+b2y=c2:   c2 =", "Gl.2 a2x+b2y=c2:   c2 ="), c2)) return;
+    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   a1 =", "Eq.1 a1x+b1y=c1:   a1 =", "Gl.1 a1x+b1y=c1:   a1 =", "Rov.1 a1x+b1y=c1: a1 ="), a1)) return;
+    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   b1 =", "Eq.1 a1x+b1y=c1:   b1 =", "Gl.1 a1x+b1y=c1:   b1 =", "Rov.1 a1x+b1y=c1: b1 ="), b1)) return;
+    if (!_numEditField(d, _solT("Rown.1 a1x+b1y=c1:   c1 =", "Eq.1 a1x+b1y=c1:   c1 =", "Gl.1 a1x+b1y=c1:   c1 =", "Rov.1 a1x+b1y=c1: c1 ="), c1)) return;
+    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   a2 =", "Eq.2 a2x+b2y=c2:   a2 =", "Gl.2 a2x+b2y=c2:   a2 =", "Rov.2 a2x+b2y=c2: a2 ="), a2)) return;
+    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   b2 =", "Eq.2 a2x+b2y=c2:   b2 =", "Gl.2 a2x+b2y=c2:   b2 =", "Rov.2 a2x+b2y=c2: b2 ="), b2)) return;
+    if (!_numEditField(d, _solT("Rown.2 a2x+b2y=c2:   c2 =", "Eq.2 a2x+b2y=c2:   c2 =", "Gl.2 a2x+b2y=c2:   c2 =", "Rov.2 a2x+b2y=c2: c2 ="), c2)) return;
 
     System2x2Result r = offlineSolveSystem2x2(a1, b1, c1, a2, b2, c2);
     char eq[160];
@@ -1930,9 +1932,9 @@ static void _solOfflineSystem(U8G2 &d) {
              a1, b1, c1, a2, b2, c2);
     String result = eq;
     if (r.infinite) {
-        result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen");
+        result += _solT("Nieskonczenie wiele rozwiazan", "Infinitely many solutions", "Unendlich viele Loesungen", "Nekonecne mnoho reseni");
     } else if (r.none) {
-        result += _solT("Uklad sprzeczny (brak rozwiazan)", "Inconsistent system (no solution)", "Widerspruechliches System (keine Loesung)");
+        result += _solT("Uklad sprzeczny (brak rozwiazan)", "Inconsistent system (no solution)", "Widerspruechliches System (keine Loesung)", "Soustava je sporna (bez reseni)");
     } else {
         char xS[24], yS[24];
         offlineFmtNum(r.x, xS, sizeof(xS));
@@ -1951,22 +1953,22 @@ static void _solOfflineSystem(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflinePercent(U8G2 &d) {
     const char* items[2] = {
-        _solT("X% z Y", "X% of Y", "X% von Y"),
-        _solT("Proporcja a:b=c:x", "Proportion a:b=c:x", "Verhaeltnis a:b=c:x"),
+        _solT("X% z Y", "X% of Y", "X% von Y", "X% z Y"),
+        _solT("Proporcja a:b=c:x", "Proportion a:b=c:x", "Verhaeltnis a:b=c:x", "Pomer a:b=c:x"),
     };
-    int sel = _solListMenu(d, _solT("=== Procenty ===", "=== Percentages ===", "=== Prozente ==="), items, 2);
+    int sel = _solListMenu(d, _solT("=== Procenty ===", "=== Percentages ===", "=== Prozente ===", "=== Procenta ==="), items, 2);
     if (sel < 0) return;
 
     if (sel == 0) {
         double pct, base;
-        if (!_numEditField(d, _solT("X% z Y:   X (%) =", "X% of Y:   X (%) =", "X% von Y:   X (%) ="), pct)) return;
-        if (!_numEditField(d, _solT("X% z Y:   Y =", "X% of Y:   Y =", "X% von Y:   Y ="), base)) return;
+        if (!_numEditField(d, _solT("X% z Y:   X (%) =", "X% of Y:   X (%) =", "X% von Y:   X (%) =", "X% z Y: X (%) ="), pct)) return;
+        if (!_numEditField(d, _solT("X% z Y:   Y =", "X% of Y:   Y =", "X% von Y:   Y =", "X% z Y: Y ="), base)) return;
         double v = offlinePercentOf(pct, base);
         char pS[24], bS[24], vS[24];
         offlineFmtNum(pct, pS, sizeof(pS));
         offlineFmtNum(base, bS, sizeof(bS));
         offlineFmtNum(v, vS, sizeof(vS));
-        const char* of = _solT("% z ", "% of ", "% von ");   // wczesniej "% z" na sztywno (PL)
+        const char* of = _solT("% z ", "% of ", "% von ", "% z ");   // wczesniej "% z" na sztywno (PL)
         String result = String(pS) + of + bS + " = " + vS;
         historySave(String("[Offline] ") + pS + of + bS, result);
         _solDisplaySolution(d, result.c_str(), "OFFLINE");
@@ -1992,10 +1994,10 @@ static void _solOfflinePercent(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflineDerivative(U8G2 &d) {
     const char* items[2] = {
-        _solT("Stopien 2 (ax^2+bx+c)", "Degree 2 (ax^2+bx+c)", "Grad 2 (ax^2+bx+c)"),
-        _solT("Stopien 3 (ax^3+bx^2+cx+d)", "Degree 3 (ax^3+bx^2+cx+d)", "Grad 3 (ax^3+bx^2+cx+d)"),
+        _solT("Stopien 2 (ax^2+bx+c)", "Degree 2 (ax^2+bx+c)", "Grad 2 (ax^2+bx+c)", "Stupen 2 (ax^2+bx+c)"),
+        _solT("Stopien 3 (ax^3+bx^2+cx+d)", "Degree 3 (ax^3+bx^2+cx+d)", "Grad 3 (ax^3+bx^2+cx+d)", "Stupen 3 (ax^3+bx^2+cx+d)"),
     };
-    int sel = _solListMenu(d, _solT("=== Pochodna ===", "=== Derivative ===", "=== Ableitung ==="), items, 2);
+    int sel = _solListMenu(d, _solT("=== Pochodna ===", "=== Derivative ===", "=== Ableitung ===", "=== Derivace ==="), items, 2);
     if (sel < 0) return;
 
     int degree = (sel == 0) ? 2 : 3;
@@ -2041,9 +2043,9 @@ static void _solOfflineDerivative(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflinePoints(U8G2 &d) {
     double x1, y1, x2, y2;
-    if (!_numEditField(d, _solT("Punkt A: x1 =", "Point A: x1 =", "Punkt A: x1 ="), x1)) return;
+    if (!_numEditField(d, _solT("Punkt A: x1 =", "Point A: x1 =", "Punkt A: x1 =", "Bod A: x1 ="), x1)) return;
     if (!_numEditField(d, "y1 =", y1)) return;
-    if (!_numEditField(d, _solT("Punkt B: x2 =", "Point B: x2 =", "Punkt B: x2 ="), x2)) return;
+    if (!_numEditField(d, _solT("Punkt B: x2 =", "Point B: x2 =", "Punkt B: x2 =", "Bod B: x2 ="), x2)) return;
     if (!_numEditField(d, "y2 =", y2)) return;
 
     PointsResult r = offlinePointsCalc(x1, y1, x2, y2);
@@ -2057,7 +2059,7 @@ static void _solOfflinePoints(U8G2 &d) {
     offlineFmtNum(r.midY, myS, sizeof(myS));
 
     String result = String("|AB| = ") + dS + "\n" +
-                     _solT("Srodek S = (", "Midpoint S = (", "Mittelpunkt S = (") + mxS + ", " + myS + ")";
+                     _solT("Srodek S = (", "Midpoint S = (", "Mittelpunkt S = (", "Stred S = (") + mxS + ", " + myS + ")";
 
     historySave(String("[Offline] A(") + x1S + "," + y1S + ") B(" + x2S + "," + y2S + ")", result);
     _solDisplaySolution(d, result.c_str(), "OFFLINE");
@@ -2068,15 +2070,15 @@ static void _solOfflinePoints(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflinePythagoras(U8G2 &d) {
     const char* items[2] = {
-        _solT("Znam obie przyprostokatne", "Know both legs", "Kenne beide Katheten"),
-        _solT("Znam przeciwprost.+bok", "Know hypotenuse+leg", "Kenne Hypotenuse+Kathete"),
+        _solT("Znam obie przyprostokatne", "Know both legs", "Kenne beide Katheten", "Znam obe odvesny"),
+        _solT("Znam przeciwprost.+bok", "Know hypotenuse+leg", "Kenne Hypotenuse+Kathete", "Znam preponu+odvesnu"),
     };
-    int sel = _solListMenu(d, _solT("=== Pitagoras ===", "=== Pythagoras ===", "=== Pythagoras ==="), items, 2);
+    int sel = _solListMenu(d, _solT("=== Pitagoras ===", "=== Pythagoras ===", "=== Pythagoras ===", "=== Pythagoras ==="), items, 2);
     if (sel < 0) return;
 
     if (sel == 0) {
         double a, b;
-        if (!_numEditField(d, _solT("Przyprost.: a =", "Leg: a =", "Kathete: a ="), a)) return;
+        if (!_numEditField(d, _solT("Przyprost.: a =", "Leg: a =", "Kathete: a =", "Odvesna: a ="), a)) return;
         if (!_numEditField(d, "b =", b)) return;
         PythagorasResult r = offlinePythagorasHypotenuse(a, b);
         char aS[24], bS[24], cS[24];
@@ -2088,15 +2090,15 @@ static void _solOfflinePythagoras(U8G2 &d) {
         _solDisplaySolution(d, result.c_str(), "OFFLINE");
     } else {
         double c, a;
-        if (!_numEditField(d, _solT("Przeciwprost.: c =", "Hypotenuse: c =", "Hypotenuse: c ="), c)) return;
-        if (!_numEditField(d, _solT("Przyprost.: a =", "Leg: a =", "Kathete: a ="), a)) return;
+        if (!_numEditField(d, _solT("Przeciwprost.: c =", "Hypotenuse: c =", "Hypotenuse: c =", "Prepona: c ="), c)) return;
+        if (!_numEditField(d, _solT("Przyprost.: a =", "Leg: a =", "Kathete: a =", "Odvesna: a ="), a)) return;
         PythagorasResult r = offlinePythagorasLeg(c, a);
         char cS[24], aS[24];
         offlineFmtNum(c, cS, sizeof(cS));
         offlineFmtNum(a, aS, sizeof(aS));
         String result;
         if (!r.valid) {
-            result = _solT("Blad: c musi byc dluzsze niz a", "Error: c must be longer than a", "Fehler: c muss laenger als a sein");
+            result = _solT("Blad: c musi byc dluzsze niz a", "Error: c must be longer than a", "Fehler: c muss laenger als a sein", "Chyba: c musi byt delsi nez a");
         } else {
             char bS[24];
             offlineFmtNum(r.result, bS, sizeof(bS));
@@ -2112,10 +2114,10 @@ static void _solOfflinePythagoras(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflineSequence(U8G2 &d) {
     const char* items[2] = {
-        _solT("Arytmetyczny", "Arithmetic", "Arithmetisch"),
-        _solT("Geometryczny", "Geometric", "Geometrisch"),
+        _solT("Arytmetyczny", "Arithmetic", "Arithmetisch", "Aritmeticka"),
+        _solT("Geometryczny", "Geometric", "Geometrisch", "Geometricka"),
     };
-    int sel = _solListMenu(d, _solT("=== Ciagi ===", "=== Sequences ===", "=== Folgen ==="), items, 2);
+    int sel = _solListMenu(d, _solT("=== Ciagi ===", "=== Sequences ===", "=== Folgen ===", "=== Posloupnosti ==="), items, 2);
     if (sel < 0) return;
 
     double a1, diffOrRatio, nD;
@@ -2145,19 +2147,19 @@ static void _solOfflineSequence(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void _solOfflineArea(U8G2 &d) {
     const char* items[4] = {
-        _solT("Prostokat", "Rectangle", "Rechteck"),
-        _solT("Trojkat (3 boki)", "Triangle (3 sides)", "Dreieck (3 Seiten)"),
-        _solT("Kolo", "Circle", "Kreis"),
-        _solT("Trapez", "Trapezoid", "Trapez"),
+        _solT("Prostokat", "Rectangle", "Rechteck", "Obdelnik"),
+        _solT("Trojkat (3 boki)", "Triangle (3 sides)", "Dreieck (3 Seiten)", "Trojuhelnik (3 strany)"),
+        _solT("Kolo", "Circle", "Kreis", "Kruh"),
+        _solT("Trapez", "Trapezoid", "Trapez", "Lichobeznik"),
     };
-    int sel = _solListMenu(d, _solT("=== Pola i obwody ===", "=== Areas ===", "=== Flaechen ==="), items, 4);
+    int sel = _solListMenu(d, _solT("=== Pola i obwody ===", "=== Areas ===", "=== Flaechen ===", "=== Obsahy a obvody ==="), items, 4);
     if (sel < 0) return;
 
     String result, histLabel;
 
     if (sel == 0) {
         double a, b;
-        if (!_numEditField(d, _solT("Prostokat: a =", "Rectangle: a =", "Rechteck: a ="), a)) return;
+        if (!_numEditField(d, _solT("Prostokat: a =", "Rectangle: a =", "Rechteck: a =", "Obdelnik: a ="), a)) return;
         if (!_numEditField(d, "b =", b)) return;
         AreaResult r = offlineRectangle(a, b);
         char aS[24], bS[24], pS[24], oS[24];
@@ -2165,12 +2167,12 @@ static void _solOfflineArea(U8G2 &d) {
         offlineFmtNum(b, bS, sizeof(bS));
         offlineFmtNum(r.area, pS, sizeof(pS));
         offlineFmtNum(r.perimeter, oS, sizeof(oS));
-        result = String(_solT("Pole = ", "Area = ", "Flaeche = ")) + pS + "\n" +
-                 _solT("Obwod = ", "Perimeter = ", "Umfang = ") + oS;
-        histLabel = String("Prostokat a=") + aS + " b=" + bS;
+        result = String(_solT("Pole = ", "Area = ", "Flaeche = ", "Obsah = ")) + pS + "\n" +
+                 _solT("Obwod = ", "Perimeter = ", "Umfang = ", "Obvod = ") + oS;
+        histLabel = String(_solT("Prostokat", "Rectangle", "Rechteck", "Obdelnik")) + " a=" + aS + " b=" + bS;
     } else if (sel == 1) {
         double a, b, c;
-        if (!_numEditField(d, _solT("Trojkat: a =", "Triangle: a =", "Dreieck: a ="), a)) return;
+        if (!_numEditField(d, _solT("Trojkat: a =", "Triangle: a =", "Dreieck: a =", "Trojuhelnik: a ="), a)) return;
         if (!_numEditField(d, "b =", b)) return;
         if (!_numEditField(d, "c =", c)) return;
         AreaResult r = offlineTriangleHeron(a, b, c);
@@ -2179,29 +2181,29 @@ static void _solOfflineArea(U8G2 &d) {
         offlineFmtNum(b, bS, sizeof(bS));
         offlineFmtNum(c, cS, sizeof(cS));
         if (!r.valid) {
-            result = _solT("Blad: takie boki nie tworza trojkata", "Error: these sides don't form a triangle", "Fehler: diese Seiten bilden kein Dreieck");
+            result = _solT("Blad: takie boki nie tworza trojkata", "Error: these sides don't form a triangle", "Fehler: diese Seiten bilden kein Dreieck", "Chyba: tyto strany netvori trojuhelnik");
         } else {
             char pS[24], oS[24];
             offlineFmtNum(r.area, pS, sizeof(pS));
             offlineFmtNum(r.perimeter, oS, sizeof(oS));
-            result = String(_solT("Pole = ", "Area = ", "Flaeche = ")) + pS + "\n" +
-                     _solT("Obwod = ", "Perimeter = ", "Umfang = ") + oS;
+            result = String(_solT("Pole = ", "Area = ", "Flaeche = ", "Obsah = ")) + pS + "\n" +
+                     _solT("Obwod = ", "Perimeter = ", "Umfang = ", "Obvod = ") + oS;
         }
-        histLabel = String("Trojkat a=") + aS + " b=" + bS + " c=" + cS;
+        histLabel = String(_solT("Trojkat", "Triangle", "Dreieck", "Trojuhelnik")) + " a=" + aS + " b=" + bS + " c=" + cS;
     } else if (sel == 2) {
         double rad;
-        if (!_numEditField(d, _solT("Kolo: r =", "Circle: r =", "Kreis: r ="), rad)) return;
+        if (!_numEditField(d, _solT("Kolo: r =", "Circle: r =", "Kreis: r =", "Kruh: r ="), rad)) return;
         AreaResult r = offlineCircle(rad);
         char rS[24], pS[24], oS[24];
         offlineFmtNum(rad, rS, sizeof(rS));
         offlineFmtNum(r.area, pS, sizeof(pS));
         offlineFmtNum(r.perimeter, oS, sizeof(oS));
-        result = String(_solT("Pole = ", "Area = ", "Flaeche = ")) + pS + "\n" +
-                 _solT("Obwod = ", "Perimeter = ", "Umfang = ") + oS;
-        histLabel = String("Kolo r=") + rS;
+        result = String(_solT("Pole = ", "Area = ", "Flaeche = ", "Obsah = ")) + pS + "\n" +
+                 _solT("Obwod = ", "Perimeter = ", "Umfang = ", "Obvod = ") + oS;
+        histLabel = String(_solT("Kolo", "Circle", "Kreis", "Kruh")) + " r=" + rS;
     } else {
         double a, b, h;
-        if (!_numEditField(d, _solT("Trapez: a =", "Trapezoid: a =", "Trapez: a ="), a)) return;
+        if (!_numEditField(d, _solT("Trapez: a =", "Trapezoid: a =", "Trapez: a =", "Lichobeznik: a ="), a)) return;
         if (!_numEditField(d, "b =", b)) return;
         if (!_numEditField(d, "h =", h)) return;
         AreaResult r = offlineTrapezoid(a, b, h);
@@ -2210,9 +2212,9 @@ static void _solOfflineArea(U8G2 &d) {
         offlineFmtNum(b, bS, sizeof(bS));
         offlineFmtNum(h, hS, sizeof(hS));
         offlineFmtNum(r.area, pS, sizeof(pS));
-        result = String(_solT("Pole = ", "Area = ", "Flaeche = ")) + pS + "\n" +
-                 _solT("(obwod wymaga dlugosci ramion)", "(perimeter needs leg lengths)", "(Umfang braucht Schenkellaengen)");
-        histLabel = String("Trapez a=") + aS + " b=" + bS + " h=" + hS;
+        result = String(_solT("Pole = ", "Area = ", "Flaeche = ", "Obsah = ")) + pS + "\n" +
+                 _solT("(obwod wymaga dlugosci ramion)", "(perimeter needs leg lengths)", "(Umfang braucht Schenkellaengen)", "(obvod vyzaduje delky ramen)");
+        histLabel = String(_solT("Trapez", "Trapezoid", "Trapez", "Lichobeznik")) + " a=" + aS + " b=" + bS + " h=" + hS;
     }
 
     historySave(String("[Offline] ") + histLabel, result);
@@ -2224,19 +2226,19 @@ static void _solOfflineArea(U8G2 &d) {
 // ---------------------------------------------------------------------------
 static void runOfflineSolver(U8G2 &d) {
     const char* items[9] = {
-        _solT("Rownanie liniowe", "Linear equation", "Lineare Gleichung"),
-        _solT("Rownanie kwadratowe", "Quadratic equation", "Quadratische Gleichung"),
-        _solT("Uklad 2 rownan", "2-eq. system", "2er-Gleichungssystem"),
-        _solT("Procenty / proporcje", "Percentages / proportions", "Prozente / Verhaeltnisse"),
-        _solT("Pochodna wielomianu", "Polynomial derivative", "Polynom-Ableitung"),
-        _solT("Punkty na plaszczyznie", "Points on a plane", "Punkte in der Ebene"),
-        _solT("Twierdzenie Pitagorasa", "Pythagorean theorem", "Satz des Pythagoras"),
-        _solT("Ciagi (arytm./geom.)", "Sequences (arith./geom.)", "Folgen (arith./geom.)"),
-        _solT("Pola i obwody figur", "Areas and perimeters", "Flaechen und Umfaenge"),
+        _solT("Rownanie liniowe", "Linear equation", "Lineare Gleichung", "Linearni rovnice"),
+        _solT("Rownanie kwadratowe", "Quadratic equation", "Quadratische Gleichung", "Kvadraticka rovnice"),
+        _solT("Uklad 2 rownan", "2-eq. system", "2er-Gleichungssystem", "Soustava 2 rovnic"),
+        _solT("Procenty / proporcje", "Percentages / proportions", "Prozente / Verhaeltnisse", "Procenta / pomery"),
+        _solT("Pochodna wielomianu", "Polynomial derivative", "Polynom-Ableitung", "Derivace polynomu"),
+        _solT("Punkty na plaszczyznie", "Points on a plane", "Punkte in der Ebene", "Body v rovine"),
+        _solT("Twierdzenie Pitagorasa", "Pythagorean theorem", "Satz des Pythagoras", "Pythagorova veta"),
+        _solT("Ciagi (arytm./geom.)", "Sequences (arith./geom.)", "Folgen (arith./geom.)", "Posloupnosti (arit./geom.)"),
+        _solT("Pola i obwody figur", "Areas and perimeters", "Flaechen und Umfaenge", "Obsahy a obvody utvaru"),
     };
     while (true) {
         if (panicTriggered()) return;
-        int sel = _solListMenu(d, _solT("=== Offline ===", "=== Offline ===", "=== Offline ==="), items, 9);
+        int sel = _solListMenu(d, _solT("=== Offline ===", "=== Offline ===", "=== Offline ===", "=== Offline ==="), items, 9);
         if (sel < 0) return;   // wyjscie do _solModeSelect
 
         switch (sel) {
@@ -2273,9 +2275,9 @@ static void _solRunHistoryMode(U8G2 &d) {
     if (count == 0) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 28, _solT("Brak zapisanych zadan", "No saved tasks", "Keine gespeicherten Aufgaben"));
+        d.drawStr(2, 28, _solT("Brak zapisanych zadan", "No saved tasks", "Keine gespeicherten Aufgaben", "Zadne ulozene ulohy"));
         d.setFont(u8g2_font_5x7_tf);
-        d.drawStr(2, 56, _solT("OK / < = powrot", "OK / < = back", "OK / < = zurueck"));
+        d.drawStr(2, 56, _solT("OK / < = powrot", "OK / < = back", "OK / < = zurueck", "OK / < = zpet"));
         d.sendBuffer();
         while (true) {
             if (_solTick()) d.sendBuffer();
@@ -2326,7 +2328,7 @@ static void _solRunHistoryMode(U8G2 &d) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
             char hdr[32];
-            snprintf(hdr, sizeof(hdr), _solT("Historia (%d/%d)", "History (%d/%d)", "Verlauf (%d/%d)"),
+            snprintf(hdr, sizeof(hdr), _solT("Historia (%d/%d)", "History (%d/%d)", "Verlauf (%d/%d)", "Historie (%d/%d)"),
                      cursor + 1, count);
             d.drawStr(2, 10, hdr);
             d.drawHLine(0, 12, 256);
@@ -2341,7 +2343,8 @@ static void _solRunHistoryMode(U8G2 &d) {
             d.setFont(u8g2_font_5x7_tf);
             d.drawStr(2, 62, _solT("^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
                                     "^/v OK:show  >:edit+resend  <:back",
-                                    "^/v OK:zeigen >:bearb+senden <:zurueck"));
+                                    "^/v OK:zeigen >:bearb+senden <:zurueck",
+                                    "^/v OK:ukaz  >:upravit+odeslat  <:zpet"));
             d.sendBuffer();
             needRedraw = false;
         }
@@ -2362,9 +2365,9 @@ static void _solRunHistoryMode(U8G2 &d) {
                 // "[Zdjecie]" / "[Offline] ..." to nie tresc zadania — nie
                 // wysylamy tego jako tekstu do AI (marnowalo tokeny).
                 _solShowInfo(d,
-                    _solT("Tego wpisu nie mozna", "This entry cannot", "Dieser Eintrag kann"),
-                    _solT("wyslac ponownie.", "be resent.", "nicht erneut gesendet werden."),
-                    _solT("(zdjecie / wynik offline)", "(photo / offline result)", "(Foto / Offline-Ergebnis)"),
+                    _solT("Tego wpisu nie mozna", "This entry cannot", "Dieser Eintrag kann", "Tento zaznam nelze"),
+                    _solT("wyslac ponownie.", "be resent.", "nicht erneut gesendet werden.", "znovu odeslat."),
+                    _solT("(zdjecie / wynik offline)", "(photo / offline result)", "(Foto / Offline-Ergebnis)", "(foto / offline vysledek)"),
                     2000);
                 needRedraw = true;
             } else {
@@ -2414,7 +2417,7 @@ static void _solQueueDraw(U8G2 &d, const char* status, int idx, int total) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
     char hdr[48];
-    snprintf(hdr, sizeof(hdr), _solT("Kolejka offline: %d zadan", "Offline queue: %d tasks", "Offline-Warteschl.: %d Aufg."), total);
+    snprintf(hdr, sizeof(hdr), _solT("Kolejka offline: %d zadan", "Offline queue: %d tasks", "Offline-Warteschl.: %d Aufg.", "Offline fronta: %d uloh"), total);
     d.drawStr(2, 12, hdr);
     d.drawHLine(0, 15, 256);
     d.drawStr(2, 32, status);
@@ -2424,7 +2427,7 @@ static void _solQueueDraw(U8G2 &d, const char* status, int idx, int total) {
         d.drawStr(2, 46, ln);
     }
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 62, _solT("C/CE = pomin (na 10 min)", "C/CE = skip (for 10 min)", "C/CE = ueberspringen (10 Min.)"));
+    d.drawStr(2, 62, _solT("C/CE = pomin (na 10 min)", "C/CE = skip (for 10 min)", "C/CE = ueberspringen (10 Min.)", "C/CE = preskocit (na 10 min)"));
     d.sendBuffer();
 }
 
@@ -2466,7 +2469,7 @@ static void _solProcessQueue(U8G2 &d) {
         char ssid[33] = "", pass[64] = "";
         wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass));
         if (ssid[0] == '\0') return;    // brak zapisanej sieci — nie ma jak wyslac
-        _solQueueDraw(d, _solT("Lacze z WiFi...", "Connecting WiFi...", "Verbinde WLAN..."), 0, n);
+        _solQueueDraw(d, _solT("Lacze z WiFi...", "Connecting WiFi...", "Verbinde WLAN...", "Pripojuji WiFi..."), 0, n);
         if (!wifiJoinInProgress()) {    // nie restartuj trwajacego laczenia (patrz _solEnsureWifi)
             wifiStaOnLimited();         // STA + TxPower (KALK_WIFI_TX_POWER)
             wifiFastBegin(ssid, pass);
@@ -2497,7 +2500,7 @@ static void _solProcessQueue(U8G2 &d) {
     while (offlineQueueCount() > 0) {
         if (panicTriggered()) return;
         idx++;
-        _solQueueDraw(d, _solT("Wysylam zadanie...", "Sending task...", "Sende Aufgabe..."), idx, total);
+        _solQueueDraw(d, _solT("Wysylam zadanie...", "Sending task...", "Sende Aufgabe...", "Odesilam ulohu..."), idx, total);
         if (_solQueueWaitSkip(800)) {   // chwila na "pomin" przed kazda pozycja
             if (!panicTriggered()) _solQueueSkipAt = millis() | 1;
             return;
@@ -2544,16 +2547,16 @@ static void _solProcessQueue(U8G2 &d) {
         }
         if (r.kind == _SOL_RES_FATAL) {
             offlineQueueRemoveFirst();
-            _solShowSendError(d, r, _solT("Zadanie usuniete z kolejki", "Task removed from queue", "Aufgabe aus Warteschlange entfernt"));
+            _solShowSendError(d, r, _solT("Zadanie usuniete z kolejki", "Task removed from queue", "Aufgabe aus Warteschlange entfernt", "Uloha odstranena z fronty"));
             continue;
         }
         // Blad przejsciowy — licznik prob; po _OQ_MAX_ATTEMPTS pozycja wypada
         uint8_t att = offlineQueueBumpAttempts();
         if (att >= _OQ_MAX_ATTEMPTS) {
             offlineQueueRemoveFirst();
-            _solShowSendError(d, r, _solT("Usuniete po 3 nieudanych probach", "Removed after 3 failed attempts", "Nach 3 Fehlversuchen entfernt"));
+            _solShowSendError(d, r, _solT("Usuniete po 3 nieudanych probach", "Removed after 3 failed attempts", "Nach 3 Fehlversuchen entfernt", "Odstraneno po 3 neuspesich"));
         } else {
-            _solShowSendError(d, r, _solT("Zostaje w kolejce - kolejna proba pozniej", "Stays queued - will retry later", "Bleibt in Warteschlange"));
+            _solShowSendError(d, r, _solT("Zostaje w kolejce - kolejna proba pozniej", "Stays queued - will retry later", "Bleibt in Warteschlange", "Zustava ve fronte - dalsi pokus pozdeji"));
         }
         break;   // siec/serwer wlasnie nie dziala — reszta tez by nie przeszla
     }
@@ -2573,10 +2576,10 @@ static void _solEnsureFs(U8G2 &d) {
     _solFsFormatTried = true;
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 20, _solT("Przygotowuje pamiec...", "Preparing storage...", "Speicher wird vorbereitet..."));
+    d.drawStr(2, 20, _solT("Przygotowuje pamiec...", "Preparing storage...", "Speicher wird vorbereitet...", "Pripravuji pamet..."));
     d.setFont(u8g2_font_5x7_tf);
-    d.drawStr(2, 36, _solT("Jednorazowo, moze potrwac do 1 min.", "One-time, may take up to 1 min.", "Einmalig, dauert bis zu 1 Min."));
-    d.drawStr(2, 46, _solT("Nie wylaczaj kalkulatora.", "Do not switch off.", "Nicht ausschalten."));
+    d.drawStr(2, 36, _solT("Jednorazowo, moze potrwac do 1 min.", "One-time, may take up to 1 min.", "Einmalig, dauert bis zu 1 Min.", "Jednorazove, muze trvat az 1 min."));
+    d.drawStr(2, 46, _solT("Nie wylaczaj kalkulatora.", "Do not switch off.", "Nicht ausschalten.", "Nevypinejte kalkulacku."));
     d.sendBuffer();
     uint32_t t0 = millis();
     bool ok = SPIFFS.begin(true);   // format + mount

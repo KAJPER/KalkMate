@@ -20,6 +20,54 @@ const dict: Record<Locale, { eyebrow: string; heading: string; sub: string; veri
     sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} Bewertungen`,
     verified: "Verifizierter Kauf",
   },
+  cs: {
+    eyebrow: "/ RECENZE UŽIVATELŮ",
+    heading: "Co říkají studenti.",
+    sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} recenzí`,
+    verified: "Ověřený nákup",
+  },
+  sk: {
+    eyebrow: "/ RECENZIE POUŽÍVATEĽOV",
+    heading: "Čo hovoria študenti.",
+    sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} recenzií`,
+    verified: "Overený nákup",
+  },
+  lt: {
+    eyebrow: "/ NAUDOTOJŲ ATSILIEPIMAI",
+    heading: "Ką sako mokiniai.",
+    sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} atsiliepimų`,
+    verified: "Patvirtintas pirkimas",
+  },
+  be: {
+    eyebrow: "/ ВОДГУКІ КАРЫСТАЛЬНІКАЎ",
+    heading: "Што кажуць вучні.",
+    sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} водгукаў`,
+    verified: "Пацверджаная пакупка",
+  },
+  es: {
+    eyebrow: "/ OPINIONES DE USUARIOS",
+    heading: "Lo que dicen los estudiantes.",
+    sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} opiniones`,
+    verified: "Compra verificada",
+  },
+  pt: {
+    eyebrow: "/ OPINIÕES DE UTILIZADORES",
+    heading: "O que dizem os estudantes.",
+    sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} opiniões`,
+    verified: "Compra verificada",
+  },
+  fr: {
+    eyebrow: "/ AVIS DES UTILISATEURS",
+    heading: "Ce qu’en disent les élèves.",
+    sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} avis`,
+    verified: "Achat vérifié",
+  },
+  it: {
+    eyebrow: "/ RECENSIONI DEGLI UTENTI",
+    heading: "Cosa dicono gli studenti.",
+    sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} recensioni`,
+    verified: "Acquisto verificato",
+  },
 };
 
 function Stars({ rating }: { rating: number }) {

@@ -1,9 +1,17 @@
 "use client";
 
 import { Elements } from "@stripe/react-stripe-js";
-import { type StripeElementsOptions } from "@stripe/stripe-js";
+import { type StripeElementsOptions, type StripeElementLocale } from "@stripe/stripe-js";
 import getStripe from "@/lib/getStripe";
 import { type Locale } from "@/lib/i18n";
+
+/**
+ * Jezyk strony -> locale Stripe Elements. Stripe nie ma bialoruskiego
+ * (jest tylko "ru") — dla "be" uzywamy angielskiego.
+ */
+export function stripeLocale(lang: Locale): StripeElementLocale {
+  return lang === "be" ? "en" : lang;
+}
 
 interface StripeProviderProps {
   clientSecret: string;
@@ -66,7 +74,7 @@ export default function StripeProvider({
   const options: StripeElementsOptions = {
     clientSecret,
     appearance,
-    locale: lang,
+    locale: stripeLocale(lang),
   };
 
   return (

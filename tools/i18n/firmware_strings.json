@@ -1,0 +1,3051 @@
+{
+ "=== About ===": {
+  "pl": "=== O programie ===",
+  "de": "=== Ueber ===",
+  "cs": "=== O programu ===",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "=== Authors ===": {
+  "pl": "=== Tworcy ===",
+  "de": "=== Autoren ===",
+  "cs": "=== Autori ===",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "=== Version ===": {
+  "pl": "=== Wersja ===",
+  "de": "=== Version ===",
+  "cs": "=== Verze ===",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "Firmware version: %s": {
+  "pl": "Wersja firmware: %s",
+  "de": "Firmware-Version: %s",
+  "cs": "Verze firmwaru: %s",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "AI calculator for students": {
+  "pl": "Kalkulator AI dla maturzystow",
+  "de": "KI-Rechner fuer Schueler",
+  "cs": "AI kalkulacka pro maturanty",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "Supports: math, physics,": {
+  "pl": "Obsluguje: matematyke, fizyke,",
+  "de": "Unterstuetzt: Mathe, Physik,",
+  "cs": "Podporuje: matematiku, fyziku,",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "chemistry and biology": {
+  "pl": "chemie i biologie",
+  "de": "Chemie und Biologie",
+  "cs": "chemii a biologii",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "Project and hardware:": {
+  "pl": "Projekt i hardware:",
+  "de": "Projekt und Hardware:",
+  "cs": "Projekt a hardware:",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "Software:": {
+  "pl": "Oprogramowanie:",
+  "de": "Software:",
+  "cs": "Software:",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "Display: OLED 256x64": {
+  "pl": "Wyswietlacz: OLED 256x64",
+  "de": "Display: OLED 256x64",
+  "cs": "Displej: OLED 256x64",
+  "files": [
+   "about_screen.h"
+  ]
+ },
+ "< BACK": {
+  "pl": "< WSTECZ",
+  "de": "< ZURUECK",
+  "cs": "< ZPET",
+  "files": [
+   "about_screen.h",
+   "info_screen.h"
+  ]
+ },
+ "NEXT >": {
+  "pl": "DALEJ >",
+  "de": "WEITER>",
+  "cs": "DALSI >",
+  "files": [
+   "about_screen.h",
+   "info_screen.h"
+  ]
+ },
+ "Account status": {
+  "pl": "Status konta",
+  "de": "Kontostatus",
+  "cs": "Stav uctu",
+  "files": [
+   "account_screen.h",
+   "settings_screen.h"
+  ]
+ },
+ "Checking WiFi...": {
+  "pl": "Sprawdzam WiFi...",
+  "de": "Pruefe WLAN...",
+  "cs": "Kontroluji WiFi...",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "No saved WiFi.": {
+  "pl": "Brak zapisanego WiFi.",
+  "de": "Kein gespeichertes WLAN.",
+  "cs": "Zadna ulozena WiFi.",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Settings -> Set up WiFi": {
+  "pl": "Settings -> Ustaw WiFi",
+  "de": "Settings -> WLAN einrichten",
+  "cs": "Nastaveni -> Nastavit WiFi",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "C/CE = exit": {
+  "pl": "C/CE = wyjscie",
+  "de": "C/CE = beenden",
+  "cs": "C/CE = konec",
+  "files": [
+   "account_screen.h",
+   "settings_screen.h"
+  ]
+ },
+ "Connecting to WiFi...": {
+  "pl": "Lacze z WiFi...",
+  "de": "Verbinde mit WLAN...",
+  "cs": "Pripojuji k WiFi...",
+  "files": [
+   "account_screen.h",
+   "remote_session.h"
+  ]
+ },
+ "No WiFi connection.": {
+  "pl": "Brak polaczenia z WiFi.",
+  "de": "Keine WLAN-Verbindung.",
+  "cs": "Zadne pripojeni WiFi.",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Registering device...": {
+  "pl": "Rejestruje urzadzenie...",
+  "de": "Registriere Geraet...",
+  "cs": "Registruji zarizeni...",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Fetching status...": {
+  "pl": "Pobieram status...",
+  "de": "Lade Status...",
+  "cs": "Nacitam stav...",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Fetch error:": {
+  "pl": "Blad pobierania:",
+  "de": "Ladefehler:",
+  "cs": "Chyba nacteni:",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Status:  NOT LINKED": {
+  "pl": "Status:  NIEPODLACZONE",
+  "de": "Status:  NICHT VERBUNDEN",
+  "cs": "Stav:    NEPROPOJENO",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Pair on the website:": {
+  "pl": "Sparuj na stronie:",
+  "de": "Koppeln auf der Website:",
+  "cs": "Sparujte na webu:",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Enter Device ID + unlock code.": {
+  "pl": "Wpisz Device ID + kod odblokowania.",
+  "de": "Geraete-ID + Freischaltcode eingeben.",
+  "cs": "Zadejte ID zarizeni + odemykaci kod.",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Status:  LINKED": {
+  "pl": "Status:  PODLACZONE",
+  "de": "Status:  VERBUNDEN",
+  "cs": "Stav:    PROPOJENO",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Account: %.34s": {
+  "pl": "Konto: %.34s",
+  "de": "Konto: %.34s",
+  "cs": "Ucet: %.34s",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "trial": {
+  "pl": "trial",
+  "de": "Test",
+  "cs": "zkusebni",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "expired": {
+  "pl": "wygas",
+  "de": "abgelaufen",
+  "cs": "vyprsela",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Lic: %.14s (%s)": {
+  "pl": "Lic: %.14s (%s)",
+  "de": "Lizenz: %.14s (%s)",
+  "cs": "Lic: %.14s (%s)",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Days: %d": {
+  "pl": "Dni: %d",
+  "de": "Tage: %d",
+  "cs": "Dny: %d",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Mode: %.28s": {
+  "pl": "Tryb: %.28s",
+  "de": "Modus: %.28s",
+  "cs": "Rezim: %.28s",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "No license on account": {
+  "pl": "Brak licencji na koncie",
+  "de": "Keine Lizenz im Konto",
+  "cs": "Na uctu neni licence",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "C/CE = exit   OK = refresh": {
+  "pl": "C/CE = wyjscie   OK = odswiez",
+  "de": "C/CE = beenden   OK = aktualisieren",
+  "cs": "C/CE = konec   OK = obnovit",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Refreshing...": {
+  "pl": "Odswiezam...",
+  "de": "Aktualisiere...",
+  "cs": "Obnovuji...",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Registering with server...": {
+  "pl": "Rejestruje na serwerze...",
+  "de": "Registriere beim Server...",
+  "cs": "Registruji na serveru...",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "Scan QR -> link to account": {
+  "pl": "Skanuj QR -> podlaczenie",
+  "de": "QR scannen -> Konto verknuepfen",
+  "cs": "Naskenujte QR -> propojeni",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "in user panel.": {
+  "pl": "do panelu klienta.",
+  "de": "im Kundenpanel.",
+  "cs": "v zakaznickem panelu.",
+  "files": [
+   "account_screen.h"
+  ]
+ },
+ "OK / < = exit": {
+  "pl": "OK / < = wyjscie",
+  "de": "OK / < = beenden",
+  "cs": "OK / < = konec",
+  "files": [
+   "account_screen.h",
+   "settings_screen.h"
+  ]
+ },
+ "=== Factory reset ===": {
+  "pl": "=== Reset fabryczny ===",
+  "de": "=== Werksreset ===",
+  "cs": "=== Tovarni reset ===",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "Deletes: WiFi, AI code, history, queue,": {
+  "pl": "Skasuje: WiFi, kod AI, historie, kolejke,",
+  "de": "Loescht: WLAN, KI-Code, Verlauf, Warteschl.,",
+  "cs": "Smaze: WiFi, kod AI, historii, frontu,",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "notes, tests, account link.": {
+  "pl": "notatki, sprawdziany, powiazanie z kontem.",
+  "de": "Notizen, Tests, Kontoverknuepfung.",
+  "cs": "poznamky, testy, propojeni s uctem.",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "No choice within 30 s = cancel.": {
+  "pl": "Brak decyzji przez 30 s = anuluj.",
+  "de": "Keine Wahl in 30 s = Abbruch.",
+  "cs": "Bez volby do 30 s = zruseni.",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "OK = YES, reset": {
+  "pl": "OK = TAK, resetuj",
+  "de": "OK = JA, zuruecksetzen",
+  "cs": "OK = ANO, resetovat",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "C/CE or < = cancel": {
+  "pl": "C/CE lub < = anuluj",
+  "de": "C/CE oder < = abbrechen",
+  "cs": "C/CE nebo < = zrusit",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "Factory reset...": {
+  "pl": "Reset fabryczny...",
+  "de": "Werksreset...",
+  "cs": "Tovarni reset...",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "Erasing data, please wait...": {
+  "pl": "Kasuje dane, prosze czekac...",
+  "de": "Loesche Daten, bitte warten...",
+  "cs": "Mazu data, prosim cekejte...",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "Factory reset done": {
+  "pl": "Zresetowano fabrycznie",
+  "de": "Werksreset abgeschlossen",
+  "cs": "Tovarni reset dokoncen",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "Restarting...": {
+  "pl": "Restart...",
+  "de": "Neustart...",
+  "cs": "Restartuji...",
+  "files": [
+   "factory_reset.h"
+  ]
+ },
+ "=== Server status (4/5) ===": {
+  "pl": "=== Status serwera (4/5) ===",
+  "de": "=== Serverstatus (4/5) ===",
+  "cs": "=== Stav serveru (4/5) ===",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "WiFi: Connected": {
+  "pl": "WiFi: Polaczono",
+  "de": "WiFi: Verbunden",
+  "cs": "WiFi: Pripojeno",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "WiFi: OK (server: check in app)": {
+  "pl": "WiFi: OK (serwer: sprawdz w app)",
+  "de": "WiFi: OK (Server: siehe App)",
+  "cs": "WiFi: OK (server: viz aplikace)",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "WiFi: Not connected": {
+  "pl": "WiFi: Brak polaczenia",
+  "de": "WiFi: Nicht verbunden",
+  "cs": "WiFi: Nepripojeno",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Connect to WiFi in": {
+  "pl": "Polacz sie z WiFi w",
+  "de": "WiFi verbinden in",
+  "cs": "Pripojte se k WiFi v",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Settings to use": {
+  "pl": "Ustawieniach aby korzystac",
+  "de": "den Einstellungen fuer",
+  "cs": "Nastaveni pro pouziti",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "AI features": {
+  "pl": "z funkcji AI",
+  "de": "KI-Funktionen",
+  "cs": "funkci AI",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "=== How to use (1/5) ===": {
+  "pl": "=== Jak uzywac (1/5) ===",
+  "de": "=== Bedienung (1/5) ===",
+  "cs": "=== Jak pouzivat (1/5) ===",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "1. Take a photo of task": {
+  "pl": "1. Zrob zdjecie zadania",
+  "de": "1. Aufgabe fotografieren",
+  "cs": "1. Vyfotte ulohu",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "2. Press OK to send": {
+  "pl": "2. Nacisnij OK aby wyslac",
+  "de": "2. OK druecken zum Senden",
+  "cs": "2. Stisknete OK pro odeslani",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "3. Wait for response": {
+  "pl": "3. Poczekaj na odpowiedz",
+  "de": "3. Auf Antwort warten",
+  "cs": "3. Pockejte na odpoved",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "4. Read the solution": {
+  "pl": "4. Czytaj rozwiazanie",
+  "de": "4. Loesung lesen",
+  "cs": "4. Prectete si reseni",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "=== Tips (2/5) ===": {
+  "pl": "=== Wskazowki (2/5) ===",
+  "de": "=== Tipps (2/5) ===",
+  "cs": "=== Tipy (2/5) ===",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Good lighting on the task": {
+  "pl": "Dobre oswietlenie zadania",
+  "de": "Aufgabe gut beleuchten",
+  "cs": "Dobre osvetleni ulohy",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Hold steady, no blur": {
+  "pl": "Trzymaj rowno, bez rozmazania",
+  "de": "Ruhig halten, nicht verwackeln",
+  "cs": "Drzte rovne, bez rozmazani",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Task must be readable": {
+  "pl": "Zadanie musi byc czytelne",
+  "de": "Aufgabe muss lesbar sein",
+  "cs": "Uloha musi byt citelna",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Avoid shadows on paper": {
+  "pl": "Unikaj cieni na papierze",
+  "de": "Schatten auf Papier vermeiden",
+  "cs": "Bez stinu na papire",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "=== Subjects (3/5) ===": {
+  "pl": "=== Przedmioty (3/5) ===",
+  "de": "=== Faecher (3/5) ===",
+  "cs": "=== Predmety (3/5) ===",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Math - all topics": {
+  "pl": "Matematyka - wszystkie dzialy",
+  "de": "Mathematik - alle Themen",
+  "cs": "Matematika - vsechna temata",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Physics - calculations": {
+  "pl": "Fizyka - zadania obliczeniowe",
+  "de": "Physik - Berechnungen",
+  "cs": "Fyzika - vypocetni ulohy",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Chemistry - equations": {
+  "pl": "Chemia - rownania, obliczenia",
+  "de": "Chemie - Gleichungen",
+  "cs": "Chemie - rovnice, vypocty",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Biology - descriptive": {
+  "pl": "Biologia - pytania opisowe",
+  "de": "Biologie - Beschreibungen",
+  "cs": "Biologie - popisne otazky",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "=== FAQ (5/5) ===": {
+  "pl": "=== FAQ (5/5) ===",
+  "de": "=== FAQ (5/5) ===",
+  "cs": "=== FAQ (5/5) ===",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "No response? Check WiFi": {
+  "pl": "Brak odpowiedzi? Sprawdz WiFi",
+  "de": "Keine Antwort? WiFi pruefen",
+  "cs": "Zadna odpoved? Overte WiFi",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Wrong answer? Try again": {
+  "pl": "Zle rozwiazanie? Sprobuj znowu",
+  "de": "Falsche Loesung? Nochmal versuchen",
+  "cs": "Spatne reseni? Zkuste znovu",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Camera error? Restart device": {
+  "pl": "Blad kamery? Uruchom ponownie",
+  "de": "Kamerafehler? Geraet neu starten",
+  "cs": "Chyba kamery? Restartujte",
+  "files": [
+   "info_screen.h"
+  ]
+ },
+ "Notes (%d)": {
+  "pl": "Notatki (%d)",
+  "de": "Notizen (%d)",
+  "cs": "Poznamky (%d)",
+  "files": [
+   "notes.h"
+  ]
+ },
+ "No notes. Add them": {
+  "pl": "Brak notatek. Dodaj je",
+  "de": "Keine Notizen. Fuege sie",
+  "cs": "Zadne poznamky. Pridejte je",
+  "files": [
+   "notes.h"
+  ]
+ },
+ "in user panel and sync.": {
+  "pl": "w panelu klienta i zsynchron.",
+  "de": "im Kundenpanel hinzu und sync.",
+  "cs": "v zakaznickem panelu a synch.",
+  "files": [
+   "notes.h"
+  ]
+ },
+ "OK = sync   < = exit": {
+  "pl": "OK = sync   < = wyjscie",
+  "de": "OK = sync   < = beenden",
+  "cs": "OK = sync   < = konec",
+  "files": [
+   "notes.h",
+   "tests.h"
+  ]
+ },
+ "OK = open   v = sync   < = exit": {
+  "pl": "OK = otworz   v = sync   < = wyjscie",
+  "de": "OK = oeffnen  v = sync  < = beenden",
+  "cs": "OK = otevrit   v = sync   < = konec",
+  "files": [
+   "notes.h"
+  ]
+ },
+ "^/v scroll   < = back": {
+  "pl": "^/v scroll   < = wstecz",
+  "de": "^/v scroll   < = zurueck",
+  "cs": "^/v posun   < = zpet",
+  "files": [
+   "notes.h"
+  ]
+ },
+ "Syncing...": {
+  "pl": "Synchronizacja...",
+  "de": "Synchronisiere...",
+  "cs": "Synchronizace...",
+  "files": [
+   "notes.h",
+   "tests.h"
+  ]
+ },
+ "Connecting to server": {
+  "pl": "Lacze z serwerem",
+  "de": "Verbinde mit Server",
+  "cs": "Pripojuji k serveru",
+  "files": [
+   "notes.h"
+  ]
+ },
+ "No WiFi": {
+  "pl": "Brak WiFi",
+  "de": "Kein WLAN",
+  "cs": "Bez WiFi",
+  "files": [
+   "notes.h",
+   "tests.h"
+  ]
+ },
+ "Sync error": {
+  "pl": "Blad synchronizacji",
+  "de": "Sync-Fehler",
+  "cs": "Chyba synchronizace",
+  "files": [
+   "notes.h",
+   "tests.h"
+  ]
+ },
+ "Downloaded: %d notes": {
+  "pl": "Pobrano: %d notatek",
+  "de": "Geladen: %d Notizen",
+  "cs": "Stazeno: %d poznamek",
+  "files": [
+   "notes.h"
+  ]
+ },
+ "Do not turn off the device!": {
+  "pl": "Nie wylaczaj urzadzenia!",
+  "de": "Geraet nicht ausschalten!",
+  "cs": "Nevypinejte zarizeni!",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Battery too low for update": {
+  "pl": "Za slaba bateria do aktualizacji",
+  "de": "Akku zu schwach fuer Update",
+  "cs": "Baterie prilis slaba na update",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Connect USB-C charger": {
+  "pl": "Podlacz ladowarke USB-C",
+  "de": "USB-C-Ladegeraet anschliessen",
+  "cs": "Pripojte nabijecku USB-C",
+  "files": [
+   "main.cpp",
+   "ota_update.h"
+  ]
+ },
+ "Error: no WiFi": {
+  "pl": "Blad: brak WiFi",
+  "de": "Fehler: kein WLAN",
+  "cs": "Chyba: zadna WiFi",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "PROD: missing signature!": {
+  "pl": "PROD: brak podpisu!",
+  "de": "PROD: fehlende Signatur!",
+  "cs": "PROD: chybi podpis!",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "ERROR: bad URL!": {
+  "pl": "BLAD: zly URL!",
+  "de": "FEHLER: falsche URL!",
+  "cs": "CHYBA: spatna URL!",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Connecting to server...": {
+  "pl": "Laczenie z serwerem...",
+  "de": "Verbinde mit Server...",
+  "cs": "Pripojuji k serveru...",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Download error: %d": {
+  "pl": "Blad pobrania: %d",
+  "de": "Downloadfehler: %d",
+  "cs": "Chyba stahovani: %d",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Error: size 0": {
+  "pl": "Blad: rozmiar 0",
+  "de": "Fehler: Groesse 0",
+  "cs": "Chyba: velikost 0",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Error: no space": {
+  "pl": "Blad: brak miejsca",
+  "de": "Fehler: kein Speicherplatz",
+  "cs": "Chyba: malo mista",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Downloading firmware...": {
+  "pl": "Pobieranie firmware...",
+  "de": "Firmware wird geladen...",
+  "cs": "Stahuji firmware...",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Error: WiFi lost": {
+  "pl": "Blad: utracono WiFi",
+  "de": "Fehler: WLAN verloren",
+  "cs": "Chyba: ztrata WiFi",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Error: no data for 15 s": {
+  "pl": "Blad: brak danych 15 s",
+  "de": "Fehler: 15 s keine Daten",
+  "cs": "Chyba: 15 s bez dat",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Error: download too slow": {
+  "pl": "Blad: pobieranie za dlugie",
+  "de": "Fehler: Download zu langsam",
+  "cs": "Chyba: pomale stahovani",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Write error": {
+  "pl": "Blad zapisu",
+  "de": "Schreibfehler",
+  "cs": "Chyba zapisu",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Error: incomplete download": {
+  "pl": "Blad: niepelny pobor",
+  "de": "Fehler: unvollstaendiger Download",
+  "cs": "Chyba: nekompletni stazeni",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Key parse error": {
+  "pl": "Blad parsowania key",
+  "de": "Schluessel-Parsefehler",
+  "cs": "Chyba cteni klice",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "SIGNATURE INVALID!": {
+  "pl": "PODPIS NIEPOPRAWNY!",
+  "de": "SIGNATUR UNGUELTIG!",
+  "cs": "NEPLATNY PODPIS!",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Signature OK, saving...": {
+  "pl": "Podpis OK, zapisuje...",
+  "de": "Signatur OK, speichere...",
+  "cs": "Podpis OK, ukladam...",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Finalize error": {
+  "pl": "Blad finalizacji",
+  "de": "Fehler beim Abschluss",
+  "cs": "Chyba dokonceni",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Update incomplete": {
+  "pl": "Update niepelny",
+  "de": "Update unvollstaendig",
+  "cs": "Aktualizace nedokoncena",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "Success! Restarting...": {
+  "pl": "Sukces! Restart...",
+  "de": "Erfolg! Neustart...",
+  "cs": "Hotovo! Restartuji...",
+  "files": [
+   "ota_update.h"
+  ]
+ },
+ "LOW BATTERY": {
+  "pl": "NISKA BATERIA",
+  "de": "AKKU SCHWACH",
+  "cs": "SLABA BATERIE",
+  "files": [
+   "main.cpp",
+   "power.h"
+  ]
+ },
+ "Connect a USB-C charger": {
+  "pl": "Podlacz ladowarke USB-C",
+  "de": "USB-C-Ladegeraet anschliessen",
+  "cs": "Pripojte nabijecku USB-C",
+  "files": [
+   "power.h"
+  ]
+ },
+ "Remote help: ACTIVE": {
+  "pl": "Zdalna pomoc: AKTYWNA",
+  "de": "Fernhilfe: AKTIV",
+  "cs": "Vzdalena pomoc: AKTIVNI",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "Someone can see and control": {
+  "pl": "Ktos moze widziec i sterowac",
+  "de": "Jemand kann sehen und steuern",
+  "cs": "Nekdo muze videt a ovladat",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "this calculator remotely.": {
+  "pl": "tym kalkulatorem zdalnie.",
+  "de": "diesen Rechner aus der Ferne.",
+  "cs": "tuto kalkulacku na dalku.",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "OK = end   < = back": {
+  "pl": "OK = zakoncz   < = wstecz",
+  "de": "OK = beenden  < = zurueck",
+  "cs": "OK = ukoncit  < = zpet",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "No saved WiFi network": {
+  "pl": "Brak zapisanej sieci WiFi",
+  "de": "Kein gespeichertes WLAN",
+  "cs": "Zadna ulozena sit WiFi",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "Could not connect": {
+  "pl": "Nie polaczono z WiFi",
+  "de": "Keine WLAN-Verbindung",
+  "cs": "Nepripojeno k WiFi",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "Remote help active": {
+  "pl": "Zdalna pomoc aktywna",
+  "de": "Fernhilfe aktiv",
+  "cs": "Vzdalena pomoc aktivni",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "Give support this Device ID:": {
+  "pl": "Podaj wsparciu Device ID:",
+  "de": "Geraete-ID fuer den Support:",
+  "cs": "Sdelte podpore Device ID:",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "Corner square = session live": {
+  "pl": "Kwadracik w rogu = sesja trwa",
+  "de": "Eckquadrat = Sitzung aktiv",
+  "cs": "Ctverecek v rohu = relace bezi",
+  "files": [
+   "remote_session.h"
+  ]
+ },
+ "Test %d/%d:": {
+  "pl": "Test %d/%d:",
+  "de": "Test %d/%d:",
+  "cs": "Test %d/%d:",
+  "files": [
+   "screen_test.h"
+  ]
+ },
+ "OK/> = next   < = exit": {
+  "pl": "OK/> = dalej   < = wyjdz",
+  "de": "OK/> = weiter   < = Ende",
+  "cs": "OK/> = dale   < = konec",
+  "files": [
+   "screen_test.h"
+  ]
+ },
+ "Tests complete!": {
+  "pl": "Testy zakonczone!",
+  "de": "Tests abgeschlossen!",
+  "cs": "Testy dokonceny!",
+  "files": [
+   "screen_test.h"
+  ]
+ },
+ "Display OK": {
+  "pl": "Ekran dziala OK",
+  "de": "Display OK",
+  "cs": "Displej OK",
+  "files": [
+   "screen_test.h"
+  ]
+ },
+ "=== Settings ===": {
+  "pl": "=== Ustawienia ===",
+  "de": "=== Einstellungen ===",
+  "cs": "=== Nastaveni ===",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Bright:   ": {
+  "pl": "Jasnosc:  ",
+  "de": "Hell:     ",
+  "cs": "Jas:      ",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Rotate:   ": {
+  "pl": "Obrot:    ",
+  "de": "Drehung:  ",
+  "cs": "Otoceni:  ",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Camera...": {
+  "pl": "Kamera...",
+  "de": "Kamera...",
+  "cs": "Kamera...",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Language: ": {
+  "pl": "Jezyk:    ",
+  "de": "Sprache:  ",
+  "cs": "Jazyk:    ",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Detailed": {
+  "pl": "Szczegolowy",
+  "de": "Detailliert",
+  "cs": "Podrobny",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Calc only": {
+  "pl": "Obliczenia",
+  "de": "Rechnung",
+  "cs": "Jen vypocet",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Result": {
+  "pl": "Wynik",
+  "de": "Ergebnis",
+  "cs": "Vysledek",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Mode:     ": {
+  "pl": "Tryb:     ",
+  "de": "Modus:    ",
+  "cs": "Rezim:    ",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "AI code:  ": {
+  "pl": "Kod AI:   ",
+  "de": "KI-Code:  ",
+  "cs": "Kod AI:   ",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Panic key:": {
+  "pl": "Panic:    ",
+  "de": "Panik:    ",
+  "cs": "Panik:    ",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "WiFi (network + pass)": {
+  "pl": "WiFi (siec + haslo)",
+  "de": "WLAN (Netz + Passwort)",
+  "cs": "WiFi (sit + heslo)",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Device ID + QR": {
+  "pl": "Device ID + QR",
+  "de": "Geraete-ID + QR",
+  "cs": "ID zarizeni + QR",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Remote help": {
+  "pl": "Zdalna pomoc",
+  "de": "Fernhilfe",
+  "cs": "Vzdalena pomoc",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "ACTIVE": {
+  "pl": "AKTYWNA",
+  "de": "AKTIV",
+  "cs": "AKTIVNI",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "off": {
+  "pl": "wylaczona",
+  "de": "aus",
+  "cs": "vypnuto",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Updates:  ": {
+  "pl": "Aktual.:  ",
+  "de": "Update:   ",
+  "cs": "Aktualiz.:",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Factory reset": {
+  "pl": "Reset fabryczny",
+  "de": "Werksreset",
+  "cs": "Tovarni reset",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Clear offline queue": {
+  "pl": "Wyczysc kolejke offline",
+  "de": "Offline-Warteschl. leeren",
+  "cs": "Vymazat offline frontu",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Screen test": {
+  "pl": "Test ekranu",
+  "de": "Bildschirmtest",
+  "cs": "Test displeje",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Camera test": {
+  "pl": "Test kamery",
+  "de": "Kameratest",
+  "cs": "Test kamery",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Keyboard test": {
+  "pl": "Test klawiatury",
+  "de": "Tastaturtest",
+  "cs": "Test klavesnice",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Keyboard scanner": {
+  "pl": "Skaner kl. (debug)",
+  "de": "Tastatur-Scanner",
+  "cs": "Skener klavesnice",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Pin Driver Test": {
+  "pl": "Pin Driver Test",
+  "de": "Pin-Treiber-Test",
+  "cs": "Pin Driver Test",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Battery...": {
+  "pl": "Bateria...",
+  "de": "Akku...",
+  "cs": "Baterie...",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "< BACK      OK: edit": {
+  "pl": "< WSTECZ    OK: edytuj",
+  "de": "< ZURUECK   OK: bearbeiten",
+  "cs": "< ZPET      OK: upravit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Brightness:": {
+  "pl": "Jasnosc:",
+  "de": "Helligkeit:",
+  "cs": "Jas:",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "< -   OK: confirm   + >": {
+  "pl": "< -   OK: zatwierdz   + >",
+  "de": "< -   OK: bestaetigen + >",
+  "cs": "< -   OK: potvrdit   + >",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Screen rotation:": {
+  "pl": "Obrot ekranu:",
+  "de": "Bildschirmdrehung:",
+  "cs": "Otoceni displeje:",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "< / > toggle   OK: confirm": {
+  "pl": "< / > przelacz   OK: zatwierdz",
+  "de": "< / > umschalten OK: bestaetigen",
+  "cs": "< / > prepnout   OK: potvrdit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Starting preview...": {
+  "pl": "Uruchamiam podglad...",
+  "de": "Starte Vorschau...",
+  "cs": "Spoustim nahled...",
+  "files": [
+   "settings_screen.h",
+   "solve_screen.h"
+  ]
+ },
+ "=== Camera ===": {
+  "pl": "=== Kamera ===",
+  "de": "=== Kamera ===",
+  "cs": "=== Kamera ===",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Init FAILED": {
+  "pl": "Init NIEUDANY",
+  "de": "Init FEHLGESCHLAGEN",
+  "cs": "Init SELHAL",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "< = exit": {
+  "pl": "< = wyjscie",
+  "de": "< = beenden",
+  "cs": "< = konec",
+  "files": [
+   "settings_screen.h",
+   "solve_screen.h"
+  ]
+ },
+ "CAMERA": {
+  "pl": "KAMERA",
+  "de": "KAMERA",
+  "cs": "KAMERA",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Bright": {
+  "pl": "Jasn",
+  "de": "Hell",
+  "cs": "Jas",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "UP/DN field": {
+  "pl": "UP/DN pole",
+  "de": "UP/DN Feld",
+  "cs": "UP/DN pole",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "</> change": {
+  "pl": "</> zmien",
+  "de": "</> aendern",
+  "cs": "</> zmenit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK=save  CCE=cancel": {
+  "pl": "OK=zapisz  CCE=anuluj",
+  "de": "OK=speichern CCE=abbr.",
+  "cs": "OK=ulozit  CCE=zrusit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Language:": {
+  "pl": "Jezyk:",
+  "de": "Sprache:",
+  "cs": "Jazyk:",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "< / > change   OK: confirm": {
+  "pl": "< / > zmien   OK: zatwierdz",
+  "de": "< / > wechseln OK: bestaetigen",
+  "cs": "< / > zmenit   OK: potvrdit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Solve mode:": {
+  "pl": "Tryb rozwiazan:",
+  "de": "Loesungsmodus:",
+  "cs": "Rezim reseni:",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Result only": {
+  "pl": "Tylko wynik",
+  "de": "Nur Ergebnis",
+  "cs": "Jen vysledek",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Time": {
+  "pl": "Czas",
+  "de": "Zeit",
+  "cs": "Cas",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "< / > time   OK: confirm": {
+  "pl": "< / > czas   OK: zatwierdz",
+  "de": "< / > Zeit   OK: bestaetigen",
+  "cs": "< / > cas   OK: potvrdit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK: enable   < / > OFF": {
+  "pl": "OK: wlacz   < / > OFF",
+  "de": "OK: aktivieren < / > OFF",
+  "cs": "OK: zapnout   < / > OFF",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "AI code (UP/DOWN digit, LEFT/RIGHT pos)": {
+  "pl": "Kod AI (UP/DOWN cyfra, LEFT/RIGHT pozycja)",
+  "de": "KI-Code (UP/DOWN Ziffer, LEFT/RIGHT Pos.)",
+  "cs": "Kod AI (UP/DOWN cislice, LEFT/RIGHT poz.)",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK=save  C/CE=cancel": {
+  "pl": "OK=zapisz  C/CE=anuluj",
+  "de": "OK=speichern C/CE=abbrechen",
+  "cs": "OK=ulozit  C/CE=zrusit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Press key for panic:": {
+  "pl": "Nacisnij klawisz na panic:",
+  "de": "Taste fuer Panik druecken:",
+  "cs": "Stisknete klavesu pro panik:",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Current:": {
+  "pl": "Aktualny:",
+  "de": "Aktuell:",
+  "cs": "Aktualni:",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Not allowed! Use: * / M+ M- MR MC sqrt % MU": {
+  "pl": "Niedozwolony! Wybierz: * / M+ M- MR MC sqrt % MU",
+  "de": "Nicht erlaubt! Nimm: * / M+ M- MR MC sqrt % MU",
+  "cs": "Nepovoleno! Pouzijte: * / M+ M- MR MC sqrt % MU",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "C/CE=cancel  (* / M+ M- MR MC sqrt % MU)": {
+  "pl": "C/CE=anuluj  (* / M+ M- MR MC sqrt % MU)",
+  "de": "C/CE=abbr.  (* / M+ M- MR MC sqrt % MU)",
+  "cs": "C/CE=zrusit  (* / M+ M- MR MC sqrt % MU)",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "=== Updates ===": {
+  "pl": "=== Aktualizacje ===",
+  "de": "=== Updates ===",
+  "cs": "=== Aktualizace ===",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Current version: v%s": {
+  "pl": "Aktualna wersja: v%s",
+  "de": "Aktuelle Version: v%s",
+  "cs": "Aktualni verze: v%s",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK = check for updates": {
+  "pl": "OK = sprawdz aktualizacje",
+  "de": "OK = nach Updates suchen",
+  "cs": "OK = zkontrolovat aktualizace",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Checking server...": {
+  "pl": "Sprawdzam serwer...",
+  "de": "Server wird geprueft...",
+  "cs": "Kontroluji server...",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Available: v%s": {
+  "pl": "Dostepna: v%s",
+  "de": "Verfuegbar: v%s",
+  "cs": "Dostupna: v%s",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK = install": {
+  "pl": "OK = zainstaluj",
+  "de": "OK = installieren",
+  "cs": "OK = instalovat",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "C/CE = cancel": {
+  "pl": "C/CE = anuluj",
+  "de": "C/CE = abbrechen",
+  "cs": "C/CE = zrusit",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "You have the latest :)": {
+  "pl": "Masz najnowsza wersje :)",
+  "de": "Du hast die neueste Version :)",
+  "cs": "Mate nejnovejsi verzi :)",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Error: %.40s": {
+  "pl": "Blad: %.40s",
+  "de": "Fehler: %.40s",
+  "cs": "Chyba: %.40s",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "=== Offline queue ===": {
+  "pl": "=== Kolejka offline ===",
+  "de": "=== Offline-Warteschl. ===",
+  "cs": "=== Offline fronta ===",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Queued tasks: %u": {
+  "pl": "Zadan w kolejce: %u",
+  "de": "Aufgaben in Warteschl.: %u",
+  "cs": "Uloh ve fronte: %u",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Unsent tasks will be lost.": {
+  "pl": "Niewyslane zadania przepadna.",
+  "de": "Ungesendete Aufgaben gehen verloren.",
+  "cs": "Neodeslane ulohy budou ztraceny.",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK = clear   C/CE / < = back": {
+  "pl": "OK = wyczysc   C/CE / < = wstecz",
+  "de": "OK = leeren   C/CE / < = zurueck",
+  "cs": "OK = vymazat   C/CE / < = zpet",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Queue is empty.": {
+  "pl": "Kolejka jest pusta.",
+  "de": "Warteschlange ist leer.",
+  "cs": "Fronta je prazdna.",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK / C/CE / < = back": {
+  "pl": "OK / C/CE / < = wstecz",
+  "de": "OK / C/CE / < = zurueck",
+  "cs": "OK / C/CE / < = zpet",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Queue cleared": {
+  "pl": "Kolejka wyczyszczona",
+  "de": "Warteschlange geleert",
+  "cs": "Fronta vymazana",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "CAMERA TEST": {
+  "pl": "TEST KAMERY",
+  "de": "KAMERATEST",
+  "cs": "TEST KAMERY",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Sharp": {
+  "pl": "Ostrosc",
+  "de": "Schaerfe",
+  "cs": "Ostrost",
+  "files": [
+   "settings_screen.h",
+   "solve_screen.h"
+  ]
+ },
+ "No shots": {
+  "pl": "Brak zdjec",
+  "de": "Kein Foto",
+  "cs": "Zadne foto",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK=JPEG shot  CCE=exit": {
+  "pl": "OK=zdjecie JPEG  CCE=wyjscie",
+  "de": "OK=JPEG-Foto  CCE=Ende",
+  "cs": "OK=foto JPEG  CCE=konec",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "=== Camera test ===": {
+  "pl": "=== Test kamery ===",
+  "de": "=== Kameratest ===",
+  "cs": "=== Test kamery ===",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Capturing...": {
+  "pl": "Robie zdjecie...",
+  "de": "Aufnahme laeuft...",
+  "cs": "Fotim...",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "=== Battery ===": {
+  "pl": "=== Bateria ===",
+  "de": "=== Akku ===",
+  "cs": "=== Baterie ===",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "No sensor": {
+  "pl": "Brak czujnika",
+  "de": "Kein Sensor",
+  "cs": "Chybi senzor",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Voltage: ": {
+  "pl": "Napiecie:",
+  "de": "Spannung:",
+  "cs": "Napeti:  ",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Percent: ": {
+  "pl": "Procent: ",
+  "de": "Prozent: ",
+  "cs": "Procenta:",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Status:  ": {
+  "pl": "Status:  ",
+  "de": "Status:  ",
+  "cs": "Stav:    ",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "CHARGING": {
+  "pl": "LADOWANIE",
+  "de": "LADEN",
+  "cs": "NABIJENI",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "FULL": {
+  "pl": "NALADOWANA",
+  "de": "VOLL",
+  "cs": "NABITO",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "LOW": {
+  "pl": "NISKI",
+  "de": "NIEDRIG",
+  "cs": "NIZKA",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "OK": {
+  "pl": "OK",
+  "de": "OK",
+  "cs": "OK",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Auto": {
+  "pl": "Auto",
+  "de": "Auto",
+  "cs": "Auto",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Sunny": {
+  "pl": "Sloneczny",
+  "de": "Sonnig",
+  "cs": "Slunecno",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Cloudy": {
+  "pl": "Pochmurno",
+  "de": "Bewoelkt",
+  "cs": "Zatazeno",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Office": {
+  "pl": "Biuro",
+  "de": "Buero",
+  "cs": "Kancelar",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "Home": {
+  "pl": "Dom",
+  "de": "Zuhause",
+  "cs": "Doma",
+  "files": [
+   "settings_screen.h"
+  ]
+ },
+ "! Error !": {
+  "pl": "! Blad !",
+  "de": "! Fehler !",
+  "cs": "! Chyba !",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "OK = back": {
+  "pl": "OK = powrot",
+  "de": "OK = zurueck",
+  "cs": "OK = zpet",
+  "files": [
+   "solve_screen.h",
+   "wifi_settings.h"
+  ]
+ },
+ "...(truncated)": {
+  "pl": "...(obcieto)",
+  "de": "...(gekuerzt)",
+  "cs": "...(zkraceno)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Out of memory!": {
+  "pl": "Brak pamieci!",
+  "de": "Kein Speicher!",
+  "cs": "Malo pameti!",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "< exit  UP/DN scroll": {
+  "pl": "< wyjdz  UP/DN scroll",
+  "de": "< raus  UP/DN scroll",
+  "cs": "< konec  UP/DN posun",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Contacting server...": {
+  "pl": "Lacze z serwerem...",
+  "de": "Verbinde mit Server...",
+  "cs": "Pripojuji k serveru...",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "No WiFi!": {
+  "pl": "Brak WiFi!",
+  "de": "Kein WLAN!",
+  "cs": "Neni WiFi!",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Set network in menu.": {
+  "pl": "Ustaw siec w menu.",
+  "de": "WLAN im Menue einstellen.",
+  "cs": "Nastavte sit v menu.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Connecting: %s": {
+  "pl": "Lacze z: %s",
+  "de": "Verbinde: %s",
+  "cs": "Pripojuji: %s",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "WiFi failed!": {
+  "pl": "Blad WiFi!",
+  "de": "WLAN Fehler!",
+  "cs": "Chyba WiFi!",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Check password.": {
+  "pl": "Sprawdz haslo.",
+  "de": "Passwort pruefen.",
+  "cs": "Zkontrolujte heslo.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "C/CE = cancel (task to queue)": {
+  "pl": "C/CE = anuluj (zadanie do kolejki)",
+  "de": "C/CE = abbrechen (in Warteschlange)",
+  "cs": "C/CE = zrusit (uloha do fronty)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "AI solving problem": {
+  "pl": "AI rozwiazuje zadanie",
+  "de": "KI loest die Aufgabe",
+  "cs": "AI resi ulohu",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Please wait": {
+  "pl": "Prosze czekac",
+  "de": "Bitte warten",
+  "cs": "Prosim cekejte",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Connection error": {
+  "pl": "Blad polaczenia",
+  "de": "Verbindungsfehler",
+  "cs": "Chyba pripojeni",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "No answer": {
+  "pl": "Brak odpowiedzi",
+  "de": "Keine Antwort",
+  "cs": "Zadna odpoved",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Out of tokens!": {
+  "pl": "Brak tokenow!",
+  "de": "Keine Tokens mehr!",
+  "cs": "Dosly tokeny!",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Buy more at kalkmate.pl": {
+  "pl": "Dokup w sklepie: kalkmate.pl",
+  "de": "Nachkaufen: kalkmate.pl",
+  "cs": "Dokupte na kalkmate.pl",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Access denied (license/lock)": {
+  "pl": "Brak dostepu (licencja/blokada)",
+  "de": "Kein Zugriff (Lizenz/Sperre)",
+  "cs": "Pristup odepren (licence/zamek)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Request too large": {
+  "pl": "Zadanie za duze",
+  "de": "Anfrage zu gross",
+  "cs": "Uloha je prilis velka",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Rate limit - try later": {
+  "pl": "Limit zapytan - sprobuj pozniej",
+  "de": "Limit erreicht - spaeter",
+  "cs": "Limit dotazu - zkuste pozdeji",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Server / AI error": {
+  "pl": "Blad serwera / AI",
+  "de": "Server-/KI-Fehler",
+  "cs": "Chyba serveru / AI",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "API error:": {
+  "pl": "Blad API:",
+  "de": "API Fehler:",
+  "cs": "Chyba API:",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Task queued - will retry later": {
+  "pl": "Zadanie w kolejce - wysle ponownie pozniej",
+  "de": "In Warteschlange - spaeter erneut",
+  "cs": "Uloha ve fronte - odesle se pozdeji",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Queue full (3) - task NOT saved": {
+  "pl": "Kolejka pelna (3) - zadanie NIE zapisane",
+  "de": "Warteschlange voll - NICHT gespeichert",
+  "cs": "Fronta plna (3) - uloha NEULOZENA",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Queue write error - task NOT saved": {
+  "pl": "Blad zapisu kolejki - zadanie NIE zapisane",
+  "de": "Speicherfehler - NICHT gespeichert",
+  "cs": "Chyba zapisu fronty - uloha NEULOZENA",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "No WiFi.": {
+  "pl": "Brak WiFi.",
+  "de": "Kein WLAN.",
+  "cs": "Neni WiFi.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Photo queued.": {
+  "pl": "Zdjecie w kolejce.",
+  "de": "Foto in Warteschlange.",
+  "cs": "Foto ve fronte.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Task queued.": {
+  "pl": "Zadanie w kolejce.",
+  "de": "Aufgabe in Warteschlange.",
+  "cs": "Uloha ve fronte.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Will send when WiFi available.": {
+  "pl": "Wysylka po polaczeniu WiFi.",
+  "de": "Senden nach WLAN-Verbindung.",
+  "cs": "Odeslani po pripojeni WiFi.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Problem: ": {
+  "pl": "Zadanie: ",
+  "de": "Aufgabe: ",
+  "cs": "Uloha: ",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "PREVIEW": {
+  "pl": "PODGLAD",
+  "de": "VORSCHAU",
+  "cs": "NAHLED",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "OK = photo": {
+  "pl": "OK = foto",
+  "de": "OK = Foto",
+  "cs": "OK = foto",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Camera not responding": {
+  "pl": "Kamera nie odpowiada",
+  "de": "Kamera antwortet nicht",
+  "cs": "Kamera neodpovida",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "No image from camera.": {
+  "pl": "Brak obrazu z kamery.",
+  "de": "Kein Kamerabild.",
+  "cs": "Zadny obraz z kamery.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Mode: Photo": {
+  "pl": "Tryb: Zdjecie",
+  "de": "Modus: Foto",
+  "cs": "Rezim: Foto",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Point at the problem.": {
+  "pl": "Skieruj na zadanie.",
+  "de": "Auf Aufgabe richten.",
+  "cs": "Namirte na ulohu.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "OK = take photo": {
+  "pl": "OK = zrob zdjecie",
+  "de": "OK = Foto machen",
+  "cs": "OK = vyfotit",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "< = cancel": {
+  "pl": "< = anuluj",
+  "de": "< = abbrechen",
+  "cs": "< = zrusit",
+  "files": [
+   "solve_screen.h",
+   "wifi_settings.h"
+  ]
+ },
+ "Powering camera...": {
+  "pl": "Wlaczam kamere...",
+  "de": "Kamera wird gestartet...",
+  "cs": "Zapinam kameru...",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Camera init!": {
+  "pl": "Init kamery!",
+  "de": "Kamera-Init!",
+  "cs": "Init kamery!",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Taking photo...": {
+  "pl": "Robie zdjecie...",
+  "de": "Foto wird gemacht...",
+  "cs": "Fotim...",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Capture error!": {
+  "pl": "Blad zdjecia!",
+  "de": "Fotofehler!",
+  "cs": "Chyba snimku!",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "=== Solve problem ===": {
+  "pl": "=== Rozwiaz zadanie ===",
+  "de": "=== Aufgabe loesen ===",
+  "cs": "=== Resit ulohu ===",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "[1] Camera photo": {
+  "pl": "[1] Zdjecie kamery",
+  "de": "[1] Kamerafoto",
+  "cs": "[1] Foto kamerou",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "[2] Enter text": {
+  "pl": "[2] Wpisz tekst",
+  "de": "[2] Text eingeben",
+  "cs": "[2] Zadat text",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "[3] History": {
+  "pl": "[3] Historia",
+  "de": "[3] Verlauf",
+  "cs": "[3] Historie",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "[4] Offline": {
+  "pl": "[4] Offline",
+  "de": "[4] Offline",
+  "cs": "[4] Offline",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "^/v select   OK: start   < back": {
+  "pl": "^/v wybor   OK: start   < wstecz",
+  "de": "^/v waehlen  OK: Start  < zurueck",
+  "cs": "^/v vyber   OK: start   < zpet",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "+/- sign   =: next   C: clear/exit": {
+  "pl": "+/- znak   =: dalej   C: kasuj/wyjdz",
+  "de": "+/- Vorz.  =: weiter  C: loesch/raus",
+  "cs": "+/- znam.   =: dale   C: smazat/konec",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Linear eq. ax+b=0:   a =": {
+  "pl": "Rownanie ax+b=0:   a =",
+  "de": "Lin. Gl. ax+b=0:   a =",
+  "cs": "Rovnice ax+b=0: a =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Linear eq. ax+b=0:   b =": {
+  "pl": "Rownanie ax+b=0:   b =",
+  "de": "Lin. Gl. ax+b=0:   b =",
+  "cs": "Rovnice ax+b=0: b =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Infinitely many solutions": {
+  "pl": "Nieskonczenie wiele rozwiazan",
+  "de": "Unendlich viele Loesungen",
+  "cs": "Nekonecne mnoho reseni",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "No solution": {
+  "pl": "Brak rozwiazan",
+  "de": "Keine Loesung",
+  "cs": "Zadne reseni",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Quadr. ax^2+bx+c=0:   a =": {
+  "pl": "Rown. ax^2+bx+c=0:   a =",
+  "de": "Quadr. ax^2+bx+c=0:   a =",
+  "cs": "Kvadr. ax^2+bx+c=0: a =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Quadr. ax^2+bx+c=0:   b =": {
+  "pl": "Rown. ax^2+bx+c=0:   b =",
+  "de": "Quadr. ax^2+bx+c=0:   b =",
+  "cs": "Kvadr. ax^2+bx+c=0: b =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Quadr. ax^2+bx+c=0:   c =": {
+  "pl": "Rown. ax^2+bx+c=0:   c =",
+  "de": "Quadr. ax^2+bx+c=0:   c =",
+  "cs": "Kvadr. ax^2+bx+c=0: c =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "a=0 -> linear equation\\n": {
+  "pl": "a=0 -> rownanie liniowe\\n",
+  "de": "a=0 -> lineare Gleichung\\n",
+  "cs": "a=0 -> linearni rovnice\\n",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "x (double) = ": {
+  "pl": "x (podwojny) = ",
+  "de": "x (doppelt) = ",
+  "cs": "x (dvojnasobny) = ",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "No real roots\\n": {
+  "pl": "Brak pierwiastkow rzeczywistych\\n",
+  "de": "Keine reellen Nullstellen\\n",
+  "cs": "Zadne realne koreny\\n",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Eq.1 a1x+b1y=c1:   a1 =": {
+  "pl": "Rown.1 a1x+b1y=c1:   a1 =",
+  "de": "Gl.1 a1x+b1y=c1:   a1 =",
+  "cs": "Rov.1 a1x+b1y=c1: a1 =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Eq.1 a1x+b1y=c1:   b1 =": {
+  "pl": "Rown.1 a1x+b1y=c1:   b1 =",
+  "de": "Gl.1 a1x+b1y=c1:   b1 =",
+  "cs": "Rov.1 a1x+b1y=c1: b1 =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Eq.1 a1x+b1y=c1:   c1 =": {
+  "pl": "Rown.1 a1x+b1y=c1:   c1 =",
+  "de": "Gl.1 a1x+b1y=c1:   c1 =",
+  "cs": "Rov.1 a1x+b1y=c1: c1 =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Eq.2 a2x+b2y=c2:   a2 =": {
+  "pl": "Rown.2 a2x+b2y=c2:   a2 =",
+  "de": "Gl.2 a2x+b2y=c2:   a2 =",
+  "cs": "Rov.2 a2x+b2y=c2: a2 =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Eq.2 a2x+b2y=c2:   b2 =": {
+  "pl": "Rown.2 a2x+b2y=c2:   b2 =",
+  "de": "Gl.2 a2x+b2y=c2:   b2 =",
+  "cs": "Rov.2 a2x+b2y=c2: b2 =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Eq.2 a2x+b2y=c2:   c2 =": {
+  "pl": "Rown.2 a2x+b2y=c2:   c2 =",
+  "de": "Gl.2 a2x+b2y=c2:   c2 =",
+  "cs": "Rov.2 a2x+b2y=c2: c2 =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Inconsistent system (no solution)": {
+  "pl": "Uklad sprzeczny (brak rozwiazan)",
+  "de": "Widerspruechliches System (keine Loesung)",
+  "cs": "Soustava je sporna (bez reseni)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "X% of Y": {
+  "pl": "X% z Y",
+  "de": "X% von Y",
+  "cs": "X% z Y",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Proportion a:b=c:x": {
+  "pl": "Proporcja a:b=c:x",
+  "de": "Verhaeltnis a:b=c:x",
+  "cs": "Pomer a:b=c:x",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "=== Percentages ===": {
+  "pl": "=== Procenty ===",
+  "de": "=== Prozente ===",
+  "cs": "=== Procenta ===",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "X% of Y:   X (%) =": {
+  "pl": "X% z Y:   X (%) =",
+  "de": "X% von Y:   X (%) =",
+  "cs": "X% z Y: X (%) =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "X% of Y:   Y =": {
+  "pl": "X% z Y:   Y =",
+  "de": "X% von Y:   Y =",
+  "cs": "X% z Y: Y =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "% of ": {
+  "pl": "% z ",
+  "de": "% von ",
+  "cs": "% z ",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Degree 2 (ax^2+bx+c)": {
+  "pl": "Stopien 2 (ax^2+bx+c)",
+  "de": "Grad 2 (ax^2+bx+c)",
+  "cs": "Stupen 2 (ax^2+bx+c)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Degree 3 (ax^3+bx^2+cx+d)": {
+  "pl": "Stopien 3 (ax^3+bx^2+cx+d)",
+  "de": "Grad 3 (ax^3+bx^2+cx+d)",
+  "cs": "Stupen 3 (ax^3+bx^2+cx+d)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "=== Derivative ===": {
+  "pl": "=== Pochodna ===",
+  "de": "=== Ableitung ===",
+  "cs": "=== Derivace ===",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Point A: x1 =": {
+  "pl": "Punkt A: x1 =",
+  "de": "Punkt A: x1 =",
+  "cs": "Bod A: x1 =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Point B: x2 =": {
+  "pl": "Punkt B: x2 =",
+  "de": "Punkt B: x2 =",
+  "cs": "Bod B: x2 =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Midpoint S = (": {
+  "pl": "Srodek S = (",
+  "de": "Mittelpunkt S = (",
+  "cs": "Stred S = (",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Know both legs": {
+  "pl": "Znam obie przyprostokatne",
+  "de": "Kenne beide Katheten",
+  "cs": "Znam obe odvesny",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Know hypotenuse+leg": {
+  "pl": "Znam przeciwprost.+bok",
+  "de": "Kenne Hypotenuse+Kathete",
+  "cs": "Znam preponu+odvesnu",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "=== Pythagoras ===": {
+  "pl": "=== Pitagoras ===",
+  "de": "=== Pythagoras ===",
+  "cs": "=== Pythagoras ===",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Leg: a =": {
+  "pl": "Przyprost.: a =",
+  "de": "Kathete: a =",
+  "cs": "Odvesna: a =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Hypotenuse: c =": {
+  "pl": "Przeciwprost.: c =",
+  "de": "Hypotenuse: c =",
+  "cs": "Prepona: c =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Error: c must be longer than a": {
+  "pl": "Blad: c musi byc dluzsze niz a",
+  "de": "Fehler: c muss laenger als a sein",
+  "cs": "Chyba: c musi byt delsi nez a",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Arithmetic": {
+  "pl": "Arytmetyczny",
+  "de": "Arithmetisch",
+  "cs": "Aritmeticka",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Geometric": {
+  "pl": "Geometryczny",
+  "de": "Geometrisch",
+  "cs": "Geometricka",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "=== Sequences ===": {
+  "pl": "=== Ciagi ===",
+  "de": "=== Folgen ===",
+  "cs": "=== Posloupnosti ===",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Rectangle": {
+  "pl": "Prostokat",
+  "de": "Rechteck",
+  "cs": "Obdelnik",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Triangle (3 sides)": {
+  "pl": "Trojkat (3 boki)",
+  "de": "Dreieck (3 Seiten)",
+  "cs": "Trojuhelnik (3 strany)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Circle": {
+  "pl": "Kolo",
+  "de": "Kreis",
+  "cs": "Kruh",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Trapezoid": {
+  "pl": "Trapez",
+  "de": "Trapez",
+  "cs": "Lichobeznik",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "=== Areas ===": {
+  "pl": "=== Pola i obwody ===",
+  "de": "=== Flaechen ===",
+  "cs": "=== Obsahy a obvody ===",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Rectangle: a =": {
+  "pl": "Prostokat: a =",
+  "de": "Rechteck: a =",
+  "cs": "Obdelnik: a =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Area = ": {
+  "pl": "Pole = ",
+  "de": "Flaeche = ",
+  "cs": "Obsah = ",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Perimeter = ": {
+  "pl": "Obwod = ",
+  "de": "Umfang = ",
+  "cs": "Obvod = ",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Triangle: a =": {
+  "pl": "Trojkat: a =",
+  "de": "Dreieck: a =",
+  "cs": "Trojuhelnik: a =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Error: these sides don't form a triangle": {
+  "pl": "Blad: takie boki nie tworza trojkata",
+  "de": "Fehler: diese Seiten bilden kein Dreieck",
+  "cs": "Chyba: tyto strany netvori trojuhelnik",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Triangle": {
+  "pl": "Trojkat",
+  "de": "Dreieck",
+  "cs": "Trojuhelnik",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Circle: r =": {
+  "pl": "Kolo: r =",
+  "de": "Kreis: r =",
+  "cs": "Kruh: r =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Trapezoid: a =": {
+  "pl": "Trapez: a =",
+  "de": "Trapez: a =",
+  "cs": "Lichobeznik: a =",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "(perimeter needs leg lengths)": {
+  "pl": "(obwod wymaga dlugosci ramion)",
+  "de": "(Umfang braucht Schenkellaengen)",
+  "cs": "(obvod vyzaduje delky ramen)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Linear equation": {
+  "pl": "Rownanie liniowe",
+  "de": "Lineare Gleichung",
+  "cs": "Linearni rovnice",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Quadratic equation": {
+  "pl": "Rownanie kwadratowe",
+  "de": "Quadratische Gleichung",
+  "cs": "Kvadraticka rovnice",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "2-eq. system": {
+  "pl": "Uklad 2 rownan",
+  "de": "2er-Gleichungssystem",
+  "cs": "Soustava 2 rovnic",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Percentages / proportions": {
+  "pl": "Procenty / proporcje",
+  "de": "Prozente / Verhaeltnisse",
+  "cs": "Procenta / pomery",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Polynomial derivative": {
+  "pl": "Pochodna wielomianu",
+  "de": "Polynom-Ableitung",
+  "cs": "Derivace polynomu",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Points on a plane": {
+  "pl": "Punkty na plaszczyznie",
+  "de": "Punkte in der Ebene",
+  "cs": "Body v rovine",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Pythagorean theorem": {
+  "pl": "Twierdzenie Pitagorasa",
+  "de": "Satz des Pythagoras",
+  "cs": "Pythagorova veta",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Sequences (arith./geom.)": {
+  "pl": "Ciagi (arytm./geom.)",
+  "de": "Folgen (arith./geom.)",
+  "cs": "Posloupnosti (arit./geom.)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Areas and perimeters": {
+  "pl": "Pola i obwody figur",
+  "de": "Flaechen und Umfaenge",
+  "cs": "Obsahy a obvody utvaru",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "=== Offline ===": {
+  "pl": "=== Offline ===",
+  "de": "=== Offline ===",
+  "cs": "=== Offline ===",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "No saved tasks": {
+  "pl": "Brak zapisanych zadan",
+  "de": "Keine gespeicherten Aufgaben",
+  "cs": "Zadne ulozene ulohy",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "OK / < = back": {
+  "pl": "OK / < = powrot",
+  "de": "OK / < = zurueck",
+  "cs": "OK / < = zpet",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "History (%d/%d)": {
+  "pl": "Historia (%d/%d)",
+  "de": "Verlauf (%d/%d)",
+  "cs": "Historie (%d/%d)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "^/v OK:show  >:edit+resend  <:back": {
+  "pl": "^/v OK:pokaz  >:edytuj+wyslij  <:wstecz",
+  "de": "^/v OK:zeigen >:bearb+senden <:zurueck",
+  "cs": "^/v OK:ukaz  >:upravit+odeslat  <:zpet",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "This entry cannot": {
+  "pl": "Tego wpisu nie mozna",
+  "de": "Dieser Eintrag kann",
+  "cs": "Tento zaznam nelze",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "be resent.": {
+  "pl": "wyslac ponownie.",
+  "de": "nicht erneut gesendet werden.",
+  "cs": "znovu odeslat.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "(photo / offline result)": {
+  "pl": "(zdjecie / wynik offline)",
+  "de": "(Foto / Offline-Ergebnis)",
+  "cs": "(foto / offline vysledek)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Offline queue: %d tasks": {
+  "pl": "Kolejka offline: %d zadan",
+  "de": "Offline-Warteschl.: %d Aufg.",
+  "cs": "Offline fronta: %d uloh",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "C/CE = skip (for 10 min)": {
+  "pl": "C/CE = pomin (na 10 min)",
+  "de": "C/CE = ueberspringen (10 Min.)",
+  "cs": "C/CE = preskocit (na 10 min)",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Connecting WiFi...": {
+  "pl": "Lacze z WiFi...",
+  "de": "Verbinde WLAN...",
+  "cs": "Pripojuji WiFi...",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Sending task...": {
+  "pl": "Wysylam zadanie...",
+  "de": "Sende Aufgabe...",
+  "cs": "Odesilam ulohu...",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Task removed from queue": {
+  "pl": "Zadanie usuniete z kolejki",
+  "de": "Aufgabe aus Warteschlange entfernt",
+  "cs": "Uloha odstranena z fronty",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Removed after 3 failed attempts": {
+  "pl": "Usuniete po 3 nieudanych probach",
+  "de": "Nach 3 Fehlversuchen entfernt",
+  "cs": "Odstraneno po 3 neuspesich",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Stays queued - will retry later": {
+  "pl": "Zostaje w kolejce - kolejna proba pozniej",
+  "de": "Bleibt in Warteschlange",
+  "cs": "Zustava ve fronte - dalsi pokus pozdeji",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Preparing storage...": {
+  "pl": "Przygotowuje pamiec...",
+  "de": "Speicher wird vorbereitet...",
+  "cs": "Pripravuji pamet...",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "One-time, may take up to 1 min.": {
+  "pl": "Jednorazowo, moze potrwac do 1 min.",
+  "de": "Einmalig, dauert bis zu 1 Min.",
+  "cs": "Jednorazove, muze trvat az 1 min.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Do not switch off.": {
+  "pl": "Nie wylaczaj kalkulatora.",
+  "de": "Nicht ausschalten.",
+  "cs": "Nevypinejte kalkulacku.",
+  "files": [
+   "solve_screen.h"
+  ]
+ },
+ "Tests (%d)": {
+  "pl": "Sprawdzian (%d)",
+  "de": "Tests (%d)",
+  "cs": "Pisemky (%d)",
+  "files": [
+   "tests.h"
+  ]
+ },
+ "No tests.": {
+  "pl": "Brak sprawdzianow.",
+  "de": "Keine Tests.",
+  "cs": "Zadne pisemky.",
+  "files": [
+   "tests.h"
+  ]
+ },
+ "Add in user panel and sync.": {
+  "pl": "Dodaj w panelu klienta i sync.",
+  "de": "Im Kundenpanel hinzufuegen u. sync.",
+  "cs": "Pridejte v panelu zakaznika a sync.",
+  "files": [
+   "tests.h"
+  ]
+ },
+ "OK=open  v=sync  <=exit": {
+  "pl": "OK=otworz  v=sync  <=wyjscie",
+  "de": "OK=oeffnen v=sync <=beenden",
+  "cs": "OK=otevrit  v=sync  <=konec",
+  "files": [
+   "tests.h"
+  ]
+ },
+ "^/v scroll  < back": {
+  "pl": "^/v scroll  < wstecz",
+  "de": "^/v scroll  < zurueck",
+  "cs": "^/v posun  < zpet",
+  "files": [
+   "tests.h"
+  ]
+ },
+ "Downloaded: %d tests": {
+  "pl": "Pobrano: %d sprawdz.",
+  "de": "Geladen: %d Tests",
+  "cs": "Stazeno: %d pisemek",
+  "files": [
+   "tests.h"
+  ]
+ },
+ "=== WiFi Settings ===": {
+  "pl": "=== Ustawienia WiFi ===",
+  "de": "=== WiFi-Einstellungen ===",
+  "cs": "=== Nastaveni WiFi ===",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Status: Connected": {
+  "pl": "Stan: Polaczono",
+  "de": "Status: Verbunden",
+  "cs": "Stav: Pripojeno",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Status: Disconnected": {
+  "pl": "Stan: Rozlaczone",
+  "de": "Status: Getrennt",
+  "cs": "Stav: Odpojeno",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "No network connection.": {
+  "pl": "Brak polaczenia z siecia.",
+  "de": "Keine Netzwerkverbindung.",
+  "cs": "Zadne pripojeni k siti.",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "v Saved(%d)": {
+  "pl": "v Zapisane(%d)",
+  "de": "v Gespeichert(%d)",
+  "cs": "v Ulozene(%d)",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "< Back": {
+  "pl": "< Wstecz",
+  "de": "< Zurueck",
+  "cs": "< Zpet",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "OK Scan": {
+  "pl": "OK Skanuj",
+  "de": "OK Suchen",
+  "cs": "OK Hledat",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Scanning...": {
+  "pl": "Skanowanie...",
+  "de": "Suche laeuft...",
+  "cs": "Hledam site...",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Select WiFi network:": {
+  "pl": "Wybierz siec WiFi:",
+  "de": "WiFi-Netzwerk waehlen:",
+  "cs": "Vyberte sit WiFi:",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "No networks found.": {
+  "pl": "Brak sieci.",
+  "de": "Keine Netze gefunden.",
+  "cs": "Zadne site nenalezeny.",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "OK = scan again": {
+  "pl": "OK = skanuj ponownie",
+  "de": "OK = erneut suchen",
+  "cs": "OK = hledat znovu",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "=== WiFi scan ===": {
+  "pl": "=== Skanowanie WiFi ===",
+  "de": "=== WiFi-Suche ===",
+  "cs": "=== Hledani WiFi ===",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Radio scan error.": {
+  "pl": "Blad skanu radia.",
+  "de": "Fehler beim Scannen.",
+  "cs": "Chyba skenovani.",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "No networks in range.": {
+  "pl": "Brak sieci w zasiegu.",
+  "de": "Keine Netze in Reichweite.",
+  "cs": "Zadne site v dosahu.",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Password:": {
+  "pl": "Haslo:",
+  "de": "Passwort:",
+  "cs": "Heslo:",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Connecting to:": {
+  "pl": "Laczenie z:",
+  "de": "Verbinde mit:",
+  "cs": "Pripojuji k:",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Connection failed!": {
+  "pl": "Blad polaczenia!",
+  "de": "Verbindung fehlgeschlagen!",
+  "cs": "Pripojeni selhalo!",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Check SSID and password.": {
+  "pl": "Sprawdz SSID i haslo.",
+  "de": "SSID und Passwort pruefen.",
+  "cs": "Zkontrolujte SSID a heslo.",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Connected!": {
+  "pl": "Polaczono!",
+  "de": "Verbunden!",
+  "cs": "Pripojeno!",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Returning shortly...": {
+  "pl": "Powrot za chwile...",
+  "de": "Rueckkehr in Kuerze...",
+  "cs": "Navrat za chvili...",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Saved networks": {
+  "pl": "Zapamietane sieci",
+  "de": "Gespeicherte Netze",
+  "cs": "Ulozene site",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "No saved networks.": {
+  "pl": "Brak zapisanych sieci.",
+  "de": "Keine gespeicherten Netze.",
+  "cs": "Zadne ulozene site.",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "< back": {
+  "pl": "< wstecz",
+  "de": "< zurueck",
+  "cs": "< zpet",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Saved (%d)": {
+  "pl": "Zapamietane (%d)",
+  "de": "Gespeichert (%d)",
+  "cs": "Ulozene (%d)",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ " (now)": {
+  "pl": " (akt.)",
+  "de": " (akt.)",
+  "cs": " (akt.)",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "OK connect  > forget  < back": {
+  "pl": "OK polacz  > zapomnij  < wstecz",
+  "de": "OK verbind.  > loeschen  < zurueck",
+  "cs": "OK pripojit  > zapomenout  < zpet",
+  "files": [
+   "wifi_settings.h"
+  ]
+ },
+ "Selected:": {
+  "pl": "Wybrano:",
+  "de": "Ausgewaehlt:",
+  "cs": "Vybrano:",
+  "files": [
+   "main.cpp"
+  ]
+ },
+ "1. Solve problem": {
+  "pl": "1. Rozwiaz zadanie",
+  "de": "1. Aufgabe loesen",
+  "cs": "1. Vyresit ulohu",
+  "files": [
+   "main.cpp"
+  ]
+ },
+ "2. Notes": {
+  "pl": "2. Notatki",
+  "de": "2. Notizen",
+  "cs": "2. Poznamky",
+  "files": [
+   "main.cpp"
+  ]
+ },
+ "3. Test mode": {
+  "pl": "3. Sprawdzian",
+  "de": "3. Testmodus",
+  "cs": "3. Pisemka",
+  "files": [
+   "main.cpp"
+  ]
+ },
+ "4. Information": {
+  "pl": "4. Informacje",
+  "de": "4. Informationen",
+  "cs": "4. Informace",
+  "files": [
+   "main.cpp"
+  ]
+ },
+ "5. Settings": {
+  "pl": "5. Ustawienia",
+  "de": "5. Einstellungen",
+  "cs": "5. Nastaveni",
+  "files": [
+   "main.cpp"
+  ]
+ },
+ "6. About": {
+  "pl": "6. O programie",
+  "de": "6. Ueber",
+  "cs": "6. O programu",
+  "files": [
+   "main.cpp"
+  ]
+ }
+}

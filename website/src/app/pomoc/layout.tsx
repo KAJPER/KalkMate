@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
 
 // /pomoc to publiczna strona pomocy/instrukcji — chcemy ją indeksować, z własnym
 // tytułem i canonical (strona główna ma osobny canonical, nie dziedziczymy go tu).
-// Odpowiedniki /en/pomoc i /de/pomoc mają własne layout.tsx z tym samym wzorcem.
+// Odpowiedniki w pozostałych językach (/en/pomoc, /de/pomoc, /cs/pomoc, /sk/pomoc...)
+// mają własne layout.tsx z tym samym wzorcem; hreflang generowany z `locales`
+// (nowy język w i18n.ts = automatycznie w alternates wszystkich wersji).
 // Dynamiczne (nie staly obiekt) — patrz komentarz w src/app/page.tsx (kalkmate.eu).
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
@@ -16,9 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
     alternates: {
       canonical: `${siteUrl}/pomoc`,
       languages: {
-        pl: `${siteUrl}/pomoc`,
-        en: `${siteUrl}/en/pomoc`,
-        de: `${siteUrl}/de/pomoc`,
+        ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
     },

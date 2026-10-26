@@ -580,7 +580,12 @@ _FW_VER_RE = re.compile(r"^\[FW\] v(\S+)")
 _DEEP_SLEEP_RE = re.compile(r"^\[EARLY\].*deep sleep", re.I)
 
 
-LANG_CODES = ("pl", "en", "de")   # KALKPROV:SETLANG - jezyk interfejsu kalkulatora
+# KALKPROV:SETLANG - jezyk interfejsu kalkulatora. Indeks w krotce = kalkSettings.language
+# w firmware (0..3 = helpery 4-argumentowe, 4..10 = tabela src/i18n_extra.h).
+LANG_CODES = ("pl", "en", "de", "cs", "sk", "lt", "be", "es", "pt", "fr", "it")
+LANG_NAMES = {"pl": "Polski", "en": "English", "de": "Deutsch", "cs": "Čeština",
+              "sk": "Slovenčina", "lt": "Lietuvių", "be": "Беларуская", "es": "Español",
+              "pt": "Português", "fr": "Français", "it": "Italiano"}
 
 
 def boot_check_and_provision(mac, code, log, port_hint=None,

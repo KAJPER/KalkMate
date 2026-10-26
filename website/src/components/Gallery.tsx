@@ -11,6 +11,20 @@ interface Shot {
   span: string;
 }
 
+// Zdjęcia + układ siatki wspólne dla wszystkich języków — kolejne wersje
+// językowe podają tylko [label, caption] w tej samej kolejności.
+const SHOT_BASE: Pick<Shot, "src" | "span">[] = [
+  { src: "/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp", span: "md:col-span-7 md:row-span-2 aspect-[4/5]" },
+  { src: "/galeria/kalkulator-kalkmate-opakowanie-pudelko.webp", span: "md:col-span-5 aspect-[4/3]" },
+  { src: "/galeria/kalkulator-kalkmate-ekran-menu-glowne.webp", span: "md:col-span-5 aspect-[4/3]" },
+  { src: "/galeria/kalkulator-kalkmate-ekran-rozwiaz-zadanie.webp", span: "md:col-span-6 aspect-[4/3]" },
+  { src: "/galeria/kalkulator-kalkmate-etykieta-certyfikaty.webp", span: "md:col-span-6 aspect-[4/3]" },
+];
+
+function localizedShots(texts: [label: string, caption: string][]): Shot[] {
+  return SHOT_BASE.map((base, i) => ({ ...base, label: texts[i][0], caption: texts[i][1] }));
+}
+
 const shots: Record<Locale, Shot[]> = {
   pl: [
     {
@@ -108,6 +122,87 @@ const shots: Record<Locale, Shot[]> = {
       span: "md:col-span-6 aspect-[4/3]",
     },
   ],
+  cs: [
+    {
+      src: "/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp",
+      label: "01 · Hotový kus",
+      caption: "KalkMate v3 — skutečná fotka",
+      span: "md:col-span-7 md:row-span-2 aspect-[4/5]",
+    },
+    {
+      src: "/galeria/kalkulator-kalkmate-opakowanie-pudelko.webp",
+      label: "02 · Balení",
+      caption: "Krabička, ve které k tobě dorazí",
+      span: "md:col-span-5 aspect-[4/3]",
+    },
+    {
+      src: "/galeria/kalkulator-kalkmate-ekran-menu-glowne.webp",
+      label: "03 · OLED displej",
+      caption: "Hlavní menu naživo",
+      span: "md:col-span-5 aspect-[4/3]",
+    },
+    {
+      src: "/galeria/kalkulator-kalkmate-ekran-rozwiaz-zadanie.webp",
+      label: "04 · Vyřeš úlohu",
+      caption: "Fotka kamerou → řešení",
+      span: "md:col-span-6 aspect-[4/3]",
+    },
+    {
+      src: "/galeria/kalkulator-kalkmate-etykieta-certyfikaty.webp",
+      label: "05 · Štítek",
+      caption: "CE / RoHS, čárový kód",
+      span: "md:col-span-6 aspect-[4/3]",
+    },
+  ],
+  sk: localizedShots([
+    ["01 · Hotový kus", "KalkMate v3 — skutočná fotka"],
+    ["02 · Balenie", "Krabička, v ktorej k tebe príde"],
+    ["03 · OLED displej", "Hlavné menu naživo"],
+    ["04 · Vyrieš úlohu", "Fotka kamerou → riešenie"],
+    ["05 · Štítok", "CE / RoHS, čiarový kód"],
+  ]),
+  lt: localizedShots([
+    ["01 · Gatavas egzempliorius", "KalkMate v3 — tikra nuotrauka"],
+    ["02 · Pakuotė", "Dėžutė, kurioje jis atkeliaus"],
+    ["03 · OLED ekranas", "Pagrindinis meniu gyvai"],
+    ["04 · Spręsk užduotį", "Nuotrauka kamera → sprendimas"],
+    ["05 · Etiketė", "CE / RoHS, brūkšninis kodas"],
+  ]),
+  be: localizedShots([
+    ["01 · Гатовы асобнік", "KalkMate v3 — сапраўднае фота"],
+    ["02 · Упакоўка", "Скрынка, у якой ён да цябе прыедзе"],
+    ["03 · OLED-экран", "Галоўнае меню ўжывую"],
+    ["04 · Рашы задачу", "Фота камерай → рашэнне"],
+    ["05 · Этыкетка", "CE / RoHS, штрых-код"],
+  ]),
+  es: localizedShots([
+    ["01 · Unidad terminada", "KalkMate v3 — foto real"],
+    ["02 · Embalaje", "La caja en la que te llega"],
+    ["03 · Pantalla OLED", "Menú principal, en directo"],
+    ["04 · Resolver problema", "Foto con la cámara → solución"],
+    ["05 · Etiqueta", "CE / RoHS, código de barras"],
+  ]),
+  pt: localizedShots([
+    ["01 · Unidade final", "KalkMate v3 — foto real"],
+    ["02 · Embalagem", "A caixa em que te chega"],
+    ["03 · Ecrã OLED", "Menu principal, ao vivo"],
+    ["04 · Resolver exercício", "Foto com a câmara → resolução"],
+    ["05 · Etiqueta", "CE / RoHS, código de barras"],
+  ]),
+  fr: localizedShots([
+    ["01 · Exemplaire final", "KalkMate v3 — vraie photo"],
+    ["02 · Emballage", "La boîte dans laquelle il arrive"],
+    ["03 · Écran OLED", "Menu principal, en direct"],
+    ["04 · Résoudre un exercice", "Photo → solution"],
+    ["05 · Étiquette", "CE / RoHS, code-barres"],
+  ]),
+  it: localizedShots([
+    ["01 · Esemplare finito", "KalkMate v3 — foto reale"],
+    ["02 · Confezione", "La scatola in cui arriva"],
+    ["03 · Display OLED", "Menu principale dal vivo"],
+    ["04 · Risolvi l’esercizio", "Foto con la fotocamera → soluzione"],
+    ["05 · Etichetta", "CE / RoHS, codice a barre"],
+  ]),
 };
 
 const content: Record<
@@ -135,6 +230,54 @@ const content: Record<
     eyebrow: "[ 05 ] · Archiv",
     h2: { before: "Aus der Werkstatt, ", italic: "direkt", after: "in deine Tasche." },
     galleryCount: "Galerie · 05 Aufnahmen",
+    meta: "2025–2026 · KRK · PL",
+  },
+  cs: {
+    eyebrow: "[ 05 ] · Archiv",
+    h2: { before: "Z dílny ", italic: "rovnou", after: "do tvé kapsy." },
+    galleryCount: "Galerie · 05 snímků",
+    meta: "2025–2026 · KRK · PL",
+  },
+  sk: {
+    eyebrow: "[ 05 ] · Archív",
+    h2: { before: "Z dielne ", italic: "rovno", after: "do tvojho vrecka." },
+    galleryCount: "Galéria · 05 záberov",
+    meta: "2025–2026 · KRK · PL",
+  },
+  lt: {
+    eyebrow: "[ 05 ] · Archyvas",
+    h2: { before: "Iš dirbtuvių ", italic: "tiesiai", after: "į tavo kišenę." },
+    galleryCount: "Galerija · 05 kadrai",
+    meta: "2025–2026 · KRK · PL",
+  },
+  be: {
+    eyebrow: "[ 05 ] · Архіў",
+    h2: { before: "З майстэрні ", italic: "наўпрост", after: "у тваю кішэню." },
+    galleryCount: "Галерэя · 05 кадраў",
+    meta: "2025–2026 · KRK · PL",
+  },
+  es: {
+    eyebrow: "[ 05 ] · Archivo",
+    h2: { before: "Del taller, ", italic: "directo", after: "a tu bolsillo." },
+    galleryCount: "Galería · 05 fotos",
+    meta: "2025–2026 · KRK · PL",
+  },
+  pt: {
+    eyebrow: "[ 05 ] · Arquivo",
+    h2: { before: "Da oficina, ", italic: "direto", after: "para o teu bolso." },
+    galleryCount: "Galeria · 05 imagens",
+    meta: "2025–2026 · KRK · PL",
+  },
+  fr: {
+    eyebrow: "[ 05 ] · Archives",
+    h2: { before: "De l’atelier, ", italic: "directement", after: "dans ta poche." },
+    galleryCount: "Galerie · 05 clichés",
+    meta: "2025–2026 · KRK · PL",
+  },
+  it: {
+    eyebrow: "[ 05 ] · Archivio",
+    h2: { before: "Dal laboratorio, ", italic: "dritto", after: "nella tua tasca." },
+    galleryCount: "Galleria · 05 scatti",
     meta: "2025–2026 · KRK · PL",
   },
 };

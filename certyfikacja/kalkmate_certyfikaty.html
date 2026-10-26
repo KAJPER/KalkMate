@@ -89,6 +89,12 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
 .cl li::before{content:'[ ]';font-family:var(--mono);font-size:8px;color:var(--g4);flex-shrink:0;margin-top:1px}
 .cl li strong{font-weight:700}
 
+/* INDEX PAGE (compact) */
+.idx .sec{margin-bottom:10px}
+.idx .overview{margin-bottom:6px}
+.idx .overview td{padding:2px 6px;line-height:1.35}
+.idx .hdr{margin-bottom:10px}
+
 /* FOOTER */
 .pfooter{position:absolute;bottom:10mm;left:16mm;right:16mm;display:flex;justify-content:space-between;font-family:var(--mono);font-size:7px;color:var(--g4);border-top:1px solid var(--g6);padding-top:4px}
 
@@ -100,6 +106,75 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
 </head>
 <body>
 
+<!-- PAGE 0: TECZKA DOKUMENTOW (indeks, stan na 25.10.2026) -->
+<div class="page idx">
+
+<div class="hdr">
+  <div class="hdr-title">
+    KalkMate — Teczka techniczna (indeks)
+    <span>Stan dokumentow zgodnosci · PCB v4 · firmware 2.0.2</span>
+  </div>
+  <div class="hdr-date">
+    Aktualizacja: 25.10.2026<br>
+    KalkMate v1.0 · model KalkMate-ESP32S3-v1<br>
+    PCB v4 · ESP32-S3-WROOM-1-N16R8 · fw 2.0.2
+  </div>
+</div>
+
+<div class="note" style="margin-left:0"><strong>Zakres:</strong> jedynym wspieranym sprzetem jest PCB v4 z ESP32-S3-WROOM-1-N16R8. Stara plytka PCB v3 (ESP32-WROVER-E) nie jest juz wspierana — dokumenty dotyczace v3 maja charakter archiwalny. Odnosniki sa wzgledne wobec folderu <code>certyfikacja/</code>.</div>
+
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">A</div><div class="sec-title">Dokumenty producenta</div></div>
+  <table class="overview">
+    <thead><tr><th>Dokument</th><th>Plik</th><th>Wersja</th><th>Data</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Deklaracja zgodnosci UE (DoC)</strong> — zrodlo HTML</td><td><a href="EU_Declaration_of_Conformity_KalkMate.html"><code>EU_Declaration_of_Conformity_KalkMate.html</code></a></td><td>Rev. 2.0 (KAJPA-DOC-2026-001)</td><td>25.10.2026</td><td><span class="tag req">DO PODPISU</span></td></tr>
+      <tr><td><strong>DoC — PDF</strong> (publikowany na kalkmate.pl/docs/ce-declaration.pdf)</td><td><a href="docs/ce-declaration.pdf"><code>docs/ce-declaration.pdf</code></a></td><td>Rev. 2.0</td><td>25.10.2026</td><td><span class="tag req">DO PODPISU</span></td></tr>
+      <tr><td>DoC — poprzednia wersja (podpisana)</td><td><a href="docs/archiwum/ce-declaration-2026-06.pdf"><code>docs/archiwum/ce-declaration-2026-06.pdf</code></a></td><td>Rev. 1.0 (fw 1.4.4)</td><td>17.06.2026</td><td><span class="tag opt">ARCHIWUM</span></td></tr>
+      <tr><td><strong>Opis oprogramowania</strong> i protokolow komunikacyjnych</td><td><a href="docs/opis_oprogramowania.md"><code>docs/opis_oprogramowania.md</code></a></td><td>fw 2.0.2</td><td>25.10.2026</td><td><span class="tag done">AKTUALNY</span></td></tr>
+      <tr><td><strong>Ocena cyberbezpieczenstwa</strong> (RED art. 3(3)(d)(e)(f), EN 18031)</td><td><a href="docs/cybersecurity_assessment.md"><code>docs/cybersecurity_assessment.md</code></a></td><td>rev. 2 (fw 2.0.2)</td><td>25.10.2026</td><td><span class="tag req">DO PODPISU</span></td></tr>
+      <tr><td>Instrukcja obslugi (druk)</td><td><a href="docs/kalkmate_instrukcja_druk_v3.html"><code>docs/kalkmate_instrukcja_druk_v3.html</code></a></td><td>v3</td><td>18.06.2026</td><td><span class="tag req">DO AKTUALIZACJI</span></td></tr>
+      <tr><td>Schemat elektryczny</td><td><a href="schemat-kalkmate-v3.png"><code>schemat-kalkmate-v3.png</code></a></td><td>nazwa pliku: v3</td><td>26.05.2026</td><td><span class="tag req">ZWERYFIKOWAC (PCB v4?)</span></td></tr>
+      <tr><td>BOM</td><td><a href="bom.xls"><code>bom.xls</code></a>, <a href="KalkMate_BOM_v3_NO_ESP.xlsx"><code>KalkMate_BOM_v3_NO_ESP.xlsx</code></a></td><td>—</td><td>12.06.2026 / 26.05.2026</td><td><span class="tag req">ZWERYFIKOWAC (PCB v4?)</span></td></tr>
+      <tr><td>Karty katalogowe komponentow (LCSC)</td><td><a href="lcsc_datasheets/"><code>lcsc_datasheets/</code></a> (31 plikow)</td><td>—</td><td>12.06.2026</td><td><span class="tag done">ZEBRANE</span></td></tr>
+      <tr><td>Model obudowy (dol)</td><td><a href="docs/dol%20obudowy%20kalkulator.stl"><code>docs/dol obudowy kalkulator.stl</code></a></td><td>—</td><td>27.05.2026</td><td><span class="tag opt">ZALACZNIK</span></td></tr>
+      <tr><td>Wyniki testow (wlasne / laboratoryjne) EN 300 328, EN 301 489, EN 62368-1</td><td>—</td><td>—</td><td>—</td><td><span class="tag req">BRAK W TECZCE</span></td></tr>
+      <tr><td>Fotografie urzadzenia i oznakowania (CE, WEEE)</td><td>—</td><td>—</td><td>—</td><td><span class="tag req">BRAK W TECZCE</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">B</div><div class="sec-title">Certyfikaty modulu radiowego ESP32-S3-WROOM-1 (Espressif)</div></div>
+  <table class="overview">
+    <thead><tr><th>Certyfikat</th><th>Plik</th><th>Szczegoly</th></tr></thead>
+    <tbody>
+      <tr><td><strong>CE / RED</strong> — EU Type Examination Certificate (modul B)</td><td><a href="certyfikaty-esp/ESP32-S3-WROOM-1%20CE%C2%A0Certification.pdf"><code>ESP32-S3-WROOM-1 CE Certification.pdf</code></a></td><td>Eurofins E&amp;E NA, jednostka notyfikowana nr 0980; wydany 26.01.2022; projekt 1732-01-2022-117324; EN IEC 62368-1, EN 50665, EN IEC 62311, EN 301 489-1/-17, EN 300 328 v2.2.2; WiFi 19,9 dBm EIRP, antena PCB 3,26 dBi</td></tr>
+      <tr><td>Pozostale (poza UE — informacyjnie)</td><td colspan="2"><a href="certyfikaty-esp/ESP32-S3-WROOM-1%20FCC%20Certification.pdf">FCC (USA)</a>, <a href="certyfikaty-esp/ESP32-S3-WROOM-1%20IC%20Certification.pdf">IC / ISED (Kanada)</a>, <a href="certyfikaty-esp/ESP32-S3-WROOM-1%20MIC%20Certification.pdf">MIC (Japonia)</a>, <a href="certyfikaty-esp/ESP32-S3-WROOM-1%20NCC%20Certification.pdf">NCC (Tajwan)</a>, <a href="certyfikaty-esp/SRRC%20%20ESP32-S3-WROOM-1%E7%BB%AD%E6%9C%9F%E8%87%B32028-12-31.pdf">SRRC (Chiny)</a>, <a href="certyfikaty-esp/ESP32-S3-WROOM-1%20Anatel%20Certification.pdf">Anatel (Brazylia)</a>, <a href="certyfikaty-esp/Vietnam%20MIC%20Certificate%20for%20ESP32-S3-WROOM-1.pdf">Vietnam MIC</a>, <a href="certyfikaty-esp/ESP32-S3-WROOM-1%20Wi-Fi%20Certification.pdf">Wi-Fi Alliance</a>. SRRC przedluzony do 31.12.2028 (wg nazwy pliku).</td></tr>
+    </tbody>
+  </table>
+  <div class="note" style="margin-left:0">Certyfikat modulu obejmuje art. 3(1)(a), 3(1)(b) i 3(2) RED dla samego modulu. Nie zwalnia z wlasnej deklaracji producenta urzadzenia i nie obejmuje art. 3(3)(d)(e)(f) (cyberbezpieczenstwo) — te opisuje <code>docs/cybersecurity_assessment.md</code>.</div>
+</div>
+
+<div class="sec">
+  <div class="sec-hdr"><div class="sec-num">C</div><div class="sec-title">Certyfikaty producenta PCB / montazu (JLCPCB)</div></div>
+  <table class="overview">
+    <thead><tr><th>Certyfikat</th><th>Plik</th><th>Do czego</th></tr></thead>
+    <tbody>
+      <tr><td><strong>RoHS</strong> — Certificate of Conformity</td><td><a href="certyfikaty-jlcpcb/rohs-certificate-of-conformity.pdf"><code>rohs-certificate-of-conformity.pdf</code></a></td><td>Dowod zgodnosci RoHS II (2011/65/UE) dla PCB/montazu</td></tr>
+      <tr><td><strong>REACH</strong> — SVHC compliance</td><td><a href="certyfikaty-jlcpcb/reach-svhc-compliance.pdf"><code>reach-svhc-compliance.pdf</code></a></td><td>Oswiadczenie REACH (SVHC)</td></tr>
+      <tr><td>UL</td><td><a href="certyfikaty-jlcpcb/ul-certificate.pdf"><code>ul-certificate.pdf</code></a></td><td>Laminat / PCB — palnosc (UL)</td></tr>
+      <tr><td>ISO 9001:2015</td><td><a href="certyfikaty-jlcpcb/iso-9001-2015-certificate.pdf"><code>iso-9001-2015-certificate.pdf</code></a></td><td>System zarzadzania jakoscia dostawcy</td></tr>
+      <tr><td>ISO 14001:2015</td><td><a href="certyfikaty-jlcpcb/iso-14001-2015-certificate.pdf"><code>iso-14001-2015-certificate.pdf</code></a></td><td>System zarzadzania srodowiskowego dostawcy</td></tr>
+      <tr><td>IATF 16949:2016</td><td><a href="certyfikaty-jlcpcb/iatf-16949-2016-certificate.pdf"><code>iatf-16949-2016-certificate.pdf</code></a></td><td>Jakosc (motoryzacja) — informacyjnie</td></tr>
+    </tbody>
+  </table>
+  <div class="warn" style="margin-left:0"><strong>Do uzupelnienia:</strong> daty waznosci certyfikatow JLCPCB (sprawdzic w plikach), deklaracja RoHS / UN38.3 / MSDS akumulatora LiPo, deklaracje RoHS obudowy, kabla USB-C i opakowania. Normy EN 18031 w DoC Rev. 2.0 — potwierdzic zakres i ograniczenia publikacji w Dz.U. UE (decyzja wykonawcza (UE) 2025/138) przed podpisem.</div>
+</div>
+
+<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 1 / 4</span><span>Dokument wewnetrzny producenta</span></div>
+</div>
+
 <!-- PAGE 1 -->
 <div class="page">
 
@@ -109,9 +184,9 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
     <span>Przewodnik krok po kroku dla producenta · Polska / UE</span>
   </div>
   <div class="hdr-date">
-    Opracowanie: maj 2026<br>
-    Dotyczy: KalkMate v1.0<br>
-    ESP32-S3 + WiFi 2.4 GHz + Li-Po
+    Opracowanie: maj 2026 · aktualizacja: 25.10.2026<br>
+    Dotyczy: KalkMate v1.0 · PCB v4 · fw 2.0.2<br>
+    ESP32-S3-WROOM-1-N16R8 + WiFi 2.4 GHz + Li-Po
   </div>
 </div>
 
@@ -143,7 +218,7 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
       <div class="step-num">1.1</div>
       <div class="step-body">
         <strong>Sprawdz, ze modul ESP32-S3-WROOM-1 ma wlasny certyfikat CE/RED</strong><br>
-        Espressif posiada certyfikat RED dla modulow WROOM. Pobierz deklaracje zgodnosci ESP32-S3-WROOM-1 ze strony:
+        Espressif posiada certyfikat RED dla modulow WROOM. <strong>Zebrany:</strong> <a href="certyfikaty-esp/ESP32-S3-WROOM-1%20CE%C2%A0Certification.pdf">certyfikaty-esp/ESP32-S3-WROOM-1 CE Certification.pdf</a> (EU Type Examination Certificate, NB 0980, 26.01.2022). Zrodlo:
         <a href="https://www.espressif.com/en/certificates">espressif.com/en/certificates</a><br>
         <strong>To nie zwalnia cie z obowiazku wystawienia wlasnej deklaracji</strong> — ale jest kluczowym dowodem w Twojej dokumentacji technicznej.
       </div>
@@ -156,12 +231,12 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
         Kompletna teczka techniczna musi zawierac:
         <ul>
           <li>Opis urzadzenia i jego przeznaczenie</li>
-          <li>Schemat elektryczny (eksport z Fusion 360)</li>
+          <li>Schemat elektryczny PCB v4 (eksport z Fusion 360)</li>
           <li>BOM (lista komponentow z numerami katalogowymi)</li>
-          <li>Certyfikaty CE komponentow radiowych — ESP32-S3-WROOM-1 (RED), CH340C (EMC)</li>
-          <li>Deklaracje RoHS od JLCPCB / LCSC dla wszystkich komponentow</li>
-          <li>Opis oprogramowania i protokolow komunikacyjnych (WiFi WPA2, HTTPS do serwera)</li>
-          <li>Informacje o cyberbezpieczenstwie (patrz punkt 4)</li>
+          <li>Certyfikaty CE komponentow radiowych — ESP32-S3-WROOM-1 (RED) — folder <code>certyfikaty-esp/</code> (PCB v4 uzywa natywnego USB S3, bez CH340C)</li>
+          <li>Deklaracje RoHS od JLCPCB / LCSC dla wszystkich komponentow — foldery <code>certyfikaty-jlcpcb/</code>, <code>lcsc_datasheets/</code></li>
+          <li>Opis oprogramowania i protokolow komunikacyjnych — <code>docs/opis_oprogramowania.md</code> (fw 2.0.2)</li>
+          <li>Informacje o cyberbezpieczenstwie — <code>docs/cybersecurity_assessment.md</code> (patrz punkt 4)</li>
           <li>Fotografie urzadzenia</li>
           <li>Wyniki testow (wlasne lub laboratoryjne)</li>
         </ul>
@@ -202,7 +277,7 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
       <div class="step-num">1.5</div>
       <div class="step-body">
         <strong>Wystaw EU Declaration of Conformity (DoC)</strong><br>
-        Plik PDF, podpisany przez Ciebie jako producenta. Szablon ponizej (strona 2). Musisz go:
+        Plik PDF, podpisany przez Ciebie jako producenta. Szablon ponizej (strona 3), wypelniona wersja: <code>EU_Declaration_of_Conformity_KalkMate.html</code>. Musisz go:
         <ul>
           <li>Dolaczac do kazdego sprzedanego urzadzenia (moze byc jako PDF do pobrania z kalkmate.pl)</li>
           <li>Miec dostepny na zadanie organow kontrolnych przez 10 lat</li>
@@ -224,7 +299,7 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
   </div>
 </div>
 
-<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 1 / 3</span><span>Dokument wewnetrzny producenta</span></div>
+<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 2 / 4</span><span>Dokument wewnetrzny producenta</span></div>
 </div>
 
 <!-- PAGE 2: DoC TEMPLATE + ROHS + BDO -->
@@ -232,7 +307,7 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
 
 <div class="hdr">
   <div class="hdr-title">Deklaracja Zgodnosci UE — szablon<span>EU Declaration of Conformity · RED 2014/53/EU</span></div>
-  <div class="hdr-date">Wypelnij i wydrukuj / zapisz jako PDF<br>Podpisz odreczenie lub podpisem kwalifikowanym</div>
+  <div class="hdr-date">Wypelniona wersja: EU_Declaration_of_Conformity_KalkMate.html (Rev. 2.0)<br>Podpisz odrecznie lub podpisem kwalifikowanym</div>
 </div>
 
 <div class="sec">
@@ -272,7 +347,7 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
     _____________________________________<br>
     <span class="fill">[Imie i nazwisko, stanowisko: Wlasciciel / Producent]</span></p>
   </div>
-  <div class="note" style="margin-left:0"><strong>Gdzie przechowac:</strong> Oryginal podpisany w teczkce technicznej. Kopia PDF dostepna do pobrania na kalkmate.pl/doc/ce-declaration.pdf. Dolaczaj link lub druk do kazdej przesylki.</div>
+  <div class="note" style="margin-left:0"><strong>Gdzie przechowac:</strong> Oryginal podpisany w teczkce technicznej. Kopia PDF dostepna do pobrania na kalkmate.pl/docs/ce-declaration.pdf (plik <code>website/public/docs/ce-declaration.pdf</code>). Dolaczaj link lub druk do kazdej przesylki.</div>
 </div>
 
 <!-- SECTION 2: ROHS -->
@@ -366,7 +441,7 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
   </div>
 </div>
 
-<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 2 / 3</span><span>Dokument wewnetrzny producenta</span></div>
+<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 3 / 4</span><span>Dokument wewnetrzny producenta</span></div>
 </div>
 
 <!-- PAGE 3: CYBERSEC + COSTS + CHECKLIST + LINKS -->
@@ -388,8 +463,8 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
         <strong>Co musisz udokumentowac dla KalkMate</strong><br>
         Norma EN 18031 wprowadza trzy obszary. Dla urzadzenia takiego jak KalkMate (brak przechowywania danych osobowych lokalnie, komunikacja tylko z wlasnym serwerem):
         <ul>
-          <li><strong>Art. 3.3(d) — Ochrona sieci:</strong> Urzadzenie nie moze uszkadzac sieci. Dokumentacja: WiFi ESP32 dziala w standardowym trybie klienta WPA2, brak mozliwosci dzialania jako AP bez jawnej konfiguracji uzytkownika.</li>
-          <li><strong>Art. 3.3(e) — Ochrona danych osobowych:</strong> KalkMate nie przechowuje danych osobowych na urzadzeniu — historyjki AI sa lokalne (NVS), nie zawieraja danych identyfikacyjnych. WiFi password przechowywane zaszyfrowane w NVS ESP32.</li>
+          <li><strong>Art. 3.3(d) — Ochrona sieci:</strong> Urzadzenie nie moze uszkadzac sieci. Stan fw 2.0.2: wylacznie tryb klienta (STA), brak trybu AP i uslug nasluchujacych, moc TX ograniczona do 8,5 dBm, komunikacja tylko z kalkmate.pl.</li>
+          <li><strong>Art. 3.3(e) — Ochrona danych osobowych:</strong> Stan fw 2.0.2: TLS z przypietymi rootami Let's Encrypt, token per urzadzenie, reset fabryczny (C/CE 5 s). Uwaga: hasla WiFi i dane w NVS/SPIFFS <strong>nie sa szyfrowane</strong> (Flash Encryption XTS-AES-256 chroni firmware) — ryzyko rezydualne opisane w ocenie.</li>
           <li><strong>Art. 3.3(f) — Ochrona przed oszustwami finansowymi:</strong> KalkMate nie przetwarza platnosci. Nie dotyczy.</li>
         </ul>
       </div>
@@ -399,9 +474,9 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
       <div class="step-body">
         <strong>Minimalne srodki techniczne do udokumentowania</strong><br>
         <ul>
-          <li>Komunikacja z serwerem przez <strong>HTTPS (TLS 1.2+)</strong> — zweryfikuj w kodzie OTA i API</li>
-          <li>OTA aktualizacje podpisane cyfrowo lub weryfikowane przez hash — opisz mechanizm w dokumentacji</li>
-          <li>Brak domyslnych hasel (Kod AI ustawiany przez uzytkownika, nie predefiniowany)</li>
+          <li>Komunikacja z serwerem przez <strong>HTTPS (TLS 1.2)</strong> z weryfikacja certyfikatu — <span class="tag done">ZROBIONE</span> (fw 2.0.2)</li>
+          <li>OTA podpisane ECDSA P-256, weryfikacja przed instalacja, rollback — <span class="tag done">ZROBIONE</span></li>
+          <li>Brak domyslnych hasel sieciowych — tak; ale <strong>kod AI domyslnie 1111</strong>, jesli klient nie wybral wlasnego (blokada lokalna, nie sieciowa) — opisane jako ryzyko rezydualne</li>
           <li>Mozliwosc resetu do ustawien fabrycznych usuwajacego dane — Settings → Reset fabryczny</li>
           <li>Brak nieuzywanych otwartych portow sieciowych</li>
         </ul>
@@ -491,7 +566,7 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
         <li><strong>Znak CE</strong> na urzadzeniu (min. 5 mm) i opakowaniu</li>
         <li><strong>Symbol WEEE</strong> na urzadzeniu i opakowaniu</li>
         <li><strong>Napiecie USB-C 5V DC</strong> podane na urzadzeniu lub opakowaniu</li>
-        <li><strong>DoC dostepna do pobrania</strong> na kalkmate.pl/doc/ce-declaration.pdf</li>
+        <li><strong>DoC dostepna do pobrania</strong> na kalkmate.pl/docs/ce-declaration.pdf</li>
         <li><strong>Informacja o WEEE</strong> na stronie sklepu (mozliwosc zwrotu zuzyty sprzet)</li>
         <li><strong>Sprawozdanie BDO</strong> — termin: 15 marca za rok poprzedni</li>
       </ul>
@@ -517,7 +592,7 @@ body{font-family:var(--sans);color:var(--black);background:#fff;font-size:10.5px
   <div class="warn" style="margin-left:0;margin-top:12px"><strong>Ważne:</strong> Przepisy zmieniaja sie. Ten dokument odzwierciedla stan na maj 2026. Sprawdz aktualne wymagania przed sprzedaza, szczegolnie w zakresie EN 18031 (cyberbezpieczenstwo RED), ktorego wdrozenie bylo stopniowe w 2025–2026.</div>
 </div>
 
-<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 3 / 3</span><span>Dokument wewnetrzny producenta · nie jest porada prawna</span></div>
+<div class="pfooter"><span>KalkMate — Certyfikaty i zgodnosc prawna</span><span>Strona 4 / 4</span><span>Dokument wewnetrzny producenta · nie jest porada prawna</span></div>
 </div>
 
 </body>

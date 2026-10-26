@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { siteUrlFromHost } from "@/lib/i18n";
+import { locales, localePath, siteUrlFromHost } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
@@ -12,9 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
     alternates: {
       canonical: `${siteUrl}/en/pomoc`,
       languages: {
-        pl: `${siteUrl}/pomoc`,
-        en: `${siteUrl}/en/pomoc`,
-        de: `${siteUrl}/de/pomoc`,
+        ...Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, "/pomoc")}`])),
         "x-default": `${siteUrl}/pomoc`,
       },
     },

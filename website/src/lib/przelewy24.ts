@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { localeFromCountry } from "@/lib/email-templates";
 
 const MERCHANT_ID = parseInt(process.env.P24_MERCHANT_ID || "0", 10);
 const POS_ID = parseInt(process.env.P24_POS_ID || "0", 10);
@@ -65,6 +66,17 @@ export interface RegisterParams {
   channel?: number;
   regulationAccept?: boolean;
   method?: number;
+}
+
+// Jezyk bramki P24. P24 obsluguje m.in.: bg, cs, de, en, es, fr, hr, hu, it,
+// nl, pl, pt, se, sk, ro — NIE ma lt ani be (te -> en). PLN zawsze po polsku
+// (klient z Polski); dla EUR jezyk z kraju wysylki (jak maile zamowien,
+// localeFromCountry: SK->sk, ES->es, PT->pt, FR/BE/LU->fr, IT->it, CZ->cs, DE->de).
+const P24_LANGUAGES = new Set(["pl", "en", "de", "cs", "sk", "es", "pt", "fr", "it"]);
+export function p24Language(currency: string, country: string | null | undefined): string {
+  if ((currency || "").toUpperCase() === "PLN") return "pl";
+  const lang = localeFromCountry(country || "OTHER");
+  return P24_LANGUAGES.has(lang) ? lang : "en";
 }
 
 export async function registerTransaction(params: RegisterParams): Promise<string> {

@@ -4,6 +4,7 @@ import { Elements, PaymentMethodMessagingElement } from "@stripe/react-stripe-js
 import type { StripeElementsOptions, StripePaymentMethodMessagingElementOptions } from "@stripe/stripe-js";
 import getStripe from "@/lib/getStripe";
 import { type Locale } from "@/lib/i18n";
+import { stripeLocale } from "@/components/StripeProvider";
 
 // Komunikat "zaplac pozniej / w ratach" (Klarna przez Stripe) na karcie
 // zamowienia. Osobny modul ladowany przez next/dynamic — Stripe.js
@@ -24,7 +25,7 @@ export default function KlarnaMessaging({
     <Elements
       stripe={getStripe()}
       options={{
-        locale: lang,
+        locale: stripeLocale(lang),
         appearance: {
           theme: "night",
           variables: {

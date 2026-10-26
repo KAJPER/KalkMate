@@ -51,6 +51,94 @@ const dict: Record<Locale, { eyebrow: string; heading: string; sub: string; bene
       { side: "right", label: "04", title: "Funktioniert eigenständig", desc: "Kein Smartphone nötig. USB-C-Laden, Akku für einen ganzen Lerntag." },
     ],
   },
+  cs: {
+    eyebrow: "/ JAK TO FUNGUJE",
+    heading: "Jedno tlačítko.",
+    sub: "Zbytek se udělá sám.",
+    benefits: [
+      { side: "left",  label: "01", title: "Vyfoť úlohu",          desc: "Vestavěná 2MP kamera. Jedno stisknutí — fotka je hotová ve zlomku sekundy." },
+      { side: "right", label: "02", title: "AI analyzuje za běhu", desc: "Model rozpozná předmět a typ úlohy. Matematika, fyzika, chemie, biologie." },
+      { side: "left",  label: "03", title: "Krok za krokem",       desc: "Každý krok na OLED displeji 256×64. Žádné zkratky — celý myšlenkový postup." },
+      { side: "right", label: "04", title: "Funguje samostatně",   desc: "Nepotřebuje smartphone. Nabíjení přes USB-C, baterie vydrží celý den učení." },
+    ],
+  },
+  sk: {
+    eyebrow: "/ AKO TO FUNGUJE",
+    heading: "Jedno tlačidlo.",
+    sub: "Zvyšok sa urobí sám.",
+    benefits: [
+      { side: "left",  label: "01", title: "Odfoť úlohu",          desc: "Vstavaná 2MP kamera. Jedno stlačenie — fotka je hotová v zlomku sekundy." },
+      { side: "right", label: "02", title: "AI analyzuje za behu", desc: "Model rozpozná predmet a typ úlohy. Matematika, fyzika, chémia, biológia." },
+      { side: "left",  label: "03", title: "Krok za krokom",       desc: "Každý krok na OLED displeji 256×64. Žiadne skratky — celý myšlienkový postup." },
+      { side: "right", label: "04", title: "Funguje samostatne",   desc: "Nepotrebuje smartfón. Nabíjanie cez USB-C, batéria vydrží celý deň učenia." },
+    ],
+  },
+  lt: {
+    eyebrow: "/ KAIP TAI VEIKIA",
+    heading: "Vienas mygtukas.",
+    sub: "Visa kita — savaime.",
+    benefits: [
+      { side: "left",  label: "01", title: "Nufotografuok užduotį",     desc: "Įmontuota 2MP kamera. Vienas paspaudimas — nuotrauka per sekundės dalį." },
+      { side: "right", label: "02", title: "DI analizuoja akimirksniu", desc: "Modelis atpažįsta dalyką ir užduoties tipą. Matematika, fizika, chemija, biologija." },
+      { side: "left",  label: "03", title: "Žingsnis po žingsnio",      desc: "Kiekvienas žingsnis 256×64 OLED ekrane. Jokių trumpinių — visa sprendimo eiga." },
+      { side: "right", label: "04", title: "Veikia savarankiškai",      desc: "Išmaniojo telefono nereikia. Įkrovimas per USB-C, baterija ištveria visą mokymosi dieną." },
+    ],
+  },
+  be: {
+    eyebrow: "/ ЯК ГЭТА ПРАЦУЕ",
+    heading: "Адна кнопка.",
+    sub: "Астатняе — само сабой.",
+    benefits: [
+      { side: "left",  label: "01", title: "Сфатаграфуй задачу",  desc: "Убудаваная камера 2MP. Адно націсканне — і фота гатовае за долю секунды." },
+      { side: "right", label: "02", title: "ШІ аналізуе імгненна", desc: "Мадэль вызначае прадмет і тып задачы. Матэматыка, фізіка, хімія, біялогія." },
+      { side: "left",  label: "03", title: "Крок за крокам",       desc: "Кожны крок на OLED-экране 256×64. Ніякіх скарачэнняў — увесь ход думкі." },
+      { side: "right", label: "04", title: "Працуе самастойна",    desc: "Смартфон не патрэбны. Зарадка праз USB-C, батарэі хапае на цэлы дзень вучобы." },
+    ],
+  },
+  es: {
+    eyebrow: "/ CÓMO FUNCIONA",
+    heading: "Un botón.",
+    sub: "El resto se hace solo.",
+    benefits: [
+      { side: "left",  label: "01", title: "Fotografía el problema",    desc: "Cámara integrada de 2MP. Una pulsación — foto lista en una fracción de segundo." },
+      { side: "right", label: "02", title: "La IA analiza al instante", desc: "El modelo identifica la asignatura y el tipo de problema. Matemáticas, física, química, biología." },
+      { side: "left",  label: "03", title: "Paso a paso",               desc: "Cada paso en la pantalla OLED de 256×64. Sin atajos — todo el razonamiento." },
+      { side: "right", label: "04", title: "Funciona por sí sola",      desc: "No necesita smartphone. Carga por USB-C y batería para todo un día de estudio." },
+    ],
+  },
+  pt: {
+    eyebrow: "/ COMO FUNCIONA",
+    heading: "Um botão.",
+    sub: "O resto acontece sozinho.",
+    benefits: [
+      { side: "left",  label: "01", title: "Fotografa o exercício", desc: "Câmara integrada de 2MP. Um clique — foto tirada numa fração de segundo." },
+      { side: "right", label: "02", title: "A IA analisa na hora",  desc: "O modelo identifica a disciplina e o tipo de exercício. Matemática, física, química, biologia." },
+      { side: "left",  label: "03", title: "Passo a passo",         desc: "Cada passo no ecrã OLED de 256×64. Sem atalhos — o raciocínio completo." },
+      { side: "right", label: "04", title: "Funciona sozinha",      desc: "Não precisa de smartphone. Carregamento por USB-C e bateria para um dia inteiro de estudo." },
+    ],
+  },
+  fr: {
+    eyebrow: "/ COMMENT ÇA MARCHE",
+    heading: "Un bouton.",
+    sub: "Le reste se fait tout seul.",
+    benefits: [
+      { side: "left",  label: "01", title: "Photographie l’exercice", desc: "Caméra intégrée de 2 MP. Une pression — la photo est prise en une fraction de seconde." },
+      { side: "right", label: "02", title: "L’IA analyse en direct",  desc: "Le modèle identifie la matière et le type d’exercice. Maths, physique, chimie, biologie." },
+      { side: "left",  label: "03", title: "Étape par étape",         desc: "Chaque étape sur l’écran OLED 256×64. Aucun raccourci — tout le raisonnement." },
+      { side: "right", label: "04", title: "Totalement autonome",     desc: "Pas besoin de smartphone. Recharge en USB-C, batterie pour toute une journée de révisions." },
+    ],
+  },
+  it: {
+    eyebrow: "/ COME FUNZIONA",
+    heading: "Un pulsante.",
+    sub: "Il resto viene da sé.",
+    benefits: [
+      { side: "left",  label: "01", title: "Fotografa l’esercizio", desc: "Fotocamera integrata da 2 MP. Una pressione — foto pronta in una frazione di secondo." },
+      { side: "right", label: "02", title: "L’IA analizza al volo", desc: "Il modello riconosce materia e tipo di esercizio. Matematica, fisica, chimica, biologia." },
+      { side: "left",  label: "03", title: "Passo dopo passo",      desc: "Ogni passaggio sul display OLED 256×64. Nessuna scorciatoia — tutto il ragionamento." },
+      { side: "right", label: "04", title: "Funziona da sola",      desc: "Non serve lo smartphone. Ricarica via USB-C, batteria per un’intera giornata di studio." },
+    ],
+  },
 };
 
 export default function VideoScroll({ lang = "pl" }: { lang?: Locale }) {

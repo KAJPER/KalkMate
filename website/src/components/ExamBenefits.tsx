@@ -235,6 +235,558 @@ const content: Record<Locale, Content> = {
       },
     ],
   },
+  cs: {
+    eyebrow: "[ 03 ] · Pokrytí předmětů",
+    heading: (
+      <>
+        Čtyři <span className="italic">přírodovědné</span><br />
+        předměty.
+      </>
+    ),
+    side:
+      "Natrénováno na tisících úloh z posledních 10 let. Rozpozná typ úlohy, zvolí správnou metodu a ukáže celý postup řešení.",
+    exampleLabel: "Příklad",
+    subjects: [
+      {
+        code: "MAT",
+        name: "Matematika",
+        sub: "základní · rozšířená",
+        formula: "f(x) = ax² + bx + c",
+        bullets: ["Funkce, limity, derivace", "Analytická geometrie", "Posloupnosti, pravděpodobnost, kombinatorika"],
+        accent: true,
+      },
+      {
+        code: "FYZ",
+        name: "Fyzika",
+        sub: "rozšířená",
+        formula: "E = ½mv² + mgh",
+        bullets: ["Mechanika, termodynamika", "Elektromagnetismus", "Optika, jaderná fyzika"],
+      },
+      {
+        code: "CHE",
+        name: "Chemie",
+        sub: "rozšířená",
+        formula: "2H₂ + O₂ → 2H₂O",
+        bullets: ["Stechiometrie, rovnováhy", "Organická chemie", "Roztoky, elektrochemie"],
+      },
+      {
+        code: "BIO",
+        name: "Biologie",
+        sub: "rozšířená",
+        formula: "ATP ⇌ ADP + Pᵢ",
+        bullets: ["Genetika, biochemie", "Fyziologie, ekologie", "Evoluce, biotechnologie"],
+      },
+    ],
+    stats: [
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">10</span> let
+          </>
+        ),
+        label: "let trénovacích dat",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">94</span>%
+          </>
+        ),
+        label: "Přesnost řešení úloh",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">1,2</span>s
+          </>
+        ),
+        label: "Průměrná doba odpovědi",
+      },
+    ],
+  },
+  sk: {
+    eyebrow: "[ 03 ] · Pokrytie predmetov",
+    heading: (
+      <>
+        Štyri <span className="italic">prírodovedné</span><br />
+        predmety.
+      </>
+    ),
+    side:
+      "Natrénovaný na tisíckach úloh z posledných 10 rokov. Rozpozná typ úlohy, zvolí správnu metódu a ukáže celý postup riešenia.",
+    exampleLabel: "Príklad",
+    subjects: [
+      {
+        code: "MAT",
+        name: "Matematika",
+        sub: "základná · rozšírená",
+        formula: "f(x) = ax² + bx + c",
+        bullets: ["Funkcie, limity, derivácie", "Analytická geometria", "Postupnosti, pravdepodobnosť, kombinatorika"],
+        accent: true,
+      },
+      {
+        code: "FYZ",
+        name: "Fyzika",
+        sub: "rozšírená",
+        formula: "E = ½mv² + mgh",
+        bullets: ["Mechanika, termodynamika", "Elektromagnetizmus", "Optika, jadrová fyzika"],
+      },
+      {
+        code: "CHE",
+        name: "Chémia",
+        sub: "rozšírená",
+        formula: "2H₂ + O₂ → 2H₂O",
+        bullets: ["Stechiometria, rovnováhy", "Organická chémia", "Roztoky, elektrochémia"],
+      },
+      {
+        code: "BIO",
+        name: "Biológia",
+        sub: "rozšírená",
+        formula: "ATP ⇌ ADP + Pᵢ",
+        bullets: ["Genetika, biochémia", "Fyziológia, ekológia", "Evolúcia, biotechnológia"],
+      },
+    ],
+    stats: [
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">10</span> rokov
+          </>
+        ),
+        label: "rokov tréningových dát",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">94</span>%
+          </>
+        ),
+        label: "Presnosť riešenia úloh",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">1,2</span>s
+          </>
+        ),
+        label: "Priemerný čas odpovede",
+      },
+    ],
+  },
+  lt: {
+    eyebrow: "[ 03 ] · Dalykų aprėptis",
+    heading: (
+      <>
+        Keturi <span className="italic">mokslo</span><br />
+        dalykai.
+      </>
+    ),
+    side:
+      "Apmokytas tūkstančiais užduočių iš pastarųjų 10 metų. Atpažįsta užduoties tipą, parenka tinkamą metodą ir parodo visą sprendimo eigą.",
+    exampleLabel: "Pavyzdys",
+    subjects: [
+      {
+        code: "MAT",
+        name: "Matematika",
+        sub: "bendrasis · išplėstinis",
+        formula: "f(x) = ax² + bx + c",
+        bullets: ["Funkcijos, ribos, išvestinės", "Analizinė geometrija", "Sekos, tikimybės, kombinatorika"],
+        accent: true,
+      },
+      {
+        code: "FIZ",
+        name: "Fizika",
+        sub: "išplėstinis",
+        formula: "E = ½mv² + mgh",
+        bullets: ["Mechanika, termodinamika", "Elektromagnetizmas", "Optika, branduolio fizika"],
+      },
+      {
+        code: "CHE",
+        name: "Chemija",
+        sub: "išplėstinis",
+        formula: "2H₂ + O₂ → 2H₂O",
+        bullets: ["Stechiometrija, pusiausvyra", "Organinė chemija", "Tirpalai, elektrochemija"],
+      },
+      {
+        code: "BIO",
+        name: "Biologija",
+        sub: "išplėstinis",
+        formula: "ATP ⇌ ADP + Pᵢ",
+        bullets: ["Genetika, biochemija", "Fiziologija, ekologija", "Evoliucija, biotechnologija"],
+      },
+    ],
+    stats: [
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">10</span> metų
+          </>
+        ),
+        label: "metų mokymo duomenų",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">94</span>%
+          </>
+        ),
+        label: "Užduočių sprendimo tikslumas",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">1,2</span>s
+          </>
+        ),
+        label: "Vidutinis atsakymo laikas",
+      },
+    ],
+  },
+  be: {
+    eyebrow: "[ 03 ] · Ахоп прадметаў",
+    heading: (
+      <>
+        Чатыры <span className="italic">навуковыя</span><br />
+        прадметы.
+      </>
+    ),
+    side:
+      "Навучаны на тысячах задач за апошнія 10 гадоў. Распазнае тып задачы, падбірае метад рашэння і паказвае ўвесь ход разважанняў.",
+    exampleLabel: "Прыклад",
+    subjects: [
+      {
+        code: "МАТ",
+        name: "Матэматыка",
+        sub: "базавы · павышаны",
+        formula: "f(x) = ax² + bx + c",
+        bullets: ["Функцыі, межы, вытворныя", "Аналітычная геаметрыя", "Паслядоўнасці, імавернасць, камбінаторыка"],
+        accent: true,
+      },
+      {
+        code: "ФІЗ",
+        name: "Фізіка",
+        sub: "павышаны",
+        formula: "E = ½mv² + mgh",
+        bullets: ["Механіка, тэрмадынаміка", "Электрамагнетызм", "Оптыка, ядзерная фізіка"],
+      },
+      {
+        code: "ХІМ",
+        name: "Хімія",
+        sub: "павышаны",
+        formula: "2H₂ + O₂ → 2H₂O",
+        bullets: ["Стэхіяметрыя, раўнавагі", "Арганічная хімія", "Растворы, электрахімія"],
+      },
+      {
+        code: "БІЯ",
+        name: "Біялогія",
+        sub: "павышаны",
+        formula: "ATP ⇌ ADP + Pᵢ",
+        bullets: ["Генетыка, біяхімія", "Фізіялогія, экалогія", "Эвалюцыя, біятэхналогія"],
+      },
+    ],
+    stats: [
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">10</span> гадоў
+          </>
+        ),
+        label: "гадоў навучальных даных",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">94</span>%
+          </>
+        ),
+        label: "Дакладнасць рашэння задач",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">1,2</span>с
+          </>
+        ),
+        label: "Сярэдні час адказу",
+      },
+    ],
+  },
+  es: {
+    eyebrow: "[ 03 ] · Asignaturas",
+    heading: (
+      <>
+        Cuatro <span className="italic">asignaturas</span><br />
+        de ciencias.
+      </>
+    ),
+    side:
+      "Entrenado con miles de problemas de los últimos 10 años. Reconoce el tipo de ejercicio, elige el método adecuado y muestra todo el razonamiento.",
+    exampleLabel: "Ejemplo",
+    subjects: [
+      {
+        code: "MAT",
+        name: "Matemáticas",
+        sub: "básico · avanzado",
+        formula: "f(x) = ax² + bx + c",
+        bullets: ["Funciones, límites, derivadas", "Geometría analítica", "Sucesiones, probabilidad, combinatoria"],
+        accent: true,
+      },
+      {
+        code: "FÍS",
+        name: "Física",
+        sub: "avanzado",
+        formula: "E = ½mv² + mgh",
+        bullets: ["Mecánica, termodinámica", "Electromagnetismo", "Óptica, física nuclear"],
+      },
+      {
+        code: "QUÍ",
+        name: "Química",
+        sub: "avanzado",
+        formula: "2H₂ + O₂ → 2H₂O",
+        bullets: ["Estequiometría, equilibrios", "Química orgánica", "Disoluciones, electroquímica"],
+      },
+      {
+        code: "BIO",
+        name: "Biología",
+        sub: "avanzado",
+        formula: "ATP ⇌ ADP + Pᵢ",
+        bullets: ["Genética, bioquímica", "Fisiología, ecología", "Evolución, biotecnología"],
+      },
+    ],
+    stats: [
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">10</span> años
+          </>
+        ),
+        label: "años de datos de entrenamiento",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">94</span>%
+          </>
+        ),
+        label: "Precisión en problemas de examen",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">1,2</span>s
+          </>
+        ),
+        label: "Tiempo medio de respuesta",
+      },
+    ],
+  },
+  pt: {
+    eyebrow: "[ 03 ] · Disciplinas",
+    heading: (
+      <>
+        Quatro <span className="italic">disciplinas</span><br />
+        de ciências.
+      </>
+    ),
+    side:
+      "Treinado com milhares de exercícios dos últimos 10 anos. Reconhece o tipo de exercício, escolhe o método certo e mostra todo o raciocínio.",
+    exampleLabel: "Exemplo",
+    subjects: [
+      {
+        code: "MAT",
+        name: "Matemática",
+        sub: "base · avançado",
+        formula: "f(x) = ax² + bx + c",
+        bullets: ["Funções, limites, derivadas", "Geometria analítica", "Sucessões, probabilidades, combinatória"],
+        accent: true,
+      },
+      {
+        code: "FÍS",
+        name: "Física",
+        sub: "avançado",
+        formula: "E = ½mv² + mgh",
+        bullets: ["Mecânica, termodinâmica", "Eletromagnetismo", "Ótica, física nuclear"],
+      },
+      {
+        code: "QUÍ",
+        name: "Química",
+        sub: "avançado",
+        formula: "2H₂ + O₂ → 2H₂O",
+        bullets: ["Estequiometria, equilíbrios", "Química orgânica", "Soluções, eletroquímica"],
+      },
+      {
+        code: "BIO",
+        name: "Biologia",
+        sub: "avançado",
+        formula: "ATP ⇌ ADP + Pᵢ",
+        bullets: ["Genética, bioquímica", "Fisiologia, ecologia", "Evolução, biotecnologia"],
+      },
+    ],
+    stats: [
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">10</span> anos
+          </>
+        ),
+        label: "anos de dados de treino",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">94</span>%
+          </>
+        ),
+        label: "Precisão na resolução de exercícios",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">1,2</span>s
+          </>
+        ),
+        label: "Tempo médio de resposta",
+      },
+    ],
+  },
+  fr: {
+    eyebrow: "[ 03 ] · Matières couvertes",
+    heading: (
+      <>
+        Quatre <span className="italic">matières</span><br />
+        scientifiques.
+      </>
+    ),
+    side:
+      "Entraîné sur des milliers d’exercices des 10 dernières années. Il reconnaît le type d’exercice, choisit la bonne méthode et détaille tout le raisonnement.",
+    exampleLabel: "Exemple",
+    subjects: [
+      {
+        code: "MATH",
+        name: "Mathématiques",
+        sub: "tronc commun · spécialité",
+        formula: "f(x) = ax² + bx + c",
+        bullets: ["Fonctions, limites, dérivées", "Géométrie analytique", "Suites, probabilités, dénombrement"],
+        accent: true,
+      },
+      {
+        code: "PHY",
+        name: "Physique",
+        sub: "spécialité",
+        formula: "E = ½mv² + mgh",
+        bullets: ["Mécanique, thermodynamique", "Électromagnétisme", "Optique, physique nucléaire"],
+      },
+      {
+        code: "CHI",
+        name: "Chimie",
+        sub: "spécialité",
+        formula: "2H₂ + O₂ → 2H₂O",
+        bullets: ["Stœchiométrie, équilibres", "Chimie organique", "Solutions, électrochimie"],
+      },
+      {
+        code: "BIO",
+        name: "Biologie",
+        sub: "spécialité",
+        formula: "ATP ⇌ ADP + Pᵢ",
+        bullets: ["Génétique, biochimie", "Physiologie, écologie", "Évolution, biotechnologies"],
+      },
+    ],
+    stats: [
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">10</span> ans
+          </>
+        ),
+        label: "ans de données d’entraînement",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">94</span>%
+          </>
+        ),
+        label: "Précision sur les exercices d’examen",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">1,2</span>s
+          </>
+        ),
+        label: "Temps de réponse moyen",
+      },
+    ],
+  },
+  it: {
+    eyebrow: "[ 03 ] · Materie coperte",
+    heading: (
+      <>
+        Quattro <span className="italic">materie</span><br />
+        scientifiche.
+      </>
+    ),
+    side:
+      "Addestrato su migliaia di esercizi degli ultimi 10 anni. Riconosce il tipo di esercizio, sceglie il metodo giusto e mostra tutto il ragionamento.",
+    exampleLabel: "Esempio",
+    subjects: [
+      {
+        code: "MAT",
+        name: "Matematica",
+        sub: "base · avanzato",
+        formula: "f(x) = ax² + bx + c",
+        bullets: ["Funzioni, limiti, derivate", "Geometria analitica", "Successioni, probabilità, combinatoria"],
+        accent: true,
+      },
+      {
+        code: "FIS",
+        name: "Fisica",
+        sub: "avanzato",
+        formula: "E = ½mv² + mgh",
+        bullets: ["Meccanica, termodinamica", "Elettromagnetismo", "Ottica, fisica nucleare"],
+      },
+      {
+        code: "CHI",
+        name: "Chimica",
+        sub: "avanzato",
+        formula: "2H₂ + O₂ → 2H₂O",
+        bullets: ["Stechiometria, equilibri", "Chimica organica", "Soluzioni, elettrochimica"],
+      },
+      {
+        code: "BIO",
+        name: "Biologia",
+        sub: "avanzato",
+        formula: "ATP ⇌ ADP + Pᵢ",
+        bullets: ["Genetica, biochimica", "Fisiologia, ecologia", "Evoluzione, biotecnologie"],
+      },
+    ],
+    stats: [
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">10</span> anni
+          </>
+        ),
+        label: "anni di dati di addestramento",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">94</span>%
+          </>
+        ),
+        label: "Precisione sugli esercizi d’esame",
+      },
+      {
+        value: (
+          <>
+            <span className="text-[#D8FF3D]">1,2</span>s
+          </>
+        ),
+        label: "Tempo medio di risposta",
+      },
+    ],
+  },
 };
 
 export default function ExamBenefits({ lang = "pl" }: { lang?: Locale }) {

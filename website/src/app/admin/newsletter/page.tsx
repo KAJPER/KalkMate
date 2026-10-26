@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import AdminShell from "@/components/admin/AdminShell";
-import { newsletterEmail } from "@/lib/email-templates";
+import { newsletterEmail, EMAIL_LOCALES, type EmailLocale } from "@/lib/email-templates";
+import { localeLabel } from "@/lib/i18n";
 import { type PendingAttachment, fileToAttachment } from "@/components/admin/imageAttachments";
 
 interface Recipient {
@@ -17,11 +18,18 @@ interface Recipient {
   lang: Lang;
 }
 
-type Lang = "pl" | "en" | "de";
-// Teksty tlumaczone na EN/DE (lib/translate.ts translateNewsletter).
+type Lang = EmailLocale;
+type TrLang = Exclude<Lang, "pl">;
+// Teksty tlumaczone na wszystkie jezyki strony poza PL (lib/translate.ts translateNewsletter).
 interface Texts { subject: string; preheader: string; eyebrow: string; title: string; body: string; ctaText: string }
-type Translations = Partial<Record<"en" | "de", Texts>>;
-const LANG_LABEL: Record<Lang, string> = { pl: "PL", en: "EN", de: "DE" };
+type Translations = Partial<Record<TrLang, Texts>>;
+const LANGS: readonly Lang[] = EMAIL_LOCALES;
+const TR_LANGS = LANGS.filter((l): l is TrLang => l !== "pl");
+const LANG_LABEL: Record<Lang, string> = localeLabel;
+const zeroCounts = (): Record<Lang, number> => Object.fromEntries(LANGS.map((l) => [l, 0])) as Record<Lang, number>;
+// "PL 12 · EN 3 · SK 1" — tylko jezyki, ktore faktycznie maja odbiorcow.
+const countsLabel = (c: Record<Lang, number>): string =>
+  LANGS.filter((l) => c[l] > 0).map((l) => `${LANG_LABEL[l]} ${c[l]}`).join(" · ") || "—";
 const TR_KEY = "km-newsletter-tr";
 
 interface Campaign {
@@ -44,7 +52,7 @@ interface Draft {
   body: string;
   ctaText: string;
   ctaUrl: string;
-  lang: "pl" | "en" | "de";
+  lang: Lang;
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -131,9 +139,9 @@ export default function NewsletterPage() {
     } catch {}
   }, [translations, translatedFrom]);
 
-  const trFresh = translatedFrom === sourceKey(draft) && !!translations.en?.body && !!translations.de?.body;
+  const trFresh = translatedFrom === sourceKey(draft) && TR_LANGS.every((l) => !!translations[l]?.body);
 
-  // Tlumaczy polska tresc na EN i DE. Zwraca tlumaczenia (albo null przy bledzie).
+  // Tlumaczy polska tresc na wszystkie jezyki poza PL. Zwraca tlumaczenia (albo null przy bledzie).
   const translate = async (): Promise<Translations | null> => {
     setTranslating(true);
     setTrErr("");
@@ -160,7 +168,8 @@ export default function NewsletterPage() {
   const freshTranslations = async (): Promise<Translations | null> => (trFresh ? translations : translate());
   const setTr = (k: keyof Texts, v: string) => {
     if (previewLang === "pl") return;
-    setTranslations((t) => ({ ...t, [previewLang]: { ...(t[previewLang] as Texts), [k]: v } }));
+    const l = previewLang;
+    setTranslations((t) => ({ ...t, [l]: { ...(t[l] as Texts), [k]: v } }));
   };
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
@@ -231,14 +240,16 @@ export default function NewsletterPage() {
   const langCounts = recipients.reduce<Record<Lang, number>>((acc, r) => {
     if (!r.unsubscribed) acc[r.lang] = (acc[r.lang] || 0) + 1;
     return acc;
-  }, { pl: 0, en: 0, de: 0 });
+  }, zeroCounts());
   const unsubCount = recipients.length - activeCount;
+  // Test idzie po polsku + w jezykach, ktore dostana odbiorcy (i w jezyku podgladu).
+  const testLangs: Lang[] = LANGS.filter((l) => l === "pl" || l === previewLang || langCounts[l] > 0);
   const filteredRecipients = useMemo(() => {
     const q = recSearch.trim().toLowerCase();
     return q ? recipients.filter((r) => r.email.includes(q) || (r.name || "").toLowerCase().includes(q)) : recipients;
   }, [recipients, recSearch]);
 
-  const previewTexts: Texts | null = previewLang === "pl" ? draft : translations[previewLang] || null;
+  const previewTexts: Texts | null = previewLang === "pl" ? draft : translations[previewLang as TrLang] || null;
   const previewHtml = useMemo(
     () =>
       newsletterEmail({
@@ -320,10 +331,12 @@ export default function NewsletterPage() {
       const res = await fetch("/api/admin/newsletter/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: payloadContent(tr), to: testTo }),
+        body: JSON.stringify({ content: payloadContent(tr), to: testTo, langs: testLangs }),
       });
       const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
-      setMsg(data.ok ? { ok: true, text: `Wysłano 3 testy (PL, EN, DE) na ${testTo}.` } : { ok: false, text: data.error || "Błąd" });
+      setMsg(data.ok
+        ? { ok: true, text: `Wysłano ${testLangs.length} ${testLangs.length === 1 ? "test" : testLangs.length < 5 ? "testy" : "testów"} (${testLangs.map((l) => LANG_LABEL[l]).join(", ")}) na ${testTo}.` }
+        : { ok: false, text: data.error || "Błąd" });
     } catch {
       setMsg({ ok: false, text: "Błąd sieci" });
     } finally {
@@ -341,7 +354,7 @@ export default function NewsletterPage() {
       return;
     }
     if (!activeCount) return;
-    if (!confirm(`Wysłać „${draft.subject}” do ${activeCount} odbiorców (PL ${langCounts.pl} · EN ${langCounts.en} · DE ${langCounts.de})?\n\nTego nie da się cofnąć. Najpierw wyślij test do siebie i sprawdź tłumaczenia w podglądzie.`)) return;
+    if (!confirm(`Wysłać „${draft.subject}” do ${activeCount} odbiorców (${countsLabel(langCounts)})?\n\nTego nie da się cofnąć. Najpierw wyślij test do siebie i sprawdź tłumaczenia w podglądzie.`)) return;
     setSending(true);
     setMsg(null);
     try {
@@ -547,19 +560,19 @@ export default function NewsletterPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            {(["pl", "en", "de"] as Lang[]).map((l) => (
+            {LANGS.map((l) => (
               <button key={l} type="button" onClick={() => setPreviewLang(l)} className={`${tool} ${previewLang === l ? "!bg-[#3B82F6] !text-white" : ""}`}>
                 {LANG_LABEL[l]}
               </button>
             ))}
             <button type="button" onClick={translate} disabled={translating || !canSend} className={`${tool} ml-auto`}>
-              {translating ? "Tłumaczę…" : trFresh ? "🌐 Przetłumacz ponownie" : "🌐 Przetłumacz na EN i DE"}
+              {translating ? "Tłumaczę…" : trFresh ? "🌐 Przetłumacz ponownie" : "🌐 Przetłumacz na wszystkie języki"}
             </button>
           </div>
           {trErr && <p className="text-xs text-red-400 mb-2">{trErr}</p>}
           {previewLang !== "pl" && !trFresh && !translating && (
             <p className="text-xs text-amber-300/90 mb-2">
-              {previewTexts ? "Polski tekst zmienił się po tłumaczeniu — kliknij „Przetłumacz ponownie” (przed wysyłką zrobi się to samo)." : "Brak tłumaczenia — kliknij „Przetłumacz na EN i DE”."}
+              {previewTexts ? "Polski tekst zmienił się po tłumaczeniu — kliknij „Przetłumacz ponownie” (przed wysyłką zrobi się to samo)." : "Brak tłumaczenia — kliknij „Przetłumacz na wszystkie języki”."}
             </p>
           )}
           <div className="text-xs text-[#E0E0E0]/60 mb-2 break-words">
@@ -654,7 +667,7 @@ export default function NewsletterPage() {
             )}
             {!recLoading && !recErr && activeCount > 0 && (
               <p className="text-xs text-[#E0E0E0]/60 mt-1">
-                Języki: PL {langCounts.pl} · EN {langCounts.en} · DE {langCounts.de}
+                Języki: {countsLabel(langCounts)}
               </p>
             )}
             <button type="button" onClick={() => setShowList((v) => !v)} className="text-xs text-[#3B82F6] mt-1">

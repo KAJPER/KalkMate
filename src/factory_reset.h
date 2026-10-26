@@ -135,21 +135,24 @@ static void factoryResetWipe() {
 static bool _factoryResetConfirm(U8G2& d, bool honorPanic) {
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 10, T("=== Reset fabryczny ===", "=== Factory reset ===", "=== Werksreset ==="));
+    d.drawStr(2, 10, T("=== Reset fabryczny ===", "=== Factory reset ===", "=== Werksreset ===", "=== Tovarni reset ==="));
     d.drawHLine(0, 12, 256);
     d.setFont(u8g2_font_5x7_tf);
     d.drawStr(2, 23, T("Skasuje: WiFi, kod AI, historie, kolejke,",
                        "Deletes: WiFi, AI code, history, queue,",
-                       "Loescht: WLAN, KI-Code, Verlauf, Warteschl.,"));
+                       "Loescht: WLAN, KI-Code, Verlauf, Warteschl.,",
+                       "Smaze: WiFi, kod AI, historii, frontu,"));
     d.drawStr(2, 32, T("notatki, sprawdziany, powiazanie z kontem.",
                        "notes, tests, account link.",
-                       "Notizen, Tests, Kontoverknuepfung."));
+                       "Notizen, Tests, Kontoverknuepfung.",
+                       "poznamky, testy, propojeni s uctem."));
     d.drawStr(2, 41, T("Brak decyzji przez 30 s = anuluj.",
                        "No choice within 30 s = cancel.",
-                       "Keine Wahl in 30 s = Abbruch."));
+                       "Keine Wahl in 30 s = Abbruch.",
+                       "Bez volby do 30 s = zruseni."));
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 53, T("OK = TAK, resetuj", "OK = YES, reset", "OK = JA, zuruecksetzen"));
-    d.drawStr(2, 63, T("C/CE lub < = anuluj", "C/CE or < = cancel", "C/CE oder < = abbrechen"));
+    d.drawStr(2, 53, T("OK = TAK, resetuj", "OK = YES, reset", "OK = JA, zuruecksetzen", "OK = ANO, resetovat"));
+    d.drawStr(2, 63, T("C/CE lub < = anuluj", "C/CE or < = cancel", "C/CE oder < = abbrechen", "C/CE nebo < = zrusit"));
     d.sendBuffer();
 
     static const KalkKey kOk[] = { KEY_EQ, KEY_5 };
@@ -186,17 +189,17 @@ static bool factoryResetRun(U8G2& d, bool honorPanic) {
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(2, 14, T("Reset fabryczny...", "Factory reset...", "Werksreset..."));
+    d.drawStr(2, 14, T("Reset fabryczny...", "Factory reset...", "Werksreset...", "Tovarni reset..."));
     d.drawHLine(0, 16, 256);
-    d.drawStr(2, 32, T("Kasuje dane, prosze czekac...", "Erasing data, please wait...", "Loesche Daten, bitte warten..."));
+    d.drawStr(2, 32, T("Kasuje dane, prosze czekac...", "Erasing data, please wait...", "Loesche Daten, bitte warten...", "Mazu data, prosim cekejte..."));
     d.sendBuffer();
 
     factoryResetWipe();
 
     d.clearBuffer();
     d.setFont(u8g2_font_6x10_tf);
-    d.drawStr(6, 25, T("Zresetowano fabrycznie", "Factory reset done", "Werksreset abgeschlossen"));
-    d.drawStr(6, 40, T("Restart...", "Restarting...", "Neustart..."));
+    d.drawStr(6, 25, T("Zresetowano fabrycznie", "Factory reset done", "Werksreset abgeschlossen", "Tovarni reset dokoncen"));
+    d.drawStr(6, 40, T("Restart...", "Restarting...", "Neustart...", "Restartuji..."));
     d.sendBuffer();
     delay(1500);
     ESP.restart();

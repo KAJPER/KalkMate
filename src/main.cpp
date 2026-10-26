@@ -39,7 +39,7 @@ SET_LOOP_TASK_STACK_SIZE(24 * 1024);
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "2.0.2"
+#define FW_VERSION "2.0.4"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -49,14 +49,12 @@ SET_LOOP_TASK_STACK_SIZE(24 * 1024);
 
 #include "settings_screen.h"   // kalkSettings
 
-// Trojjezyczny helper (0=Polski, 1=English, 2=Deutsch) — musi byc
+// Helper tlumaczen (0=Polski, 1=English, 2=Deutsch, 3=Cestina) — musi byc
 // zdefiniowany TUTAJ (zaraz po kalkSettings), bo notes.h/tests.h/
 // account_screen.h wlaczane ponizej go uzywaja, a w C++ include widzi
 // tylko to co juz zdefiniowane wczesniej w tym samym pliku.
-static inline const char* mT(const char* pl, const char* en, const char* de) {
-    if (kalkSettings.language == 0) return pl;
-    if (kalkSettings.language == 1) return en;
-    return de;
+static inline const char* mT(const char* pl, const char* en, const char* de, const char* cs = nullptr) {
+    return T(pl, en, de, cs);   // ta sama logika co T() (settings_screen.h); cs == nullptr -> EN
 }
 
 // Debounce nawigacji w menu (oddzielny od debounce klawiatury matrycowej).
@@ -150,15 +148,28 @@ const char* menuItemsDE[] = {
     "5. Einstellungen",
     "6. Ueber",
 };
+const char* menuItemsCS[] = {
+    "1. Vyresit ulohu",
+    "2. Poznamky",
+    "3. Pisemka",
+    "4. Informace",
+    "5. Nastaveni",
+    "6. O programu",
+};
 const int MENU_COUNT = 6;
 const int VISIBLE_LINES = 4;
 
 // mT() zdefiniowane wczesniej w pliku (zaraz po include settings_screen.h) —
 // patrz komentarz tam.
 static inline const char* mMenuItem(int idx) {
-    if (kalkSettings.language == 0) return menuItemsPL[idx];
-    if (kalkSettings.language == 1) return menuItemsEN[idx];
-    return menuItemsDE[idx];
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST)   // 4..10 — tabela po tekscie EN
+        return kalkTrExtra(menuItemsEN[idx], kalkSettings.language);
+    switch (kalkSettings.language) {
+        case 0:  return menuItemsPL[idx];
+        case 2:  return menuItemsDE[idx];
+        case 3:  return menuItemsCS[idx];
+        default: return menuItemsEN[idx];
+    }
 }
 
 int selectedItem = 0;
@@ -212,12 +223,30 @@ void drawMenu() {
 void showSelected() {
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_10x20_tf);
-    u8g2.drawStr(10, 30, mT("Wybrano:", "Selected:", "Ausgewaehlt:"));
+    u8g2.drawStr(10, 30, mT("Wybrano:", "Selected:", "Ausgewaehlt:", "Vybrano:"));
     u8g2.setFont(u8g2_font_6x10_tf);
     const char* label = mMenuItem(selectedItem);
     u8g2.drawStr(10, 50, label);
     u8g2.sendBuffer();
     delay(1500);
+}
+
+// Ekran "niska bateria" (wczesny check przy starcie + watchdog VBAT w loop).
+// Teksty w jezyku interfejsu — przy starcie kalkSettings nie sa jeszcze
+// wczytane, wiec caller ustawia najpierw kalkSettings.language z NVS.
+static void _drawLowBatteryScreen(uint16_t vbatMv) {
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_10x20_tf);
+    const char* title = mT("NISKA BATERIA", "LOW BATTERY", "AKKU SCHWACH", "SLABA BATERIE");
+    u8g2.drawStr((256 - u8g2.getStrWidth(title)) / 2, 22, title);
+    u8g2.setFont(u8g2_font_6x10_tf);
+    char buf[40];
+    snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", vbatMv/1000, (vbatMv%1000)/10);
+    u8g2.drawStr(80, 40, buf);
+    const char* hint = mT("Podlacz ladowarke USB-C", "Connect USB-C charger",
+                          "USB-C-Ladegeraet anschliessen", "Pripojte nabijecku USB-C");
+    u8g2.drawStr((256 - u8g2.getStrWidth(hint)) / 2, 55, hint);
+    u8g2.sendBuffer();
 }
 
 void setup() {
@@ -294,15 +323,16 @@ void setup() {
             u8g2.begin();
             u8g2.setContrast(40);   // zmniejsz jasność -> mniej pradu OLED
 
-            u8g2.clearBuffer();
-            u8g2.setFont(u8g2_font_10x20_tf);
-            u8g2.drawStr(35, 22, "NISKA BATERIA");
-            u8g2.setFont(u8g2_font_6x10_tf);
-            char buf[40];
-            snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", vbatMv/1000, (vbatMv%1000)/10);
-            u8g2.drawStr(80, 40, buf);
-            u8g2.drawStr(40, 55, "Podlacz ladowarke USB-C");
-            u8g2.sendBuffer();
+            // Ustawienia jeszcze nie wczytane — sam jezyk z NVS (jak w kalkLoadSettings)
+            {
+                Preferences lp;
+                if (lp.begin("kalkmate", true)) {
+                    uint8_t l = lp.getUChar("lang", 1);
+                    kalkSettings.language = (l > _LANG_MAX) ? 1 : l;
+                    lp.end();
+                }
+            }
+            _drawLowBatteryScreen(vbatMv);
 
             delay(3000);
 
@@ -398,7 +428,8 @@ void setup() {
     // Protokol (linia tekstowa zakonczona \n):
     //   PC wysyla:  KALKPROV:SETCODE:1234
     //   ESP32 odp:  KALKPROV:OK   albo  KALKPROV:ERR:BADCODE / KALKPROV:ERR:NVS
-    //   PC wysyla:  KALKPROV:SETLANG:pl|en|de   (opcjonalnie, PRZED SETCODE)
+    //   PC wysyla:  KALKPROV:SETLANG:pl|en|de|cs|sk|lt|be|es|pt|fr|it albo 0..10
+    //               (opcjonalnie, PRZED SETCODE)
     //   ESP32 odp:  KALKPROV:LANG:OK  albo  KALKPROV:LANG:ERR:BADLANG / KALKPROV:LANG:ERR:NVS
     //   (osobny prefiks LANG:, zeby flasher nie wzial odpowiedzi jezyka za
     //   odpowiedz na kod)
@@ -428,15 +459,18 @@ void setup() {
                     if (c == '\n') {
                         provLine.trim();
                         if (provLine.startsWith("KALKPROV:SETLANG:")) {
-                            // Jezyk interfejsu (kalkSettings.language: 0=PL, 1=EN, 2=DE).
+                            // Jezyk interfejsu (kalkSettings.language: 0=PL, 1=EN, 2=DE, 3=CS,
+                            // 4=SK, 5=LT, 6=BE, 7=ES, 8=PT, 9=FR, 10=IT).
                             // Zapis prosto do NVS "kalkmate"/"lang" — kalkLoadSettings()
                             // nizej wczyta go jak kazde inne ustawienie.
                             String lg = provLine.substring(17);
                             lg.trim();
                             lg.toLowerCase();
-                            int lv = (lg == "pl" || lg == "0") ? 0
-                                   : (lg == "en" || lg == "1") ? 1
-                                   : (lg == "de" || lg == "2") ? 2 : -1;
+                            // Kody pl..it albo cyfry 0..10 (KALK_LANG_CODES, settings_screen.h).
+                            int lv = -1;
+                            for (int li = 0; li <= _LANG_MAX; li++) {
+                                if (lg == KALK_LANG_CODES[li] || lg == String(li)) { lv = li; break; }
+                            }
                             if (lv < 0) {
                                 provBad = true;
                                 Serial.println("KALKPROV:LANG:ERR:BADLANG");
@@ -581,15 +615,7 @@ static void _vbatWatchdogLoop() {
         Serial.printf("[VBAT-WD] VBAT=%u mV - CRITICAL, shutdown\n", vbatMv);
         Serial.flush();
 
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_10x20_tf);
-        u8g2.drawStr(35, 22, "NISKA BATERIA");
-        u8g2.setFont(u8g2_font_6x10_tf);
-        char buf[40];
-        snprintf(buf, sizeof(buf), "VBAT = %u.%02u V", vbatMv/1000, (vbatMv%1000)/10);
-        u8g2.drawStr(80, 40, buf);
-        u8g2.drawStr(40, 55, "Podlacz ladowarke USB-C");
-        u8g2.sendBuffer();
+        _drawLowBatteryScreen(vbatMv);
         delay(3000);
 
         u8g2.sleepOn();

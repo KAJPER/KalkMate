@@ -20,7 +20,7 @@
 
 import { prisma } from "@/lib/db";
 import { sendMail } from "@/lib/mailer";
-import { paymentReminderEmail, PAYMENT_REMINDER_SUBJECT, purchaseConfirmationEmail, localeFromCountry } from "@/lib/email-templates";
+import { paymentReminderEmail, PAYMENT_REMINDER_SUBJECT, purchaseConfirmationEmail, localeFromCountry, orderConfirmationSubject } from "@/lib/email-templates";
 import { signLink, verifyLink } from "@/lib/linkTokens";
 import { getTransactionBySessionId, p24StatusIsPaid, verifyTransaction, type P24TransactionInfo } from "@/lib/przelewy24";
 import { getOrderCoupon, consumeCouponUsage } from "@/lib/coupons";
@@ -223,11 +223,7 @@ export async function settleP24OrderPayment(p: {
     // sie na brakujacych kolumnach; blad = mail jak dla 1 sztuki bez listy).
     const orderUnits = await readOrderUnits(order.id).catch(() => ({ quantity: 1, units: [] as { code: string; name: string }[] }));
     const locale = localeFromCountry(order.customerCountry);
-    const subject = locale === "de"
-      ? `Bestellbestätigung ${order.orderNumber} – KalkMate`
-      : locale === "en"
-        ? `Order confirmation ${order.orderNumber} – KalkMate`
-        : `Potwierdzenie zamówienia ${order.orderNumber} - KalkMate`;
+    const subject = orderConfirmationSubject(locale, order.orderNumber);
     await sendMail({
       to: order.customerEmail,
       subject,

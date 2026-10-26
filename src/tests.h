@@ -18,6 +18,7 @@
 #include <vector>
 #include "kalkmate_certs.h"
 #include "wifi_persist.h"
+#include "i18n_extra.h"   // kalkTrExtra — _testsTr dla jezykow 4..10
 #include "notes.h"   // wspolne helpery JSON / UTF-8 / zapisu SPIFFS (_json*, _kalk*)
 
 #ifndef KALK_SERVER_URL
@@ -647,6 +648,18 @@ inline void testsDrawLine(U8G2 &d, int x, int y, const String& line) {
 //  Przeniesione tu z main.cpp — patrz komentarz przy showNotesScreen
 //  w notes.h (ten sam powod/mechanizm).
 // =====================================================================
+// Lokalny helper tlumaczen: 0=PL, 1=EN, 2=DE, 3=CS (bez diakrytykow).
+// Wlasny (nie mT() z main.cpp), zeby ten plik obslugiwal 4 jezyki niezaleznie.
+static inline const char* _testsTr(const char* pl, const char* en, const char* de, const char* cs) {
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..10
+    switch (kalkSettings.language) {
+        case 0:  return pl;
+        case 2:  return de;
+        case 3:  return cs;
+        default: return en;
+    }
+}
+
 inline void showTestsScreen(U8G2 &d) {
     inputWaitRelease();
     testsBuildTitleCache();   // raz na wejscie - eliminuje lagi listy
@@ -656,21 +669,24 @@ inline void showTestsScreen(U8G2 &d) {
         d.setFont(u8g2_font_6x10_tf);
         char hdr[40];
         snprintf(hdr, sizeof(hdr),
-            mT("Sprawdzian (%d)", "Tests (%d)", "Tests (%d)"), count);
+            _testsTr("Sprawdzian (%d)", "Tests (%d)", "Tests (%d)", "Pisemky (%d)"), count);
         d.drawStr(2, 10, hdr);
         d.drawHLine(0, 12, 256);
 
         if (count == 0) {
-            d.drawStr(2, 30, mT("Brak sprawdzianow.",
+            d.drawStr(2, 30, _testsTr("Brak sprawdzianow.",
                                     "No tests.",
-                                    "Keine Tests."));
-            d.drawStr(2, 42, mT("Dodaj w panelu klienta i sync.",
+                                    "Keine Tests.",
+                                    "Zadne pisemky."));
+            d.drawStr(2, 42, _testsTr("Dodaj w panelu klienta i sync.",
                                     "Add in user panel and sync.",
-                                    "Im Kundenpanel hinzufuegen u. sync."));
+                                    "Im Kundenpanel hinzufuegen u. sync.",
+                                    "Pridejte v panelu zakaznika a sync."));
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, mT("OK = sync   < = wyjscie",
+            d.drawStr(2, 62, _testsTr("OK = sync   < = wyjscie",
                                     "OK = sync   < = exit",
-                                    "OK = sync   < = beenden"));
+                                    "OK = sync   < = beenden",
+                                    "OK = sync   < = konec"));
         } else {
             int scroll = (cursor < 4) ? 0 : cursor - 3;
             for (int i = 0; i < 4 && (scroll + i) < count; i++) {
@@ -691,9 +707,10 @@ inline void showTestsScreen(U8G2 &d) {
                 }
             }
             d.setFont(u8g2_font_5x7_tf);
-            d.drawStr(2, 62, mT("OK=otworz  v=sync  <=wyjscie",
+            d.drawStr(2, 62, _testsTr("OK=otworz  v=sync  <=wyjscie",
                                     "OK=open  v=sync  <=exit",
-                                    "OK=oeffnen v=sync <=beenden"));
+                                    "OK=oeffnen v=sync <=beenden",
+                                    "OK=otevrit  v=sync  <=konec"));
         }
         d.sendBuffer();
     };
@@ -734,9 +751,10 @@ inline void showTestsScreen(U8G2 &d) {
                 char info[24];
                 snprintf(info, sizeof(info), "%d/%d", scrollLine + 1, (int)lines.size());
                 d.drawStr(220, 62, info);
-                d.drawStr(2, 62, mT("^/v scroll  < wstecz",
+                d.drawStr(2, 62, _testsTr("^/v scroll  < wstecz",
                                         "^/v scroll  < back",
-                                        "^/v scroll  < zurueck"));
+                                        "^/v scroll  < zurueck",
+                                        "^/v posun  < zpet"));
                 d.sendBuffer();
             }
 
@@ -760,7 +778,7 @@ inline void showTestsScreen(U8G2 &d) {
     auto syncFromServer = [&]() {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
-        d.drawStr(2, 30, mT("Synchronizacja...", "Syncing...", "Synchronisiere..."));
+        d.drawStr(2, 30, _testsTr("Synchronizacja...", "Syncing...", "Synchronisiere...", "Synchronizace..."));
         d.sendBuffer();
 
         if (WiFi.status() != WL_CONNECTED) {
@@ -775,7 +793,7 @@ inline void showTestsScreen(U8G2 &d) {
         if (WiFi.status() != WL_CONNECTED) {
             d.clearBuffer();
             d.setFont(u8g2_font_6x10_tf);
-            d.drawStr(2, 30, mT("Brak WiFi", "No WiFi", "Kein WLAN"));
+            d.drawStr(2, 30, _testsTr("Brak WiFi", "No WiFi", "Kein WLAN", "Bez WiFi"));
             d.sendBuffer();
             delay(2000);
             return -1;
@@ -789,11 +807,11 @@ inline void showTestsScreen(U8G2 &d) {
         d.clearBuffer();
         d.setFont(u8g2_font_6x10_tf);
         if (n < 0) {
-            d.drawStr(2, 30, mT("Blad synchronizacji", "Sync error", "Sync-Fehler"));
+            d.drawStr(2, 30, _testsTr("Blad synchronizacji", "Sync error", "Sync-Fehler", "Chyba synchronizace"));
         } else {
             char buf[40];
             snprintf(buf, sizeof(buf),
-                mT("Pobrano: %d sprawdz.", "Downloaded: %d tests", "Geladen: %d Tests"), n);
+                _testsTr("Pobrano: %d sprawdz.", "Downloaded: %d tests", "Geladen: %d Tests", "Stazeno: %d pisemek"), n);
             d.drawStr(2, 30, buf);
         }
         d.sendBuffer();
