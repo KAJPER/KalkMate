@@ -5,7 +5,7 @@ import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
-import { homeJsonLd } from "@/lib/seo";
+import { homeJsonLd, ogImages } from "@/lib/seo";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
@@ -46,6 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: languageAlternates(siteUrl),
     },
     openGraph: {
+      images: ogImages,
       title: "KalkMate — AI Calculator with Camera",
       description:
         "Point the camera at any problem. KalkMate's built-in AI delivers a step-by-step solution on its OLED screen — no phone, no app, no subscription. 2M AI tokens included.",
@@ -56,6 +57,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: "KalkMate",
     },
     twitter: {
+      images: ogImages,
       card: "summary_large_image",
       title: "KalkMate — AI Calculator with Camera",
       description:

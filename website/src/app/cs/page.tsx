@@ -5,7 +5,7 @@ import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
-import { homeJsonLd } from "@/lib/seo";
+import { homeJsonLd, ogImages } from "@/lib/seo";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
@@ -49,6 +49,7 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: languageAlternates(siteUrl),
     },
     openGraph: {
+      images: ogImages,
       title: "KalkMate — AI kalkulačka s kamerou",
       description:
         "Vyfoť úlohu — KalkMate ji vyřeší pomocí AI přímo na OLED displeji. Matematika, fyzika, chemie, biologie. 169 EUR včetně 2 mil. AI tokenů — bez předplatného.",
@@ -59,6 +60,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: "KalkMate",
     },
     twitter: {
+      images: ogImages,
       card: "summary_large_image",
       title: "KalkMate — AI kalkulačka s kamerou",
       description:

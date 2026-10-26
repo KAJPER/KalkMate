@@ -5,7 +5,7 @@ import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
-import { homeJsonLd } from "@/lib/seo";
+import { homeJsonLd, ogImages } from "@/lib/seo";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
@@ -50,6 +50,7 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: languageAlternates(siteUrl),
     },
     openGraph: {
+      images: ogImages,
       title: "Calcolatrice IA con fotocamera — KalkMate",
       description:
         "Fotografa un esercizio di matematica, fisica, chimica o biologia: KalkMate mostra la soluzione passo passo sul display OLED. Menu in 11 lingue. 169 EUR con 2 milioni di token IA, senza abbonamento.",
@@ -60,6 +61,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: "KalkMate",
     },
     twitter: {
+      images: ogImages,
       card: "summary_large_image",
       title: "Calcolatrice IA con fotocamera — KalkMate",
       description:

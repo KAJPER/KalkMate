@@ -5,7 +5,7 @@ import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
-import { homeJsonLd } from "@/lib/seo";
+import { homeJsonLd, ogImages } from "@/lib/seo";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
 
@@ -49,6 +49,7 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: languageAlternates(siteUrl),
     },
     openGraph: {
+      images: ogImages,
       title: "Калькулятар з ШІ і камерай — KalkMate",
       description:
         "Сфатаграфуй задачу па матэматыцы, фізіцы, хіміі ці біялогіі — KalkMate пакажа рашэнне крок за крокам на OLED-экране. Меню на 11 мовах. 699 zł з 2 млн токенаў ШІ, без падпіскі.",
@@ -59,6 +60,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: "KalkMate",
     },
     twitter: {
+      images: ogImages,
       card: "summary_large_image",
       title: "Калькулятар з ШІ і камерай — KalkMate",
       description:

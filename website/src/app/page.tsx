@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import Navigation from "@/components/Navigation";
 import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
-import { homeJsonLd } from "@/lib/seo";
+import { homeJsonLd, ogImages } from "@/lib/seo";
 import type { Metadata } from "next";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
@@ -35,6 +35,7 @@ export async function generateMetadata(): Promise<Metadata> {
     // caly openGraph z src/app/layout.tsx), wiec powtarzamy tresc z layoutu + url
     // per-host i alternateLocale. Obrazek OG idzie z pliku opengraph-image (nie ustawiac images).
     openGraph: {
+      images: ogImages,
       title: "KalkMate — Kalkulator AI",
       description:
         "Kalkulator z wbudowaną sztuczną inteligencją. Zrób zdjęcie zadania — AI rozwiąże je za Ciebie.",

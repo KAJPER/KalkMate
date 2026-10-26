@@ -169,3 +169,12 @@ export function organizationJsonLd(siteUrl: string = SITE_URL): string {
     taxID: "9662222951",
   });
 }
+
+/**
+ * Obrazek podgladu linku (src/app/opengraph-image.jpg). Plikowa konwencja
+ * Next.js dziala tylko tam, gdzie strona NIE ustawia wlasnego openGraph/
+ * twitter — strony jezykowe ustawiaja, wiec podaja go jawnie.
+ */
+export const ogImages = [
+  { url: "/opengraph-image.jpg", width: 1200, height: 630, alt: "KalkMate — AI calculator with camera" },
+];

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ogImages } from "@/lib/seo";
 import { headers } from "next/headers";
 import { locales, localePath, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 
@@ -23,6 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
       },
     },
     openGraph: {
+      images: ogImages,
       title: "Instrukcja obsługi kalkulatora KalkMate — pomoc",
       description:
         "Instrukcja obsługi KalkMate krok po kroku: pierwsze uruchomienie, WiFi, tryb AI, bateria i ładowanie, aktualizacje OTA, rozwiązywanie problemów i changelog.",
@@ -32,6 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName: "KalkMate",
     },
     twitter: {
+      images: ogImages,
       card: "summary_large_image",
       title: "Instrukcja obsługi kalkulatora KalkMate — pomoc",
       description:
