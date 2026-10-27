@@ -140,7 +140,9 @@ export default function Reviews({ lang = "pl" }: { lang?: Locale }) {
                     </p>
                     <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mt-0.5">{r.location}</p>
                   </div>
-                  <span className="km-mono-eyebrow text-[#D8FF3D]/60 text-[10px]">{t.verified}</span>
+                  {r.verified !== false && (
+                    <span className="km-mono-eyebrow text-[#D8FF3D]/60 text-[10px]">{t.verified}</span>
+                  )}
                 </div>
               </article>
             ))

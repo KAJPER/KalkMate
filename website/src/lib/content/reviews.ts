@@ -1,58 +1,47 @@
 import { type Locale } from "@/lib/i18n";
+import source from "./reviews-source.json";
 
 export type Review = {
   author: string;
   location: string;
-  rating: 5 | 4;
+  rating: 1 | 2 | 3 | 4 | 5;
   date: string;
   body: string;
+  /** false = opinia bez potwierdzonego zakupu (nie pokazujemy odznaki).
+   *  undefined = jak dotad (starsze, tlumaczone opinie innych jezykow). */
+  verified?: boolean;
 };
 
-export const reviews: Record<Locale, Review[]> = {
-  pl: [
-    {
-      author: "Marek K.",
-      location: "Kraków",
-      rating: 5,
-      date: "2026-04-02",
-      body: "Przed maturą z matmy rozszerzonej korzystam z tego codziennie. Całki, geometria analityczna, kombinatoryka. Daję pod kamerę i mam pełne rozwiązanie. Szczerze nie wierzyłem że to tak działa.",
-    },
-    {
-      author: "Ania W.",
-      location: "Warszawa",
-      rating: 5,
-      date: "2026-03-18",
-      body: "Tata kupił mi do fizyki bo korepetycje były za drogie. Na próbnym dostałam 78% zamiast 52%. Nie wiem czy to tylko przez kalkulator ale bardzo mi pomógł przy siłach i elektryczności.",
-    },
-    {
-      author: "Piotr S.",
-      location: "Wrocław",
-      rating: 5,
-      date: "2026-04-10",
-      body: "Z zewnątrz totalnie wygląda jak normalny kalkulator prosty. Nikt w szkole nie wie co to jest. Chemia organiczna i stechiometria przestały być problemem dzięki temu.",
-    },
-    {
-      author: "Zofia M.",
-      location: "Gdańsk",
-      rating: 5,
-      date: "2026-03-25",
-      body: "Biologia rozszerzona to był koszmar, szczególnie genetyka i zadania z krzyżówkami. Teraz po prostu fotografuję zadanie i czytam jak to się robi krok po kroku. Bardzo polecam.",
-    },
-    {
-      author: "Tomasz L.",
-      location: "Poznań",
-      rating: 4,
-      date: "2026-04-05",
-      body: "Generalnie spoko produkt. Bateria trzyma cały dzień nauki. Raz miałem problem że przy słabym świetle nie chciało dobrze odczytać zadania ale po poprawieniu oświetlenia ok. Dobry zakup.",
-    },
-    {
-      author: "Kasia R.",
-      location: "Łódź",
-      rating: 5,
-      date: "2026-04-14",
-      body: "Zamiast korepetycji za 120 zł za godzinę mam to. Jednorazowy koszt i działa do wszystkich przedmiotów. Mama była sceptyczna ale teraz też uważa że to był dobry pomysł.",
-    },
-  ],
+// Opinie PL: prawdziwe dane (formularz Google + opinie z Allegro sprzed
+// sklepu), wyeksportowane do reviews-source.json z oryginalnymi polami.
+// Pokazujemy TYLKO te ze zgoda na publikacje; odznaka "zweryfikowany zakup"
+// tylko tam, gdzie zweryfikowany_zakup = true. Najnowsze na poczatku.
+type SourceReview = {
+  id: number;
+  tresc_opinii: string;
+  ocena: number;
+  imie: string;
+  data: string; // "YYYY-MM-DD HH:mm"
+  miasto: string;
+  jezyk: string;
+  zweryfikowany_zakup: boolean;
+  zgoda_na_publikacje: boolean;
+};
+
+const realReviewsPl: Review[] = (source as SourceReview[])
+  .filter((r) => r.zgoda_na_publikacje)
+  .sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : b.id - a.id))
+  .map((r) => ({
+    author: r.imie,
+    location: r.miasto,
+    rating: Math.min(5, Math.max(1, Math.round(r.ocena))) as Review["rating"],
+    date: r.data.slice(0, 10),
+    body: r.tresc_opinii,
+    verified: r.zweryfikowany_zakup,
+  }));
+
+// Pozostale jezyki: tlumaczone opinie jak dotad (bez zmian).
+const translatedReviews: Record<Exclude<Locale, "pl">, Review[]> = {
   en: [
     {
       author: "Mark K.",
@@ -495,9 +484,16 @@ export const reviews: Record<Locale, Review[]> = {
   ],
 };
 
+export const reviews: Record<Locale, Review[]> = {
+  ...translatedReviews,
+  pl: realReviewsPl,
+};
+
+// Ocena zbiorcza liczona z prawdziwych opinii (nie wpisana recznie).
+const _ratingSum = realReviewsPl.reduce((sum, r) => sum + r.rating, 0);
 export const aggregateRating = {
-  ratingValue: "4.8",
-  reviewCount: String(reviews.pl.length),
+  ratingValue: (_ratingSum / realReviewsPl.length).toFixed(1),
+  reviewCount: String(realReviewsPl.length),
   bestRating: "5",
   worstRating: "1",
 };

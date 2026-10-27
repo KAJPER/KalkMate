@@ -88,7 +88,9 @@ export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
       bestRating: aggregateRating.bestRating,
       worstRating: aggregateRating.worstRating,
     },
-    review: reviews[locale].map((r) => ({
+    // Max 10 najnowszych — pelna lista jest w widocznej sekcji opinii, a w JSON-LD
+    // kilkadziesiat recenzji tylko puchloby HTML kazdej strony.
+    review: reviews[locale].slice(0, 10).map((r) => ({
       "@type": "Review",
       author: { "@type": "Person", name: r.author },
       reviewRating: {
