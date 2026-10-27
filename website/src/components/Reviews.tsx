@@ -99,7 +99,7 @@ export default function Reviews({ lang = "pl" }: { lang?: Locale }) {
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
 
         {/* Header */}
-        <div className="mb-12">
+        <div className="mb-10">
           <p className="km-mono-eyebrow text-[#D8FF3D]">{t.eyebrow}</p>
           <div className="mt-3 flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-6">
             <h2 className="km-display text-[clamp(28px,3.5vw,52px)] text-[#F2EDE3] leading-[0.95]">
@@ -111,31 +111,40 @@ export default function Reviews({ lang = "pl" }: { lang?: Locale }) {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {list.map((r, i) => (
-            <article
-              key={i}
-              className="border border-[rgba(242,237,227,0.10)] bg-[#111] p-5 flex flex-col gap-3"
-            >
-              <Stars rating={r.rating} />
+      {/* Tasma opinii przewijana w petli (CSS, bez JS) — druga kopia jest tylko
+          wizualnym przedluzeniem petli, ukryta przed czytnikami ekranu. */}
+      <div
+        className="km-reviews-viewport overflow-hidden"
+        style={{ ["--km-reviews-duration" as string]: `${Math.max(30, list.length * 9)}s` }}
+      >
+        <div className="km-reviews-track flex w-max">
+          {[0, 1].map((copy) =>
+            list.map((r, i) => (
+              <article
+                key={`${copy}-${i}`}
+                {...(copy === 1 ? { "aria-hidden": true, "data-dup": "" } : {})}
+                className="mr-4 w-[300px] sm:w-[360px] shrink-0 border border-[rgba(242,237,227,0.10)] bg-[#111] p-5 flex flex-col gap-3"
+              >
+                <Stars rating={r.rating} />
 
-              <p className="text-[14px] leading-[1.6] text-[#F2EDE3]/80 flex-1">
-                {r.body}
-              </p>
+                <p className="text-[14px] leading-[1.6] text-[#F2EDE3]/80 flex-1">
+                  {r.body}
+                </p>
 
-              <div className="border-t border-[rgba(242,237,227,0.08)] pt-3 flex items-center justify-between">
-                <div>
-                  <p className="text-[13px] text-[#F2EDE3] font-medium">
-                    {r.author}
-                  </p>
-                  <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mt-0.5">{r.location}</p>
+                <div className="border-t border-[rgba(242,237,227,0.08)] pt-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[13px] text-[#F2EDE3] font-medium">
+                      {r.author}
+                    </p>
+                    <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mt-0.5">{r.location}</p>
+                  </div>
+                  <span className="km-mono-eyebrow text-[#D8FF3D]/60 text-[10px]">{t.verified}</span>
                 </div>
-                <span className="km-mono-eyebrow text-[#D8FF3D]/60 text-[10px]">{t.verified}</span>
-              </div>
-            </article>
-          ))}
+              </article>
+            ))
+          )}
         </div>
       </div>
     </section>

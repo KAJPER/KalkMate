@@ -122,6 +122,25 @@ body {
 
 .km-blink {}
 
+/* Przewijane opinie (src/components/Reviews.tsx): tasma = 2 kopie listy,
+   przesuw o -50% w petli; pauza po najechaniu / fokusie; bez ruchu przy
+   prefers-reduced-motion (wtedy zwykle przewijanie w poziomie). */
+.km-reviews-viewport {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.km-reviews-track {
+  animation: km-marquee var(--km-reviews-duration, 60s) linear infinite;
+  will-change: transform;
+}
+.km-reviews-viewport:hover .km-reviews-track,
+.km-reviews-viewport:focus-within .km-reviews-track { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .km-reviews-viewport { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
+  .km-reviews-track { animation: none; }
+  .km-reviews-track [data-dup] { display: none; }
+}
+
 /* Scroll reveal (src/components/Reveal.tsx) — zamiennik framer-motion whileInView.
    Keyframes zamiast transition: nie nadpisuje transition-colors/hoverow elementu. */
 @keyframes km-reveal-in {
