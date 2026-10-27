@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 export default function AdminLogin() {
   const router = useRouter();
   const [token, setToken] = useState("");
+  // Login moderatora — puste = wlasciciel (sam kod z Authenticatora, jak dotad).
+  const [username, setUsername] = useState("");
   // Drugi skladnik (gdy na serwerze ustawione ADMIN_PASSWORD_HASH) — bez tej
   // zmiennej serwer pole ignoruje, wiec mozna je zostawic puste.
   const [password, setPassword] = useState("");
@@ -21,7 +23,7 @@ export default function AdminLogin() {
       const res = await fetch("/api/admin/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify(username.trim() ? { username: username.trim(), token } : { token, password }),
       });
 
       if (!res.ok) {
@@ -56,6 +58,23 @@ export default function AdminLogin() {
         >
           <div>
             <label className="block text-sm font-medium text-[#E0E0E0]/70 mb-1">
+              Login moderatora
+            </label>
+            <input
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={32}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-lg border border-[#3F4147] bg-[#2B2D31] text-[#E0E0E0] text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+              placeholder="Zostaw puste, jeśli jesteś właścicielem"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#E0E0E0]/70 mb-1">
               Kod Authenticator
             </label>
             <input
@@ -71,6 +90,7 @@ export default function AdminLogin() {
             />
           </div>
 
+          {!username.trim() && (
           <div>
             <label className="block text-sm font-medium text-[#E0E0E0]/70 mb-1">
               Hasło (jeśli ustawione)
@@ -83,6 +103,7 @@ export default function AdminLogin() {
               className="w-full px-4 py-2.5 rounded-lg border border-[#3F4147] bg-[#2B2D31] text-[#E0E0E0] text-sm focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
             />
           </div>
+          )}
 
           {error && <p className="text-sm text-red-400">{error}</p>}
 

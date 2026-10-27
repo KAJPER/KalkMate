@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { ADMIN_COOKIE_NAME, buildAdminCookie, randomSessionId, verifyAdminCookie } from "@/lib/admin-session";
 import { sendMail, CONTACT_EMAIL } from "@/lib/mailer";
 import { adminLockoutAlertEmail } from "@/lib/email-templates";
+import { getModerator, ensureModeratorTable, type Moderator } from "@/lib/admin-moderators";
+import { moderatorApiAllowed } from "@/lib/admin-permissions";
 
 export const COOKIE_NAME = ADMIN_COOKIE_NAME;
 // 180 dni — aplikacja desktopowa (tools/kalkmate-admin-desktop) ma pamietac
@@ -27,6 +29,11 @@ async function ensureAdminSessionTable(): Promise<void> {
       "revokedAt"  DATETIME
     )
   `);
+  // moderatorId: NULL = wlasciciel, inaczej AdminModerator.id (lib/admin-moderators.ts).
+  const cols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("AdminSession")`);
+  if (!cols.some((c) => c.name === "moderatorId")) {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "AdminSession" ADD COLUMN "moderatorId" TEXT`);
+  }
   _tableReady = true;
 }
 
@@ -38,19 +45,21 @@ export interface AdminSessionRow {
   userAgent: string | null;
   ip: string | null;
   revokedAt: string | null;
+  moderatorId: string | null;
+  moderatorUsername: string | null;
 }
 
 // Tworzy nowa sesje po poprawnym TOTP. Zwraca gotowa wartosc cookie.
-export async function createAdminSession(userAgent: string | null, ip: string | null): Promise<{ cookie: string; sessionId: string }> {
+export async function createAdminSession(userAgent: string | null, ip: string | null, moderatorId: string | null = null): Promise<{ cookie: string; sessionId: string }> {
   const secret = process.env.ADMIN_SESSION_TOKEN;
   if (!secret) throw new Error("ADMIN_SESSION_TOKEN not configured");
   await ensureAdminSessionTable();
   const sessionId = randomSessionId();
   const exp = Math.floor(Date.now() / 1000) + MAX_AGE;
   await prisma.$executeRaw`
-    INSERT INTO "AdminSession" ("id", "expiresAt", "lastUsedAt", "userAgent", "ip")
+    INSERT INTO "AdminSession" ("id", "expiresAt", "lastUsedAt", "userAgent", "ip", "moderatorId")
     VALUES (${sessionId}, ${new Date(exp * 1000).toISOString()}, ${new Date().toISOString()},
-            ${(userAgent || "").slice(0, 300)}, ${(ip || "").slice(0, 64)})
+            ${(userAgent || "").slice(0, 300)}, ${(ip || "").slice(0, 64)}, ${moderatorId})
   `;
   const cookie = await buildAdminCookie(sessionId, exp, secret);
   return { cookie, sessionId };
@@ -75,11 +84,23 @@ export async function revokeAllAdminSessions(exceptId?: string): Promise<number>
   return prisma.$executeRaw`UPDATE "AdminSession" SET "revokedAt" = ${now} WHERE "revokedAt" IS NULL`;
 }
 
+// Wylogowanie moderatora wszedzie (usuniecie konta / nowy kod 2FA).
+export async function revokeModeratorSessions(moderatorId: string): Promise<number> {
+  await ensureAdminSessionTable();
+  return prisma.$executeRaw`
+    UPDATE "AdminSession" SET "revokedAt" = ${new Date().toISOString()}
+    WHERE "revokedAt" IS NULL AND "moderatorId" = ${moderatorId}
+  `;
+}
+
 export async function listAdminSessions(): Promise<AdminSessionRow[]> {
   await ensureAdminSessionTable();
+  await ensureModeratorTable();
   return prisma.$queryRaw<AdminSessionRow[]>`
-    SELECT "id", "createdAt", "expiresAt", "lastUsedAt", "userAgent", "ip", "revokedAt"
-    FROM "AdminSession" ORDER BY "createdAt" DESC LIMIT 50
+    SELECT s."id", s."createdAt", s."expiresAt", s."lastUsedAt", s."userAgent", s."ip", s."revokedAt",
+           s."moderatorId", m."username" AS "moderatorUsername"
+    FROM "AdminSession" s LEFT JOIN "AdminModerator" m ON m."id" = s."moderatorId"
+    ORDER BY s."createdAt" DESC LIMIT 50
   `;
 }
 
@@ -89,25 +110,33 @@ export async function currentAdminSessionId(request: NextRequest): Promise<strin
   return parsed?.sessionId ?? null;
 }
 
-// Defense-in-depth: kazdy admin route wywoluje to jako pierwsza linie,
-// niezaleznie od middleware (ktore sprawdza tylko podpis + date, bez bazy):
-//   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
-// Tu dodatkowo: sesja istnieje w bazie, nie jest odwolana, nie wygasla.
+// Kto jest zalogowany: wlasciciel (moderator = null) albo moderator.
+// null = brak waznej sesji (zly podpis, odwolana, wygasla, usuniety moderator).
+export interface AdminIdentity {
+  sessionId: string;
+  moderator: Moderator | null;
+}
+
 const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 const _lastTouch = new Map<string, number>();
 
-export async function requireAdminAuth(request: NextRequest): Promise<NextResponse | null> {
-  const unauthorized = () => NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function getAdminIdentity(request: NextRequest): Promise<AdminIdentity | null> {
   const parsed = await verifyAdminCookie(request.cookies.get(COOKIE_NAME)?.value, process.env.ADMIN_SESSION_TOKEN);
-  if (!parsed) return unauthorized();
+  if (!parsed) return null;
 
   await ensureAdminSessionTable();
-  const rows = await prisma.$queryRaw<{ revokedAt: string | null; expiresAt: string }[]>`
-    SELECT "revokedAt", "expiresAt" FROM "AdminSession" WHERE "id" = ${parsed.sessionId} LIMIT 1
+  const rows = await prisma.$queryRaw<{ revokedAt: string | null; expiresAt: string; moderatorId: string | null }[]>`
+    SELECT "revokedAt", "expiresAt", "moderatorId" FROM "AdminSession" WHERE "id" = ${parsed.sessionId} LIMIT 1
   `;
   const row = rows[0];
-  if (!row || row.revokedAt) return unauthorized();
-  if (new Date(row.expiresAt).getTime() < Date.now()) return unauthorized();
+  if (!row || row.revokedAt) return null;
+  if (new Date(row.expiresAt).getTime() < Date.now()) return null;
+
+  let moderator: Moderator | null = null;
+  if (row.moderatorId) {
+    moderator = await getModerator(row.moderatorId);
+    if (!moderator) return null; // konto usuniete
+  }
 
   // lastUsedAt — max raz na 5 min per sesja, zeby nie pisac do SQLite przy kazdym zadaniu
   const last = _lastTouch.get(parsed.sessionId) ?? 0;
@@ -116,7 +145,29 @@ export async function requireAdminAuth(request: NextRequest): Promise<NextRespon
     prisma.$executeRaw`UPDATE "AdminSession" SET "lastUsedAt" = ${new Date().toISOString()} WHERE "id" = ${parsed.sessionId}`
       .catch(() => { /* nieistotne */ });
   }
+  return { sessionId: parsed.sessionId, moderator };
+}
+
+// Defense-in-depth: kazdy admin route wywoluje to jako pierwsza linie,
+// niezaleznie od middleware (ktore sprawdza tylko podpis + date, bez bazy):
+//   const authErr = await requireAdminAuth(request); if (authErr) return authErr;
+// Tu dodatkowo: sesja istnieje w bazie, nie jest odwolana, nie wygasla, a
+// moderator ma uprawnienie do sekcji tej sciezki API (lib/admin-permissions.ts).
+export async function requireAdminAuth(request: NextRequest): Promise<NextResponse | null> {
+  const identity = await getAdminIdentity(request);
+  if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (identity.moderator && !moderatorApiAllowed(request.nextUrl.pathname, request.method, identity.moderator.permissions)) {
+    return NextResponse.json({ error: "Brak dostępu do tej sekcji" }, { status: 403 });
+  }
   return null; // OK
+}
+
+// Tylko wlasciciel (zarzadzanie moderatorami, lista sesji, "wyloguj wszystkich").
+export async function requireOwnerAuth(request: NextRequest): Promise<NextResponse | null> {
+  const identity = await getAdminIdentity(request);
+  if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (identity.moderator) return NextResponse.json({ error: "Tylko dla właściciela panelu" }, { status: 403 });
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +181,11 @@ export function matchTOTPCounter(rawToken: string, timestamp = Date.now()): numb
     console.error("ADMIN_2FA_SECRET is not configured");
     return null;
   }
+  return matchTOTPCounterForSecret(secret, rawToken, timestamp);
+}
+
+// To samo dla dowolnego sekretu (moderatorzy — lib/admin-moderators.ts).
+export function matchTOTPCounterForSecret(secret: string, rawToken: string, timestamp = Date.now()): number | null {
   const token = String(rawToken ?? "").replace(/\s+/g, "");
   if (!/^\d{6}$/.test(token)) return null;
 

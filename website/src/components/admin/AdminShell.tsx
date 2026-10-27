@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { moderatorPageAllowed } from "@/lib/admin-permissions";
 
 // Most z aplikacja desktopowa (tools/kalkmate-admin-desktop, preload.js):
 // window.kalkmateDesktop istnieje TYLKO wewnatrz Electrona. W przegladarce
@@ -121,7 +122,15 @@ const navItems = [
     label: "Analityka",
     icon: "M3 3v18h18M9 17V9m4 8V5m4 12v-4"
   },
+  {
+    href: "/admin/moderators",
+    label: "Moderatorzy",
+    icon: "M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3zm-3 9l2 2 4-4"
+  },
 ];
+
+// /api/admin/me — wlasciciel widzi wszystko, moderator tylko swoje sekcje.
+type AdminMe = { owner: true } | { owner: false; username: string; permissions: string[] };
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -129,9 +138,34 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
+  const [me, setMe] = useState<AdminMe | null>(null);
+
   useEffect(() => {
     setIsDesktop(!!window.kalkmateDesktop?.isDesktop);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/me")
+      .then((res) => (res.status === 401 ? null : res.json()))
+      .then((data) => {
+        if (cancelled) return;
+        if (!data) { router.push("/admin/login"); return; }
+        if (data.ok) setMe(data.owner ? { owner: true } : { owner: false, username: data.username, permissions: data.permissions || [] });
+      })
+      .catch(() => { /* zostaje pelne menu; API i tak pilnuje uprawnien */ });
+    return () => { cancelled = true; };
+  }, [router]);
+
+  const canSee = (href: string) => !me || me.owner || moderatorPageAllowed(href, me.permissions);
+  const visibleNav = navItems.filter((item) => (item.href === "/admin/moderators" ? me?.owner === true : canSee(item.href)));
+  const pageBlocked = !!me && !me.owner && !moderatorPageAllowed(pathname, me.permissions);
+
+  // Moderator bez dostepu do Dashboardu laduje po logowaniu na /admin —
+  // przenies go na pierwsza dozwolona strone.
+  useEffect(() => {
+    if (pageBlocked && pathname === "/admin" && visibleNav.length) router.replace(visibleNav[0].href);
+  }, [pageBlocked, pathname, visibleNav, router]);
 
   const openFlasher = () => {
     setSidebarOpen(false);
@@ -169,8 +203,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           </span>
         </div>
 
-        <nav className="p-3 space-y-1">
-          {navItems.map((item) => (
+        <nav className="p-3 space-y-1 overflow-y-auto" style={{ maxHeight: "calc(100% - 3.5rem - 4.5rem)" }}>
+          {visibleNav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -197,7 +231,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </Link>
           ))}
 
-          {isDesktop && (
+          {isDesktop && me?.owner && (
             <button
               type="button"
               onClick={openFlasher}
@@ -222,7 +256,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           )}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-[#3F4147]">
+        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-[#3F4147] bg-[#313338]">
+          {me && !me.owner && (
+            <p className="px-3 pb-2 text-xs text-[#E0E0E0]/40 truncate">Moderator: {me.username}</p>
+          )}
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-[#E0E0E0]/60 hover:text-red-400 hover:bg-[#3F4147]/50 transition-colors"
@@ -261,7 +298,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
       {/* Main content */}
       <main className="lg:ml-60 pt-14 lg:pt-0 min-h-screen">
-        <div className="p-6">{children}</div>
+        <div className="p-6">
+          {pageBlocked ? (
+            <div className="max-w-md mx-auto mt-16 text-center bg-[#313338] rounded-xl border border-[#3F4147] p-6">
+              <p className="text-[#E0E0E0] font-semibold">Brak dostępu</p>
+              <p className="text-sm text-[#E0E0E0]/50 mt-1">Twoje konto moderatora nie ma dostępu do tej sekcji.</p>
+            </div>
+          ) : children}
+        </div>
       </main>
     </div>
   );
