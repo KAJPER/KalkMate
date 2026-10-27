@@ -49,6 +49,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // NIE wlaczac experimental.inlineCss — sprawdzone na produkcji 2026-10-27:
+  // Lighthouse mobile 0.83 -> 0.79 (LCP 4.0 -> 4.4 s, wiekszy HTML), a
+  // "render delay" H1 ~2.3 s zostal (to klatkowanie headless Chrome co ~1 s,
+  // odtwarzalne na pustej stronie z 1 arkuszem CSS — nie nasz CSS).
   images: {
     formats: ["image/webp", "image/avif"],
     deviceSizes: [640, 828, 1200, 1920, 2048],
