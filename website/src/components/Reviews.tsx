@@ -4,7 +4,7 @@ import { reviews, aggregateRating } from "@/lib/content/reviews";
 const dict: Record<Locale, { eyebrow: string; heading: string; sub: string; verified: string }> = {
   pl: {
     eyebrow: "/ OPINIE UŻYTKOWNIKÓW",
-    heading: "Co mówią maturzyści.",
+    heading: "Co mówią użytkownicy.",
     sub: `${aggregateRating.ratingValue}/5 · ${aggregateRating.reviewCount} opinii`,
     verified: "Zweryfikowany zakup",
   },
