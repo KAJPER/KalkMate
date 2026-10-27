@@ -15,7 +15,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 // na pytania techniczne/uzytkowe zgodnie z prawda, a nie zgadywalo. To NIE
 // jest tekst do kopiowania 1:1 do klienta — to kontekst, z ktorego model
 // korzysta budujac wlasna, zwiezla odpowiedz.
-const KALKMATE_KNOWLEDGE = `=== O PRODUKCIE: KalkMate v3.0 ===
+export const KALKMATE_KNOWLEDGE = `=== O PRODUKCIE: KalkMate v3.0 ===
 Kalkulator edukacyjny z ukrytym AI — rozwiazuje zadania z matematyki, fizyki, chemii i biologii oraz kazdego innego przedmiotu krok po kroku. Wyglada i dziala jak zwykly kalkulator prosty (obudowa Esperanza T8809-2) — funkcje AI sa ukryte pod kodem, dyskretne na egzaminie/zajeciach.
 
 Podzespoly i funkcje (jezyk dla klienta, nie techniczny):

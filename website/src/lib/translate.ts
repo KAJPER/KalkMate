@@ -5,6 +5,8 @@
 // Model celowo tani/szybki — tlumaczenie to prosta, deterministyczna operacja,
 // nie potrzeba tu drogiego modelu rozumowania.
 
+import { KALKMATE_KNOWLEDGE } from "@/lib/mailReply";
+
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const TRANSLATE_MODEL = process.env.MAILBOX_TRANSLATE_MODEL || "google/gemini-3.8-flash";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -13,7 +15,7 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 // pojedynczym gigantycznym mailem zjadajacym cala odpowiedz/koszt.
 const MAX_CHARS = 12000;
 
-async function callTranslate(system: string, user: string, maxTokens = 4000): Promise<string> {
+async function callTranslate(system: string, user: string, maxTokens = 4000, temperature = 0.2): Promise<string> {
   if (!OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured");
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -32,7 +34,7 @@ async function callTranslate(system: string, user: string, maxTokens = 4000): Pr
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      temperature: 0.2,
+      temperature,
       max_tokens: maxTokens,
       // gemini-3.8-flash ma OBOWIAZKOWY reasoning (OpenRouter odrzuca
       // "effort":"none" bledem 400 dla tego modelu) i przy dluzszych mailach
@@ -157,5 +159,53 @@ export async function translateNewsletter(src: NewsletterTexts, target: Newslett
   return {
     subject: pick("subject"), preheader: pick("preheader"), eyebrow: pick("eyebrow"),
     title: pick("title"), body: pick("body"), ctaText: pick("ctaText"),
+  };
+}
+
+// === Newsletter — szkic z krotkiego opisu ("Napisz z AI" w /admin/newsletter) ===
+// Admin opisuje w 1-2 zdaniach, co chce wyslac; model pisze wszystkie pola po
+// polsku w formacie edytora. Fakty o produkcie z KALKMATE_KNOWLEDGE, zeby nie
+// zmyslal funkcji. serviceNotice = wysylka takze do osob BEZ zgody
+// marketingowej (newsletterInput.ts) — wtedy twardy zakaz tresci reklamowych.
+export interface NewsletterDraftTexts extends NewsletterTexts {
+  ctaUrl: string;
+}
+
+export async function composeNewsletter(brief: string, serviceNotice: boolean): Promise<NewsletterDraftTexts> {
+  const system =
+    "Piszesz newslettery KalkMate (kalkulator z ukrytym AI dla uczniow, kalkmate.pl) do zarejestrowanych uzytkownikow i kupujacych.\n" +
+    "Dostajesz krotki opis od wlasciciela. Napisz z niego gotowy mail PO POLSKU.\n" +
+    "Zasady:\n" +
+    "- Zwracaj sie na \"ty\", przyjaznie i konkretnie, jak na stronie KalkMate. Bez korpomowy, bez przesady z wykrzyknikami.\n" +
+    "- Tresc (body): zacznij od \"Czesc {{imie}},\" w osobnej linii (z polskimi znakami: \"Cześć {{imie}},\"), potem 2-4 krotkie akapity (lacznie ok. 60-180 slow). " +
+    "Formatowanie TYLKO takie: pusta linia miedzy akapitami, \"## \" na poczatku linii = srodtytul, \"- \" = punkt listy, **pogrubienie**, [tekst](https://...) = link. Bez HTML, bez naglowkow \"#\" pojedynczych. Zakoncz podpisem \"Zespół KalkMate\".\n" +
+    "- subject: max ok. 60 znakow, konkretny, najwyzej jedno emoji. preheader: max ok. 90 znakow, uzupelnia temat (nie powtarza go). " +
+    "eyebrow: 1-2 slowa (np. \"Nowość\", \"Przerwa techniczna\", \"Promocja\"). title: krotki duzy naglowek, max ok. 50 znakow.\n" +
+    "- ctaText + ctaUrl: przycisk tylko jesli ma sens (np. \"Zobacz nowości\" -> https://kalkmate.pl/panel). Uzywaj WYLACZNIE adresow https://kalkmate.pl/... (np. /panel, /pomoc, /) albo adresu podanego w opisie. Bez sensownego przycisku: oba pola puste.\n" +
+    "- NIE wymyslaj faktow: dat, godzin, cen, kodow rabatowych, procentow, numerow wersji ani funkcji, ktorych nie ma w opisie lub w wiedzy o produkcie ponizej. Jesli opis czegos nie podaje, napisz ogolniej.\n" +
+    (serviceNotice
+      ? "- To KOMUNIKAT SERWISOWY wysylany takze do osob BEZ zgody marketingowej: tylko informacja o usludze/produkcie, ktory odbiorca ma. ZERO reklamy, promocji, rabatow, zachet do zakupu i linkow do sklepu.\n"
+      : "") +
+    "- Odpowiedz WYLACZNIE obiektem JSON z kluczami: subject, preheader, eyebrow, title, body, ctaText, ctaUrl. Bez komentarzy i bez ``` .\n\n" +
+    KALKMATE_KNOWLEDGE;
+  const raw = await callTranslate(system, `Opis newslettera od wlasciciela:\n${brief.slice(0, 2000)}`, 4000, 0.7);
+  const json = raw.match(/\{[\s\S]*\}/)?.[0];
+  if (!json) throw new Error("Model nie zwrócił JSON — spróbuj jeszcze raz");
+  const out = JSON.parse(json) as Partial<Record<keyof NewsletterDraftTexts, unknown>>;
+  const str = (k: keyof NewsletterDraftTexts, max: number) => (typeof out[k] === "string" ? (out[k] as string).trim().slice(0, max) : "");
+  const body = str("body", 20000);
+  if (!body) throw new Error("Model nie napisał treści — spróbuj jeszcze raz");
+  const ctaUrl = str("ctaUrl", 500);
+  const ctaText = str("ctaText", 60);
+  // Link z opisu albo kalkmate.pl — inne adresy (zmyslone) odrzucamy razem z przyciskiem.
+  const urlOk = /^https:\/\/(www\.)?kalkmate\.pl(\/|$)/.test(ctaUrl) || (!!ctaUrl && brief.includes(ctaUrl) && /^https?:\/\//.test(ctaUrl));
+  return {
+    subject: str("subject", 200),
+    preheader: str("preheader", 200),
+    eyebrow: str("eyebrow", 60),
+    title: str("title", 200),
+    body,
+    ctaText: urlOk ? ctaText : "",
+    ctaUrl: urlOk && ctaText ? ctaUrl : "",
   };
 }

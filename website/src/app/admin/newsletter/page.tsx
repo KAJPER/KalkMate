@@ -85,6 +85,10 @@ export default function NewsletterPage() {
   const [translations, setTranslations] = useState<Translations>({});
   const [translatedFrom, setTranslatedFrom] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
+  // "Napisz z AI" — krotki opis -> wszystkie pola szkicu (api/admin/newsletter/compose).
+  const [brief, setBrief] = useState("");
+  const [composing, setComposing] = useState(false);
+  const [composeMsg, setComposeMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [trErr, setTrErr] = useState("");
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -173,6 +177,33 @@ export default function NewsletterPage() {
   };
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+
+  const composeWithAi = async () => {
+    const hasContent = !!(draft.subject.trim() || draft.title.trim() || draft.body.replace(EMPTY_DRAFT.body, "").trim());
+    if (hasContent && !confirm("AI nadpisze temat, tytuł, treść i przycisk. Kontynuować?")) return;
+    setComposing(true);
+    setComposeMsg(null);
+    try {
+      const res = await fetch("/api/admin/newsletter/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief, serviceNotice: notice }),
+      });
+      const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+      if (!res.ok || !data.ok) throw new Error(data.error || "Błąd");
+      const d = data.draft;
+      setDraft((cur) => ({
+        ...cur,
+        subject: d.subject, preheader: d.preheader, eyebrow: d.eyebrow, title: d.title, body: d.body,
+        ctaText: d.ctaText, ctaUrl: d.ctaUrl || cur.ctaUrl, lang: "pl",
+      }));
+      setComposeMsg({ ok: true, text: "Gotowe — przeczytaj i popraw, zanim wyślesz. Daty, godziny i ceny sprawdź szczególnie." });
+    } catch (e) {
+      setComposeMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setComposing(false);
+    }
+  };
 
   // Lista odbiorcow musi odpowiadac AKTUALNEMU filtrowi — inaczej potwierdzenie
   // wysylki pokazaloby liczbe z poprzedniego filtra (wolna odpowiedz starego
@@ -461,6 +492,25 @@ export default function NewsletterPage() {
         {/* Kompozytor */}
         <div className={`${card} space-y-3`}>
           <h2 className="text-lg font-semibold text-[#E0E0E0]">Treść</h2>
+          <div className="rounded-lg border border-[#3B82F6]/30 bg-[#3B82F6]/5 p-3 space-y-2">
+            <label className={label}>✨ Napisz z AI — opisz krótko, co chcesz wysłać</label>
+            <textarea
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && brief.trim() && !composing) void composeWithAi(); }}
+              rows={3}
+              maxLength={2000}
+              className={`${field} resize-y`}
+              placeholder="np. przerwa techniczna w sobotę 2.11 od 22:00 do 2:00, AI w kalkulatorze nie będzie wtedy działać, kalkulator normalnie tak"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" disabled={composing || brief.trim().length < 5} onClick={composeWithAi} className={`${btn} bg-[#3B82F6] hover:bg-[#2f6fd6] text-white disabled:opacity-50`}>
+                {composing ? "Piszę…" : draft.body.replace(EMPTY_DRAFT.body, "").trim() ? "✨ Napisz od nowa" : "✨ Napisz z AI"}
+              </button>
+              {notice && <span className="text-[11px] text-amber-200/70">Tryb komunikatu serwisowego — AI nie doda reklamy.</span>}
+            </div>
+            {composeMsg && <p className={`text-xs ${composeMsg.ok ? "text-green-400" : "text-red-400"}`}>{composeMsg.text}</p>}
+          </div>
           <div>
             <label className={label}>Temat maila *</label>
             <input value={draft.subject} onChange={(e) => set("subject", e.target.value)} className={field} placeholder="np. Nowa aktualizacja KalkMate 1.8 🎉" />
