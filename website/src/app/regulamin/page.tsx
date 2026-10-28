@@ -24,7 +24,8 @@ const sections = [
   { id: "sek-5", eyebrow: "05", short: "Prawo do odstąpienia",        title: "Prawo",         accent: "odstąpienia" },
   { id: "sek-6", eyebrow: "06", short: "Reklamacje i gwarancja",      title: "Reklamacje",    accent: "i gwarancja" },
   { id: "sek-7", eyebrow: "07", short: "Ochrona danych osobowych",    title: "Ochrona",       accent: "danych" },
-  { id: "sek-8", eyebrow: "08", short: "Postanowienia końcowe",       title: "Postanowienia", accent: "końcowe" },
+  { id: "sek-8", eyebrow: "08", short: "Czat z asystentem AI",        title: "Czat",          accent: "z asystentem AI" },
+  { id: "sek-9", eyebrow: "09", short: "Postanowienia końcowe",       title: "Postanowienia", accent: "końcowe" },
 ];
 
 function H({ id, eyebrow, title, accent }: { id: string; eyebrow: string; title: string; accent: string }) {
@@ -73,7 +74,7 @@ export default function RegulaminPage() {
             </span>
           </div>
 
-          <p className="km-mono-eyebrow text-[#D8FF3D]">[ regulamin ] · 8 sekcji</p>
+          <p className="km-mono-eyebrow text-[#D8FF3D]">[ regulamin ] · 9 sekcji</p>
           <h1 className="km-display text-[clamp(56px,8.5vw,128px)] mt-4 leading-[0.92] text-[#F2EDE3]">
             Regulamin<br />
             <span className="italic text-[#D8FF3D]">sklepu</span>.
@@ -241,9 +242,65 @@ export default function RegulaminPage() {
 
           {/* 8 */}
           <section>
-            <H id="sek-8" eyebrow="08" title="Postanowienia" accent="końcowe" />
+            <H id="sek-8" eyebrow="08" title="Czat" accent="z asystentem AI" />
             <OL>
-              <li>W sprawach nieuregulowanych niniejszym regulaminem stosuje się przepisy Kodeksu Cywilnego oraz ustawy o prawach konsumenta.</li>
+              <li>
+                Na stronie kalkmate.pl Sprzedawca udostępnia bezpłatną usługę świadczoną drogą elektroniczną:
+                czat z asystentem, którego odpowiedzi generuje <strong className="text-[#F2EDE3]">sztuczna inteligencja (AI)</strong>.
+                Asystent nie jest człowiekiem. Odpowiada na pytania o produkty, zamówienia i działanie kalkulatora.
+              </li>
+              <li>
+                Do rozpoczęcia rozmowy potrzebne są: przeglądarka internetowa z włączonym JavaScriptem, podanie adresu
+                e-mail, potwierdzenie, że użytkownik nie jest automatem (weryfikacja wykonywana w przeglądarce), oraz
+                akceptacja niniejszego paragrafu. Umowa o świadczenie usługi zostaje zawarta z chwilą rozpoczęcia rozmowy
+                i rozwiązuje się z chwilą jej zakończenia (przycisk „Zakończ” lub zamknięcie strony). Użytkownik może
+                w każdej chwili przestać korzystać z czatu.
+              </li>
+              <li>
+                Odpowiedzi asystenta mają charakter wyłącznie informacyjny, mogą zawierać błędy i nie stanowią oferty
+                w rozumieniu Kodeksu cywilnego ani oświadczenia woli Sprzedawcy. W razie rozbieżności wiążące są
+                niniejszy regulamin, opis produktu na stronie oraz informacje przekazane w potwierdzeniu zamówienia.
+                Asystent nie ma dostępu do zamówień ani kont — sprawy konkretnych zamówień, zwrotów i reklamacji należy
+                kierować na adres kontakt@kalkmate.pl.
+              </li>
+              <li>
+                Sprzedawca może odpowiedzieć na pytanie z czatu wiadomością e-mail na podany adres, w szczególności gdy
+                asystent nie zna odpowiedzi.
+              </li>
+              <li>
+                Zabronione jest przesyłanie w czacie treści bezprawnych, obraźliwych lub naruszających prawa osób trzecich,
+                a także danych szczególnie chronionych, haseł, danych kart płatniczych i kodu AI kalkulatora. Sprzedawca
+                może zablokować rozmowę naruszającą te zasady oraz stosować limity liczby wiadomości.
+              </li>
+              <li>
+                Asystent może sam zaproponować pomoc, wyświetlając krótką wiadomość obok przycisku czatu (np. po pewnym
+                czasie na stronie lub przy cenniku). Taka wiadomość pojawia się najwyżej dwa razy w trakcie wizyty i nie
+                pojawia się ponownie po jej zamknięciu.
+              </li>
+              <li>
+                Treść rozmów, adres e-mail i informacje techniczne (strona, z której wysłano wiadomość, przeglądarka)
+                są zapisywane i dostępne dla Sprzedawcy oraz upoważnionych przez niego osób w celu obsługi pytań
+                i ulepszania obsługi klienta. Jeżeli użytkownik wyraził zgodę na cookies analityczne, do rozmowy
+                przypisywany jest także przebieg wizyty na stronie (odwiedzone podstrony i obejrzane sekcje) oraz
+                identyfikator nagrania sesji w Microsoft Clarity. Szczegóły, podstawy prawne i okres przechowywania
+                (12 miesięcy od ostatniej wiadomości) opisuje{" "}
+                <Link href="/polityka-prywatnosci#sek-3" className="text-[#D8FF3D] hover:underline">Polityka Prywatności</Link>.
+              </li>
+              <li>
+                Osoby, które nie ukończyły 16 lat, mogą korzystać z czatu za zgodą rodzica lub opiekuna prawnego.
+              </li>
+              <li>
+                Reklamacje dotyczące działania czatu można składać na adres kontakt@kalkmate.pl. Sprzedawca rozpatruje
+                je w terminie 14 dni.
+              </li>
+            </OL>
+          </section>
+
+          {/* 9 */}
+          <section>
+            <H id="sek-9" eyebrow="09" title="Postanowienia" accent="końcowe" />
+            <OL>
+              <li>W sprawach nieuregulowanych niniejszym regulaminem stosuje się przepisy Kodeksu Cywilnego, ustawy o prawach konsumenta oraz ustawy o świadczeniu usług drogą elektroniczną.</li>
               <li>Sprzedawca zastrzega sobie prawo do zmiany regulaminu. Zmiany wchodzą w życie z dniem publikacji na stronie.</li>
               <li>Wszelkie spory rozstrzygane będą przez sąd właściwy dla siedziby Sprzedawcy.</li>
             </OL>
@@ -260,7 +317,7 @@ export default function RegulaminPage() {
           {/* Stopka dokumentu */}
           <div className="pt-8 border-t border-[rgba(242,237,227,0.10)] flex flex-wrap items-center justify-between gap-4">
             <span className="km-mono-eyebrow text-[#F2EDE3]/45">
-              Obowiązuje od · 2026-01-01
+              Obowiązuje od · 2026-01-01 · ostatnia zmiana 2026-10-28 (§8 czat z asystentem AI)
             </span>
             <div className="flex items-center gap-4">
               <Link href="/polityka-prywatnosci" className="km-mono-eyebrow text-[#F2EDE3]/55 hover:text-[#D8FF3D] transition-colors">

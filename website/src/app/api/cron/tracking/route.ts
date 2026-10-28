@@ -5,6 +5,7 @@ import { syncAllPendingBaseCourierOrders } from "@/lib/basecourierTracking";
 import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
 import { sendPaymentReminders, type ReminderResult } from "@/lib/paymentReminders";
 import { ensureDailyBackup } from "@/lib/dbBackup";
+import { purgeOldSupportChats } from "@/lib/supportChat";
 
 // GET /api/cron/tracking — wolane co godzine z crona na serwerze
 // (/home/ubuntu/kalkulator/tracking-cron.sh) z naglowkiem x-cron-secret.
@@ -69,6 +70,15 @@ export async function GET(req: NextRequest) {
       errors.push(`backup: ${(e as Error).message}`);
     }
 
+    // Retencja czatu ze strony (polityka prywatnosci §5: 12 mies. od ostatniej wiadomosci).
+    let supportChatsPurged = 0;
+    try {
+      supportChatsPurged = await purgeOldSupportChats();
+    } catch (e) {
+      console.error("[cron/tracking] support chat purge failed:", e);
+      errors.push(`supportChatPurge: ${(e as Error).message}`);
+    }
+
     let reminders: ReminderResult = { sent: [], skipped: [], failed: [] };
     try {
       reminders = await sendPaymentReminders();
@@ -107,6 +117,7 @@ export async function GET(req: NextRequest) {
 
     const summary = {
       ok: true,
+      supportChatsPurged,
       checked: results.length,
       changed: changed.length,
       emailsSent: results.filter((r) => r.emailSent).length,

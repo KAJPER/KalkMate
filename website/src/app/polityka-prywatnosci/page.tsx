@@ -81,7 +81,7 @@ export default function PrivacyPolicy() {
               RODO · zgodne z UE 2016/679
             </span>
             <span className="km-mono-eyebrow text-[#F2EDE3]/40 hidden md:inline">
-              Aktualizacja · 2026-07-16
+              Aktualizacja · 2026-10-28
             </span>
           </div>
 
@@ -204,6 +204,27 @@ export default function PrivacyPolicy() {
               <li>informacje o saldzie, zakupach i aktywacjach tokenów AI (w tym aktywowanych kodach licencji z pudełka),</li>
               <li>historia konwersacji z AI Chat.</li>
             </UL>
+
+            <SubH>3.4. Czat z asystentem AI na stronie</SubH>
+            <P>
+              Gdy rozpoczynasz rozmowę w okienku czatu na stronie (regulamin §8), przetwarzamy:
+            </P>
+            <UL>
+              <li>adres e-mail podany przy rozpoczęciu rozmowy,</li>
+              <li>treść Twoich wiadomości i odpowiedzi asystenta, z datą i godziną,</li>
+              <li>adres podstrony, z której wysłano wiadomość, język strony i informację o przeglądarce (user-agent),</li>
+              <li>
+                <strong className="text-[#F2EDE3]">tylko jeśli zgodziłeś się na cookies analityczne</strong>: przebieg
+                wizyty na stronie (odwiedzone podstrony i obejrzane sekcje, z godziną) oraz identyfikator rozmowy
+                dopisywany do nagrania sesji w Microsoft Clarity — dzięki temu możemy zobaczyć, czego szukałeś,
+                i lepiej odpowiedzieć. Bez tej zgody przebieg wizyty nie jest zbierany.
+              </li>
+            </UL>
+            <P>
+              Potwierdzenie „Nie jestem robotem” wykonuje obliczenie w Twojej przeglądarce — nie korzysta z usług
+              zewnętrznych firm i nie zapisuje cookies. Treść wiadomości jest przekazywana do dostawcy modelu AI
+              (zob. sekcja 6) wyłącznie w celu wygenerowania odpowiedzi.
+            </P>
           </section>
 
           {/* 4 */}
@@ -223,6 +244,9 @@ export default function PrivacyPolicy() {
                     ["Realizacja umowy sprzedaży",          "Art. 6 ust. 1 lit. b) RODO"],
                     ["Obsługa płatności",                    "Art. 6 ust. 1 lit. b) RODO"],
                     ["Świadczenie usługi AI Chat",          "Art. 6 ust. 1 lit. b) RODO"],
+                    ["Czat z asystentem AI na stronie (rozmowa, e-mail, odpowiedź mailem)", "Art. 6 ust. 1 lit. b) RODO (usługa na Twoje żądanie)"],
+                    ["Przegląd rozmów z czatu w celu ulepszania obsługi i asystenta", "Art. 6 ust. 1 lit. f) RODO (prawnie uzasadniony interes)"],
+                    ["Przypisanie przebiegu wizyty i nagrania Clarity do rozmowy", "Art. 6 ust. 1 lit. a) RODO (zgoda na cookies analityczne)"],
                     ["Wysyłka produktów",                    "Art. 6 ust. 1 lit. b) RODO"],
                     ["Obsługa reklamacji",                   "Art. 6 ust. 1 lit. c) RODO (obowiązek prawny)"],
                     ["Wystawianie faktur",                   "Art. 6 ust. 1 lit. c) RODO (obowiązek prawny)"],
@@ -254,6 +278,7 @@ export default function PrivacyPolicy() {
               <li><strong className="text-[#F2EDE3]">Historia AI Chat:</strong> przez czas prowadzenia konta (do usunięcia rozmowy lub konta przez użytkownika) oraz do 30 dni po usunięciu konta.</li>
               <li><strong className="text-[#F2EDE3]">Dane marketingowe (zgoda):</strong> do momentu wycofania zgody lub wniesienia sprzeciwu.</li>
               <li><strong className="text-[#F2EDE3]">Dane analityczne:</strong> do 25 miesięcy od ostatniej aktywności.</li>
+              <li><strong className="text-[#F2EDE3]">Rozmowy z czatu na stronie</strong> (e-mail, treść, przebieg wizyty)<strong className="text-[#F2EDE3]">:</strong> 12 miesięcy od ostatniej wiadomości w rozmowie, potem usuwane automatycznie; wcześniej — na Twoje żądanie.</li>
             </ul>
           </section>
 
@@ -266,6 +291,7 @@ export default function PrivacyPolicy() {
               <li><strong className="text-[#F2EDE3]">InPost</strong> – firma kurierska (dostawa produktów do Paczkomatów).</li>
               <li><strong className="text-[#F2EDE3]">Resend</strong> – usługa email (wysyłka wiadomości transakcyjnych i magic links).</li>
               <li><strong className="text-[#F2EDE3]">Google AI (Gemini)</strong> – dostawca usługi AI Chat (przetwarzanie zapytań w chatbocie).</li>
+              <li><strong className="text-[#F2EDE3]">OpenRouter, Inc.</strong> (USA) – pośrednik w dostępie do modeli AI (m.in. Google Gemini); otrzymuje treść wiadomości z czatu na stronie i AI Chat w celu wygenerowania odpowiedzi. Nie przekazujemy mu adresu e-mail.</li>
               <li><strong className="text-[#F2EDE3]">Microsoft Clarity</strong> – narzędzie analityczne (mapy ciepła, nagrania sesji) wykorzystywane wyłącznie po wyrażeniu zgody na cookies analityczne — zob. sekcja 9.</li>
               <li><strong className="text-[#F2EDE3]">Dostawca hostingu</strong> – przechowywanie danych na serwerach VPS.</li>
               <li><strong className="text-[#F2EDE3]">Dostawca bazy danych PostgreSQL</strong> – przechowywanie danych użytkowników.</li>
@@ -284,7 +310,7 @@ export default function PrivacyPolicy() {
           <section>
             <H id="sek-7" eyebrow="07" title="Transfer" accent="poza EOG" />
             <P>
-              Niektórzy dostawcy usług (np. Stripe, Google AI, Microsoft Clarity) mogą przetwarzać
+              Niektórzy dostawcy usług (np. Stripe, Google AI, OpenRouter, Microsoft Clarity) mogą przetwarzać
               dane poza Europejskim Obszarem Gospodarczym (EOG). W takich przypadkach:
             </P>
             <UL>
@@ -397,7 +423,15 @@ export default function PrivacyPolicy() {
               w ustawieniach przeglądarki (localStorage) i wybierając „Tylko niezbędne".
             </P>
 
-            <SubH>9.4. Zarządzanie cookies</SubH>
+            <SubH>9.4. Pamięć przeglądarki używana przez czat</SubH>
+            <P>
+              Czat z asystentem zapisuje w pamięci przeglądarki (localStorage) identyfikator Twojej rozmowy, żeby
+              można ją było kontynuować po przeładowaniu strony — to niezbędne do działania usługi, o którą prosisz,
+              i znika po kliknięciu „Zakończ”. Tylko po zgodzie na cookies analityczne czat zapisuje też w sessionStorage
+              (do zamknięcia karty) listę odwiedzonych podstron i sekcji, o której mowa w punkcie 3.4.
+            </P>
+
+            <SubH>9.5. Zarządzanie cookies</SubH>
             <P>
               Możecie Państwo zarządzać cookies poprzez ustawienia przeglądarki. Należy jednak
               pamiętać, że wyłączenie cookies może wpłynąć na funkcjonalność Serwisu
@@ -443,9 +477,11 @@ export default function PrivacyPolicy() {
             </P>
             <div className="mt-4">
               <P>
-                AI Chat (Google Gemini) jest narzędziem wspomagającym, które odpowiada na
-                zapytania użytkowników, ale nie podejmuje zautomatyzowanych decyzji mających
-                wpływ prawny.
+                AI Chat (Google Gemini) oraz asystent w czacie na stronie są narzędziami
+                wspomagającymi, które odpowiadają na zapytania użytkowników, ale nie podejmują
+                zautomatyzowanych decyzji mających wpływ prawny. Przebieg wizyty przypisany do
+                rozmowy (tylko za zgodą) służy wyłącznie dopasowaniu odpowiedzi i ulepszaniu strony.
+                O tym, że rozmawiasz z AI, informujemy w okienku czatu.
               </P>
             </div>
           </section>
@@ -523,7 +559,7 @@ export default function PrivacyPolicy() {
           {/* Stopka dokumentu */}
           <div className="pt-8 border-t border-[rgba(242,237,227,0.10)] flex flex-wrap items-center justify-between gap-4">
             <span className="km-mono-eyebrow text-[#F2EDE3]/45">
-              Ostatnia aktualizacja · 2026-07-16
+              Ostatnia aktualizacja · 2026-10-28 (czat z asystentem AI na stronie)
             </span>
             <div className="flex items-center gap-4">
               <Link href="/regulamin" className="km-mono-eyebrow text-[#F2EDE3]/55 hover:text-[#D8FF3D] transition-colors">

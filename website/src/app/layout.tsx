@@ -3,7 +3,7 @@ import { Fraunces, JetBrains_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import SessionProvider from "@/components/SessionProvider";
 import { CartProvider } from "@/components/CartContext";
-import { ClientCartDrawer, ClientCookieBanner, ClientClarityAnalytics } from "@/components/ClientShell";
+import { ClientCartDrawer, ClientCookieBanner, ClientClarityAnalytics, ClientSupportWidget } from "@/components/ClientShell";
 import PageTracker from "@/components/PageTracker";
 import { organizationJsonLd } from "@/lib/seo";
 
@@ -158,6 +158,7 @@ export default function RootLayout({
         </SessionProvider>
         <PageTracker />
         <ClientClarityAnalytics />
+        <ClientSupportWidget />
         <ClientCookieBanner />
       </body>
     </html>

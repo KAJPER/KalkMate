@@ -180,7 +180,7 @@ const faqText = faqs.pl.map((f) => `P: ${f.q}\nO: ${f.a}`).join("\n\n");
 // Fakty sklepowe, ktorych nie ma w KALKMATE_KNOWLEDGE (to jest pod szkic
 // odpowiedzi w Poczcie). Zrodla: components/BuyNow.tsx, lib/tokenPacks.ts,
 // lib/seo.ts (wysylka), lib/content/faq.ts.
-const SHOP_FACTS = `=== SKLEP, CENY, WYSYŁKA ===
+export const SHOP_FACTS = `=== SKLEP, CENY, WYSYŁKA ===
 - Cena kalkulatora: 699 zł (Polska) / 169 EUR (zagranica). Sprzedaż na kalkmate.pl (także kalkmate.eu), strona w 11 językach.
 - Wysyłka: Polska — InPost (Paczkomat) za darmo; UE — 20 EUR; reszta świata — 35 EUR. Jedna paczka niezależnie od liczby sztuk.
 - Czas realizacji: kalkulatory są składane ręcznie — do ok. 4 tygodni (zagranica zwykle 2–4 tygodnie z dostawą).

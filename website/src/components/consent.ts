@@ -2,7 +2,9 @@
 // "all" = zgoda na cookies analityczne; "essential" = tylko niezbedne.
 
 export const CONSENT_STORAGE_KEY = "kalkmate-cookie-consent";
-export const CONSENT_VERSION = "1"; // musi byc zgodne z VERSION w CookieBanner
+// "2" (2026-10-28): nowy cel analityki — przebieg wizyty przy rozmowie w czacie
+// (SupportWidget). Stare zgody go nie obejmowaly, wiec baner pyta ponownie.
+export const CONSENT_VERSION = "2"; // musi byc zgodne z VERSION w CookieBanner
 export const CONSENT_EVENT = "kalkmate:cookie-consent";
 
 export function hasAnalyticsConsent(): boolean {
