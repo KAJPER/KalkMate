@@ -60,6 +60,18 @@ const nextConfig: NextConfig = {
     qualities: [60, 75, 90, 92],
     minimumCacheTTL: 60 * 60 * 24 * 365,
   },
+  // GSC (Indeksowanie stron, 2026-10-28): "Nie znaleziono (404)" — stare/obce
+  // adresy, ktore Google zna (np. /en/calculators/187-AI-calculator.html mial
+  // wyswietlenia w wynikach). 301 na wlasciwa strone zamiast 404.
+  async redirects() {
+    return [
+      { source: "/en/calculators/:path*", destination: "/en", permanent: true },
+      { source: "/calculators/:path*", destination: "/en", permanent: true },
+      { source: "/index.html", destination: "/", permanent: true },
+      { source: "/pl", destination: "/", permanent: true },
+      { source: "/pl/:path*", destination: "/:path*", permanent: true },
+    ];
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },

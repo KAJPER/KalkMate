@@ -18,3 +18,16 @@ export function hasAnalyticsConsent(): boolean {
     return false;
   }
 }
+
+// Czy uzytkownik juz wybral (dowolna opcja, aktualna wersja) — tzn. baner
+// cookies NIE jest pokazywany (ta sama regula co read() w CookieBanner).
+export function hasConsentChoice(): boolean {
+  try {
+    const raw = localStorage.getItem(CONSENT_STORAGE_KEY);
+    if (!raw) return false;
+    const rec = JSON.parse(raw) as { v?: string };
+    return rec?.v === CONSENT_VERSION;
+  } catch {
+    return false;
+  }
+}

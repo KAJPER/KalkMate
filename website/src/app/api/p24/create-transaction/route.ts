@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { setOrderCoupon, reserveCoupon, releaseCouponReservation, COUPON_RESERVATION_TTL_P24_MS } from "@/lib/coupons";
 import { registerTransaction, paymentUrl, p24Language } from "@/lib/przelewy24";
 import { randomUUID } from "crypto";
+import { funnelContextFromHeaders, recordFunnelEvent } from "@/lib/funnel";
 import {
   ensureOrderPersonalizationColumns, validateOrderUnits, serializeOrderUnits, type OrderUnit,
 } from "@/lib/orderPersonalization";
@@ -145,6 +146,10 @@ export async function POST(request: NextRequest) {
     if (quote.couponCode) {
       await setOrderCoupon(orderId, quote.couponCode, quote.discountCents).catch((e) => console.error("[P24] order coupon save failed:", e));
     }
+
+    // Lejek (lib/funnel.ts) — blad nie blokuje platnosci.
+    recordFunnelEvent({ event: "payment_start", provider: "p24", country: resolvedCountry, ...funnelContextFromHeaders(request.headers) })
+      .catch((e) => console.error("[P24] funnel event failed:", e));
 
     // Skad przyszedl klient (lib/attribution.ts) — blad nie blokuje platnosci.
     try {

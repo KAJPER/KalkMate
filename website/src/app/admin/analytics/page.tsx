@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import AdminShell from "@/components/admin/AdminShell";
+import FunnelPanel from "@/components/admin/FunnelPanel";
+import ClarityTrendPanel from "@/components/admin/ClarityTrendPanel";
 
 // ----------------------------------------------------------------
 // Typy
@@ -423,6 +425,13 @@ export default function AnalyticsPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Lejek zakupu (lib/funnel.ts) i dzienne dane z Clarity (lib/clarity.ts) —
+          wlasne okresy i ladowanie, niezalezne od statystyk wejsc ponizej. */}
+      <div className="space-y-6 mb-6">
+        <FunnelPanel />
+        <ClarityTrendPanel />
       </div>
 
       {loading ? (

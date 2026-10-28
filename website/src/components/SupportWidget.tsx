@@ -18,8 +18,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { localeFromPathname, type Locale } from "@/lib/i18n";
 import { CONSENT_EVENT, CONSENT_STORAGE_KEY, hasAnalyticsConsent } from "@/components/consent";
+import { useCheckoutState } from "@/lib/checkoutBus";
 
-const HIDDEN_PREFIXES = ["/admin", "/panel", "/auth", "/claim"];
+const HIDDEN_PREFIXES = ["/admin", "/panel", "/auth", "/claim", "/opinia"];
 const NO_TEASER_PREFIXES = ["/koszyk", "/regulamin", "/polityka-prywatnosci", "/reklamacja"];
 const CHAT_KEY = "km-support-chat";
 const JOURNEY_KEY = "km-support-journey";
@@ -198,6 +199,9 @@ export default function SupportWidget() {
   const hidden = HIDDEN_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   const [open, setOpen] = useState(false);
+  // Otwarty formularz zamowienia (BuyNow) — chowamy przycisk czatu, bo na
+  // telefonie zaslanial pola i link "Masz konto? Zaloguj sie".
+  const checkoutOpen = useCheckoutState().open;
   const [teaser, setTeaser] = useState<TeaserKind | null>(null);
   const [chat, setChat] = useState<{ chatId: string; token: string } | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -397,17 +401,18 @@ export default function SupportWidget() {
     setTerms(false);
   };
 
-  if (hidden) return null;
+  if (hidden || (checkoutOpen && !open)) return null;
 
   const fieldCls = "w-full px-3 py-2.5 bg-[#151515] border border-[rgba(242,237,227,0.14)] text-[14px] text-[#F2EDE3] placeholder:text-[#F2EDE3]/35 focus:outline-none focus:border-[#D8FF3D]/60";
 
+  // --km-sticky-bar-h: wysokosc StickyBuyBar na mobile (globals.css), inaczej 0.
   return (
-    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[90] flex flex-col items-end gap-3 max-w-[calc(100vw-2rem)]">
+    <div className="fixed bottom-[calc(1rem+var(--km-sticky-bar-h,0px))] right-4 sm:bottom-[calc(1.5rem+var(--km-sticky-bar-h,0px))] sm:right-6 z-[90] flex flex-col items-end gap-3 max-w-[calc(100vw-2rem)] transition-[bottom] duration-300 motion-reduce:transition-none">
       {open && (
         <div
           role="dialog"
           aria-label={t.title}
-          className="w-[min(380px,calc(100vw-2rem))] h-[min(560px,calc(100dvh-7rem))] flex flex-col bg-[#0B0B0B] border border-[rgba(242,237,227,0.14)] shadow-2xl shadow-black/60"
+          className="w-[min(380px,calc(100vw-2rem))] h-[min(560px,calc(100dvh-7rem-var(--km-sticky-bar-h,0px)))] flex flex-col bg-[#0B0B0B] border border-[rgba(242,237,227,0.14)] shadow-2xl shadow-black/60"
         >
           <div className="flex items-center gap-2 px-4 h-12 border-b border-[rgba(242,237,227,0.10)] shrink-0">
             <span className="w-2 h-2 rounded-full bg-[#D8FF3D]" aria-hidden />

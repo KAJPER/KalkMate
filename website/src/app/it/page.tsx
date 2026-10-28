@@ -6,8 +6,9 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd, ogImages } from "@/lib/seo";
+import { getVerifiedAggregateRating } from "@/lib/reviews";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
-import { ClientBuyNow, ClientVideoScroll } from "@/components/ClientShell";
+import { ClientBuyNow, ClientStickyBuyBar, ClientVideoScroll } from "@/components/ClientShell";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
 const ExamBenefits = dynamic(() => import("@/components/ExamBenefits"));
@@ -86,7 +87,7 @@ export default async function ItalianPage() {
   return (
     <>
       <HtmlLang lang="it" />
-      {homeJsonLd(lang, siteUrl).map((json, i) => (
+      {homeJsonLd(lang, siteUrl, await getVerifiedAggregateRating().catch(() => null)).map((json, i) => (
         <script
           key={i}
           type="application/ld+json"
@@ -104,6 +105,7 @@ export default async function ItalianPage() {
         <Reviews lang={lang} />
         <FAQ lang={lang} />
         <ClientBuyNow lang={lang} defaultCountry="IT" />
+        <ClientStickyBuyBar lang={lang} />
       </main>
       <Footer lang={lang} />
     </>

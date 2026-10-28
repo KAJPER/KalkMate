@@ -37,7 +37,8 @@ export default function PageTracker() {
     // Panel admina nie jest ruchem klienckim — bez tego kazde otwarcie
     // /admin/* (przez nas, nie klientow) zawyzalo licznik "Wizyty" na
     // dashboardzie (zaobserwowane realnie na produkcji).
-    if (pathname?.startsWith("/admin")) return;
+    // /opinia/<token> — token z maila nie trafia do statystyk wejsc.
+    if (pathname?.startsWith("/admin") || pathname?.startsWith("/opinia")) return;
 
     if (typeof navigator !== "undefined" && navigator.doNotTrack === "1") return;
 

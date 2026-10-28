@@ -1,6 +1,7 @@
 import { type Locale, SITE_URL, localeHomeUrl } from "@/lib/i18n";
 import { faqs } from "@/lib/content/faq";
 import { reviews, aggregateRating } from "@/lib/content/reviews";
+import type { VerifiedRating } from "@/lib/reviews";
 
 const productName: Record<Locale, string> = {
   pl: "KalkMate — Kalkulator AI",
@@ -50,8 +51,13 @@ function shippingDetails(currency: "PLN" | "EUR", rate: string, countries: strin
   };
 }
 
-/** Product JSON-LD (schema.org) dla strony głównej w danym języku. */
-export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
+/**
+ * Product JSON-LD (schema.org) dla strony głównej w danym języku.
+ * verifiedRating: aggregateRating WYLACZNIE z zatwierdzonych opinii
+ * CustomerReview (lib/reviews.ts getVerifiedAggregateRating() — null ponizej
+ * 5 opinii). Podany = zastepuje ocene z content/reviews.ts (bez mieszania).
+ */
+export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL, verifiedRating?: VerifiedRating | null) {
   // /be: Bialorus nie jest krajem wysylki — strona domyslnie pokazuje
   // Polske i cene w PLN, wiec dane strukturalne musza sie z tym zgadzac.
   const isPl = locale === "pl" || locale === "be";
@@ -85,16 +91,26 @@ export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
       availability: "https://schema.org/InStock",
       seller: { "@type": "Organization", name: "KalkMate" },
     },
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: aggregateRating.ratingValue,
-      reviewCount: aggregateRating.reviewCount,
-      bestRating: aggregateRating.bestRating,
-      worstRating: aggregateRating.worstRating,
-    },
+    aggregateRating: verifiedRating
+      ? {
+          "@type": "AggregateRating",
+          ratingValue: verifiedRating.ratingValue,
+          reviewCount: verifiedRating.reviewCount,
+          bestRating: "5",
+          worstRating: "1",
+        }
+      : {
+          "@type": "AggregateRating",
+          ratingValue: aggregateRating.ratingValue,
+          reviewCount: aggregateRating.reviewCount,
+          bestRating: aggregateRating.bestRating,
+          worstRating: aggregateRating.worstRating,
+        },
     // Max 10 najnowszych — pelna lista jest w widocznej sekcji opinii, a w JSON-LD
     // kilkadziesiat recenzji tylko puchloby HTML kazdej strony.
-    review: reviews[locale].slice(0, 10).map((r) => ({
+    // Tylko opinie z potwierdzonym zakupem. Na wersjach jezykowych widoczna
+    // tresc to tlumaczenie maszynowe — Google dostaje ORYGINAL z jego jezykiem.
+    review: reviews[locale].filter((r) => r.verified === true).slice(0, 10).map((r) => ({
       "@type": "Review",
       author: { "@type": "Person", name: r.author },
       reviewRating: {
@@ -102,7 +118,8 @@ export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
         ratingValue: String(r.rating),
         bestRating: "5",
       },
-      reviewBody: r.body,
+      reviewBody: r.original ?? r.body,
+      ...(r.translatedFrom ? { inLanguage: r.translatedFrom } : {}),
       datePublished: r.date,
     })),
   };
@@ -142,10 +159,10 @@ export function webPageJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
 }
 
 /** Tablica skryptów JSON-LD jako stringi gotowe do wstrzyknięcia. */
-export function homeJsonLd(locale: Locale, siteUrl: string = SITE_URL): string[] {
+export function homeJsonLd(locale: Locale, siteUrl: string = SITE_URL, verifiedRating?: VerifiedRating | null): string[] {
   return [
     webPageJsonLd(locale, siteUrl),
-    productJsonLd(locale, siteUrl),
+    productJsonLd(locale, siteUrl, verifiedRating),
     { ...faqJsonLd(locale), inLanguage: locale },
   ].map((o) => JSON.stringify(o));
 }

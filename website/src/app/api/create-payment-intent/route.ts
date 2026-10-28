@@ -10,6 +10,7 @@ import {
 import { validateOrderUnits, stripePersonalizationMetadata } from "@/lib/orderPersonalization";
 import { quoteCheckout } from "@/lib/checkoutPricing";
 import { randomUUID } from "crypto";
+import { funnelContextFromHeaders, recordFunnelEvent } from "@/lib/funnel";
 
 export async function POST(request: NextRequest) {
   try {
@@ -151,6 +152,10 @@ export async function POST(request: NextRequest) {
     if (reservationId) {
       await setCouponReservationRef(reservationId, paymentIntent.id).catch((e) => console.error("[checkout] reservation ref update failed:", e));
     }
+
+    // Lejek (lib/funnel.ts) — blad nie blokuje platnosci.
+    recordFunnelEvent({ event: "payment_start", provider: "stripe", country: resolvedCountry, ...funnelContextFromHeaders(request.headers) })
+      .catch((e) => console.error("[checkout] funnel event failed:", e));
 
     // amount/currency/shippingCents/discountCents — front pokazuje te liczby
     // na przycisku platnosci (zrodlo prawdy = serwer).

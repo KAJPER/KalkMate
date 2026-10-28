@@ -6,6 +6,8 @@ import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
 import { sendPaymentReminders, type ReminderResult } from "@/lib/paymentReminders";
 import { ensureDailyBackup } from "@/lib/dbBackup";
 import { purgeOldSupportChats } from "@/lib/supportChat";
+import { sendReviewRequests, type ReviewRequestResult } from "@/lib/reviews";
+import { maybeRunDailyClaritySnapshot } from "@/lib/clarity";
 
 // GET /api/cron/tracking — wolane co godzine z crona na serwerze
 // (/home/ubuntu/kalkulator/tracking-cron.sh) z naglowkiem x-cron-secret.
@@ -14,6 +16,7 @@ import { purgeOldSupportChats } from "@/lib/supportChat";
 // UPS...) — src/lib/basecourierTracking.ts. Oprocz tego wysyla przypomnienia
 // "dokoncz platnosc" (src/lib/paymentReminders.ts) i anuluje porzucone
 // zamowienia (platnosc pending starsza niz STALE_DAYS) — src/lib/orderCleanup.ts.
+// Raz na dobe (od 06:00 Warsaw) snapshot Microsoft Clarity — src/lib/clarity.ts.
 //
 // Historia: poprzednia wersja iterowala po Stripe PaymentIntents (zamowienia
 // ida dzis przez P24 -> nic nie znajdowala), odpytywala zly URL InPost
@@ -79,12 +82,34 @@ export async function GET(req: NextRequest) {
       errors.push(`supportChatPurge: ${(e as Error).message}`);
     }
 
+    // Snapshot Clarity (raz na dobe od 06:00 Warsaw; sam pilnuje limitu 10 zapytan/dobe).
+    let clarity: { day: string; ok: boolean; skipped?: string; calls: number } | null = null;
+    try {
+      const r = await maybeRunDailyClaritySnapshot();
+      if (r) {
+        clarity = { day: r.day, ok: r.ok, skipped: r.skipped, calls: r.calls };
+        if (r.errors.length) errors.push(`clarity: ${r.errors.join(" | ")}`);
+      }
+    } catch (e) {
+      console.error("[cron/tracking] clarity snapshot failed:", e);
+      errors.push(`clarity: ${(e as Error).message}`);
+    }
+
     let reminders: ReminderResult = { sent: [], skipped: [], failed: [] };
     try {
       reminders = await sendPaymentReminders();
     } catch (e) {
       console.error("[cron/tracking] payment reminders failed:", e);
       errors.push(`paymentReminders: ${(e as Error).message}`);
+    }
+
+    // Prosby o opinie 5-14 dni po dostawie (lib/reviews.ts, max 30 na przebieg).
+    let reviewRequests: ReviewRequestResult = { sent: [], failed: [], skipped: 0 };
+    try {
+      reviewRequests = await sendReviewRequests(30);
+    } catch (e) {
+      console.error("[cron/tracking] review requests failed:", e);
+      errors.push(`reviewRequests: ${(e as Error).message}`);
     }
 
     // Najpierw porzucone zamowienia — zeby sledzenie nie odpytywalo InPost
@@ -145,7 +170,9 @@ export async function GET(req: NextRequest) {
         })),
       },
       paymentReminders: reminders,
+      reviewRequests,
       backup,
+      clarity,
       staleUnpaid: {
         olderThanDays: STALE_DAYS,
         cancelled: stale.cancelled.map((o) => o.orderNumber),
@@ -156,7 +183,7 @@ export async function GET(req: NextRequest) {
     };
     console.log(
       `[cron/tracking] checked=${summary.checked} changed=${summary.changed} emails=${summary.emailsSent} unavailable=${summary.unavailable} ` +
-      `bcChecked=${summary.basecourier.checked} bcChanged=${summary.basecourier.changed} staleCancelled=${stale.cancelled.length} reminders=${reminders.sent.length}` +
+      `bcChecked=${summary.basecourier.checked} bcChanged=${summary.basecourier.changed} staleCancelled=${stale.cancelled.length} reminders=${reminders.sent.length} reviewRequests=${reviewRequests.sent.length}` +
       (errors.length ? ` errors=${errors.length}` : "")
     );
     return NextResponse.json(summary);

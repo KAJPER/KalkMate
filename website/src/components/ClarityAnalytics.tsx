@@ -9,7 +9,7 @@ const CLARITY_PROJECT_ID = "xnarb47w07";
 // Sekcje, ktorych NIE nagrywamy: panel admina (personel), panel klienta
 // (tresc czatow AI — czesto nieletni uczniowie), logowanie/rejestracja/reset
 // hasla (tokeny w URL, hasla) i parowanie urzadzenia (kod AI).
-const BLOCKED_PREFIXES = ["/admin", "/panel", "/auth", "/claim"];
+const BLOCKED_PREFIXES = ["/admin", "/panel", "/auth", "/claim", "/opinia"]; // /opinia/<token> — token w adresie
 
 // Parametry z sekretami — powrot ze Stripe/P24, linki weryfikacyjne itp.
 const SENSITIVE_PARAMS = [

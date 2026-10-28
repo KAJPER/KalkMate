@@ -523,6 +523,66 @@ function ctaButton(text: string, url: string): string {
 const strongName = (s: string) => `<strong style="color:${C.paper};font-weight:700;">${escHtml(s)}</strong>`;
 const strongItem = (s: string) => `<strong style="color:${C.paper};font-weight:600;">${escHtml(s)}</strong>`;
 
+// Program polecajacy — drugorzedna wzmianka (akapit z linkiem, bez przycisku).
+// [tekst linku, reszta zdania]; member = ma konto, guest = zakup jako gosc.
+const REFERRAL_NOTE: Record<EmailLocale, { member: [string, string]; guest: [string, string] }> = {
+  pl: {
+    member: ["Poleć KalkMate znajomym", " — dostaną 7% rabatu, a Ty prowizję od każdej sprzedanej sztuki."],
+    guest:  ["Załóż konto i poleć KalkMate znajomym", " — dostaną 7% rabatu, a Ty prowizję od każdej sprzedanej sztuki."],
+  },
+  de: {
+    member: ["Empfiehl KalkMate deinen Freunden", " — sie bekommen 7&nbsp;% Rabatt und du eine Provision für jedes verkaufte Gerät."],
+    guest:  ["Erstelle ein Konto und empfiehl KalkMate deinen Freunden", " — sie bekommen 7&nbsp;% Rabatt und du eine Provision für jedes verkaufte Gerät."],
+  },
+  en: {
+    member: ["Recommend KalkMate to your friends", " — they get 7% off, and you earn a commission on every unit sold."],
+    guest:  ["Create an account and recommend KalkMate to your friends", " — they get 7% off, and you earn a commission on every unit sold."],
+  },
+  cs: {
+    member: ["Doporuč KalkMate kamarádům", " — dostanou slevu 7&nbsp;% a ty provizi z každého prodaného kusu."],
+    guest:  ["Založ si účet a doporuč KalkMate kamarádům", " — dostanou slevu 7&nbsp;% a ty provizi z každého prodaného kusu."],
+  },
+  sk: {
+    member: ["Odporuč KalkMate kamarátom", " — dostanú zľavu 7&nbsp;% a ty províziu z každého predaného kusu."],
+    guest:  ["Založ si účet a odporuč KalkMate kamarátom", " — dostanú zľavu 7&nbsp;% a ty províziu z každého predaného kusu."],
+  },
+  lt: {
+    member: ["Rekomenduok KalkMate draugams", " — jie gaus 7&nbsp;% nuolaidą, o tu – komisinį atlygį už kiekvieną parduotą vienetą."],
+    guest:  ["Susikurk paskyrą ir rekomenduok KalkMate draugams", " — jie gaus 7&nbsp;% nuolaidą, o tu – komisinį atlygį už kiekvieną parduotą vienetą."],
+  },
+  be: {
+    member: ["Парай KalkMate сябрам", " — яны атрымаюць зніжку 7&nbsp;%, а ты — камісію з кожнай прададзенай штукі."],
+    guest:  ["Стварі акаўнт і парай KalkMate сябрам", " — яны атрымаюць зніжку 7&nbsp;%, а ты — камісію з кожнай прададзенай штукі."],
+  },
+  es: {
+    member: ["Recomienda KalkMate a tus amigos", ": tendrán un 7&nbsp;% de descuento y tú, una comisión por cada unidad vendida."],
+    guest:  ["Crea una cuenta y recomienda KalkMate a tus amigos", ": tendrán un 7&nbsp;% de descuento y tú, una comisión por cada unidad vendida."],
+  },
+  pt: {
+    member: ["Recomenda o KalkMate aos teus amigos", " — eles têm 7% de desconto e tu ganhas uma comissão por cada unidade vendida."],
+    guest:  ["Cria uma conta e recomenda o KalkMate aos teus amigos", " — eles têm 7% de desconto e tu ganhas uma comissão por cada unidade vendida."],
+  },
+  fr: {
+    member: ["Recommande KalkMate à tes amis", " : ils profitent de 7&nbsp;% de réduction, et toi d’une commission sur chaque unité vendue."],
+    guest:  ["Crée un compte et recommande KalkMate à tes amis", " : ils profitent de 7&nbsp;% de réduction, et toi d’une commission sur chaque unité vendue."],
+  },
+  it: {
+    member: ["Consiglia KalkMate ai tuoi amici", ": avranno il 7% di sconto e tu una commissione su ogni unità venduta."],
+    guest:  ["Crea un account e consiglia KalkMate ai tuoi amici", ": avranno il 7% di sconto e tu una commissione su ogni unità venduta."],
+  },
+};
+
+const REFERRAL_URL_MEMBER = "https://kalkmate.pl/panel?tab=affiliate";
+// Gosc: rejestracja z powrotem do zakladki polecen (signin pamieta callbackUrl)
+const REFERRAL_URL_GUEST = "https://kalkmate.pl/auth/signin?mode=register&callbackUrl=%2Fpanel%3Ftab%3Daffiliate";
+
+function referralNote(locale: EmailLocale, isGuest = false): string {
+  const n = REFERRAL_NOTE[locale] ?? REFERRAL_NOTE.en;
+  const [linkText, rest] = isGuest ? n.guest : n.member;
+  const url = isGuest ? REFERRAL_URL_GUEST : REFERRAL_URL_MEMBER;
+  return body(`<a href="${escHtml(url)}" style="color:${C.signal};text-decoration:underline;font-weight:600;">${linkText}</a>${rest}`);
+}
+
 export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale = "pl"): string {
   const headlines: Record<EmailLocale, [string, string]> = {
     pl: ["Dziękujemy za zakup.", "zakup"],
@@ -657,6 +717,7 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
     ${isGuest
       ? ctaButton(btnRegister[locale], "https://kalkmate.pl/auth/signin?mode=register")
       : ctaButton(t(locale, "btnPanel"), "https://kalkmate.pl/panel")}
+    ${referralNote(locale, isGuest)}
 
     <p style="margin:24px 0 0 0;font-family:${FONT_MONO};font-size:10px;letter-spacing:0.15em;color:${C.paperDim};text-transform:uppercase;text-align:center;">${t(locale, "labelOrderId")} <span style="color:${C.paper};font-weight:600;">${escHtml(data.orderId)}</span></p>
   `;
@@ -1074,6 +1135,7 @@ export function statusFulfilledEmail(data: FulfillmentData, locale: EmailLocale 
 
     ${body(bodies[locale])}
     ${ctaButton(t(locale, "btnPanel"), "https://kalkmate.pl/panel")}
+    ${referralNote(locale)}
   `;
   return shell(inner, locale);
 }
@@ -1754,6 +1816,19 @@ export const EMAIL_SUBJECTS = {
     fr: "Confirmation de commande – KalkMate",
     it: "Conferma d’ordine – KalkMate",
   },
+  reviewRequest: {
+    pl: "Jak Ci się podoba KalkMate? Oceń w 30 sekund – KalkMate",
+    de: "Wie gefällt dir KalkMate? Bewerte ihn in 30 Sekunden – KalkMate",
+    en: "How do you like KalkMate? Rate it in 30 seconds – KalkMate",
+    cs: "Jak se ti líbí KalkMate? Ohodnoť ho za 30 sekund – KalkMate",
+    sk: "Ako sa ti páči KalkMate? Ohodnoť ho za 30 sekúnd – KalkMate",
+    lt: "Kaip tau patinka KalkMate? Įvertink per 30 sekundžių – KalkMate",
+    be: "Як табе KalkMate? Ацэні за 30 секунд – KalkMate",
+    es: "¿Qué te parece KalkMate? Valóralo en 30 segundos – KalkMate",
+    pt: "O que achas do KalkMate? Avalia em 30 segundos – KalkMate",
+    fr: "Comment trouves-tu KalkMate ? Note-le en 30 secondes – KalkMate",
+    it: "Come ti trovi con KalkMate? Valutalo in 30 secondi – KalkMate",
+  },
 } satisfies Record<string, Record<EmailLocale, string>>;
 
 // Temat potwierdzenia zamówienia z numerem (webhook Stripe, P24, przypomnienia).
@@ -1981,4 +2056,141 @@ export function paymentReminderEmail(d: PaymentReminderData): string {
     ${body(`Jeśli płatność jest już zrobiona, zignoruj tę wiadomość — potwierdzenie przyjdzie osobnym mailem. Jeśli rezygnujesz, nic nie musisz robić: nieopłacone zamówienie anulujemy automatycznie po ${d.cancelAfterDays} dniach. Problem z płatnością? Odpisz na tego maila.`)}
   `;
   return shell(inner, "en", { htmlLang: "pl", footerLabel: "Wiadomość automatyczna" });
+}
+
+// ---------------------------------------------------------------------------
+// Prosba o opinie (po dostarczeniu zamowienia)
+// ---------------------------------------------------------------------------
+export interface ReviewRequestData {
+  customerName: string;   // pelne imie i nazwisko z zamowienia (bierzemy pierwsze slowo)
+  reviewUrl: string;      // https://kalkmate.pl/opinia/<token>
+  unsubscribeUrl: string; // lib/newsletter.ts unsubscribeUrl(email)
+}
+
+const REVIEW_TX: Record<EmailLocale, {
+  eyebrow: string;
+  headline: string;
+  hi: (name: string) => string; // name = gotowy HTML (strongName) albo ""
+  line: string;
+  cta: string;
+  optOut: string;
+  unsub: string;
+}> = {
+  pl: {
+    eyebrow: "Opinia · 30 sekund",
+    headline: "Jak Ci się podoba KalkMate?",
+    hi: (n) => (n ? `Cześć ${n}!` : "Cześć!"),
+    line: "Oceń go w 30 sekund — Twoja opinia pomoże innym uczniom wybrać.",
+    cta: "Wystaw opinię",
+    optOut: "Nie chcesz takich maili?",
+    unsub: "Wypisz się",
+  },
+  de: {
+    eyebrow: "Bewertung · 30 Sekunden",
+    headline: "Wie gefällt dir KalkMate?",
+    hi: (n) => (n ? `Hallo ${n}!` : "Hallo!"),
+    line: "Bewerte ihn in 30 Sekunden — deine Meinung hilft anderen Schülern bei der Wahl.",
+    cta: "Bewertung abgeben",
+    optOut: "Du möchtest solche E-Mails nicht?",
+    unsub: "Abmelden",
+  },
+  en: {
+    eyebrow: "Review · 30 seconds",
+    headline: "How do you like KalkMate?",
+    hi: (n) => (n ? `Hi ${n}!` : "Hi!"),
+    line: "Rate it in 30 seconds — your review will help other students choose.",
+    cta: "Leave a review",
+    optOut: "Don’t want emails like this?",
+    unsub: "Unsubscribe",
+  },
+  cs: {
+    eyebrow: "Recenze · 30 sekund",
+    headline: "Jak se ti líbí KalkMate?",
+    hi: (n) => (n ? `Ahoj ${n}!` : "Ahoj!"),
+    line: "Ohodnoť ho za 30 sekund — tvůj názor pomůže ostatním studentům vybrat.",
+    cta: "Napsat recenzi",
+    optOut: "Nechceš takové e-maily?",
+    unsub: "Odhlásit se",
+  },
+  sk: {
+    eyebrow: "Recenzia · 30 sekúnd",
+    headline: "Ako sa ti páči KalkMate?",
+    hi: (n) => (n ? `Ahoj ${n}!` : "Ahoj!"),
+    line: "Ohodnoť ho za 30 sekúnd — tvoj názor pomôže ostatným študentom vybrať si.",
+    cta: "Napísať recenziu",
+    optOut: "Nechceš takéto e-maily?",
+    unsub: "Odhlásiť sa",
+  },
+  lt: {
+    eyebrow: "Atsiliepimas · 30 sekundžių",
+    headline: "Kaip tau patinka KalkMate?",
+    hi: (n) => (n ? `Labas, ${n}!` : "Labas!"),
+    line: "Įvertink jį per 30 sekundžių — tavo nuomonė padės kitiems mokiniams pasirinkti.",
+    cta: "Palikti atsiliepimą",
+    optOut: "Nenori tokių laiškų?",
+    unsub: "Atsisakyti",
+  },
+  be: {
+    eyebrow: "Водгук · 30 секунд",
+    headline: "Як табе KalkMate?",
+    hi: (n) => (n ? `Прывітанне, ${n}!` : "Прывітанне!"),
+    line: "Ацэні яго за 30 секунд — твой водгук дапаможа іншым вучням зрабіць выбар.",
+    cta: "Пакінуць водгук",
+    optOut: "Не хочаш такіх лістоў?",
+    unsub: "Адпісацца",
+  },
+  es: {
+    eyebrow: "Opinión · 30 segundos",
+    headline: "¿Qué te parece KalkMate?",
+    hi: (n) => (n ? `¡Hola, ${n}!` : "¡Hola!"),
+    line: "Valóralo en 30 segundos: tu opinión ayudará a otros estudiantes a elegir.",
+    cta: "Dejar mi opinión",
+    optOut: "¿No quieres recibir estos correos?",
+    unsub: "Darte de baja",
+  },
+  pt: {
+    eyebrow: "Opinião · 30 segundos",
+    headline: "O que achas do KalkMate?",
+    hi: (n) => (n ? `Olá ${n}!` : "Olá!"),
+    line: "Avalia-o em 30 segundos — a tua opinião vai ajudar outros estudantes a escolher.",
+    cta: "Deixar opinião",
+    optOut: "Não queres receber estes e-mails?",
+    unsub: "Cancelar subscrição",
+  },
+  fr: {
+    eyebrow: "Avis · 30 secondes",
+    headline: "Comment trouves-tu KalkMate ?",
+    hi: (n) => (n ? `Bonjour ${n} !` : "Bonjour !"),
+    line: "Note-le en 30 secondes : ton avis aidera d’autres élèves à choisir.",
+    cta: "Donner mon avis",
+    optOut: "Tu ne veux plus recevoir ce genre d’e-mails ?",
+    unsub: "Se désinscrire",
+  },
+  it: {
+    eyebrow: "Recensione · 30 secondi",
+    headline: "Come ti trovi con KalkMate?",
+    hi: (n) => (n ? `Ciao ${n}!` : "Ciao!"),
+    line: "Valutalo in 30 secondi: la tua opinione aiuterà altri studenti a scegliere.",
+    cta: "Lascia una recensione",
+    optOut: "Non vuoi ricevere email come questa?",
+    unsub: "Annulla l’iscrizione",
+  },
+};
+
+export function reviewRequestEmail(d: ReviewRequestData, locale: EmailLocale = "pl"): string {
+  const tx = REVIEW_TX[locale] ?? REVIEW_TX.en;
+  // Tylko imie (pierwsze slowo); strongName escapuje
+  const first = (d.customerName || "").trim().split(/\s+/)[0] || "";
+  const inner = `
+    ${eyebrowBlock(tx.eyebrow)}
+    ${headline(tx.headline, "KalkMate")}
+    ${lead(`${tx.hi(first ? strongName(first) : "")} ${tx.line}`)}
+    ${ctaButton(tx.cta, escHtml(d.reviewUrl))}
+  `;
+  return shell(inner, locale, {
+    footerExtraHtml: `
+        <div style="font-family:${FONT_BODY};font-size:11.5px;color:${C.paperDim};margin-top:8px;line-height:1.5;">${tx.optOut}
+          <a href="${escHtml(d.unsubscribeUrl)}" style="color:${C.paperSub};text-decoration:underline;">${tx.unsub}</a>
+        </div>`,
+  });
 }

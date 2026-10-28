@@ -191,3 +191,9 @@ body {
 
 /* Stripe element on dark */
 .StripeElement, .__PrivateStripeElement { color-scheme: dark; }
+
+/* StickyBuyBar (mobile < lg): wysokosc paska dla innych elementow fixed
+   (np. przycisk czatu w SupportWidget podnosi sie o te wartosc). */
+@media (max-width: 1023.98px) {
+  body.km-sticky-bar { --km-sticky-bar-h: calc(4rem + env(safe-area-inset-bottom, 0px)); }
+}

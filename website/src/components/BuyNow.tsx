@@ -15,6 +15,8 @@ import {
   ALL_COUNTRY_CODES, countryName, flagEmoji, dialCode, regionsFor, showsOptionalRegion, cityWithRegion, postcodeHint,
 } from "@/lib/countries";
 import { readClientAttribution } from "@/lib/clientAttribution";
+import { trackFunnel, trackFunnelOnce } from "@/lib/funnelClient";
+import { OPEN_CHECKOUT_EVENT, publishCheckoutState } from "@/lib/checkoutBus";
 import {
   EU_COUNTRIES, MAX_ORDER_QUANTITY, PRODUCT_CENTS, PRODUCT_ID, PRODUCT_NAME,
   clampQuantity, currencyForCountry, formatMoney, shippingCentsFor, type ShopCurrency,
@@ -1513,6 +1515,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
     setIsModalOpen(true);
     setStage("form");
     setErrorMessage("");
+    trackFunnel("form_open", { lang, country: formData.country });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
@@ -1605,7 +1608,28 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
     setIsModalOpen(true);
     setStage("form");
     setErrorMessage("");
-  }, []);
+    trackFunnel("form_open", { lang, country: formData.country });
+  }, [lang, formData.country]);
+
+  // Lejek: sekcja kupna w widoku (raz na zaladowanie) + otwieranie z zewnatrz
+  // (StickyBuyBar -> lib/checkoutBus.ts) + stan dla paska.
+  useEffect(() => {
+    const el = document.getElementById("kup-teraz");
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { trackFunnelOnce("view_buy", { lang, country: formData.country }); io.disconnect(); }
+    }, { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [lang, formData.country]);
+  useEffect(() => {
+    window.addEventListener(OPEN_CHECKOUT_EVENT, openModal);
+    return () => window.removeEventListener(OPEN_CHECKOUT_EVENT, openModal);
+  }, [openModal]);
+  useEffect(() => {
+    publishCheckoutState({ ready: true, currency, open: isModalOpen });
+  }, [currency, isModalOpen]);
+  useEffect(() => () => publishCheckoutState({ ready: false, currency: null, open: false }), []);
 
   // "Masz konto? Zaloguj sie" w formularzu — po logowaniu wracamy do formularza.
   const goSignIn = useCallback(() => {
@@ -1668,6 +1692,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
       return;
     }
     setErrorMessage("");
+    trackFunnel("form_submit", { lang, country: formData.country });
 
     // Polish customers → P24 (no Stripe PaymentIntent needed yet)
     if (isPoland) {
