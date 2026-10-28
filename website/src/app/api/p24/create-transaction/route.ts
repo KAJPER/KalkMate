@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { resolveCheckoutBuyer } from "@/lib/checkoutBuyer";
+import { GUEST_NEWSLETTER_NOTE } from "@/lib/guestOrders";
 import { giveConsent } from "@/lib/newsletter";
 import { clientIp } from "@/lib/rate-limit";
 import { ipHashFromHeaders, resolveAttribution, saveOrderAttribution } from "@/lib/attribution";
@@ -15,27 +15,11 @@ import { quoteCheckout, generateOrderNumber, isUniqueViolation } from "@/lib/che
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Aby kupić kalkulator, musisz być zalogowany." },
-        { status: 401 }
-      );
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, email: true, emailVerified: true, name: true },
-    });
-    if (!user) return NextResponse.json({ error: "Brak konta" }, { status: 401 });
-    if (!user.emailVerified) {
-      return NextResponse.json(
-        { error: "Najpierw zweryfikuj swój email. Sprawdź skrzynkę pocztową." },
-        { status: 403 }
-      );
-    }
-
     const body = await request.json();
+    // Zalogowany (email z konta) albo gosc (email z formularza) — lib/checkoutBuyer.ts.
+    const resolved = await resolveCheckoutBuyer(request, body?.email);
+    if (!resolved.ok) return resolved.res;
+    const { buyer } = resolved;
     const {
       name, phone,
       pickupPoint, pickupPointAddress,
@@ -60,12 +44,15 @@ export async function POST(request: NextRequest) {
     }
     const withdrawalWaiverAt = new Date().toISOString();
     // Zgoda na newsletter z formularza zamowienia (checkbox, domyslnie
-    // odznaczony) — niezalezna od tego, czy klient potem zaplaci.
-    if (marketingConsent === true) {
-      await giveConsent(user.email!, "order", clientIp(request)).catch((e) => console.error("[checkout] consent save failed:", e));
+    // odznaczony) — zalogowanemu zapisujemy od razu. Gosc moglby wpisac cudzy
+    // adres (a giveConsent zdejmuje go z listy wypisanych), wiec jego zgode
+    // zapisujemy dopiero po oplaceniu (webhook / settle P24).
+    const guestNewsletter = buyer.guest && marketingConsent === true;
+    if (marketingConsent === true && !buyer.guest) {
+      await giveConsent(buyer.email, "order", clientIp(request)).catch((e) => console.error("[checkout] consent save failed:", e));
     }
 
-    const email = user.email!;
+    const email = buyer.email;
     const resolvedCountry = String(country || "PL").trim().toUpperCase() || "PL";
     const isPoland = resolvedCountry === "PL";
 
@@ -89,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Cennik wylacznie po stronie serwera (K1): waluta i wysylka z kraju.
-    const priced = await quoteCheckout({ country: resolvedCountry, couponCode, userId: user.id, quantity: unitsCheck.quantity });
+    const priced = await quoteCheckout({ country: resolvedCountry, couponCode, userId: buyer.couponOwner, quantity: unitsCheck.quantity });
     if (!priced.ok) {
       return NextResponse.json({ error: priced.error, reason: priced.reason }, { status: 409 });
     }
@@ -103,7 +90,7 @@ export async function POST(request: NextRequest) {
     // oplacic do 30 dni) — webhook P24 ja skonsumuje, auto-anulowanie zwolni.
     if (quote.couponCode) {
       const rid = await reserveCoupon({
-        code: quote.couponCode, ref: orderId, userId: user.id, ttlMs: COUPON_RESERVATION_TTL_P24_MS,
+        code: quote.couponCode, ref: orderId, userId: buyer.couponOwner, ttlMs: COUPON_RESERVATION_TTL_P24_MS,
       });
       if (!rid) {
         return NextResponse.json({ error: "Kupon zostal juz wykorzystany.", reason: "used_up" }, { status: 409 });
@@ -138,13 +125,14 @@ export async function POST(request: NextRequest) {
       });
 
       await insertPendingOrder({
-        orderId, userId: user.id, name, email, phone,
+        orderId, userId: buyer.userId, name, email, phone,
         pickupPoint: isPoland && pickupPoint ? String(pickupPoint) : "",
         pickupPointAddress: isPoland && pickupPointAddress ? String(pickupPointAddress) : "",
         street: street || "", postcode: postcode || "", city: city || "", country: resolvedCountry,
         amount: totalAmount, currency: quote.currency, sessionId,
         quantity: quote.quantity, units,
-        adminNotes: `[ZGODA] Brak prawa odstapienia (produkt personalizowany) zaakceptowany ${withdrawalWaiverAt}`,
+        adminNotes: `[ZGODA] Brak prawa odstapienia (produkt personalizowany) zaakceptowany ${withdrawalWaiverAt}`
+          + (guestNewsletter ? `\n${GUEST_NEWSLETTER_NOTE} ${withdrawalWaiverAt}` : ""),
       });
     } catch (e) {
       // Nie udalo sie zarejestrowac platnosci / zapisac zamowienia — oddaj kupon.
@@ -190,7 +178,7 @@ export async function POST(request: NextRequest) {
 // Numer zamowienia z crypto; przy kolizji UNIQUE (ten sam numer tego dnia)
 // losujemy ponownie.
 async function insertPendingOrder(o: {
-  orderId: string; userId: string; name: string; email: string; phone: string;
+  orderId: string; userId: string | null; name: string; email: string; phone: string;
   pickupPoint: string; pickupPointAddress: string;
   street: string; postcode: string; city: string; country: string;
   amount: number; currency: string; sessionId: string;

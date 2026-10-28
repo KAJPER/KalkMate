@@ -7,6 +7,7 @@ import { purchaseConfirmationEmail, localeFromCountry, orderConfirmationSubject 
 import { prisma } from "@/lib/db";
 import { attributionFromMetadata, saveOrderAttribution } from "@/lib/attribution";
 import { consumeCouponUsage, setOrderCoupon } from "@/lib/coupons";
+import { giveConsent } from "@/lib/newsletter";
 import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
 import { createPaidTokenPurchaseAndCredit, appendTokenPurchaseNote } from "@/lib/tokenPurchases";
 import { getTokenPack } from "@/lib/tokenPacks";
@@ -304,6 +305,13 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
     }
   }
 
+  // Gosc zaznaczyl newsletter w formularzu — zgode zapisujemy dopiero teraz,
+  // po oplaceniu (lib/checkoutBuyer.ts: cudzy adres wpisany bez platnosci
+  // nie moze zdjac nikogo z listy wypisanych).
+  if (meta.newsletter_consent === "1") {
+    await giveConsent(email, "order", null).catch((e) => console.error("[WEBHOOK] guest consent save failed:", e));
+  }
+
   if (!amountOk) {
     // Bez maila do klienta, triala i paragonu z automatu — decyzja admina.
     await alertAdmin(`Stripe: niezgodna kwota/waluta — ${orderNumber}`, [
@@ -346,6 +354,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
         orderId: orderNumber,
         quantity,
         unitNames: units.map((u) => u.name),
+        hasAccount: !!existingUser,
       }, locale),
     });
     console.log(`[WEBHOOK] ✅ Confirmation email sent to ${email}`);
@@ -435,6 +444,7 @@ async function handleCalculatorPurchase(session: Stripe.Checkout.Session) {
         pickupPoint: pickupPoint || "",
         pickupPointAddress: pickupPointAddress || "",
         orderId: orderNumber,
+        hasAccount: !!existingUser,
       }, locale),
     });
     console.log(`[WEBHOOK] ✅ Confirmation email sent to ${email}`);

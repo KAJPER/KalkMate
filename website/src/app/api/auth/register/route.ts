@@ -136,10 +136,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Nowy user — emailVerified NULL
-    const existingOrder = await prisma.order.findFirst({
-      where: { customerEmail: email, status: "paid" },
-    });
-
     let user;
     try {
       user = await prisma.user.create({
@@ -154,9 +150,8 @@ export async function POST(req: NextRequest) {
       throw e;
     }
 
-    if (existingOrder) {
-      await prisma.order.update({ where: { id: existingOrder.id }, data: { userId: user.id } });
-    }
+    // Zamowienia zlozone bez konta podpina dopiero potwierdzenie maila
+    // (/api/auth/verify-email, lib/guestOrders.ts) — tu adres nie jest jeszcze sprawdzony.
 
     // Model tokenowy (2026-10): bez rekordu Subscription/trialu — tylko saldo
     // startowe SIGNUP_TOKENS. TYLKO dla nowo utworzonego konta (wczesniej

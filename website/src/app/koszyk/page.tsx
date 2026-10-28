@@ -2,7 +2,6 @@
 
 import { useSyncExternalStore } from "react";
 import { useCart } from "@/components/CartContext";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
@@ -10,7 +9,6 @@ import HtmlLang from "@/components/HtmlLang";
 import Link from "next/link";
 import { locales, localeHome, type Locale } from "@/lib/i18n";
 import { formatMoney, MAX_ORDER_QUANTITY, PRODUCT_ID, clampQuantity } from "@/lib/content/shop";
-import { rememberCallback } from "@/app/auth/callback";
 
 const content: Record<Locale, {
   eyebrow: string;
@@ -34,7 +32,6 @@ const content: Record<Locale, {
   toPay: string;
   toPayPlusShipping: string;
   checkout: string;
-  loginAndOrder: string;
   badges: string[];
 }> = {
   pl: {
@@ -59,7 +56,6 @@ const content: Record<Locale, {
     toPay: "Do zapłaty",
     toPayPlusShipping: "Do zapłaty + wysyłka",
     checkout: "Przejdź do zamówienia",
-    loginAndOrder: "Zaloguj się i zamów",
     badges: ["Bezpieczna płatność", "Gwarancja 24 mc", "Darmowa wysyłka InPost w PL"],
   },
   en: {
@@ -84,7 +80,6 @@ const content: Record<Locale, {
     toPay: "Total",
     toPayPlusShipping: "Total + shipping",
     checkout: "Continue to checkout",
-    loginAndOrder: "Sign in and order",
     badges: ["Secure payment", "24-month warranty", "Free InPost shipping in Poland"],
   },
   de: {
@@ -109,7 +104,6 @@ const content: Record<Locale, {
     toPay: "Gesamt",
     toPayPlusShipping: "Gesamt + Versand",
     checkout: "Weiter zur Bestellung",
-    loginAndOrder: "Anmelden und bestellen",
     badges: ["Sichere Zahlung", "24 Monate Garantie", "Kostenloser InPost-Versand in Polen"],
   },
   cs: {
@@ -134,7 +128,6 @@ const content: Record<Locale, {
     toPay: "K úhradě",
     toPayPlusShipping: "K úhradě + doprava",
     checkout: "Pokračovat k objednávce",
-    loginAndOrder: "Přihlásit se a objednat",
     badges: ["Bezpečná platba", "Záruka 24 měsíců", "Doprava InPost v Polsku zdarma"],
   },
   sk: {
@@ -159,7 +152,6 @@ const content: Record<Locale, {
     toPay: "Na úhradu",
     toPayPlusShipping: "Na úhradu + doprava",
     checkout: "Pokračovať k objednávke",
-    loginAndOrder: "Prihlásiť sa a objednať",
     badges: ["Bezpečná platba", "Záruka 24 mesiacov", "Doprava InPost v Poľsku zadarmo"],
   },
   lt: {
@@ -188,7 +180,6 @@ const content: Record<Locale, {
     toPay: "Mokėti",
     toPayPlusShipping: "Mokėti + pristatymas",
     checkout: "Tęsti užsakymą",
-    loginAndOrder: "Prisijungti ir užsakyti",
     badges: ["Saugus mokėjimas", "24 mėn. garantija", "Nemokamas InPost pristatymas Lenkijoje"],
   },
   be: {
@@ -217,7 +208,6 @@ const content: Record<Locale, {
     toPay: "Да аплаты",
     toPayPlusShipping: "Да аплаты + дастаўка",
     checkout: "Перайсці да заказу",
-    loginAndOrder: "Увайсці і заказаць",
     badges: ["Бяспечная аплата", "Гарантыя 24 мес.", "Бясплатная дастаўка InPost у Польшчы"],
   },
   es: {
@@ -242,7 +232,6 @@ const content: Record<Locale, {
     toPay: "Total",
     toPayPlusShipping: "Total + envío",
     checkout: "Continuar con el pedido",
-    loginAndOrder: "Inicia sesión y compra",
     badges: ["Pago seguro", "Garantía de 24 meses", "Envío InPost gratis en Polonia"],
   },
   pt: {
@@ -267,7 +256,6 @@ const content: Record<Locale, {
     toPay: "Total",
     toPayPlusShipping: "Total + envio",
     checkout: "Continuar para a encomenda",
-    loginAndOrder: "Inicia sessão e encomenda",
     badges: ["Pagamento seguro", "Garantia de 24 meses", "Envio InPost grátis na Polónia"],
   },
   fr: {
@@ -292,7 +280,6 @@ const content: Record<Locale, {
     toPay: "Total",
     toPayPlusShipping: "Total + livraison",
     checkout: "Passer la commande",
-    loginAndOrder: "Se connecter et commander",
     badges: ["Paiement sécurisé", "Garantie 24 mois", "Livraison InPost gratuite en Pologne"],
   },
   it: {
@@ -317,7 +304,6 @@ const content: Record<Locale, {
     toPay: "Totale",
     toPayPlusShipping: "Totale + spedizione",
     checkout: "Procedi all'ordine",
-    loginAndOrder: "Accedi e ordina",
     badges: ["Pagamento sicuro", "Garanzia 24 mesi", "Spedizione InPost gratuita in Polonia"],
   },
 };
@@ -334,7 +320,6 @@ const serverSearch = () => "";
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, clearCart, totalItems, totalPrice } = useCart();
-  const { status } = useSession();
   const router = useRouter();
 
   // /koszyk nie ma wariantow /en, /de — jezyk z ?lang= (link z szuflady/menu),
@@ -350,14 +335,9 @@ export default function CartPage() {
 
   const handleCheckout = () => {
     // Checkout zyje w sekcji BuyNow landingu w tym samym jezyku. Ilosc idzie
-    // w ?qty= (przezywa tez przekierowanie przez logowanie).
+    // w ?qty=. Logowanie nie jest wymagane (zakup bez konta).
     const qty = clampQuantity(items.find((i) => i.id === PRODUCT_ID)?.quantity ?? totalItems);
     const target = `${localeHome(lang)}?checkout=true&qty=${qty}#kup-teraz`;
-    if (status !== "authenticated") {
-      rememberCallback(target);
-      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(target)}`);
-      return;
-    }
     router.push(target);
   };
 
@@ -564,7 +544,7 @@ export default function CartPage() {
                   >
                     <span className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 bg-[#0B0B0B] rounded-full km-blink" />
-                      {status === "authenticated" ? t.checkout : t.loginAndOrder}
+                      {t.checkout}
                     </span>
                     <span>→</span>
                   </button>

@@ -27,6 +27,8 @@ import { getOrderCoupon, consumeCouponUsage } from "@/lib/coupons";
 import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
 import { readOrderUnits } from "@/lib/orderPersonalization";
 import { alertAdmin, appendOrderAdminNote, formatMinor } from "@/lib/checkoutPricing";
+import { giveConsent } from "@/lib/newsletter";
+import { GUEST_NEWSLETTER_NOTE } from "@/lib/guestOrders";
 
 // Po ilu dniach bez platnosci zamowienie jest auto-anulowane (lib/orderCleanup.ts
 // re-eksportuje te stala). Trzymana tutaj, zeby orderCleanup mogl importowac
@@ -101,6 +103,7 @@ interface SettleOrderRow {
   customerAddressCity: string | null;
   customerCountry: string | null;
   userId: string | null;
+  adminNotes: string | null;
 }
 
 export type SettleResult =
@@ -127,7 +130,7 @@ export async function settleP24OrderPayment(p: {
   const rows = await prisma.$queryRaw<SettleOrderRow[]>`
     SELECT id, status, "fulfillmentStatus", "orderNumber", "customerName", "customerEmail",
            "pickupPoint", "pickupPointAddress", amount, currency,
-           "customerAddressStreet", "customerAddressPostcode", "customerAddressCity", "customerCountry", "userId"
+           "customerAddressStreet", "customerAddressPostcode", "customerAddressCity", "customerCountry", "userId", "adminNotes"
     FROM "Order" WHERE id = ${p.orderId} LIMIT 1`;
   const order = rows[0];
   if (!order) return "not_found";
@@ -214,6 +217,11 @@ export async function settleP24OrderPayment(p: {
 
   console.log(`[P24 settle] ✅ Order paid (${p.source}): ${order.orderNumber} for ${order.customerEmail}`);
 
+  // Gosc zaznaczyl newsletter (znacznik z create-transaction) — zgoda po oplaceniu.
+  if (order.adminNotes?.includes(GUEST_NEWSLETTER_NOTE)) {
+    await giveConsent(order.customerEmail, "order", null).catch((e) => console.error("[P24 settle] guest consent save failed:", e));
+  }
+
   // Paragon do kolejki agenta fiskalnego (tylko gdy FISCAL_AUTO_ENQUEUE=1) — lib/fiscal.ts.
   await autoEnqueueOrderReceipt(order.id);
 
@@ -240,6 +248,7 @@ export async function settleP24OrderPayment(p: {
         orderId: order.orderNumber,
         quantity: orderUnits.quantity,
         unitNames: orderUnits.units.map((u) => u.name),
+        hasAccount: !!order.userId,
       }, locale),
     });
     console.log(`[P24 settle] ✅ Confirmation email sent to ${order.customerEmail}`);

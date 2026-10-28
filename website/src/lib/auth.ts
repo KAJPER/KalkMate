@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs"
 import { randomUUID } from "crypto"
 import { rateLimit, clientIp } from "./rate-limit"
 import { SIGNUP_TOKENS } from "./tokenGrants"
+import { linkGuestOrders } from "./guestOrders"
 
 // ---------------------------------------------------------------------------
 // Wspolne reguly kont
@@ -375,6 +376,9 @@ export const authOptions: NextAuthOptions = {
           })
           if (hadPassword) await bumpSessionVersion(dbUser.id).catch(() => {})
         }
+        // Google potwierdzil wlasciciela adresu — zamowienia zlozone bez konta
+        // (lib/checkoutBuyer.ts) podpinamy pod to konto.
+        await linkGuestOrders(dbUser.id, dbUser.email).catch((e) => console.error("[auth] order link failed:", e))
 
         const existingAccount = await prisma.account.findUnique({
           where: {

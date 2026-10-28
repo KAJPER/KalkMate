@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { resolveCheckoutBuyer } from "@/lib/checkoutBuyer";
 import { giveConsent } from "@/lib/newsletter";
 import { clientIp } from "@/lib/rate-limit";
 import { attributionToMetadata, ipHashFromHeaders, resolveAttribution } from "@/lib/attribution";
-import { prisma } from "@/lib/db";
 import {
   reserveCoupon, releaseCouponReservation, setCouponReservationRef, COUPON_RESERVATION_TTL_STRIPE_MS,
 } from "@/lib/coupons";
@@ -15,29 +13,11 @@ import { randomUUID } from "crypto";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { error: "Aby kupic kalkulator, musisz byc zalogowany. Zaloguj sie lub zaloz konto." },
-        { status: 401 }
-      );
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, email: true, emailVerified: true },
-    });
-    if (!user) {
-      return NextResponse.json({ error: "Brak konta" }, { status: 401 });
-    }
-    if (!user.emailVerified) {
-      return NextResponse.json(
-        { error: "Najpierw zweryfikuj swoj email. Sprawdz skrzynke pocztowa." },
-        { status: 403 }
-      );
-    }
-
     const body = await request.json();
+    // Zalogowany (email z konta) albo gosc (email z formularza) — lib/checkoutBuyer.ts.
+    const resolved = await resolveCheckoutBuyer(request, body?.email);
+    if (!resolved.ok) return resolved.res;
+    const { buyer } = resolved;
     const {
       name, phone,
       pickupPoint, pickupPointAddress,
@@ -62,11 +42,14 @@ export async function POST(request: NextRequest) {
     }
     const withdrawalWaiverAt = new Date().toISOString();
     // Zgoda na newsletter z formularza zamowienia (checkbox, domyslnie
-    // odznaczony) — niezalezna od tego, czy klient potem zaplaci.
-    if (marketingConsent === true) {
-      await giveConsent(user.email!, "order", clientIp(request)).catch((e) => console.error("[checkout] consent save failed:", e));
+    // odznaczony) — zalogowanemu zapisujemy od razu. Gosc moglby wpisac cudzy
+    // adres (a giveConsent zdejmuje go z listy wypisanych), wiec jego zgode
+    // zapisujemy dopiero po oplaceniu (webhook / settle P24).
+    const guestNewsletter = buyer.guest && marketingConsent === true;
+    if (marketingConsent === true && !buyer.guest) {
+      await giveConsent(buyer.email, "order", clientIp(request)).catch((e) => console.error("[checkout] consent save failed:", e));
     }
-    const email = user.email!;
+    const email = buyer.email;
     const resolvedCountry = String(country || "PL").trim().toUpperCase() || "PL";
     const isPoland = resolvedCountry === "PL";
 
@@ -92,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Cennik wylacznie po stronie serwera (K1): waluta i wysylka z kraju.
-    const priced = await quoteCheckout({ country: resolvedCountry, couponCode, userId: user.id, quantity: unitsCheck.quantity });
+    const priced = await quoteCheckout({ country: resolvedCountry, couponCode, userId: buyer.couponOwner, quantity: unitsCheck.quantity });
     if (!priced.ok) {
       return NextResponse.json({ error: priced.error, reason: priced.reason }, { status: 409 });
     }
@@ -104,7 +87,7 @@ export async function POST(request: NextRequest) {
     let reservationId = "";
     if (quote.couponCode) {
       const rid = await reserveCoupon({
-        code: quote.couponCode, ref: randomUUID(), userId: user.id, ttlMs: COUPON_RESERVATION_TTL_STRIPE_MS,
+        code: quote.couponCode, ref: randomUUID(), userId: buyer.couponOwner, ttlMs: COUPON_RESERVATION_TTL_STRIPE_MS,
       });
       if (!rid) {
         return NextResponse.json({ error: "Kupon zostal juz wykorzystany.", reason: "used_up" }, { status: 409 });
@@ -133,7 +116,7 @@ export async function POST(request: NextRequest) {
         metadata: {
           product: "KalkMate v3.0",
           withdrawal_waiver_at: withdrawalWaiverAt,
-          user_id: user.id,
+          user_id: buyer.userId ?? "",
           customer_name: name,
           customer_email: email,
           customer_phone: phone,
@@ -155,6 +138,7 @@ export async function POST(request: NextRequest) {
           quantity: String(quote.quantity),
           ...personalizationMeta,
           attribution: attributionMeta,
+          newsletter_consent: guestNewsletter ? "1" : "",
         },
         receipt_email: email,
         description: `KalkMate v3.0 - AI Calculator${quote.quantity > 1 ? ` x${quote.quantity}` : ""}`,

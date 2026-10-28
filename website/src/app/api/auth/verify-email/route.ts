@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { linkGuestOrders } from "@/lib/guestOrders";
 import { prisma } from "@/lib/db";
 import { HASHED_TOKEN_ID_PREFIX, hashMailToken, isMailTokenFormat } from "@/lib/linkTokens";
 import { purgeExpiredAuthTokens } from "@/lib/auth";
@@ -116,6 +117,9 @@ export async function POST(req: NextRequest) {
         data: { emailVerified: new Date() },
       });
     }
+    // Adres potwierdzony — zamowienia zlozone na niego bez konta trafiaja do panelu.
+    const verified = await prisma.user.findUnique({ where: { id: r.userId }, select: { email: true } });
+    await linkGuestOrders(r.userId, verified?.email).catch((e) => console.error("[verify-email] order link failed:", e));
     void purgeExpiredAuthTokens().catch(() => {});
 
     return NextResponse.json({ ok: true, emailChanged: !!r.targetEmail });

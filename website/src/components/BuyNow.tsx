@@ -129,7 +129,7 @@ const content: Record<Locale, {
   couponLabel: string; couponApply: string; couponRemove: string; couponTag: string; couponPlaceholder: string;
   couponInvalid: string; couponRejected: (reason?: string) => string; connectionError: string;
   total: string; free: string; or: string;
-  emailFromAccount: string;
+  emailFromAccount: string; emailGuest: string; haveAccount: string;
   klarnaTitle: string; klarnaSub: string;
   processingTitle: string; processingBody: string;
   pendingTitle: string; pendingBody1: string; pendingBody2: string; pendingBody3: string; pendingRetry: string;
@@ -206,6 +206,7 @@ const content: Record<Locale, {
     connectionError: "Błąd połączenia.",
     total: "RAZEM", free: "GRATIS", or: "LUB",
     emailFromAccount: "Adres z Twojego konta — na niego wyślemy potwierdzenie zamówienia.",
+    emailGuest: "Na ten adres wyślemy potwierdzenie i numer przesyłki. Konto nie jest potrzebne — możesz je założyć później, zamówienie samo się podepnie.", haveAccount: "Masz konto? Zaloguj się",
     klarnaTitle: "Klarna — zapłać później lub w ratach", klarnaSub: "Odroczona płatność · przez Stripe",
     processingTitle: "Sprawdzamy płatność…", processingBody: "Poczekaj chwilę — weryfikujemy potwierdzenie płatności.",
     pendingTitle: "Płatność nie potwierdzona", pendingBody1: "Nie otrzymaliśmy jeszcze potwierdzenia płatności.",
@@ -287,6 +288,7 @@ const content: Record<Locale, {
     connectionError: "Connection error.",
     total: "TOTAL", free: "FREE", or: "OR",
     emailFromAccount: "Your account email — we'll send the order confirmation here.",
+    emailGuest: "We'll send the confirmation and tracking number to this address. No account needed — create one later and the order links up automatically.", haveAccount: "Have an account? Sign in",
     klarnaTitle: "Klarna — pay later or in instalments", klarnaSub: "Deferred payment · via Stripe",
     processingTitle: "Checking your payment…", processingBody: "One moment — we're verifying the payment confirmation.",
     pendingTitle: "Payment not confirmed yet", pendingBody1: "We haven't received the payment confirmation yet.",
@@ -368,6 +370,7 @@ const content: Record<Locale, {
     connectionError: "Verbindungsfehler.",
     total: "GESAMT", free: "GRATIS", or: "ODER",
     emailFromAccount: "E-Mail aus deinem Konto — hierhin senden wir die Bestellbestätigung.",
+    emailGuest: "An diese Adresse senden wir die Bestätigung und die Sendungsnummer. Kein Konto nötig — wenn du später eins erstellst, wird die Bestellung automatisch verknüpft.", haveAccount: "Schon ein Konto? Anmelden",
     klarnaTitle: "Klarna — später oder in Raten bezahlen", klarnaSub: "Spätere Zahlung · über Stripe",
     processingTitle: "Zahlung wird geprüft…", processingBody: "Einen Moment — wir prüfen die Zahlungsbestätigung.",
     pendingTitle: "Zahlung noch nicht bestätigt", pendingBody1: "Wir haben noch keine Zahlungsbestätigung erhalten.",
@@ -449,6 +452,7 @@ const content: Record<Locale, {
     connectionError: "Chyba připojení.",
     total: "CELKEM", free: "ZDARMA", or: "NEBO",
     emailFromAccount: "E-mail z vašeho účtu — sem pošleme potvrzení objednávky.",
+    emailGuest: "Na tuto adresu pošleme potvrzení a číslo zásilky. Účet není potřeba — můžeš si ho založit později, objednávka se k němu sama připojí.", haveAccount: "Máš účet? Přihlas se",
     klarnaTitle: "Klarna — zaplaťte později nebo na splátky", klarnaSub: "Odložená platba · přes Stripe",
     processingTitle: "Ověřujeme platbu…", processingBody: "Chvilku strpení — ověřujeme potvrzení platby.",
     pendingTitle: "Platba zatím nebyla potvrzena", pendingBody1: "Potvrzení platby jsme zatím neobdrželi.",
@@ -534,6 +538,7 @@ const content: Record<Locale, {
     connectionError: "Chyba pripojenia.",
     total: "SPOLU", free: "ZADARMO", or: "ALEBO",
     emailFromAccount: "E-mail z vášho účtu — sem pošleme potvrdenie objednávky.",
+    emailGuest: "Na túto adresu pošleme potvrdenie a číslo zásielky. Účet nie je potrebný — môžeš si ho založiť neskôr, objednávka sa k nemu sama pripojí.", haveAccount: "Máš účet? Prihlás sa",
     klarnaTitle: "Klarna — zaplaťte neskôr alebo na splátky", klarnaSub: "Odložená platba · cez Stripe",
     processingTitle: "Overujeme platbu…", processingBody: "Chvíľku strpenia — overujeme potvrdenie platby.",
     pendingTitle: "Platba zatiaľ nebola potvrdená", pendingBody1: "Potvrdenie platby sme zatiaľ nedostali.",
@@ -615,6 +620,7 @@ const content: Record<Locale, {
     connectionError: "Ryšio klaida.",
     total: "IŠ VISO", free: "NEMOKAMAI", or: "ARBA",
     emailFromAccount: "Jūsų paskyros el. paštas — čia išsiųsime užsakymo patvirtinimą.",
+    emailGuest: "Šiuo adresu atsiųsime patvirtinimą ir siuntos numerį. Paskyros nereikia — galėsi ją susikurti vėliau, užsakymas prisijungs automatiškai.", haveAccount: "Turi paskyrą? Prisijunk",
     klarnaTitle: "Klarna — mokėkite vėliau arba dalimis", klarnaSub: "Atidėtas mokėjimas · per Stripe",
     processingTitle: "Tikriname mokėjimą…", processingBody: "Akimirką — tikriname mokėjimo patvirtinimą.",
     pendingTitle: "Mokėjimas dar nepatvirtintas", pendingBody1: "Dar negavome mokėjimo patvirtinimo.",
@@ -696,6 +702,7 @@ const content: Record<Locale, {
     connectionError: "Памылка злучэння.",
     total: "РАЗАМ", free: "БЯСПЛАТНА", or: "АБО",
     emailFromAccount: "Email з вашага ўліковага запісу — сюды мы адправім пацвярджэнне замовы.",
+    emailGuest: "На гэты адрас мы дашлём пацвярджэнне і нумар пасылкі. Акаўнт не патрэбны — можаш стварыць яго пазней, замова прывяжацца сама.", haveAccount: "Ёсць акаўнт? Увайдзі",
     klarnaTitle: "Klarna — аплаціце пазней або ў растэрміноўку", klarnaSub: "Адкладзеная аплата · праз Stripe",
     processingTitle: "Правяраем аплату…", processingBody: "Хвілінку — правяраем пацвярджэнне аплаты.",
     pendingTitle: "Аплата яшчэ не пацверджана", pendingBody1: "Мы яшчэ не атрымалі пацвярджэння аплаты.",
@@ -777,6 +784,7 @@ const content: Record<Locale, {
     connectionError: "Error de conexión.",
     total: "TOTAL", free: "GRATIS", or: "O",
     emailFromAccount: "Email de tu cuenta — te enviaremos aquí la confirmación del pedido.",
+    emailGuest: "Enviaremos la confirmación y el número de seguimiento a esta dirección. No necesitas cuenta — si la creas más tarde, el pedido se vinculará solo.", haveAccount: "¿Tienes cuenta? Inicia sesión",
     klarnaTitle: "Klarna — paga más tarde o a plazos", klarnaSub: "Pago aplazado · a través de Stripe",
     processingTitle: "Comprobando el pago…", processingBody: "Un momento — estamos verificando la confirmación del pago.",
     pendingTitle: "Pago aún no confirmado", pendingBody1: "Todavía no hemos recibido la confirmación del pago.",
@@ -858,6 +866,7 @@ const content: Record<Locale, {
     connectionError: "Erro de ligação.",
     total: "TOTAL", free: "GRÁTIS", or: "OU",
     emailFromAccount: "Email da sua conta — enviaremos para aqui a confirmação da encomenda.",
+    emailGuest: "Enviaremos a confirmação e o número de seguimento para este endereço. Não precisas de conta — se a criares mais tarde, a encomenda fica associada automaticamente.", haveAccount: "Já tens conta? Inicia sessão",
     klarnaTitle: "Klarna — pague mais tarde ou em prestações", klarnaSub: "Pagamento diferido · via Stripe",
     processingTitle: "A verificar o pagamento…", processingBody: "Um momento — estamos a verificar a confirmação do pagamento.",
     pendingTitle: "Pagamento ainda não confirmado", pendingBody1: "Ainda não recebemos a confirmação do pagamento.",
@@ -939,6 +948,7 @@ const content: Record<Locale, {
     connectionError: "Erreur de connexion.",
     total: "TOTAL", free: "GRATUIT", or: "OU",
     emailFromAccount: "E-mail de votre compte — nous y enverrons la confirmation de commande.",
+    emailGuest: "Nous enverrons la confirmation et le numéro de suivi à cette adresse. Pas besoin de compte — si tu en crées un plus tard, la commande y sera liée automatiquement.", haveAccount: "Tu as un compte ? Connecte-toi",
     klarnaTitle: "Klarna — payez plus tard ou en plusieurs fois", klarnaSub: "Paiement différé · via Stripe",
     processingTitle: "Vérification du paiement…", processingBody: "Un instant — nous vérifions la confirmation du paiement.",
     pendingTitle: "Paiement pas encore confirmé", pendingBody1: "Nous n'avons pas encore reçu la confirmation du paiement.",
@@ -1020,6 +1030,7 @@ const content: Record<Locale, {
     connectionError: "Errore di connessione.",
     total: "TOTALE", free: "GRATIS", or: "OPPURE",
     emailFromAccount: "Email del tuo account — invieremo qui la conferma dell'ordine.",
+    emailGuest: "Invieremo la conferma e il numero di tracciamento a questo indirizzo. Non serve un account — se lo crei più tardi, l'ordine verrà collegato automaticamente.", haveAccount: "Hai un account? Accedi",
     klarnaTitle: "Klarna — paga dopo o a rate", klarnaSub: "Pagamento posticipato · tramite Stripe",
     processingTitle: "Verifica del pagamento…", processingBody: "Un attimo — stiamo verificando la conferma del pagamento.",
     pendingTitle: "Pagamento non ancora confermato", pendingBody1: "Non abbiamo ancora ricevuto la conferma del pagamento.",
@@ -1360,10 +1371,16 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
     returnHandledRef.current = true;
     cleanCheckoutQuery();
     try {
-      const ctx = JSON.parse(sessionStorage.getItem(CHECKOUT_CTX_KEY) || "null") as { country?: unknown } | null;
+      const ctx = JSON.parse(sessionStorage.getItem(CHECKOUT_CTX_KEY) || "null") as { country?: unknown; email?: unknown } | null;
       if (typeof ctx?.country === "string" && ctx.country) {
         const country = ctx.country;
         setFormData((d) => ({ ...d, country }));
+      }
+      // Gosc: email z formularza (ekran sukcesu + opinie Google). Zalogowanemu
+      // i tak nadpisze go efekt sessionEmail.
+      if (typeof ctx?.email === "string" && ctx.email) {
+        const email = ctx.email;
+        setFormData((d) => (d.email ? d : { ...d, email }));
       }
     } catch { /* ignore */ }
     setIsModalOpen(true);
@@ -1436,7 +1453,9 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
   // NIGDY przy powrocie z platnosci (nadpisalby ekran sukcesu -> podwojna platnosc).
   const checkoutHandledRef = useRef(false);
   useEffect(() => {
-    if (status !== "authenticated" || checkoutHandledRef.current || returnHandledRef.current) return;
+    // Czekamy tylko na koniec ladowania sesji (zeby zalogowanemu wpisac email
+    // konta) — gosc tez dostaje otwarty formularz (np. z /koszyk).
+    if (status === "loading" || checkoutHandledRef.current || returnHandledRef.current) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("checkout") !== "true" || params.get("redirect_status") || params.get("p24_return")) return;
     checkoutHandledRef.current = true;
@@ -1458,8 +1477,8 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
   // Kontekst na czas przekierowania do bramki (patrz CHECKOUT_CTX_KEY).
   useEffect(() => {
     if (stage !== "payment") return;
-    try { sessionStorage.setItem(CHECKOUT_CTX_KEY, JSON.stringify({ country: formData.country })); } catch { /* ignore */ }
-  }, [stage, formData.country]);
+    try { sessionStorage.setItem(CHECKOUT_CTX_KEY, JSON.stringify({ country: formData.country, email: formData.email })); } catch { /* ignore */ }
+  }, [stage, formData.country, formData.email]);
 
   // Udana platnosc -> pusty koszyk (koszyk trzyma tylko KalkMate, ktory wlasnie kupiono).
   useEffect(() => {
@@ -1537,20 +1556,21 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
     return () => { document.body.style.overflow = ""; };
   }, [isModalOpen]);
 
+  // Zakup bez konta (od 2026-10-28): formularz otwiera sie kazdemu, gosc
+  // podaje email w formularzu. Wczesniej niezalogowanych odsylalo na
+  // /auth/signin — Clarity: te sesje mialy ~0 s zaangazowania.
   const openModal = useCallback(() => {
-    if (status === "loading") return;
-    if (status !== "authenticated") {
-      // Po zalogowaniu (albo rejestracji + weryfikacji maila) wracamy prosto
-      // do formularza zamowienia na tym samym landingu.
-      const cb = `${window.location.pathname}?checkout=true#kup-teraz`;
-      rememberCallback(cb);
-      router.push(`/auth/signin?callbackUrl=${encodeURIComponent(cb)}`);
-      return;
-    }
     setIsModalOpen(true);
     setStage("form");
     setErrorMessage("");
-  }, [status, router]);
+  }, []);
+
+  // "Masz konto? Zaloguj sie" w formularzu — po logowaniu wracamy do formularza.
+  const goSignIn = useCallback(() => {
+    const cb = `${window.location.pathname}?checkout=true#kup-teraz`;
+    rememberCallback(cb);
+    router.push(`/auth/signin?callbackUrl=${encodeURIComponent(cb)}`);
+  }, [router]);
 
   const closeModal = useCallback(() => setIsModalOpen(false), []);
   const handlePointSelect = useCallback((point: InPostPoint) => {
@@ -2009,12 +2029,19 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                     </div>
                     <div>
                       <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">{t.email}</label>
-                      <input type="email" required value={formData.email}
+                      <input type="email" required value={formData.email} autoComplete="email"
                         readOnly={!!sessionEmail}
                         aria-readonly={!!sessionEmail}
                         onChange={(e) => { if (!sessionEmail) setFormData({ ...formData, email: e.target.value }); }}
                         className={inputClass + (sessionEmail ? " opacity-60 cursor-not-allowed focus:border-[rgba(242,237,227,0.18)]" : "")} />
-                      {sessionEmail && <p className="text-xs text-[#F2EDE3]/55 mt-1.5">{t.emailFromAccount}</p>}
+                      {sessionEmail ? (
+                        <p className="text-xs text-[#F2EDE3]/55 mt-1.5">{t.emailFromAccount}</p>
+                      ) : status !== "loading" && (
+                        <p className="text-xs text-[#F2EDE3]/55 mt-1.5">
+                          {t.emailGuest}{" "}
+                          <button type="button" onClick={goSignIn} className="text-[#D8FF3D] hover:underline">{t.haveAccount}</button>
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="km-mono-eyebrow text-[#F2EDE3]/55 block mb-2">

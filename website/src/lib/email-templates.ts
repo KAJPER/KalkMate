@@ -79,6 +79,7 @@ interface OrderData {
   orderId: string;
   quantity?: number;        // ile sztuk (brak = 1)
   unitNames?: string[];     // imiona/nicki na etykietach sztuk (BEZ kodów AI — to sekret)
+  hasAccount?: boolean;     // false = zakup jako gosc (brak = ma konto)
 }
 interface FulfillmentData {
   customerName: string;
@@ -559,6 +560,35 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
     fr: "Nous te préviendrons dès que le colis sera expédié. Tu peux suivre l’état de ta commande dans ton espace client.",
     it: "Ti avviseremo quando il pacco sarà spedito. Puoi seguire lo stato dell’ordine nel tuo pannello cliente.",
   };
+  // Zakup jako gosc: brak panelu — zachecamy do zalozenia konta na ten sam e-mail
+  // (zamowienie podepnie sie samo).
+  const isGuest = data.hasAccount === false;
+  const guestBodies: Record<EmailLocale, string> = {
+    pl: "Damy znać mailem, gdy paczka zostanie wysłana — z numerem przesyłki. Żeby aktywować tokeny AI z kodu licencji w pudełku, załóż konto na ten sam adres e-mail — to zamówienie samo się do niego podepnie.",
+    de: "Wir schicken dir eine E-Mail mit der Sendungsnummer, sobald das Paket verschickt wird. Um die KI-Tokens aus dem Lizenzcode in der Verpackung zu aktivieren, erstelle ein Konto mit derselben E-Mail-Adresse — diese Bestellung wird automatisch damit verknüpft.",
+    en: "We'll email you when the package ships, with the tracking number. To activate the AI tokens from the license code in the box, create an account with this same email address — this order will be linked to it automatically.",
+    cs: "Jakmile balík odešleme, pošleme ti e-mail s číslem zásilky. Pro aktivaci AI tokenů z licenčního kódu v krabičce si založ účet na stejnou e-mailovou adresu — tahle objednávka se k němu sama připojí.",
+    sk: "Keď balík odošleme, pošleme ti e-mail s číslom zásielky. Na aktiváciu AI tokenov z licenčného kódu v krabičke si založ účet na rovnakú e-mailovú adresu — táto objednávka sa k nemu sama pripojí.",
+    lt: "Kai siuntinį išsiųsime, atsiųsime el. laišką su siuntos numeriu. Kad aktyvuotum DI žetonus iš licencijos kodo dėžutėje, susikurk paskyrą tuo pačiu el. pašto adresu — šis užsakymas prie jos prisijungs automatiškai.",
+    be: "Мы напішам табе на пошту, калі пасылка будзе адпраўлена, — з нумарам адпраўлення. Каб актываваць ШІ-токены з ліцэнзійнага кода ў каробцы, стварі акаўнт на гэты ж адрас e-mail — заказ аўтаматычна прывяжацца да яго.",
+    es: "Te enviaremos un correo con el número de seguimiento cuando enviemos el paquete. Para activar los tokens de IA del código de licencia de la caja, crea una cuenta con este mismo correo: el pedido se vinculará a ella automáticamente.",
+    pt: "Enviamos-te um e-mail com o número de seguimento quando a encomenda for enviada. Para ativar os tokens de IA do código de licença na caixa, cria uma conta com este mesmo e-mail — esta encomenda fica associada automaticamente.",
+    fr: "Nous t’enverrons un e-mail avec le numéro de suivi dès que le colis sera expédié. Pour activer les tokens IA du code de licence dans la boîte, crée un compte avec cette même adresse e-mail : cette commande y sera rattachée automatiquement.",
+    it: "Ti invieremo un’e-mail con il numero di tracciamento quando il pacco sarà spedito. Per attivare i token IA dal codice di licenza nella scatola, crea un account con questo stesso indirizzo e-mail: l’ordine verrà collegato automaticamente.",
+  };
+  const btnRegister: Record<EmailLocale, string> = {
+    pl: "Załóż konto",
+    de: "Konto erstellen",
+    en: "Create account",
+    cs: "Založit účet",
+    sk: "Založiť účet",
+    lt: "Sukurti paskyrą",
+    be: "Стварыць акаўнт",
+    es: "Crear cuenta",
+    pt: "Criar conta",
+    fr: "Créer un compte",
+    it: "Crea account",
+  };
   // Model tokenowy (2026-10): bez triala/subskrypcji — tokeny AI z licencji w pudelku.
   const licenseNote: Record<EmailLocale, string> = {
     pl: "W pudełku znajdziesz kod licencji — po aktywacji w panelu dostaniesz 2 mln tokenów AI na swoje konto. Tokeny nie wygasają; kolejne możesz dokupić w panelu.",
@@ -619,9 +649,11 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
       infoRow(t(locale, "rowStatus"),  statusBadge(t(locale, "badgePaid"))),
     ].join(""))}
 
-    ${body(bodies[locale])}
+    ${body(isGuest ? guestBodies[locale] : bodies[locale])}
     ${body(licenseNote[locale])}
-    ${ctaButton(t(locale, "btnPanel"), "https://kalkmate.pl/panel")}
+    ${isGuest
+      ? ctaButton(btnRegister[locale], "https://kalkmate.pl/auth/signin?mode=register")
+      : ctaButton(t(locale, "btnPanel"), "https://kalkmate.pl/panel")}
 
     <p style="margin:24px 0 0 0;font-family:${FONT_MONO};font-size:10px;letter-spacing:0.15em;color:${C.paperDim};text-transform:uppercase;text-align:center;">${t(locale, "labelOrderId")} <span style="color:${C.paper};font-weight:600;">${escHtml(data.orderId)}</span></p>
   `;
