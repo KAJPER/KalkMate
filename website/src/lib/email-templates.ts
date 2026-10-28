@@ -85,8 +85,11 @@ interface FulfillmentData {
   customerName: string;
   product: string;
   trackingNumber?: string;
-  pickupPoint: string;
+  pickupPoint: string;       // niepusty = paczkomat; pusty = kurier pod drzwi
   pickupPointAddress: string;
+  carrierName?: string | null;   // nazwa przewoznika do wyswietlenia (InPost, DPD, UPS, GLS…); null = nieznany
+  trackUrl?: string | null;      // pelny link sledzenia tej paczki; null = brak; undefined = stary caller
+  deliveryAddress?: string;      // "ulica, kod miasto, kraj" dla kuriera ("" przy paczkomacie)
 }
 interface PasswordResetData {
   resetUrl: string;
@@ -660,6 +663,56 @@ export function purchaseConfirmationEmail(data: OrderData, locale: EmailLocale =
   return shell(inner, locale);
 }
 
+// ---------------------------------------------------------------------------
+// Wysylka: przewoznik / link sledzenia / miejsce dostawy (wspolne dla maili statusu)
+// ---------------------------------------------------------------------------
+
+// Etykieta wiersza przewoznika — lokalnie, bez ruszania wspolnego slownika t()
+const ROW_CARRIER: Record<EmailLocale, string> = {
+  pl: "Przewoźnik",
+  de: "Versanddienstleister",
+  en: "Carrier",
+  cs: "Dopravce",
+  sk: "Prepravca",
+  lt: "Vežėjas",
+  be: "Перавозчык",
+  es: "Transportista",
+  pt: "Transportadora",
+  fr: "Transporteur",
+  it: "Corriere",
+};
+
+// Paczkomat (pickupPoint niepusty) -> wiersz paczkomatu (+ adres);
+// kurier pod drzwi -> adres dostawy, jesli znany.
+function destinationRows(data: FulfillmentData, locale: EmailLocale, withLockerAddress: boolean): string[] {
+  if (data.pickupPoint) {
+    return [
+      infoRow(t(locale, "rowLocker"), escHtml(data.pickupPoint)),
+      ...(withLockerAddress
+        ? [infoRow(t(locale, "rowAddress"), `<span style="font-size:13px;color:${C.paperSub};">${escHtml(data.pickupPointAddress)}</span>`)]
+        : []),
+    ];
+  }
+  return data.deliveryAddress
+    ? [infoRow(t(locale, "rowDelivery"), `<span style="font-size:13px;color:${C.paperSub};">${escHtml(data.deliveryAddress)}</span>`)]
+    : [];
+}
+
+// Przewoznik + link sledzenia. trackUrl === undefined = stary caller: 24 cyfry
+// traktujemy jak InPost (dawne zachowanie). null = swiadomie brak linku.
+function shipmentInfo(data: FulfillmentData): { carrier: string; url: string | null } {
+  const tracking = data.trackingNumber || "";
+  const legacyInPost = data.trackUrl === undefined && /^\d{24}$/.test(tracking);
+  const url = data.trackUrl && /^https?:\/\//i.test(data.trackUrl)
+    ? data.trackUrl
+    : legacyInPost ? `https://inpost.pl/sledzenie-przesylek?number=${encodeURIComponent(tracking)}` : null;
+  const carrier = (data.carrierName || "").trim() || (legacyInPost ? "InPost" : "");
+  return { carrier, url };
+}
+
+const carrierRow = (carrier: string, locale: EmailLocale) =>
+  carrier ? infoRow(ROW_CARRIER[locale], escHtml(carrier)) : "";
+
 export function statusInProgressEmail(data: FulfillmentData, locale: EmailLocale = "pl"): string {
   const eyebrows: Record<EmailLocale, string> = {
     pl: "Status · Aktualizacja",
@@ -701,17 +754,18 @@ export function statusInProgressEmail(data: FulfillmentData, locale: EmailLocale
     it: `Ciao ${strongName(data.customerName)}, il tuo ordine ${strongItem(data.product)} è in lavorazione.`,
   };
   const bodies: Record<EmailLocale, string> = {
-    pl: "Napiszemy ponownie, gdy paczka zostanie nadana — razem z numerem przesyłki InPost.",
-    de: "Wir benachrichtigen dich erneut, wenn das Paket mit einer InPost-Sendungsnummer verschickt wurde.",
-    en: "We'll notify you again once the package has been shipped with an InPost tracking number.",
-    cs: "Znovu ti napíšeme, až balík odešleme — i s číslem zásilky InPost.",
-    sk: "Znova ti napíšeme, keď balík odošleme — aj s číslom zásielky InPost.",
-    lt: "Vėl parašysime, kai siuntinys bus išsiųstas, — kartu su InPost siuntos numeriu.",
-    be: "Мы напішам зноў, калі пасылка будзе адпраўлена, — разам з нумарам адпраўлення InPost.",
-    es: "Te volveremos a escribir cuando enviemos el paquete, junto con el número de seguimiento de InPost.",
-    pt: "Voltamos a escrever-te quando a encomenda for enviada, com o número de seguimento InPost.",
-    fr: "Nous t’écrirons à nouveau à l’expédition du colis, avec le numéro de suivi InPost.",
-    it: "Ti scriveremo di nuovo alla spedizione del pacco, insieme al numero di tracking InPost.",
+    // Bez nazwy przewoznika — na tym etapie moze byc jeszcze nieznany
+    pl: "Napiszemy ponownie, gdy paczka zostanie nadana — razem z numerem przesyłki.",
+    de: "Wir benachrichtigen dich erneut, sobald das Paket verschickt wurde — mit der Sendungsnummer.",
+    en: "We'll notify you again once the package has been shipped, with the tracking number.",
+    cs: "Znovu ti napíšeme, až balík odešleme — i s číslem zásilky.",
+    sk: "Znova ti napíšeme, keď balík odošleme — aj s číslom zásielky.",
+    lt: "Vėl parašysime, kai siuntinys bus išsiųstas, — kartu su siuntos numeriu.",
+    be: "Мы напішам зноў, калі пасылка будзе адпраўлена, — разам з нумарам адпраўлення.",
+    es: "Te volveremos a escribir cuando enviemos el paquete, junto con el número de seguimiento.",
+    pt: "Voltamos a escrever-te quando a encomenda for enviada, com o número de seguimento.",
+    fr: "Nous t’écrirons à nouveau à l’expédition du colis, avec le numéro de suivi.",
+    it: "Ti scriveremo di nuovo alla spedizione del pacco, insieme al numero di tracking.",
   };
   const [hl, hlAccent] = headlines[locale];
 
@@ -722,7 +776,7 @@ export function statusInProgressEmail(data: FulfillmentData, locale: EmailLocale
 
     ${infoTable([
       infoRow(t(locale, "rowStatus"), statusBadge(t(locale, "badgeInProgress"))),
-      infoRow(t(locale, "rowLocker"), escHtml(data.pickupPoint)),
+      ...destinationRows(data, locale, false),
     ].join(""))}
 
     ${body(bodies[locale])}
@@ -788,7 +842,7 @@ export function statusLabelCreatedEmail(data: FulfillmentData, locale: EmailLoca
   };
   const [hl, hlAccent] = headlines[locale];
   const tracking = data.trackingNumber || "";
-  const isInPost = /^\d{24}$/.test(tracking);
+  const ship = shipmentInfo(data);
 
   const inner = `
     ${eyebrowBlock(eyebrows[locale])}
@@ -800,12 +854,13 @@ export function statusLabelCreatedEmail(data: FulfillmentData, locale: EmailLoca
       tracking
         ? infoRow(t(locale, "rowTracking"), `<strong style="color:${C.ink};font-family:${FONT_MONO};font-size:13px;background:${C.signal};padding:2px 6px;border-radius:2px;">${escHtml(tracking)}</strong>`)
         : "",
-      data.pickupPoint ? infoRow(t(locale, "rowLocker"), escHtml(data.pickupPoint)) : "",
+      carrierRow(ship.carrier, locale),
+      ...destinationRows(data, locale, false),
     ].join(""))}
 
     ${body(bodies[locale])}
-    ${isInPost
-      ? ctaButton(t(locale, "btnTrack"), `https://inpost.pl/sledzenie-przesylek?number=${encodeURIComponent(tracking)}`)
+    ${ship.url
+      ? ctaButton(t(locale, "btnTrack"), escHtml(ship.url))
       : ctaButton(t(locale, "btnPanel"), "https://kalkmate.pl/panel")}
   `;
   return shell(inner, locale);
@@ -851,18 +906,67 @@ export function statusShippedEmail(data: FulfillmentData, locale: EmailLocale = 
     fr: `Bonjour ${strongName(data.customerName)}, ton colis ${strongItem(data.product)} a été expédié.`,
     it: `Ciao ${strongName(data.customerName)}, il tuo pacco ${strongItem(data.product)} è stato spedito.`,
   };
-  const trackBodies: Record<EmailLocale, string> = {
-    pl: `Śledź przesyłkę na <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> po numerze podanym powyżej.`,
-    de: `Verfolge deine Sendung auf <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> mit der oben angegebenen Nummer.`,
-    en: `Track your shipment at <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> using the number above.`,
-    cs: `Zásilku sleduj na <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> podle čísla uvedeného výše.`,
-    sk: `Zásielku sleduj na <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> podľa čísla uvedeného vyššie.`,
-    lt: `Siuntą sek <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> pagal aukščiau nurodytą numerį.`,
-    be: `Адсочвай пасылку на <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> па нумары, пазначаным вышэй.`,
-    es: `Sigue tu envío en <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> con el número indicado arriba.`,
-    pt: `Acompanha o envio em <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> com o número indicado acima.`,
-    fr: `Suis ton colis sur <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> avec le numéro indiqué ci-dessus.`,
-    it: `Traccia la spedizione su <a href="https://inpost.pl" style="color:${C.signal};text-decoration:underline;font-weight:600;">inpost.pl</a> con il numero indicato sopra.`,
+  const ship = shipmentInfo(data);
+  // Link do sledzenia u przewoznika (url juz zwalidowany w shipmentInfo)
+  const trackLink = (text: string) =>
+    `<a href="${escHtml(ship.url)}" style="color:${C.signal};text-decoration:underline;font-weight:600;">${escHtml(text)}</a>`;
+  const c = ship.carrier;
+  // Jest link: nazwa przewoznika (albo "strona przewoznika") jako link
+  const trackLinkBodies: Record<EmailLocale, string> = {
+    pl: c ? `Śledź przesyłkę na stronie przewoźnika ${trackLink(c)} po numerze podanym powyżej.` : `Śledź przesyłkę na ${trackLink("stronie przewoźnika")} po numerze podanym powyżej.`,
+    de: c ? `Verfolge deine Sendung auf der Website von ${trackLink(c)} mit der oben angegebenen Nummer.` : `Verfolge deine Sendung auf der ${trackLink("Website des Versanddienstleisters")} mit der oben angegebenen Nummer.`,
+    en: c ? `Track your shipment on the ${trackLink(c)} website using the number above.` : `Track your shipment on the ${trackLink("carrier's website")} using the number above.`,
+    cs: c ? `Zásilku sleduj na webu přepravce ${trackLink(c)} podle čísla uvedeného výše.` : `Zásilku sleduj na ${trackLink("webu přepravce")} podle čísla uvedeného výše.`,
+    sk: c ? `Zásielku sleduj na webe prepravcu ${trackLink(c)} podľa čísla uvedeného vyššie.` : `Zásielku sleduj na ${trackLink("webe prepravcu")} podľa čísla uvedeného vyššie.`,
+    lt: c ? `Siuntą sek vežėjo ${trackLink(c)} svetainėje pagal aukščiau nurodytą numerį.` : `Siuntą sek ${trackLink("vežėjo svetainėje")} pagal aukščiau nurodytą numerį.`,
+    be: c ? `Адсочвай пасылку на сайце перавозчыка ${trackLink(c)} па нумары, пазначаным вышэй.` : `Адсочвай пасылку на ${trackLink("сайце перавозчыка")} па нумары, пазначаным вышэй.`,
+    es: c ? `Sigue tu envío en la web del transportista ${trackLink(c)} con el número indicado arriba.` : `Sigue tu envío en la ${trackLink("web del transportista")} con el número indicado arriba.`,
+    pt: c ? `Acompanha o envio no site da transportadora ${trackLink(c)} com o número indicado acima.` : `Acompanha o envio no ${trackLink("site da transportadora")} com o número indicado acima.`,
+    fr: c ? `Suis ton colis sur le site du transporteur ${trackLink(c)} avec le numéro indiqué ci-dessus.` : `Suis ton colis sur le ${trackLink("site du transporteur")} avec le numéro indiqué ci-dessus.`,
+    it: c ? `Traccia la spedizione sul sito del corriere ${trackLink(c)} con il numero indicato sopra.` : `Traccia la spedizione sul ${trackLink("sito del corriere")} con il numero indicato sopra.`,
+  };
+  // Brak linku, znany przewoznik
+  const carrierOnlyBodies: Record<EmailLocale, string> = {
+    pl: `Przesyłkę nadaliśmy kurierem ${strongItem(c)} — numer znajdziesz powyżej.`,
+    de: `Wir haben das Paket mit ${strongItem(c)} verschickt — die Sendungsnummer findest du oben.`,
+    en: `We've shipped your package with ${strongItem(c)} — the tracking number is above.`,
+    cs: `Zásilku jsme odeslali přes přepravce ${strongItem(c)} — číslo najdeš výše.`,
+    sk: `Zásielku sme odoslali cez prepravcu ${strongItem(c)} — číslo nájdeš vyššie.`,
+    lt: `Siuntą išsiuntėme per vežėją ${strongItem(c)} — numerį rasi aukščiau.`,
+    be: `Мы адправілі пасылку праз перавозчыка ${strongItem(c)} — нумар пазначаны вышэй.`,
+    es: `Hemos enviado tu paquete con ${strongItem(c)}; el número de seguimiento está arriba.`,
+    pt: `Enviámos a tua encomenda pela transportadora ${strongItem(c)} — o número está indicado acima.`,
+    fr: `Nous avons expédié ton colis via ${strongItem(c)} — le numéro de suivi est indiqué ci-dessus.`,
+    it: `Abbiamo spedito il pacco con ${strongItem(c)}: il numero di tracciamento è indicato sopra.`,
+  };
+  // Brak linku i przewoznika
+  const neutralTrackBodies: Record<EmailLocale, string> = {
+    pl: "Numer przesyłki znajdziesz powyżej.",
+    de: "Die Sendungsnummer findest du oben.",
+    en: "You'll find the tracking number above.",
+    cs: "Číslo zásilky najdeš výše.",
+    sk: "Číslo zásielky nájdeš vyššie.",
+    lt: "Siuntos numerį rasi aukščiau.",
+    be: "Нумар адпраўлення пазначаны вышэй.",
+    es: "Encontrarás el número de seguimiento arriba.",
+    pt: "Encontras o número de seguimento acima.",
+    fr: "Tu trouveras le numéro de suivi ci-dessus.",
+    it: "Trovi il numero di tracciamento qui sopra.",
+  };
+  const trackBody = ship.url ? trackLinkBodies[locale] : c ? carrierOnlyBodies[locale] : neutralTrackBodies[locale];
+  // Kurier pod drzwi — bez obietnic specyficznych dla przewoznika
+  const doorBodies: Record<EmailLocale, string> = {
+    pl: "Kurier dostarczy paczkę pod podany adres — zwykle dostaniesz od przewoźnika e-mail lub SMS z przewidywaną godziną doręczenia.",
+    de: "Der Kurier liefert das Paket an die angegebene Adresse — normalerweise bekommst du vom Versanddienstleister eine E-Mail oder SMS mit der voraussichtlichen Zustellzeit.",
+    en: "The courier will deliver the package to the address you provided — the carrier usually sends you an email or SMS with the estimated delivery time.",
+    cs: "Kurýr doručí balík na uvedenou adresu — obvykle ti přepravce pošle e-mail nebo SMS s předpokládaným časem doručení.",
+    sk: "Kuriér doručí balík na uvedenú adresu — zvyčajne ti prepravca pošle e-mail alebo SMS s predpokladaným časom doručenia.",
+    lt: "Kurjeris pristatys siuntinį nurodytu adresu — paprastai vežėjas atsiunčia el. laišką arba SMS su numatomu pristatymo laiku.",
+    be: "Кур’ер дастаўіць пасылку на пазначаны адрас — звычайна перавозчык дасылае e-mail або SMS з прыблізным часам дастаўкі.",
+    es: "El mensajero entregará el paquete en la dirección indicada; normalmente el transportista te enviará un correo o SMS con la hora prevista de entrega.",
+    pt: "O estafeta vai entregar a encomenda na morada indicada — normalmente a transportadora envia-te um e-mail ou SMS com a hora prevista de entrega.",
+    fr: "Le livreur apportera le colis à l’adresse indiquée — en général, le transporteur t’envoie un e-mail ou un SMS avec l’heure de livraison prévue.",
+    it: "Il corriere consegnerà il pacco all’indirizzo indicato: di solito riceverai dal corriere un’e-mail o un SMS con l’orario di consegna previsto.",
   };
   const pickupBodies: Record<EmailLocale, string> = {
     pl: `Odbierz paczkę z paczkomatu ${strongItem(data.pickupPoint)} po otrzymaniu SMS-a z kodem odbioru.`,
@@ -891,16 +995,14 @@ export function statusShippedEmail(data: FulfillmentData, locale: EmailLocale = 
     ${infoTable([
       infoRow(t(locale, "rowStatus"), statusBadge(t(locale, "badgeShipped"))),
       trackingRow,
-      infoRow(t(locale, "rowLocker"),  escHtml(data.pickupPoint)),
-      infoRow(t(locale, "rowAddress"), `<span style="font-size:13px;color:${C.paperSub};">${escHtml(data.pickupPointAddress)}</span>`),
+      carrierRow(c, locale),
+      ...destinationRows(data, locale, true),
     ].join(""))}
 
-    ${data.trackingNumber ? body(trackBodies[locale]) : ""}
-    ${body(pickupBodies[locale])}
+    ${data.trackingNumber ? body(trackBody) : ""}
+    ${data.pickupPoint ? body(pickupBodies[locale]) : body(doorBodies[locale])}
 
-    ${data.trackingNumber
-      ? ctaButton(t(locale, "btnTrack"), `https://inpost.pl/sledzenie-przesylek?number=${encodeURIComponent(data.trackingNumber)}`)
-      : ""}
+    ${ship.url ? ctaButton(t(locale, "btnTrack"), escHtml(ship.url)) : ""}
   `;
   return shell(inner, locale);
 }

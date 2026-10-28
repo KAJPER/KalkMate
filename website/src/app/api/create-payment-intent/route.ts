@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
     // Rezerwacja kuponu (limit uzyc liczony z rezerwacjami — lib/coupons.ts).
     // Webhook skonsumuje ja po oplaceniu (id w metadata PaymentIntentu).
     let reservationId = "";
-    if (quote.couponCode) {
+    // Kod partnera nie ma limitu uzyc — bez rezerwacji (lib/affiliates.ts).
+    if (quote.couponCode && !quote.affiliate) {
       const rid = await reserveCoupon({
         code: quote.couponCode, ref: randomUUID(), userId: buyer.couponOwner, ttlMs: COUPON_RESERVATION_TTL_STRIPE_MS,
       });

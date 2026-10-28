@@ -88,7 +88,8 @@ export async function POST(request: NextRequest) {
 
     // Rezerwacja kuponu na czas oczekiwania na wplate (zamowienie P24 mozna
     // oplacic do 30 dni) — webhook P24 ja skonsumuje, auto-anulowanie zwolni.
-    if (quote.couponCode) {
+    // Kod partnera nie ma limitu uzyc — bez rezerwacji (lib/affiliates.ts).
+    if (quote.couponCode && !quote.affiliate) {
       const rid = await reserveCoupon({
         code: quote.couponCode, ref: orderId, userId: buyer.couponOwner, ttlMs: COUPON_RESERVATION_TTL_P24_MS,
       });

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db";
 import { attributionFromMetadata, saveOrderAttribution } from "@/lib/attribution";
 import { consumeCouponUsage, setOrderCoupon } from "@/lib/coupons";
 import { giveConsent } from "@/lib/newsletter";
+import { accrueAffiliateCommission, reverseAffiliateCommission } from "@/lib/affiliates";
 import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
 import { createPaidTokenPurchaseAndCredit, appendTokenPurchaseNote } from "@/lib/tokenPurchases";
 import { getTokenPack } from "@/lib/tokenPacks";
@@ -15,6 +16,7 @@ import { setOrderPersonalization, setOrderUnits, unitsFromStripeMetadata, type O
 import {
   alertAdmin, appendOrderAdminNote, expectedPaidAmount, formatMinor,
   generateOrderNumber, isUniqueViolation, parseOrderQuantity,
+  PRODUCT_CENTS,
 } from "@/lib/checkoutPricing";
 import { randomUUID } from "crypto";
 
@@ -327,6 +329,16 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   // Model tokenowy (2026-10): zakup kalkulatora nie daje triala/tokenow —
   // tokeny sa z licencji w pudelku (aktywacja w panelu).
 
+  // Prowizja partnera (kod partnera w polu kuponu) — dopiero dla zamowienia
+  // z poprawna kwota (zamowienie "DO SPRAWDZENIA" wyzej konczy sie returnem).
+  if (meta.coupon_code) {
+    await accrueAffiliateCommission({
+      orderId, orderNumber, code: meta.coupon_code, units: quantity,
+      productNetCents: PRODUCT_CENTS[expected.currency] * quantity - expected.discountCents,
+      currency: expected.currency, buyerUserId: existingUser?.id ?? null, buyerEmail: email,
+    }).catch((e) => console.error("[WEBHOOK] affiliate commission failed:", e));
+  }
+
   console.log(`[WEBHOOK] ✅ Order created successfully: ${orderNumber} for email ${email}${existingUser ? ` (user ID: ${existingUser.id})` : " (no account yet)"}`);
 
   // Paragon do kolejki agenta fiskalnego (tylko gdy FISCAL_AUTO_ENQUEUE=1) — lib/fiscal.ts.
@@ -522,6 +534,17 @@ function logIgnoredSubscriptionEvent(type: string, id: string | null | undefined
 // odejmujemy automatycznie (decyzja wlasciciela). Marker = id zdarzenia, zeby
 // powtorzony webhook nie dopisal notatki drugi raz.
 
+// Prowizja partnera za zamowienie z tym PaymentIntentem (lib/affiliates.ts).
+async function reverseStripeAffiliate(piId: string | null, note: string): Promise<boolean> {
+  if (!piId) return false;
+  const order = await prisma.order.findUnique({ where: { stripePaymentIntentId: piId }, select: { id: true } });
+  if (!order) return false;
+  return reverseAffiliateCommission(order.id, note).catch((e) => {
+    console.error("[WEBHOOK] affiliate reverse failed:", e);
+    return false;
+  });
+}
+
 async function annotateStripePayment(piId: string | null, note: string, marker: string): Promise<{ target: string; added: boolean }> {
   if (!piId) return { target: "brak PaymentIntent w zdarzeniu", added: true };
   const order = await prisma.order.findUnique({
@@ -557,11 +580,14 @@ async function handleChargeRefunded(charge: Stripe.Charge, eventId: string) {
   const kind = charge.refunded ? "ZWROT CALKOWITY" : "zwrot czesciowy";
   const note = `[auto ${dayTag()}] Stripe: ${kind} ${refunded} z ${total} (charge ${charge.id}) ${eventId}`;
   const { target, added } = await annotateStripePayment(piId, note, eventId);
+  // Pelny zwrot = prowizja partnera cofnieta (czesciowy — decyzja admina).
+  const affReversed = charge.refunded ? await reverseStripeAffiliate(piId, `Stripe: zwrot calkowity ${eventId}`) : false;
   if (added) {
     await alertAdmin(`Stripe: ${kind} ${refunded}`, [
       note,
       `Dotyczy: ${target}`,
       `Status zamowienia/tokeny NIE zmienione automatycznie.`,
+      ...(affReversed ? ["Prowizja partnera za to zamowienie zostala cofnieta."] : []),
     ]);
   }
 }
@@ -580,6 +606,8 @@ async function handleDisputeCreated(dispute: Stripe.Dispute, eventId: string) {
     `[auto ${dayTag()}] Stripe: SPOR/CHARGEBACK ${formatMinor(dispute.amount, dispute.currency)} — powod: ${dispute.reason}, ` +
     `status: ${dispute.status}, dowody do ${dueBy} (dispute ${dispute.id}) ${eventId}`;
   const { target, added } = await annotateStripePayment(piId, note, eventId);
+  const affReversed = await reverseStripeAffiliate(piId, `Stripe: spor ${dispute.id}`);
+  if (affReversed) console.log(`[WEBHOOK] affiliate commission reversed (dispute ${dispute.id})`);
   if (added) {
     await alertAdmin(`Stripe: CHARGEBACK ${formatMinor(dispute.amount, dispute.currency)}`, [
       note,

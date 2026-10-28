@@ -9,6 +9,7 @@ import { randomUUID } from "crypto"
 import { rateLimit, clientIp } from "./rate-limit"
 import { SIGNUP_TOKENS } from "./tokenGrants"
 import { linkGuestOrders } from "./guestOrders"
+import { detachAffiliateUser } from "./affiliates"
 
 // ---------------------------------------------------------------------------
 // Wspolne reguly kont
@@ -178,6 +179,8 @@ export async function deleteUserAccount(userId: string): Promise<{ ok: boolean; 
   await bestEffort("DeviceSolve", () => prisma.deviceSolve.deleteMany({ where: { userId } }))
   // Zdjecia zadan z kalkulatora (pliki na dysku + indeks Capture).
   await bestEffort("Capture", async () => { await deleteUserCaptures(userId) })
+  // Kod partnerski przestaje dzialac (prowizje/wyplaty zostaja do rozliczen).
+  await bestEffort("AffiliateCode", () => detachAffiliateUser(userId))
 
   await prisma.$transaction([
     prisma.$executeRaw`UPDATE "Order" SET "userId" = NULL WHERE "userId" = ${userId}`,

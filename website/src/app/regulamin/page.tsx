@@ -25,7 +25,8 @@ const sections = [
   { id: "sek-6", eyebrow: "06", short: "Reklamacje i gwarancja",      title: "Reklamacje",    accent: "i gwarancja" },
   { id: "sek-7", eyebrow: "07", short: "Ochrona danych osobowych",    title: "Ochrona",       accent: "danych" },
   { id: "sek-8", eyebrow: "08", short: "Czat z asystentem AI",        title: "Czat",          accent: "z asystentem AI" },
-  { id: "sek-9", eyebrow: "09", short: "Postanowienia końcowe",       title: "Postanowienia", accent: "końcowe" },
+  { id: "sek-9", eyebrow: "09", short: "Program partnerski",          title: "Program",       accent: "partnerski" },
+  { id: "sek-10", eyebrow: "10", short: "Postanowienia końcowe",      title: "Postanowienia", accent: "końcowe" },
 ];
 
 function H({ id, eyebrow, title, accent }: { id: string; eyebrow: string; title: string; accent: string }) {
@@ -74,7 +75,7 @@ export default function RegulaminPage() {
             </span>
           </div>
 
-          <p className="km-mono-eyebrow text-[#D8FF3D]">[ regulamin ] · 9 sekcji</p>
+          <p className="km-mono-eyebrow text-[#D8FF3D]">[ regulamin ] · 10 sekcji</p>
           <h1 className="km-display text-[clamp(56px,8.5vw,128px)] mt-4 leading-[0.92] text-[#F2EDE3]">
             Regulamin<br />
             <span className="italic text-[#D8FF3D]">sklepu</span>.
@@ -296,9 +297,80 @@ export default function RegulaminPage() {
             </OL>
           </section>
 
-          {/* 9 */}
+          {/* 9 — zewnetrzne linki uzywaja #program-partnerski (panel klienta) */}
+          <section id="program-partnerski" className="scroll-mt-28">
+            <H id="sek-9" eyebrow="09" title="Program" accent="partnerski" />
+            <OL>
+              <li>
+                Uczestnikiem programu partnerskiego („Partnerem”) może być zarejestrowany użytkownik serwisu kalkmate.pl
+                z potwierdzonym adresem e-mail. Partner tworzy w panelu klienta jeden własny kod partnerski
+                (od 4 do 16 znaków: litery A–Z i cyfry).
+              </li>
+              <li>
+                Kupujący, który poda kod partnerski przy zamówieniu, otrzymuje <strong className="text-[#F2EDE3]">7% rabatu</strong>{" "}
+                od ceny produktów. Kodu partnerskiego nie łączy się z innymi kuponami rabatowymi (formularz zamówienia
+                przyjmuje jeden kod). Partner nie może użyć własnego kodu.
+              </li>
+              <li>
+                Za każde opłacone zamówienie z kodem Partner otrzymuje prowizję liczoną od wartości produktów po rabacie,
+                bez kosztów dostawy. Wysokość prowizji zależy od poziomu Partnera, ustalanego na podstawie liczby sztuk
+                sprzedanych z jego kodem przed danym zamówieniem:
+                <div className="mt-3 max-w-md border border-[rgba(242,237,227,0.10)] bg-[#0E0E0E]">
+                  <table className="w-full text-[14px]">
+                    <thead>
+                      <tr className="text-left km-mono-eyebrow text-[#F2EDE3]/45 border-b border-[rgba(242,237,227,0.10)]">
+                        <th className="px-4 py-2 font-normal">Poziom</th>
+                        <th className="px-4 py-2 font-normal">Sprzedane sztuki</th>
+                        <th className="px-4 py-2 font-normal text-right">Prowizja</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[#F2EDE3]/80">
+                      {[
+                        ["Start", "0–2", "5%"],
+                        ["Brąz", "3–9", "7%"],
+                        ["Srebro", "10–24", "9%"],
+                        ["Złoto", "25–49", "11%"],
+                        ["Diament", "od 50", "13%"],
+                      ].map(([name, units, pct]) => (
+                        <tr key={name} className="border-b border-[rgba(242,237,227,0.06)] last:border-0">
+                          <td className="px-4 py-2">{name}</td>
+                          <td className="px-4 py-2 font-mono">{units}</td>
+                          <td className="px-4 py-2 font-mono text-right text-[#D8FF3D]">{pct}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <span className="block mt-3">
+                  Prowizje rozliczane są w złotych; wartość zamówień w EUR przeliczana jest po stałym kursie 4,25 zł za 1 EUR.
+                </span>
+              </li>
+              <li>
+                Prowizja staje się dostępna po 30 dniach od opłacenia zamówienia. Prowizja jest cofana w przypadku
+                anulowania zamówienia, zwrotu płatności lub sporu dotyczącego płatności — również wtedy, gdy została już
+                wymieniona lub wypłacona; saldo Partnera może wówczas stać się ujemne i jest wyrównywane z kolejnych prowizji.
+              </li>
+              <li>
+                Dostępne środki Partner może: (a) wymienić na tokeny AI — od 10 zł, po kursie 1 zł = 65 000 tokenów,
+                natychmiast; (b) wypłacić przelewem na rachunek bankowy — od 100 zł, wyłącznie jeśli Partner jest osobą
+                pełnoletnią. Wypłata realizowana jest zwykle w ciągu 7 dni roboczych. Przed wypłatą Sprzedawca może
+                poprosić o dane niezbędne do rozliczeń podatkowych.
+              </li>
+              <li>
+                Zabronione jest: rozsyłanie spamu, podszywanie się pod KalkMate lub Sprzedawcę, reklamy w wyszukiwarkach
+                na hasła zawierające markę KalkMate, polecanie samemu sobie oraz składanie fikcyjnych zamówień. W razie
+                naruszeń Sprzedawca może wyłączyć kod partnerski i anulować nienależne prowizje.
+              </li>
+              <li>
+                Sprzedawca może zmienić warunki programu partnerskiego z wyprzedzeniem 14 dni, informując o tym na stronie.
+                Zmiany nie dotyczą prowizji naliczonych przed ich wejściem w życie.
+              </li>
+            </OL>
+          </section>
+
+          {/* 10 */}
           <section>
-            <H id="sek-9" eyebrow="09" title="Postanowienia" accent="końcowe" />
+            <H id="sek-10" eyebrow="10" title="Postanowienia" accent="końcowe" />
             <OL>
               <li>W sprawach nieuregulowanych niniejszym regulaminem stosuje się przepisy Kodeksu Cywilnego, ustawy o prawach konsumenta oraz ustawy o świadczeniu usług drogą elektroniczną.</li>
               <li>Sprzedawca zastrzega sobie prawo do zmiany regulaminu. Zmiany wchodzą w życie z dniem publikacji na stronie.</li>
@@ -317,7 +389,7 @@ export default function RegulaminPage() {
           {/* Stopka dokumentu */}
           <div className="pt-8 border-t border-[rgba(242,237,227,0.10)] flex flex-wrap items-center justify-between gap-4">
             <span className="km-mono-eyebrow text-[#F2EDE3]/45">
-              Obowiązuje od · 2026-01-01 · ostatnia zmiana 2026-10-28 (§8 czat z asystentem AI)
+              Obowiązuje od · 2026-01-01 · ostatnia zmiana 2026-10-28 (§9 program partnerski)
             </span>
             <div className="flex items-center gap-4">
               <Link href="/polityka-prywatnosci" className="km-mono-eyebrow text-[#F2EDE3]/55 hover:text-[#D8FF3D] transition-colors">

@@ -44,9 +44,11 @@ const jetbrains = JetBrains_Mono({
 // jako fallback dla ewentualnych wzglednych URLi, nie jest realnym sygnalem
 // kanonicznosci (kazda strona i tak podaje pelny, absolutny canonical).
 export const metadata: Metadata = {
-  title: "KalkMate — Kalkulator AI | Matematyka, Fizyka, Chemia, Biologia",
+  // GSC 2026-10: "inteligentny kalkulator" (poz. 7.7), "kalkulator z aparatem/ze zdjecia"
+  // (poz. 7.4) — frazy w tytule, marka na koncu ("kalkulator ai" i tak poz. 1.2).
+  title: "Inteligentny kalkulator AI z aparatem | KalkMate",
   description:
-    "Kalkulator z aparatem i AI — zrób zdjęcie zadania, dostaniesz rozwiązanie krok po kroku. Matematyka, fizyka, chemia, biologia. Polska produkcja. 699 zł.",
+    "Inteligentny kalkulator z aparatem i AI: zrób zdjęcie zadania z matematyki, fizyki, chemii lub biologii i zobacz rozwiązanie krok po kroku. Polska produkcja, 699 zł z 2 mln tokenów AI.",
   keywords: [
     "kalkulator ai",
     "kalkulator z ai",

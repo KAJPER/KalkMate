@@ -64,6 +64,10 @@ export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
       `${siteUrl}/galeria/kalkulator-kalkmate-gotowy-egzemplarz.webp`,
       `${siteUrl}/galeria/kalkulator-kalkmate-opakowanie-pudelko.webp`,
       `${siteUrl}/galeria/kalkulator-kalkmate-ekran-menu-glowne.webp`,
+      // Merchant Center (Jakosc sklepu): "liczba zdjec na oferte" — wiecej
+      // prawdziwych zdjec produktu (bez prototypow/PCB).
+      `${siteUrl}/galeria/kalkulator-kalkmate-ekran-rozwiaz-zadanie.webp`,
+      `${siteUrl}/galeria/kalkulator-kalkmate-etykieta-certyfikaty.webp`,
     ],
     sku: "KM-V3",
     brand: { "@type": "Brand", name: "KalkMate" },

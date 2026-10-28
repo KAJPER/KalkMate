@@ -14,6 +14,7 @@ export const ADMIN_SECTIONS = [
   { key: "dashboard",  label: "Dashboard",          page: "/admin" },
   { key: "licenses",   label: "Generator Licencji", page: "/admin/licenses" },
   { key: "coupons",    label: "Kupony",             page: "/admin/coupons" },
+  { key: "affiliates", label: "Program partnerski", page: "/admin/partnerzy" },
   { key: "mailbox",    label: "Poczta",             page: "/admin/mailbox" },
   { key: "assistant",  label: "Asystent AI",        page: "/admin/asystent" },
   { key: "support",    label: "Czat klientów",      page: "/admin/support" },
@@ -67,6 +68,7 @@ const API_RULES: ApiRule[] = [
 
   { prefix: "/api/admin/licenses", sections: ["licenses"] },
   { prefix: "/api/admin/coupons", sections: ["coupons"] },
+  { prefix: "/api/admin/affiliates", sections: ["affiliates"] },
   { prefix: "/api/admin/mailbox", sections: ["mailbox"] },
   { prefix: "/api/admin/support", sections: ["support"] },
   { prefix: "/api/admin/assistant", sections: ["assistant"] },

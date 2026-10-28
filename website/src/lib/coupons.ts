@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { randomUUID } from "crypto";
+import { affiliateDiscountFor } from "@/lib/affiliates";
 
 // Coupon NIE jest w Prisma schemie (kolumny tylko w sqlite) — wszystko raw SQL,
 // wzorem tabeli Inventory. Tabela tworzona lazy przez ensureCouponTable().
@@ -73,6 +74,8 @@ export interface DiscountResult {
   discountCents: number;    // ile odjac od ceny produktu (w minor units waluty)
   finalCents: number;       // produkt - rabat (BEZ wysylki)
   coupon?: { code: string; type: "percent" | "fixed"; value: number };
+  // Kod partnera (lib/affiliates.ts), nie kupon — bez limitu uzyc/rezerwacji.
+  affiliate?: boolean;
 }
 
 // Minimalna kwota do pobrania przez Stripe (zeby total nie spadl ponizej progu).
@@ -198,6 +201,21 @@ export async function checkCouponForCheckout(
   userId?: string | null,
 ): Promise<DiscountResult> {
   const coupon = await getCoupon(code);
+  if (!coupon) {
+    // Nie kupon — moze kod partnera (to samo pole w formularzu). userId =
+    // buyer.couponOwner (userId albo "guest:email") — wlasnego kodu nie wolno.
+    const aff = await affiliateDiscountFor(code, userId);
+    if (aff?.ok) {
+      const res = computeDiscount(
+        { id: "", createdAt: "", code: aff.code, type: "percent", value: aff.pct, active: 1, maxUses: null, usedCount: 0, expiresAt: null } as CouponRow,
+        productCents, currency, 0,
+      );
+      return { ...res, affiliate: res.ok };
+    }
+    if (aff && !aff.ok && aff.self) {
+      return { ok: false, reason: "Nie mozesz uzyc wlasnego kodu partnerskiego.", reasonCode: "invalid", discountCents: 0, finalCents: productCents };
+    }
+  }
   const reserved = coupon && coupon.maxUses != null ? await countActiveReservations(coupon.code, userId) : 0;
   return computeDiscount(coupon, productCents, currency, reserved);
 }

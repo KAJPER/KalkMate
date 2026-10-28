@@ -26,7 +26,8 @@ import { getTransactionBySessionId, p24StatusIsPaid, verifyTransaction, type P24
 import { getOrderCoupon, consumeCouponUsage } from "@/lib/coupons";
 import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
 import { readOrderUnits } from "@/lib/orderPersonalization";
-import { alertAdmin, appendOrderAdminNote, formatMinor } from "@/lib/checkoutPricing";
+import { alertAdmin, appendOrderAdminNote, formatMinor, PRODUCT_CENTS } from "@/lib/checkoutPricing";
+import { accrueAffiliateCommission } from "@/lib/affiliates";
 import { giveConsent } from "@/lib/newsletter";
 import { GUEST_NEWSLETTER_NOTE } from "@/lib/guestOrders";
 
@@ -220,6 +221,23 @@ export async function settleP24OrderPayment(p: {
   // Gosc zaznaczyl newsletter (znacznik z create-transaction) — zgoda po oplaceniu.
   if (order.adminNotes?.includes(GUEST_NEWSLETTER_NOTE)) {
     await giveConsent(order.customerEmail, "order", null).catch((e) => console.error("[P24 settle] guest consent save failed:", e));
+  }
+
+  // Prowizja partnera, jesli w polu kuponu byl kod partnera (lib/affiliates.ts).
+  // Nie dla wplaty po anulowaniu (wyzej return "late_payment").
+  try {
+    const coupon = await getOrderCoupon(order.id);
+    if (coupon) {
+      const { quantity } = await readOrderUnits(order.id).catch(() => ({ quantity: 1 }));
+      const cur = orderCurrency === "eur" ? "eur" : "pln";
+      await accrueAffiliateCommission({
+        orderId: order.id, orderNumber: order.orderNumber, code: coupon.code, units: quantity,
+        productNetCents: PRODUCT_CENTS[cur] * quantity - (coupon.discountCents || 0),
+        currency: cur, buyerUserId: order.userId, buyerEmail: order.customerEmail,
+      });
+    }
+  } catch (err) {
+    console.error("[P24 settle] affiliate commission failed:", err);
   }
 
   // Paragon do kolejki agenta fiskalnego (tylko gdy FISCAL_AUTO_ENQUEUE=1) — lib/fiscal.ts.

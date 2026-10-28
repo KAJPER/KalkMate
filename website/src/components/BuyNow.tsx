@@ -1140,6 +1140,25 @@ function cleanCheckoutQuery() {
   }
 }
 
+// Kod partnera z linku ?ref= (program partnerski) — localStorage, 30 dni.
+const REF_KEY = "km_ref";
+const REF_TTL_MS = 30 * 86_400_000;
+function rememberRefCode(raw: string) {
+  const code = raw.trim().toUpperCase().replace(/\s+/g, "");
+  if (!/^[A-Z0-9]{4,16}$/.test(code)) return;
+  try { localStorage.setItem(REF_KEY, JSON.stringify({ code, at: Date.now() })); } catch { /* ignore */ }
+}
+function readRefCode(): string | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(REF_KEY) || "null") as { code?: unknown; at?: unknown } | null;
+    if (typeof v?.code === "string" && typeof v.at === "number" && Date.now() - v.at < REF_TTL_MS) return v.code;
+  } catch { /* ignore */ }
+  return null;
+}
+function forgetRefCode() {
+  try { localStorage.removeItem(REF_KEY); } catch { /* ignore */ }
+}
+
 export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry?: string; lang?: Locale }) {
   const t = content[lang];
   const { data: session, status } = useSession();
@@ -1261,7 +1280,9 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
   // Walidacja kuponu dla danej ilosci (rabat procentowy liczony od subtotalu).
   // Kazde nowe zapytanie uniewaznia poprzednie (couponReqRef) — spoznione
   // odpowiedzi (stara ilosc/waluta) sa ignorowane.
-  const validateCoupon = async (code: string, reqQty: number) => {
+  // fromRef — kod partnera z linku polecajacego (?ref=): blad bez komunikatu,
+  // pole czyscimy i zapominamy kod (np. wlasny kod partnera albo wylaczony).
+  const validateCoupon = async (code: string, reqQty: number, opts: { fromRef?: boolean } = {}) => {
     if (!code) return;
     const reqId = ++couponReqRef.current;
     const reqCurrency = currency;
@@ -1278,6 +1299,10 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
       if (d.ok && typeof d.discountCents === "number") {
         setAppliedCoupon({ code: d.code, discountCents: d.discountCents, currency: reqCurrency, quantity: reqQty });
         setCouponMsg("");
+      } else if (opts.fromRef) {
+        setAppliedCoupon(null);
+        setCouponInput("");
+        forgetRefCode();
       } else {
         setAppliedCoupon(null);
         // Serwer odpowiada po polsku — w EN/DE pokazujemy ogolny komunikat.
@@ -1293,6 +1318,23 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
   };
 
   const applyCoupon = () => validateCoupon(couponInput.trim(), orderQty);
+
+  // Link polecajacy partnera (?ref=KOD, program partnerski — lib/affiliates.ts):
+  // kod zapamietany na 30 dni i wpisywany w pole kuponu przy otwarciu formularza.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) rememberRefCode(ref);
+  }, []);
+  const refAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!isModalOpen || refAppliedRef.current || appliedCoupon || couponInput.trim()) return;
+    const code = readRefCode();
+    if (!code) return;
+    refAppliedRef.current = true;
+    setCouponInput(code);
+    void validateCoupon(code, orderQty, { fromRef: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isModalOpen]);
 
   // Zmiana ilosci: rabat zalezy od subtotalu -> ponowna walidacja kuponu
   // (zastosowanego albo wlasnie sprawdzanego).

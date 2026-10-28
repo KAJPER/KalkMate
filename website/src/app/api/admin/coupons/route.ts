@@ -7,6 +7,7 @@ import {
   normalizeCode,
   type CouponRow,
 } from "@/lib/coupons";
+import { getAffiliateByCode } from "@/lib/affiliates";
 import { randomUUID } from "crypto";
 
 // GET /api/admin/coupons — lista kuponow
@@ -83,6 +84,10 @@ export async function POST(req: NextRequest) {
     `;
     if (exists.length > 0) {
       return NextResponse.json({ ok: false, error: "Kupon o tym kodzie juz istnieje." }, { status: 409 });
+    }
+    // Kody partnerow ida przez to samo pole w formularzu zamowienia.
+    if (await getAffiliateByCode(code)) {
+      return NextResponse.json({ ok: false, error: "Ten kod jest juz kodem partnerskim." }, { status: 409 });
     }
 
     const id = randomUUID();

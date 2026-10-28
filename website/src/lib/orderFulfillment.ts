@@ -10,6 +10,8 @@ import {
   EMAIL_SUBJECTS,
 } from "@/lib/email-templates";
 import { cancelOpenFiscalJobsForOrder } from "@/lib/fiscal";
+import { carrierEmailFields } from "@/lib/carriers";
+import { reverseAffiliateCommission, restoreAffiliateCommission } from "@/lib/affiliates";
 
 // Jedno miejsce, w ktorym zmienia sie fulfillmentStatus zamowienia i wysyla
 // maila do klienta. Uzywane przez:
@@ -145,6 +147,13 @@ export async function applyFulfillmentStatus(
   }
 
   // Anulowane = pieniadze zwrocone: paragon fiskalny nie moze sie juz wydrukowac.
+  // Prowizja partnera: anulowanie = zwrot pieniedzy -> cofnieta; cofniecie
+  // anulowania przez admina -> przywrocona (lib/affiliates.ts).
+  if (statusChanged && newStatus === "cancelled") {
+    await reverseAffiliateCommission(orderId, "Zamowienie anulowane").catch((e) => console.error(`[fulfillment] affiliate reverse failed ${orderId}:`, e));
+  } else if (statusChanged && previousStatus === "cancelled") {
+    await restoreAffiliateCommission(orderId).catch((e) => console.error(`[fulfillment] affiliate restore failed ${orderId}:`, e));
+  }
   if (statusChanged && newStatus === "cancelled") {
     await cancelOpenFiscalJobsForOrder(orderId, "Zamówienie anulowane (zwrot) — paragon wstrzymany");
   }
@@ -152,12 +161,16 @@ export async function applyFulfillmentStatus(
   let emailSent = false;
   if (statusChanged && newStatus && order.customerEmail) {
     const locale = localeFromCountry(order.customerCountry);
+    const trackingForEmail = (data.trackingNumber !== undefined ? data.trackingNumber : order.trackingNumber) || "";
     const emailData = {
       customerName: order.customerName || "Customer",
       product: "KalkMate v3.0",
-      trackingNumber: (data.trackingNumber !== undefined ? data.trackingNumber : order.trackingNumber) || "",
+      trackingNumber: trackingForEmail,
       pickupPoint: order.pickupPoint || "",
       pickupPointAddress: order.pickupPointAddress || "",
+      // Przewoznik + link sledzenia + adres drzwi-drzwi (lib/carriers.ts) —
+      // wczesniej maile zawsze mowily "InPost", takze o paczkach DPD/UPS.
+      ...(await carrierEmailFields(order, trackingForEmail)),
     };
 
     let html: string | null = null;
@@ -237,6 +250,7 @@ export async function ensureLabelEmail(orderId: string): Promise<boolean> {
     trackingNumber,
     pickupPoint: order.pickupPoint || "",
     pickupPointAddress: order.pickupPointAddress || "",
+    ...(await carrierEmailFields(order, trackingNumber)),
   }, locale);
   const r = await sendMail({ to: order.customerEmail, subject: EMAIL_SUBJECTS.orderLabelCreated[locale], html })
     .catch((err) => ({ ok: false, error: String(err) }));

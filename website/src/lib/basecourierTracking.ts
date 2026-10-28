@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { applyFulfillmentStatus, ensureLabelEmail, type FulfillmentStatus } from "@/lib/orderFulfillment";
 import { bcGetOrderDetails, type BcOrderDetails, type BcTrackingEvent } from "@/lib/basecourier";
+import { saveShippingCarrier } from "@/lib/carriers";
 import { looksLikeInPostNumber, appendOrderNoteOnce, trackingSkipReason, mapWithConcurrency } from "@/lib/inpostTracking";
 
 // Sledzenie przesylek zagranicznych (DPD, GLS, UPS...) nadanych przez Base
@@ -128,6 +129,12 @@ async function syncBaseCourierOrderInner(orderId: string, prefetched?: BcOrderDe
     }
   }
   if (!details) return { ...base, note: "basecourier_unavailable" };
+  // Przewoznik z Base Courier (np. zlecenie "Powiaz zlecenie" albo sprzed
+  // zapisywania przy nadaniu) — do maili statusowych, lib/carriers.ts.
+  if (details.courierName) {
+    await saveShippingCarrier(orderId, details.courierName, { onlyIfEmpty: true })
+      .catch((e) => console.error(`[basecourierTracking] carrier save failed for ${orderId}:`, e));
+  }
 
   const latest = latestEvent(details.events);
   if (!latest) return { ...base, note: "no_tracking_yet" };

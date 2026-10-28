@@ -19,6 +19,11 @@ const MessageRenderer = dynamic(() => import("@/components/MessageRenderer"), {
   ssr: false,
   loading: () => <div className="h-4 w-24 bg-[#F2EDE3]/10 animate-pulse" />,
 });
+// Zakladka programu partnerskiego (z wlasnymi tlumaczeniami) — dopiero po wejsciu.
+const AffiliateTab = dynamic(() => import("./_components/AffiliateTab"), {
+  ssr: false,
+  loading: () => <div className="h-4 w-24 bg-[#F2EDE3]/10 animate-pulse" />,
+});
 
 const DATE_LOCALE: Record<Locale, string> = {
   pl: "pl-PL",
@@ -34,7 +39,7 @@ const DATE_LOCALE: Record<Locale, string> = {
   it: "it-IT",
 };
 
-const TAB_IDS = ["orders", "chat", "ai", "calculator", "notes", "tests", "settings"] as const;
+const TAB_IDS = ["orders", "chat", "ai", "calculator", "notes", "tests", "affiliate", "settings"] as const;
 type TabId = (typeof TAB_IDS)[number];
 const CALC_TABS: readonly TabId[] = ["calculator", "notes", "tests"];
 
@@ -77,6 +82,7 @@ const PANEL_DICT: Record<Locale, {
   tabsCalculator: string;
   tabsNotes: string;
   tabsTests: string;
+  tabsAffiliate: string;
   tabsSettings: string;
   // alerts / messages
   alertPaymentStart: string;
@@ -310,6 +316,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Kalkulator",
     tabsNotes: "Notatki",
     tabsTests: "Sprawdziany",
+    tabsAffiliate: "Program partnerski",
     tabsSettings: "Ustawienia konta",
     alertPaymentStart: "Nie udało się rozpocząć płatności",
     alertNetwork: "Błąd sieci",
@@ -534,6 +541,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Calculator",
     tabsNotes: "Notes",
     tabsTests: "Tests",
+    tabsAffiliate: "Referral program",
     tabsSettings: "Account settings",
     alertPaymentStart: "Could not start the payment",
     alertNetwork: "Network error",
@@ -758,6 +766,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Rechner",
     tabsNotes: "Notizen",
     tabsTests: "Klassenarbeiten",
+    tabsAffiliate: "Partnerprogramm",
     tabsSettings: "Kontoeinstellungen",
     alertPaymentStart: "Zahlung konnte nicht gestartet werden",
     alertNetwork: "Netzwerkfehler",
@@ -982,6 +991,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Kalkulačka",
     tabsNotes: "Poznámky",
     tabsTests: "Písemky",
+    tabsAffiliate: "Partnerský program",
     tabsSettings: "Nastavení účtu",
     alertPaymentStart: "Platbu se nepodařilo zahájit",
     alertNetwork: "Chyba sítě",
@@ -1206,6 +1216,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Kalkulačka",
     tabsNotes: "Poznámky",
     tabsTests: "Písomky",
+    tabsAffiliate: "Partnerský program",
     tabsSettings: "Nastavenia účtu",
     alertPaymentStart: "Platbu sa nepodarilo spustiť",
     alertNetwork: "Chyba siete",
@@ -1430,6 +1441,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Skaičiuotuvas",
     tabsNotes: "Užrašai",
     tabsTests: "Kontroliniai",
+    tabsAffiliate: "Partnerių programa",
     tabsSettings: "Paskyros nustatymai",
     alertPaymentStart: "Nepavyko pradėti mokėjimo",
     alertNetwork: "Tinklo klaida",
@@ -1658,6 +1670,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Калькулятар",
     tabsNotes: "Нататкі",
     tabsTests: "Кантрольныя",
+    tabsAffiliate: "Партнёрская праграма",
     tabsSettings: "Налады акаўнта",
     alertPaymentStart: "Не ўдалося пачаць аплату",
     alertNetwork: "Памылка сеткі",
@@ -1886,6 +1899,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Calculadora",
     tabsNotes: "Notas",
     tabsTests: "Exámenes",
+    tabsAffiliate: "Programa de socios",
     tabsSettings: "Ajustes de la cuenta",
     alertPaymentStart: "No se ha podido iniciar el pago",
     alertNetwork: "Error de red",
@@ -2110,6 +2124,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Calculadora",
     tabsNotes: "Notas",
     tabsTests: "Testes",
+    tabsAffiliate: "Programa de parceiros",
     tabsSettings: "Definições da conta",
     alertPaymentStart: "Não foi possível iniciar o pagamento",
     alertNetwork: "Erro de rede",
@@ -2334,6 +2349,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Calculatrice",
     tabsNotes: "Notes",
     tabsTests: "Contrôles",
+    tabsAffiliate: "Parrainage",
     tabsSettings: "Paramètres du compte",
     alertPaymentStart: "Impossible de lancer le paiement",
     alertNetwork: "Erreur réseau",
@@ -2558,6 +2574,7 @@ const PANEL_DICT: Record<Locale, {
     tabsCalculator: "Calcolatrice",
     tabsNotes: "Note",
     tabsTests: "Verifiche",
+    tabsAffiliate: "Programma partner",
     tabsSettings: "Impostazioni account",
     alertPaymentStart: "Impossibile avviare il pagamento",
     alertNetwork: "Errore di rete",
@@ -3717,7 +3734,8 @@ export default function PanelPage() {
     { id: "calculator" as const, n: "04", label: t.tabsCalculator },
     { id: "notes" as const, n: "05", label: t.tabsNotes },
     { id: "tests" as const, n: "06", label: t.tabsTests },
-    { id: "settings" as const, n: "07", label: t.tabsSettings },
+    { id: "affiliate" as const, n: "07", label: t.tabsAffiliate },
+    { id: "settings" as const, n: "08", label: t.tabsSettings },
   ];
 
   return (
@@ -5102,6 +5120,12 @@ export default function PanelPage() {
                       </div>
                     )}
                   </div></>)}
+            </div>
+          )}
+
+          {activeTab === "affiliate" && (
+            <div key="affiliate" className="km-panel-fade">
+              <AffiliateTab lang={lang} />
             </div>
           )}
 

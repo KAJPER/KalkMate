@@ -10,6 +10,7 @@ import {
   BC_UNCERTAIN_RESOLVED_NOTE,
 } from "@/lib/basecourier";
 import { ensureLabelEmail } from "@/lib/orderFulfillment";
+import { saveShippingCarrier } from "@/lib/carriers";
 
 // POST /api/admin/orders/[id]/basecourier/link — { basecourierOrderId }
 // Wiaze z zamowieniem przesylke nadana RECZNIE w panelu Base Courier (np. do
@@ -116,6 +117,11 @@ export async function POST(
     // Ostrzezenie, gdy zlecenie jest na innego odbiorce niz zamowienie (pomylone ID).
     const emailMismatch = takerEmail && takerEmail !== (order.customerEmail || "").trim().toLowerCase();
     const nameMismatch = !takerEmail && takerName && takerName.trim().toLowerCase() !== (order.customerName || "").trim().toLowerCase();
+
+    // Przewoznik zlecenia (DPD/UPS/... albo InPost) do maili statusowych — lib/carriers.ts.
+    if (details.courierName) {
+      await saveShippingCarrier(id, details.courierName).catch((e) => console.error("[basecourier/link] carrier save failed", id, e));
+    }
 
     // Mail "Pakujemy i wysylamy" — ale NIE przy innym odbiorcy w zleceniu
     // (prawdopodobnie pomylone ID: klient dostalby cudzy numer przesylki).

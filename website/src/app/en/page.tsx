@@ -22,9 +22,11 @@ const lang = "en" as const;
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "KalkMate — AI Calculator with Camera | Smart Photo Calculator",
+    // GSC 2026-10: "calculator with camera" 1.5k wyswietlen, poz. 4.9, CTR 8% —
+    // fraza na poczatku tytulu, marka na koncu.
+    title: "AI Calculator with Camera — Step-by-Step Solutions | KalkMate",
     description:
-      "KalkMate is an AI calculator with camera built in — point it at any math, physics, chemistry or biology problem and get the full step-by-step solution on its OLED screen. 169 EUR with 2M AI tokens included — no subscription.",
+      "Calculator with camera and AI built in: snap any math, physics, chemistry or biology problem and get the full step-by-step solution on its OLED screen. 169 EUR with 2M AI tokens included — no subscription.",
     keywords: [
       "AI calculator",
       "AI calculator with camera",

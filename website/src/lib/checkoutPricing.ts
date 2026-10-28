@@ -16,6 +16,7 @@ import { randomInt } from "crypto";
 import { prisma } from "@/lib/db";
 import { sendMail, CONTACT_EMAIL } from "@/lib/mailer";
 import { checkCouponForCheckout, discountForCoupon, getCoupon, type CouponReasonCode } from "@/lib/coupons";
+import { BUYER_DISCOUNT_PCT, isAffiliateCode } from "@/lib/affiliates";
 
 export const EU_COUNTRIES = new Set([
   "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE",
@@ -83,6 +84,7 @@ export interface CheckoutQuote {
   discountCents: number;
   amount: number;       // subtotal - rabat + wysylka
   couponCode: string;   // znormalizowany kod albo ""
+  affiliate: boolean;   // couponCode to kod partnera (lib/affiliates.ts) — bez rezerwacji
 }
 
 export type QuoteResult =
@@ -107,6 +109,7 @@ export async function quoteCheckout(input: {
 
   let discountCents = 0;
   let couponCode = "";
+  let affiliate = false;
   const rawCode = input.couponCode == null ? "" : String(input.couponCode).trim();
   if (rawCode) {
     // Kupon od CALEGO subtotalu (procentowy od calosci, kwotowy raz na zamowienie).
@@ -116,6 +119,7 @@ export async function quoteCheckout(input: {
     }
     discountCents = disc.discountCents;
     couponCode = disc.coupon.code;
+    affiliate = !!disc.affiliate;
   }
 
   return {
@@ -126,6 +130,7 @@ export async function quoteCheckout(input: {
       shippingCents, discountCents,
       amount: subtotalCents - discountCents + shippingCents,
       couponCode,
+      affiliate,
     },
   };
 }
@@ -147,8 +152,15 @@ export async function expectedPaidAmount(country: unknown, couponCode?: string |
   let couponMissing = false;
   if (couponCode && couponCode.trim()) {
     const coupon = await getCoupon(couponCode);
-    const d = coupon ? discountForCoupon(coupon, subtotalCents, currency) : null;
-    if (d === null) couponMissing = !coupon;
+    // Kod partnera: staly rabat BUYER_DISCOUNT_PCT (bez sprawdzania active —
+    // mogl zostac wylaczony miedzy utworzeniem platnosci a webhookiem).
+    const affiliate = !coupon && (await isAffiliateCode(couponCode));
+    const d = coupon
+      ? discountForCoupon(coupon, subtotalCents, currency)
+      : affiliate
+        ? discountForCoupon({ type: "percent", value: BUYER_DISCOUNT_PCT }, subtotalCents, currency)
+        : null;
+    if (d === null) couponMissing = !coupon && !affiliate;
     else discountCents = d;
   }
   return { currency, amount: subtotalCents - discountCents + shippingCents, discountCents, couponMissing };

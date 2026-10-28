@@ -5,10 +5,11 @@ import { authOptions } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { listTokenPurchasesByUser } from "@/lib/tokenPurchases";
 import { consentStatus } from "@/lib/newsletter";
+import { getAffiliateForUser, listCommissions, listPayouts } from "@/lib/affiliates";
 
 // GET /api/user/account/export — kopia danych konta (RODO art. 15 i 20)
 // w JSON: konto, subskrypcja, zgoda marketingowa, zamowienia, zakupy tokenow,
-// licencje, urzadzenia, notatki, sprawdziany, rozmowy (bez tresci
+// program partnerski, licencje, urzadzenia, notatki, sprawdziany, rozmowy (bez tresci
 // zalacznikow — tylko nazwa/typ/rozmiar) i historia z kalkulatora.
 // Bez sekretow: hash hasla, tokeny OAuth, deviceToken, kod AI, IP.
 export async function GET() {
@@ -101,6 +102,27 @@ export async function GET() {
       })))
       .catch(() => []);
     const consent = await consentStatus(user.email).catch(() => null);
+    // Program partnerski: kod, prowizje, wyplaty (pelny IBAN — to dane uzytkownika).
+    const affiliate = await Promise.all([
+      getAffiliateForUser(user.id),
+      listCommissions(user.id, 10000),
+      listPayouts(user.id, 10000),
+    ])
+      .then(([code, commissions, payouts]) => ({
+        code: code ? { code: code.code, active: !!code.active, createdAt: new Date(code.createdAt).toISOString() } : null,
+        commissions: commissions.map((c) => ({
+          orderNumber: c.orderNumber, units: c.units, baseCents: c.baseCents, pct: c.pct, amountCents: c.amountCents,
+          currency: "pln", status: c.status, createdAt: new Date(c.createdAt).toISOString(),
+          availableAt: new Date(c.availableAt).toISOString(),
+          reversedAt: c.reversedAt ? new Date(c.reversedAt).toISOString() : null, note: c.note,
+        })),
+        payouts: payouts.map((p) => ({
+          kind: p.kind, amountCents: p.amountCents, currency: "pln", tokens: p.tokens, status: p.status,
+          iban: p.iban, holder: p.holder, createdAt: new Date(p.createdAt).toISOString(),
+          processedAt: p.processedAt ? new Date(p.processedAt).toISOString() : null, note: p.note,
+        })),
+      }))
+      .catch(() => null);
     const x = extra[0];
 
     const data = {
@@ -124,6 +146,7 @@ export async function GET() {
       marketingConsent: consent,
       orders,
       tokenPurchases,
+      affiliate,
       licenses,
       devices,
       notes,

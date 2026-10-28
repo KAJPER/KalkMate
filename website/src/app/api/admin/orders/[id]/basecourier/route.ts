@@ -19,6 +19,7 @@ import {
   type BcShipOptions,
   type BcCreatedShipment,
 } from "@/lib/basecourier";
+import { saveShippingCarrier } from "@/lib/carriers";
 import { syncOrderTracking, appendOrderNoteOnce } from "@/lib/inpostTracking";
 import { ensureLabelEmail } from "@/lib/orderFulfillment";
 import { receiverFromOrder, applyReceiverEdits, orderPatchFromReceiver, savedForClient } from "@/lib/basecourierReceiver";
@@ -164,7 +165,8 @@ async function runCreate(
   previousStatus: string | null,
   orderPatch: Record<string, unknown>,
   create: () => Promise<BcCreatedShipment>,
-  logTag: string
+  logTag: string,
+  carrier: string
 ): Promise<{ ok: true; created: BcCreatedShipment; emailSent: boolean } | { ok: false; response: NextResponse }> {
   let created: BcCreatedShipment;
   try {
@@ -212,6 +214,9 @@ async function runCreate(
       ),
     };
   }
+  // Przewoznik do maili statusowych (lib/carriers.ts) — PRZED mailem ponizej,
+  // zeby juz on mial wlasciwego kuriera i link sledzenia.
+  await saveShippingCarrier(id, carrier).catch((e) => console.error("[basecourier] carrier save failed", id, e));
   // Mail do klienta "Pakujemy i wysylamy" z numerem — blad maila nie psuje nadania.
   let emailSent = false;
   try { emailSent = await ensureLabelEmail(id); } catch (e) { console.error(`[basecourier] ${logTag} label email failed`, id, e); }
@@ -373,7 +378,8 @@ async function createShipment(request: NextRequest, id: string): Promise<NextRes
       order.furgonetkaStatus,
       orderPatch,
       () => bcCreateInternationalShipment(receiver, `KalkMate ${order.orderNumber}`, courierCode, country, shipOpts),
-      `(intl ${courierCode} ${country})`
+      `(intl ${courierCode} ${country})`,
+      courierCode
     );
     if (!r.ok) return r.response;
     const created = r.created;
@@ -407,7 +413,8 @@ async function createShipment(request: NextRequest, id: string): Promise<NextRes
     order.furgonetkaStatus,
     orderPatch,
     () => bcCreateLockerShipment(receiver, `KalkMate ${order.orderNumber}`, shipOpts),
-    "(paczkomat)"
+    "(paczkomat)",
+    "inpost"
   );
   if (!r.ok) return r.response;
   const created = r.created;
