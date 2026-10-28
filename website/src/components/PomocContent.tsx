@@ -1617,7 +1617,21 @@ function richText(s: string): React.ReactNode {
     if (p.startsWith("`") && p.endsWith("`")) {
       return <code key={i} className="km-mono-eyebrow text-[#D8FF3D]">{p.slice(1, -1)}</code>;
     }
-    return <span key={i}>{p}</span>;
+    return <span key={i}>{linkify(p)}</span>;
+  });
+}
+
+// "kalkmate.pl/panel" i "kontakt@kalkmate.pl" w tekstach pomocy jako klikalne
+// linki — Clarity pokazywal martwe klikniecia na /pomoc (ludzie tapali w adresy).
+const LINK_RE = /(kontakt@kalkmate\.pl|kalkmate\.pl(?:\/[a-z0-9\-/]+)?)/g;
+
+function linkify(s: string): React.ReactNode {
+  const parts = s.split(LINK_RE);
+  if (parts.length === 1) return s;
+  return parts.map((p, i) => {
+    if (i % 2 === 0) return p;
+    const href = p.includes("@") ? `mailto:${p}` : p.slice("kalkmate.pl".length) || "/";
+    return <a key={i} href={href} className="text-[#D8FF3D] hover:underline">{p}</a>;
   });
 }
 
@@ -1681,6 +1695,7 @@ const inputClass =
 export default function PomocContent({ lang }: { lang: Locale }) {
   const t = DICT[lang];
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [selectedKey, setSelectedKey] = useState("5");
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -1789,11 +1804,18 @@ export default function PomocContent({ lang }: { lang: Locale }) {
           <Section id="klawiatura" eyebrow={t.s2.eyebrow} title={t.s2.title} accent={t.s2.accent}>
             <p className="text-[15px] leading-[1.65] text-[#F2EDE3]/65 mb-6">{richText(t.s2.intro)}</p>
 
-            <KeyboardMap legend={t.s2.legend} />
+            <KeyboardMap legend={t.s2.legend} keyRows={t.s2.keyRows} selected={selectedKey} onSelect={setSelectedKey} />
 
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 text-[14px]">
               {t.s2.keyRows.map((k, i) => (
-                <KeyRow key={i} keyLabel={k.key} desc={k.desc} accent={k.accent} />
+                <KeyRow
+                  key={i}
+                  keyLabel={k.key}
+                  desc={k.desc}
+                  accent={k.accent}
+                  active={selectedKey === k.key}
+                  onSelect={() => setSelectedKey(k.key)}
+                />
               ))}
             </div>
 
@@ -1871,7 +1893,7 @@ export default function PomocContent({ lang }: { lang: Locale }) {
                     <span className={`km-mono-eyebrow text-[#D8FF3D] transition-transform ${openFaq === i ? "rotate-45" : ""}`}>+</span>
                   </button>
                   {openFaq === i && (
-                    <div className="px-5 pb-5 text-[14.5px] leading-[1.65] text-[#F2EDE3]/65">{f.a}</div>
+                    <div className="px-5 pb-5 text-[14.5px] leading-[1.65] text-[#F2EDE3]/65">{linkify(f.a)}</div>
                   )}
                 </div>
               ))}
@@ -2082,16 +2104,24 @@ function VideoPlayer({ src, label }: { src: string; label: string }) {
   );
 }
 
+// Klik = pauza/wznowienie (bez tego klikniecia w wideo byly martwe w Clarity).
 function AutoplayVideo({ src, label }: { src: string; label: string }) {
+  const [paused, setPaused] = useState(false);
   return (
     <div className="mt-6 border border-[rgba(242,237,227,0.18)] bg-[#0B0B0B] overflow-hidden">
-      <p className="km-mono-eyebrow text-[#F2EDE3]/55 px-4 pt-3 pb-2">/ {label}</p>
+      <p className="km-mono-eyebrow text-[#F2EDE3]/55 px-4 pt-3 pb-2">/ {label}{paused && " · ❚❚"}</p>
       <video
         autoPlay
         loop
         muted
         playsInline
-        className="w-full block"
+        onClick={(e) => {
+          const v = e.currentTarget;
+          if (v.paused) v.play().catch(() => {}); else v.pause();
+        }}
+        onPlay={() => setPaused(false)}
+        onPause={() => setPaused(true)}
+        className="w-full block cursor-pointer"
         style={{ maxHeight: "480px" }}
       >
         <source src={src} type="video/mp4" />
@@ -2100,7 +2130,17 @@ function AutoplayVideo({ src, label }: { src: string; label: string }) {
   );
 }
 
-function KeyboardMap({ legend }: { legend: { nav: string; panic: string; standard: string } }) {
+// Klawisze sa klikalne — pokazuja funkcje pod siatka i podswietlaja wiersz
+// w liscie ponizej. Wczesniej to byly zwykle <div>y, a Clarity notowal na
+// /pomoc martwe i "wsciekle" klikniecia (ludzie tapali w klawisze).
+function KeyboardMap({
+  legend, keyRows, selected, onSelect,
+}: {
+  legend: { nav: string; panic: string; standard: string };
+  keyRows: KeyRowT[];
+  selected: string;
+  onSelect: (k: string) => void;
+}) {
   // 6 rzedów × 5 kolumn = 30 slotów, 27 klawiszy fizycznych
   const layout: (string | null)[][] = [
     [null,  "√",   "%",   "MU",  null ],
@@ -2111,29 +2151,37 @@ function KeyboardMap({ legend }: { legend: { nav: string; panic: string; standar
     ["0",   "00",  ".",   "=",   null ],
   ];
   const navKeys = new Set(["8", "2", "4", "6", "5"]);
+  const selectedDesc = keyRows.find((r) => r.key === selected)?.desc ?? legend.standard;
   return (
-    <div className="border border-[rgba(242,237,227,0.18)] p-4 bg-[#0B0B0B] inline-block">
+    <div className="border border-[rgba(242,237,227,0.18)] p-4 bg-[#0B0B0B] inline-block max-w-full">
       <div className="grid grid-cols-5 gap-2">
         {layout.flat().map((k, i) => {
           if (!k) return <div key={i} className="w-14 h-14" />;
           const isNav = navKeys.has(k);
           const isMu = k === "MU";
+          const isSel = k === selected;
           return (
-            <div
+            <button
               key={i}
-              className={`w-14 h-14 flex items-center justify-center font-bold text-[15px] border ${
+              type="button"
+              onClick={() => onSelect(k)}
+              aria-pressed={isSel}
+              className={`w-14 h-14 flex items-center justify-center font-bold text-[15px] border transition-transform active:scale-95 ${
                 isNav
                   ? "bg-[#D8FF3D]/15 border-[#D8FF3D] text-[#D8FF3D]"
                   : isMu
                   ? "bg-[#FF4D2E]/15 border-[#FF4D2E] text-[#FF4D2E]"
-                  : "border-[rgba(242,237,227,0.18)] text-[#F2EDE3]"
-              }`}
+                  : "border-[rgba(242,237,227,0.18)] text-[#F2EDE3] hover:border-[#F2EDE3]/50"
+              } ${isSel ? "ring-2 ring-[#F2EDE3] ring-offset-2 ring-offset-[#0B0B0B]" : ""}`}
             >
               {k}
-            </div>
+            </button>
           );
         })}
       </div>
+      <p aria-live="polite" className="mt-4 min-h-[2.5em] max-w-[312px] text-[14px] text-[#F2EDE3]/80">
+        <span className="font-bold text-[#F2EDE3]">{selected}</span> — {selectedDesc}
+      </p>
       <div className="mt-4 flex gap-4 text-[12px]">
         <span className="km-mono-eyebrow text-[#D8FF3D]">■ {legend.nav}</span>
         <span className="km-mono-eyebrow text-[#FF4D2E]">■ {legend.panic}</span>
@@ -2143,16 +2191,18 @@ function KeyboardMap({ legend }: { legend: { nav: string; panic: string; standar
   );
 }
 
-function KeyRow({ keyLabel, desc, accent }: { keyLabel: string; desc: string; accent?: boolean }) {
+function KeyRow({
+  keyLabel, desc, accent, active, onSelect,
+}: { keyLabel: string; desc: string; accent?: boolean; active?: boolean; onSelect?: () => void }) {
   return (
-    <div className="flex items-center gap-4">
+    <button type="button" onClick={onSelect} className="flex items-center gap-4 text-left">
       <div className={`min-w-[60px] px-3 py-2 text-center font-bold border ${
         accent ? "bg-[#D8FF3D]/15 border-[#D8FF3D] text-[#D8FF3D]" : "border-[rgba(242,237,227,0.18)] text-[#F2EDE3]"
-      }`}>
+      } ${active ? "ring-2 ring-[#F2EDE3] ring-offset-2 ring-offset-[#0B0B0B]" : ""}`}>
         {keyLabel}
       </div>
-      <span className="text-[#F2EDE3]/70">{desc}</span>
-    </div>
+      <span className={active ? "text-[#F2EDE3]" : "text-[#F2EDE3]/70"}>{desc}</span>
+    </button>
   );
 }
 
@@ -2165,7 +2215,7 @@ function Problem({ issue, fix }: { issue: string; fix: string }) {
       <h3 className="text-[16px] font-semibold text-[#F2EDE3] mb-3">{issue}</h3>
       <div className="flex items-start gap-3">
         <span className="km-mono-eyebrow text-[#D8FF3D] min-w-[60px] mt-1">/ FIX</span>
-        <p className="text-[14.5px] leading-[1.65] text-[#F2EDE3]/70 flex-1">{fix}</p>
+        <p className="text-[14.5px] leading-[1.65] text-[#F2EDE3]/70 flex-1">{linkify(fix)}</p>
       </div>
     </div>
   );

@@ -31,6 +31,9 @@ const DICT: Record<
     h1Register: ReactNode;
     subLogin: string;
     subRegister: string;
+    checkoutH1: ReactNode;
+    checkoutSub: string;
+    checkoutNote: string;
     errorLabel: string;
     resendSending: string;
     resendLink: string;
@@ -77,6 +80,9 @@ const DICT: Record<
     h1Register: (<>Załóż <span className="italic text-[#D8FF3D]">konto</span>.</>),
     subLogin: "Zaloguj się i przejmij kontrolę nad swoim KalkMate.",
     subRegister: "Utwórz konto, żeby zacząć aktywować urządzenia.",
+    checkoutH1: (<>Jeszcze krok do <span className="italic text-[#D8FF3D]">zamówienia</span>.</>),
+    checkoutSub: "Zaloguj się albo załóż konto — od razu wrócisz do formularza zamówienia.",
+    checkoutNote: "Konto przyda się i tak: w nim aktywujesz tokeny AI do kalkulatora i widzisz swoje zamówienia. Najszybciej przez Google — jedno kliknięcie, bez potwierdzania maila.",
     errorLabel: "/ ERROR",
     resendSending: "WYSYŁAM...",
     resendLink: "WYŚLIJ NOWY LINK WERYFIKACYJNY →",
@@ -127,6 +133,9 @@ const DICT: Record<
     h1Register: (<>Create an <span className="italic text-[#D8FF3D]">account</span>.</>),
     subLogin: "Sign in and take control of your KalkMate.",
     subRegister: "Create an account to start activating devices.",
+    checkoutH1: (<>One step to your <span className="italic text-[#D8FF3D]">order</span>.</>),
+    checkoutSub: "Sign in or create an account — you'll go straight back to the order form.",
+    checkoutNote: "You'll need the account anyway: it's where you activate the calculator's AI tokens and see your orders. Fastest with Google — one click, no email confirmation.",
     errorLabel: "/ ERROR",
     resendSending: "SENDING...",
     resendLink: "SEND A NEW VERIFICATION LINK →",
@@ -177,6 +186,9 @@ const DICT: Record<
     h1Register: (<>Konto <span className="italic text-[#D8FF3D]">erstellen</span>.</>),
     subLogin: "Melde dich an und übernimm die Kontrolle über dein KalkMate.",
     subRegister: "Erstelle ein Konto, um Geräte zu aktivieren.",
+    checkoutH1: (<>Nur noch ein Schritt zur <span className="italic text-[#D8FF3D]">Bestellung</span>.</>),
+    checkoutSub: "Melde dich an oder erstelle ein Konto — danach geht es direkt zurück zum Bestellformular.",
+    checkoutNote: "Das Konto brauchst du sowieso: Dort aktivierst du die KI-Tokens für den Rechner und siehst deine Bestellungen. Am schnellsten mit Google — ein Klick, ohne E-Mail-Bestätigung.",
     errorLabel: "/ ERROR",
     resendSending: "SENDE...",
     resendLink: "NEUEN BESTÄTIGUNGSLINK SENDEN →",
@@ -227,6 +239,9 @@ const DICT: Record<
     h1Register: (<>Založ si <span className="italic text-[#D8FF3D]">účet</span>.</>),
     subLogin: "Přihlas se a převezmi kontrolu nad svým KalkMate.",
     subRegister: "Vytvoř si účet a začni aktivovat zařízení.",
+    checkoutH1: (<>Ještě krok k <span className="italic text-[#D8FF3D]">objednávce</span>.</>),
+    checkoutSub: "Přihlas se nebo si založ účet — hned se vrátíš k objednávkovému formuláři.",
+    checkoutNote: "Účet se ti stejně bude hodit: aktivuješ v něm AI tokeny pro kalkulačku a vidíš své objednávky. Nejrychleji přes Google — jedno kliknutí, bez potvrzování e-mailu.",
     errorLabel: "/ ERROR",
     resendSending: "ODESÍLÁM...",
     resendLink: "POSLAT NOVÝ OVĚŘOVACÍ ODKAZ →",
@@ -277,6 +292,9 @@ const DICT: Record<
     h1Register: (<>Založ si <span className="italic text-[#D8FF3D]">účet</span>.</>),
     subLogin: "Prihlás sa a prevezmi kontrolu nad svojím KalkMate.",
     subRegister: "Vytvor si účet a začni aktivovať zariadenia.",
+    checkoutH1: (<>Ešte krok k <span className="italic text-[#D8FF3D]">objednávke</span>.</>),
+    checkoutSub: "Prihlás sa alebo si založ účet — hneď sa vrátiš k objednávkovému formuláru.",
+    checkoutNote: "Účet sa ti aj tak zíde: aktivuješ v ňom AI tokeny pre kalkulačku a vidíš svoje objednávky. Najrýchlejšie cez Google — jedno kliknutie, bez potvrdzovania e-mailu.",
     errorLabel: "/ CHYBA",
     resendSending: "ODOSIELAM...",
     resendLink: "POSLAŤ NOVÝ OVEROVACÍ ODKAZ →",
@@ -327,6 +345,9 @@ const DICT: Record<
     h1Register: (<>Susikurk <span className="italic text-[#D8FF3D]">paskyrą</span>.</>),
     subLogin: "Prisijunk ir valdyk savo KalkMate.",
     subRegister: "Susikurk paskyrą, kad galėtum aktyvuoti įrenginius.",
+    checkoutH1: (<>Dar vienas žingsnis iki <span className="italic text-[#D8FF3D]">užsakymo</span>.</>),
+    checkoutSub: "Prisijunk arba susikurk paskyrą — iškart grįši į užsakymo formą.",
+    checkoutNote: "Paskyra vis tiek pravers: joje aktyvuoji skaičiuotuvo AI žetonus ir matai savo užsakymus. Greičiausia su Google — vienas paspaudimas, be el. pašto patvirtinimo.",
     errorLabel: "/ KLAIDA",
     resendSending: "SIUNČIAMA...",
     resendLink: "SIŲSTI NAUJĄ PATVIRTINIMO NUORODĄ →",
@@ -377,6 +398,9 @@ const DICT: Record<
     h1Register: (<>Ствары <span className="italic text-[#D8FF3D]">акаўнт</span>.</>),
     subLogin: "Увайдзі і вазьмі пад кантроль свой KalkMate.",
     subRegister: "Ствары акаўнт, каб пачаць актываваць прылады.",
+    checkoutH1: (<>Яшчэ крок да <span className="italic text-[#D8FF3D]">замовы</span>.</>),
+    checkoutSub: "Увайдзі або ствары акаўнт — адразу вернешся да формы замовы.",
+    checkoutNote: "Акаўнт усё роўна спатрэбіцца: у ім ты актывуеш AI-токены для калькулятара і бачыш свае замовы. Хутчэй за ўсё праз Google — адзін клік, без пацвярджэння пошты.",
     errorLabel: "/ ПАМЫЛКА",
     resendSending: "АДПРАЎЛЯЮ...",
     resendLink: "ДАСЛАЦЬ НОВУЮ СПАСЫЛКУ ДЛЯ ПАЦВЯРДЖЭННЯ →",
@@ -427,6 +451,9 @@ const DICT: Record<
     h1Register: (<>Crea una <span className="italic text-[#D8FF3D]">cuenta</span>.</>),
     subLogin: "Inicia sesión y toma el control de tu KalkMate.",
     subRegister: "Crea una cuenta para empezar a activar dispositivos.",
+    checkoutH1: (<>Un paso más para tu <span className="italic text-[#D8FF3D]">pedido</span>.</>),
+    checkoutSub: "Inicia sesión o crea una cuenta — volverás directamente al formulario del pedido.",
+    checkoutNote: "La cuenta te hará falta de todos modos: en ella activas los tokens de IA de la calculadora y ves tus pedidos. Lo más rápido, con Google — un clic, sin confirmar el correo.",
     errorLabel: "/ ERROR",
     resendSending: "ENVIANDO...",
     resendLink: "ENVIAR UN NUEVO ENLACE DE VERIFICACIÓN →",
@@ -477,6 +504,9 @@ const DICT: Record<
     h1Register: (<>Cria uma <span className="italic text-[#D8FF3D]">conta</span>.</>),
     subLogin: "Inicia sessão e assume o controlo do teu KalkMate.",
     subRegister: "Cria uma conta para começares a ativar dispositivos.",
+    checkoutH1: (<>Falta um passo para a tua <span className="italic text-[#D8FF3D]">encomenda</span>.</>),
+    checkoutSub: "Inicia sessão ou cria uma conta — voltas logo ao formulário da encomenda.",
+    checkoutNote: "Vais precisar da conta de qualquer forma: é nela que ativas os tokens de IA da calculadora e vês as tuas encomendas. Mais rápido com Google — um clique, sem confirmar o email.",
     errorLabel: "/ ERRO",
     resendSending: "A ENVIAR...",
     resendLink: "ENVIAR NOVA LIGAÇÃO DE VERIFICAÇÃO →",
@@ -527,6 +557,9 @@ const DICT: Record<
     h1Register: (<>Crée un <span className="italic text-[#D8FF3D]">compte</span>.</>),
     subLogin: "Connecte-toi et prends le contrôle de ton KalkMate.",
     subRegister: "Crée un compte pour commencer à activer des appareils.",
+    checkoutH1: (<>Plus qu’une étape avant ta <span className="italic text-[#D8FF3D]">commande</span>.</>),
+    checkoutSub: "Connecte-toi ou crée un compte — tu reviendras directement au formulaire de commande.",
+    checkoutNote: "Le compte te servira de toute façon : c'est là que tu actives les jetons IA de la calculatrice et que tu vois tes commandes. Le plus rapide : Google — un clic, sans confirmation par e-mail.",
     errorLabel: "/ ERREUR",
     resendSending: "ENVOI...",
     resendLink: "ENVOYER UN NOUVEAU LIEN DE VÉRIFICATION →",
@@ -577,6 +610,9 @@ const DICT: Record<
     h1Register: (<>Crea un <span className="italic text-[#D8FF3D]">account</span>.</>),
     subLogin: "Accedi e prendi il controllo del tuo KalkMate.",
     subRegister: "Crea un account per iniziare ad attivare i dispositivi.",
+    checkoutH1: (<>Manca un passo al tuo <span className="italic text-[#D8FF3D]">ordine</span>.</>),
+    checkoutSub: "Accedi o crea un account — tornerai subito al modulo d'ordine.",
+    checkoutNote: "L'account ti servirà comunque: lì attivi i token IA della calcolatrice e vedi i tuoi ordini. Più veloce con Google — un clic, senza conferma email.",
     errorLabel: "/ ERRORE",
     resendSending: "INVIO...",
     resendLink: "INVIA UN NUOVO LINK DI VERIFICA →",
@@ -627,6 +663,10 @@ function SignInForm() {
   // dostaje ja jako callbackUrl) — inaczej zwykle logowanie z menu w ciagu
   // 24h wrzucaloby usera w checkout.
   const resolveCallback = () => safeCallback(callbackParam);
+  // Wejscie z "Zamow teraz" / koszyka (callbackUrl z checkout=true) — inny
+  // naglowek i wyjasnienie po co konto. Clarity: sesje na signin z checkoutu
+  // mialy ~0 s zaangazowania (naglowek "Wejdz na panel" nie pasowal do intencji).
+  const fromCheckout = !!callbackParam && safeCallback(callbackParam).includes("checkout=true");
   // Tryb formularza: ?mode=register | ?mode=signup | ?signup=1 -> rejestracja, domyslnie login
   const initialMode = searchParams.get("mode") || (searchParams.get("signup") ? "register" : "");
   const startAsRegister = initialMode === "register" || initialMode === "signup";
@@ -786,11 +826,16 @@ function SignInForm() {
             </div>
 
             <h1 className="km-display text-4xl lg:text-5xl mt-6 leading-[0.95]">
-              {isLogin ? t.h1Login : t.h1Register}
+              {fromCheckout ? t.checkoutH1 : isLogin ? t.h1Login : t.h1Register}
             </h1>
             <p className="mt-3 text-[14.5px] text-[#F2EDE3]/55">
-              {isLogin ? t.subLogin : t.subRegister}
+              {fromCheckout ? t.checkoutSub : isLogin ? t.subLogin : t.subRegister}
             </p>
+            {fromCheckout && (
+              <p className="mt-4 border-l-2 border-[#D8FF3D] bg-[#D8FF3D]/[0.04] px-3 py-2 text-[13.5px] leading-[1.55] text-[#F2EDE3]/75">
+                {t.checkoutNote}
+              </p>
+            )}
 
             {error && (
               <div className="mt-6 border border-[#FF4D2E]/40 bg-[#FF4D2E]/[0.06] p-3">
@@ -827,7 +872,11 @@ function SignInForm() {
                   forgetCallback();
                   signIn("google", { callbackUrl: target });
                 }}
-                className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-[rgba(242,237,227,0.18)] bg-transparent text-[#F2EDE3]/80 hover:border-[rgba(242,237,227,0.35)] hover:text-[#F2EDE3] transition-colors km-mono-eyebrow"
+                className={`w-full flex items-center justify-center gap-3 px-4 py-3 border bg-transparent hover:text-[#F2EDE3] transition-colors km-mono-eyebrow ${
+                  fromCheckout
+                    ? "border-[#D8FF3D] text-[#F2EDE3] hover:bg-[#D8FF3D]/[0.06]"
+                    : "border-[rgba(242,237,227,0.18)] text-[#F2EDE3]/80 hover:border-[rgba(242,237,227,0.35)]"
+                }`}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
