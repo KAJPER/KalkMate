@@ -76,6 +76,7 @@ export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL, verifi
       `${siteUrl}/galeria/kalkulator-kalkmate-etykieta-certyfikaty.webp`,
     ],
     sku: "KM-V3",
+    mpn: "KM-V3",
     brand: { "@type": "Brand", name: "KalkMate" },
     offers: {
       "@type": "Offer",

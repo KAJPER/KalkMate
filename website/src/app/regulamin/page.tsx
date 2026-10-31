@@ -9,8 +9,8 @@ import { siteUrlFromHost } from "@/lib/i18n";
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Regulamin Sklepu — KalkMate",
-    description: "Regulamin sklepu internetowego KalkMate",
+    title: "Regulamin sklepu: zamówienia, zwroty i gwarancja | KalkMate",
+    description: "Regulamin sklepu KalkMate: zamówienia, płatności (Przelewy24, karta), darmowa dostawa InPost, 14 dni na zwrot, 24 miesiące gwarancji i czat z asystentem AI.",
     robots: { index: true, follow: true },
     alternates: { canonical: `${siteUrl}/regulamin` },
   };

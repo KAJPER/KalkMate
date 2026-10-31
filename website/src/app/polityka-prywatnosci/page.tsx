@@ -9,8 +9,8 @@ import { siteUrlFromHost } from "@/lib/i18n";
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   return {
-    title: "Polityka Prywatności - KalkMate",
-    description: "Polityka prywatności i ochrony danych osobowych KalkMate.pl",
+    title: "Polityka prywatności: RODO i cookies | KalkMate",
+    description: "Jak KalkMate chroni Twoje dane: co zbieramy i po co, jak długo przechowujemy, cookies i Microsoft Clarity, czat z AI oraz Twoje prawa wynikające z RODO.",
     robots: { index: true, follow: true },
     alternates: { canonical: `${siteUrl}/polityka-prywatnosci` },
   };
