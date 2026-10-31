@@ -42,7 +42,7 @@ export async function GET(
   const fromKey: PickupAddressKey = Object.prototype.hasOwnProperty.call(PICKUP_ADDRESSES, fromRaw) ? (fromRaw as PickupAddressKey) : "choroszcz";
   const from = PICKUP_ADDRESSES[fromKey];
 
-  let profile = { name: "Kacper Popko", vat_company: "KAJPA Kacper Popko", phone: "600580888", email: "kacper@kajpa.pl" };
+  let profile = { name: "Kacper Popko", vat_company: "KAJPA Kacper Popko", phone: "600580888", email: "kontakt@kalkmate.pl" };
   try {
     const p = await bcGetProfile();
     profile = { name: p.name || profile.name, vat_company: p.vat_company || profile.vat_company, phone: p.phone || profile.phone, email: p.email || profile.email };

@@ -21,7 +21,7 @@ export async function GET(
   const order = await prisma.order.findUnique({ where: { id } });
   if (!order) return NextResponse.json({ ok: false, error: "Order not found" }, { status: 404 });
 
-  let profile = { name: "Kacper Popko", phone: "600580888", email: "kacper@kajpa.pl", street: "ul. Zastawie I", house_no: "37", postal: "16-070", city: "Choroszcz" };
+  let profile = { name: "Kacper Popko", phone: "600580888", email: "kontakt@kalkmate.pl", street: "ul. Zastawie I", house_no: "37", postal: "16-070", city: "Choroszcz" };
   try {
     const p = await bcGetProfile();
     profile = {

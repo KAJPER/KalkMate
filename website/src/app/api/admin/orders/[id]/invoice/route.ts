@@ -39,7 +39,7 @@ function invoiceHtml(rawName: string, rawFilename: string) {
       <div style="margin:32px 0;height:1px;background:rgba(242,237,227,0.10)"></div>
       <p style="margin:0;font-size:12px;color:rgba(242,237,227,0.35)">
         KalkMate · kalkmate.pl<br>
-        Masz pytania? Odpisz na tego maila lub napisz na kacper@kajpa.pl
+        Masz pytania? Odpisz na tego maila lub napisz na kontakt@kalkmate.pl
       </p>
     </div>
   </div>

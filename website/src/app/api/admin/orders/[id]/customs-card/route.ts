@@ -43,7 +43,7 @@ export async function GET(
   const rate = APPROX_TO_EUR[currency];
   const valueEur = rate !== undefined ? value * rate : Number.POSITIVE_INFINITY;
 
-  let profile = { name: "Kacper Popko", vat_company: "KAJPA Kacper Popko", phone: "600580888", email: "kacper@kajpa.pl" };
+  let profile = { name: "Kacper Popko", vat_company: "KAJPA Kacper Popko", phone: "600580888", email: "kontakt@kalkmate.pl" };
   try {
     const p = await bcGetProfile();
     profile = { name: p.name || profile.name, vat_company: p.vat_company || profile.vat_company, phone: p.phone || profile.phone, email: p.email || profile.email };

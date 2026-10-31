@@ -1062,7 +1062,7 @@ export default function OrderDetailPage({
     nadawcaNumer: "37",
     nadawcaKod: "16-070",
     nadawcaMiasto: "Choroszcz",
-    nadawcaEmail: "kacper@kajpa.pl",
+    nadawcaEmail: "kontakt@kalkmate.pl",
     nadawcaTelefon: "600580888",
   };
 

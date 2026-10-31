@@ -156,7 +156,7 @@ export default function PrivacyPolicy() {
                 </div>
                 <div>
                   <span className="text-[#F2EDE3]/45">E-mail:</span>{" "}
-                  <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>
+                  <a href="mailto:kontakt@kalkmate.pl" className="text-[#D8FF3D] hover:underline">kontakt@kalkmate.pl</a>
                 </div>
                 <div>
                   <span className="text-[#F2EDE3]/45">Telefon:</span>{" "}
@@ -169,7 +169,7 @@ export default function PrivacyPolicy() {
               <P>Kontakt z Administratorem w sprawach przetwarzania danych osobowych możliwy jest poprzez:</P>
             </div>
             <UL>
-              <li>e-mail: <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>,</li>
+              <li>e-mail: <a href="mailto:kontakt@kalkmate.pl" className="text-[#D8FF3D] hover:underline">kontakt@kalkmate.pl</a>,</li>
               <li>telefonicznie: <a href="tel:+48600580888" className="text-[#D8FF3D] hover:underline">+48 600 580 888</a>,</li>
               <li>formularz kontaktowy dostępny na stronie.</li>
             </UL>
@@ -534,7 +534,7 @@ export default function PrivacyPolicy() {
               z przysługujących Państwu praw prosimy kierować na:
             </P>
             <UL>
-              <li>Email: <a href="mailto:kontakt@kajpa.pl" className="text-[#D8FF3D] hover:underline">kontakt@kajpa.pl</a>,</li>
+              <li>Email: <a href="mailto:kontakt@kalkmate.pl" className="text-[#D8FF3D] hover:underline">kontakt@kalkmate.pl</a>,</li>
               <li>Telefon: <a href="tel:+48600580888" className="text-[#D8FF3D] hover:underline">+48 600 580 888</a>,</li>
               <li>
                 <Link href="/pomoc#kontakt" className="text-[#D8FF3D] hover:underline">

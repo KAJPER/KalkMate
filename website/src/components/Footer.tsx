@@ -464,8 +464,8 @@ export default function Footer({ lang = "pl" }: { lang?: Locale }) {
             </div>
             <div>
               <p className="km-mono-eyebrow text-[#F2EDE3]/55 text-[10px] mb-1">{t.fields.email}</p>
-              <a href="mailto:kontakt@kajpa.pl" className="font-mono text-[#F2EDE3] hover:text-[#D8FF3D] transition-colors">
-                kontakt@kajpa.pl
+              <a href="mailto:kontakt@kalkmate.pl" className="font-mono text-[#F2EDE3] hover:text-[#D8FF3D] transition-colors">
+                kontakt@kalkmate.pl
               </a>
             </div>
             <div>
