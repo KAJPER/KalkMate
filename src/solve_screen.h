@@ -19,6 +19,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "esp_heap_caps.h"
+#include "server_select.h"   // wybor najszybszego serwera dla solve (Mediolan / posrednik)
 #include "input.h"
 #include "settings_screen.h"
 #include "ui_kit.h"         // wspolny wyglad ekranow (naglowek, wiersze, komunikaty)
@@ -60,7 +61,7 @@ static String _solDeviceId() {
 #define KALK_API_KEY ""
 #endif
 
-#define _SOL_SOLVE_ENDPOINT  KALK_SERVER_URL "/api/device/solve"
+// Adres solve budowany per serwer w _solBeginRequest (server_select.h).
 #define _SOL_TEXT_MAX        2048   // max znakow zadania (input)
 
 // UTF-8 -> ASCII dla fontow 6x10/5x7 (drawStr — nie maja diakrytykow ani
@@ -1085,12 +1086,37 @@ struct _SolSendRes {
 // wewnatrz tej funkcji, nigdy nie "uciekaja" do tla po jej zakonczeniu).
 struct _SolNetTaskCtx {
     HTTPClient* http;
+    WiFiClientSecure* client;
     const uint8_t* body;
     size_t bodyLen;
+    // Naglowki zadania — HTTPClient::begin() je czysci, a przy przejsciu na
+    // inny serwer (server_select.h) begin() wolamy drugi raz.
+    const char* contentType;
+    const char* licKey;
+    const char* devToken;
+    const char* reqId;
     volatile bool done;
     volatile bool abort;   // panic — przerwij miedzy probami DNS
     int httpCode;
 };
+
+// Adres + naglowki zadania solve na wskazany serwer (server_select.h).
+static void _solBeginRequest(_SolNetTaskCtx* ctx, int srvIdx) {
+    HTTPClient& http = *ctx->http;
+    String url = String("https://") + serverHost(srvIdx) + "/api/device/solve";
+    http.begin(*ctx->client, url);
+    http.addHeader("Content-Type", ctx->contentType);
+    http.addHeader("x-api-key", KALK_API_KEY);
+    http.addHeader("x-device-id", _solDeviceId());
+    http.addHeader("x-fw-version", FW_VERSION);
+    if (ctx->licKey[0]) http.addHeader("x-license-key", ctx->licKey);
+    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
+    http.addHeader("x-language", kalkLangCode(kalkSettings.language));   // pl..it (settings_screen.h)
+    if (ctx->devToken[0]) http.addHeader("x-device-token", ctx->devToken);
+    if (ctx->reqId && ctx->reqId[0]) http.addHeader("x-request-id", ctx->reqId);
+    http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
+    http.setConnectTimeout(12000);   // domyslnie 5000 ms -> "start_ssl_client: -1" na slabym lacu
+}
 
 static void _solNetTaskFn(void* arg) {
     _SolNetTaskCtx* ctx = (_SolNetTaskCtx*)arg;
@@ -1101,14 +1127,25 @@ static void _solNetTaskFn(void* arg) {
     // Do 2 prob polaczenia: -1 oznacza, ze nic jeszcze nie poszlo do serwera
     // (timeout polaczenia / TLS), wiec powtorka nie dubluje zadania. Przy
     // slabym lacu (hotspot z telefonu, RSSI -60..-70) pierwsze SYN-y gina.
+    //
+    // Serwer: najszybszy z server_select.h (pomiar co kilka godzin). Gdy
+    // serwer posredniczacy nie odpowie, druga proba idzie od razu do
+    // glownego (x-request-id chroni przed podwojnym pobraniem tokenow).
     int code = -1;
+    serverRefreshIfStale(&ctx->abort);
+    int srv = serverSolveIndex();
     for (int attempt = 0; attempt < 2 && !ctx->abort; attempt++) {
-        if (!wifiEnsureDns(KALKMATE_HOST, &ctx->abort)) break;
+        _solBeginRequest(ctx, srv);
+        if (!wifiEnsureDns(serverHost(srv), &ctx->abort)) {
+            if (srv != 0 && !ctx->abort) { serverMarkFailed(srv); srv = 0; continue; }
+            break;
+        }
         if (ctx->abort) break;
         code = ctx->http->POST((uint8_t*)ctx->body, ctx->bodyLen);
         if (code != -1) break;
-        Serial.printf("[SOL] polaczenie nieudane (proba %d/2)\n", attempt + 1);
-        logEventf("SOL", "connect fail try %d/2 rssi=%d", attempt + 1, WiFi.RSSI());
+        Serial.printf("[SOL] polaczenie z %s nieudane (proba %d/2)\n", serverHost(srv), attempt + 1);
+        logEventf("SOL", "connect fail %s try %d/2 rssi=%d", serverHost(srv), attempt + 1, WiFi.RSSI());
+        if (srv != 0) { serverMarkFailed(srv); srv = 0; }
     }
     // Zero odpowiedzi HTTP mimo WL_CONNECTED = lacze prawdopodobnie martwe
     // (polowiczne skojarzenie, brak IP po DHCP). Oznacz, zeby nastepne
@@ -1146,18 +1183,8 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
     client.setCACert(KALKMATE_CA_CERT);
     client.setTimeout(60);
     HTTPClient http;
-    http.begin(client, _SOL_SOLVE_ENDPOINT);
-    http.addHeader("Content-Type", contentType);
-    http.addHeader("x-api-key", KALK_API_KEY);
-    http.addHeader("x-device-id", _solDeviceId());
-    http.addHeader("x-fw-version", FW_VERSION);
-    if (licKey[0]) http.addHeader("x-license-key", licKey);
-    http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
-    http.addHeader("x-language", kalkLangCode(kalkSettings.language));   // pl..it (settings_screen.h)
-    { char dt[68]=""; wifiLoadDeviceToken(dt,sizeof(dt)); if(dt[0]) http.addHeader("x-device-token",dt); memset(dt,0,sizeof(dt)); }
-    if (reqId && reqId[0]) http.addHeader("x-request-id", reqId);
-    http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
-    http.setConnectTimeout(12000);   // domyslnie 5000 ms -> "start_ssl_client: -1" na slabym lacu
+    char devToken[68] = "";
+    wifiLoadDeviceToken(devToken, sizeof(devToken));
 
     Serial.printf("[SOL] POST %u B, req=%s\n", (unsigned)bodyLen, (reqId && reqId[0]) ? reqId : "-");
 
@@ -1167,8 +1194,13 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
     // AI, czesto najdluzszy moment calego dzialania kalkulatora).
     _SolNetTaskCtx ctx;
     ctx.http = &http;
+    ctx.client = &client;
     ctx.body = body;
     ctx.bodyLen = bodyLen;
+    ctx.contentType = contentType;
+    ctx.licKey = licKey;
+    ctx.devToken = devToken;
+    ctx.reqId = reqId;
     ctx.done = false;
     ctx.abort = false;
     ctx.httpCode = 0;
@@ -1186,6 +1218,7 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
         // do zwyklego, blokujacego POST na tym samym watku.
         Serial.println("[SOL] xTaskCreate failed — fallback na blokujacy POST");
         logEvent("SOL", "xTaskCreate failed, fallback blocking POST");
+        _solBeginRequest(&ctx, 0);
         ctx.httpCode = wifiEnsureDns() ? http.POST((uint8_t*)body, bodyLen) : -1;
         ctx.done = true;
     }
@@ -1227,6 +1260,8 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
     // taska = realna korupcja stosu. client.stop() w praktyce odblokowuje
     // blokujace gniazdo lwIP niemal od razu; w najgorszym razie i tak czeka
     // sie nie dluzej niz standardowy timeout HTTPClienta sprzed tej zmiany.
+
+    memset(devToken, 0, sizeof(devToken));   // task skonczyl — token juz niepotrzebny
 
     int httpCode = ctx.httpCode;
     res.http = httpCode;
