@@ -97,7 +97,7 @@ Klucz prywatny podpisywania firmware i klucz Flash Encryption **nie znajdują si
 
 Reset fabryczny dostępny jest z Ustawień oraz — bez znajomości kodu AI — przez przytrzymanie **C/CE przez 5 s** w trybie kalkulatora (z potwierdzeniem OK). Usuwa: sieci WiFi i hasła, klucz licencji, kod AI, panic key, ustawienia, historię, mapowanie klawiatury, kolejkę offline (NVS `kalkmate`, `kalkhist`, `kalkmap`, `kalkoq`), wszystkie pliki SPIFFS (notatki, sprawdziany, historia, zdjęcia z kolejki, log zdarzeń) oraz wewnętrzną konfigurację WiFi ESP-IDF. Ustawia flagę `unpair` — przy następnym połączeniu serwer odpina urządzenie od konta użytkownika. Zachowywany jest wyłącznie token urządzenia (tożsamość sprzętu, nie dane użytkownika), stan walidacji OTA i znacznik prowizjonowania.
 
-Dane przechowywane po stronie serwera (konto, notatki, historia, zdjęcia zadań zapisywane na serwerze z przypisaniem do właściciela urządzenia) podlegają Polityce Prywatności i RODO; administrator: KAJPA Kacper Popko, kontakt@kajpa.pl. Okres przechowywania zdjęć zadań na serwerze: **[DO UZUPEŁNIENIA]**.
+Dane przechowywane po stronie serwera (konto, notatki, historia, zdjęcia zadań zapisywane na serwerze z przypisaniem do właściciela urządzenia) podlegają Polityce Prywatności i RODO; administrator: KAJPA Kacper Popko, kontakt@kalkmate.pl. Okres przechowywania zdjęć zadań na serwerze: **[DO UZUPEŁNIENIA]**.
 
 ## 5. Art. 3 ust. 3 lit. f) — ochrona przed oszustwami (EN 18031-3)
 
@@ -118,7 +118,7 @@ Urządzenie nie umożliwia przekazywania pieniędzy, wartości pieniężnej ani 
 ### 6.2 Zarządzanie podatnościami
 
 - Poprawki bezpieczeństwa dystrybuowane są przez podpisane OTA. Przeglądy bezpieczeństwa kodu urządzenia i serwera przeprowadzono w czerwcu 2026 (audyt i naprawy — `docs/security/`) oraz w październiku 2026 (m.in. wprowadzenie weryfikacji TLS, wymogu podpisu OTA, tokenu urządzenia, rate-limitów, usunięcia sekretów z logów).
-- Kontakt w sprawie zgłaszania podatności: kontakt@kajpa.pl.
+- Kontakt w sprawie zgłaszania podatności: kontakt@kalkmate.pl.
 - Deklarowany okres wsparcia aktualizacjami bezpieczeństwa: **[DO UZUPEŁNIENIA]**.
 
 ## 7. Ryzyka rezydualne i znane ograniczenia

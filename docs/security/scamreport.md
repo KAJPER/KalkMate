@@ -146,7 +146,7 @@ Firma jest zarejestrowana i podaje pełne dane:
 - **REGON:** 545011444  
 - **Adres:** ul. Zastawie I 37, 16-070 Choroszcz
 - **Telefon:** 600 580 888
-- **E-mail:** kontakt@kajpa.pl
+- **E-mail:** kontakt@kalkmate.pl
 
 To są weryfikowalne dane publiczne. Firma istnieje.
 

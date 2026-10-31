@@ -49,7 +49,7 @@ Ocena została przeprowadzona w oparciu o specyfikację oprogramowania układowe
 5. **Procedura pełnego usuwania danych (Factory Reset)**:  
    Użytkownik ma możliwość wywołania funkcji przywracania ustawień fabrycznych bezpośrednio z menu urządzenia. Procedura ta bezpowrotnie usuwa wszystkie dane konfiguracji WiFi, klucze licencji, kody AI, lokalną historię zapytań AI oraz pobrane z serwera notatki/sprawdziany poprzez wyczyszczenie przestrzeni NVS oraz sformatowanie partycji systemowej SPIFFS.
 6. **Polityka RODO / Privacy Policy**:  
-   Sposób przetwarzania danych w systemie KalkMate (w tym kontakt e-mailowy `kontakt@kajpa.pl`) podlega regulacjom RODO i jest ujęty w Polityce Prywatności serwera.
+   Sposób przetwarzania danych w systemie KalkMate (w tym kontakt e-mailowy `kontakt@kalkmate.pl`) podlega regulacjom RODO i jest ujęty w Polityce Prywatności serwera.
 
 ---
 

@@ -236,7 +236,7 @@ static void _infoDrawPage(U8G2 &d, int page) {
                         "Camera error? Restart device",
                         "Kamerafehler? Geraet neu starten",
                         "Chyba kamery? Restartujte"),
-                "Kontakt: kacper@kajpa.pl"
+                "Kontakt: kontakt@kalkmate.pl"
             );
             break;
 

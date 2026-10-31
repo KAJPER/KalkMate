@@ -39,7 +39,7 @@ SET_LOOP_TASK_STACK_SIZE(24 * 1024);
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "2.0.5"
+#define FW_VERSION "2.0.6"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
