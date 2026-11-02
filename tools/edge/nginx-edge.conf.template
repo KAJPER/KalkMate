@@ -40,12 +40,15 @@ server {
         proxy_pass https://kalkmate_origin;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
-        # Serwer glowny widzi zwykle zapytanie do kalkmate.pl.
-        proxy_set_header Host kalkmate.pl;
+        # Serwer glowny widzi zwykle zapytanie do api.kalkmate.pl (host kalkulatorow, zawsze bez Cloudflare).
+        proxy_set_header Host api.kalkmate.pl;
         proxy_ssl_server_name on;
-        proxy_ssl_name kalkmate.pl;
+        proxy_ssl_name api.kalkmate.pl;
         proxy_ssl_verify on;
         proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        # Domyslnie 1 — za malo dla lancucha Let's Encrypt (certyfikat -> YR1 -> root):
+        # nginx zwracal 502 "unable to get local issuer certificate".
+        proxy_ssl_verify_depth 3;
         proxy_ssl_session_reuse on;
         # Prawdziwe IP kalkulatora (nadpisuje to, co przyslal klient) —
         # Mediolan ufa temu naglowkowi tylko od IP tego serwera (milan-realip.conf).

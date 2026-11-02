@@ -2,7 +2,8 @@
 // ============================================================================
 // server_select.h — wybor najszybszego serwera dla /api/device/solve
 // ============================================================================
-// Glowny serwer (aplikacja + baza + AI) stoi w Mediolanie: KALKMATE_HOST.
+// Glowny serwer (aplikacja + baza + AI) stoi w Mediolanie: KALKMATE_HOST
+// (od fw 2.1.0 api.kalkmate.pl).
 // Serwery posredniczace (np. ca.kalkmate.pl w Kanadzie) to sam nginx, ktory
 // przekazuje zapytania do Mediolanu po stalym polaczeniu keep-alive — patrz
 // tools/edge/. Kalkulator daleko od Europy robi handshake TLS i wysyla
@@ -11,7 +12,7 @@
 //
 // Tylko solve (najwiekszy upload + najczesciej uzywane). Rejestracja,
 // notatki, sprawdziany, zdalna pomoc i OTA zostaja na KALKMATE_HOST (OTA
-// i tak przyjmuje tylko https://kalkmate.pl/, ota_update.h).
+// i tak przyjmuje tylko https://api.kalkmate.pl/, ota_update.h).
 //
 // Wybor: czas polaczenia TCP (bez TLS — szybko) do kazdego hosta, lepszy
 // z 2 prob. Serwer posredniczacy wygrywa tylko, gdy jest szybszy o
@@ -33,7 +34,7 @@
 
 // Indeks 0 = serwer glowny (zawsze ostatnia deska ratunku).
 static const char* const _SRV_HOSTS[] = {
-    KALKMATE_HOST,       // Mediolan (glowny)
+    KALKMATE_HOST,       // Mediolan (glowny, api.kalkmate.pl)
     "ca.kalkmate.pl",    // Kanada (nginx -> Mediolan)
 };
 static const int _SRV_COUNT = sizeof(_SRV_HOSTS) / sizeof(_SRV_HOSTS[0]);

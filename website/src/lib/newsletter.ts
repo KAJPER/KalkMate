@@ -265,7 +265,7 @@ export function langForCountry(country: string | null | undefined): NlLang | nul
   return COUNTRY_LANG[c] ?? "en";
 }
 
-function langForEmail(email: string): NlLang | null {
+export function langForEmail(email: string): NlLang | null {
   const tld = email.split(".").pop()?.toLowerCase() || "";
   if (TLD_LANG[tld]) return TLD_LANG[tld];
   if (tld.length === 2 && !GENERIC_TLDS.has(tld)) return "en";

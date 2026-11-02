@@ -8,6 +8,7 @@ import { ensureDailyBackup } from "@/lib/dbBackup";
 import { purgeOldSupportChats } from "@/lib/supportChat";
 import { sendReviewRequests, type ReviewRequestResult } from "@/lib/reviews";
 import { maybeRunDailyClaritySnapshot } from "@/lib/clarity";
+import { runFwUpdateNotices, type FwNoticeResult } from "@/lib/fwUpdateNotice";
 
 // GET /api/cron/tracking — wolane co godzine z crona na serwerze
 // (/home/ubuntu/kalkulator/tracking-cron.sh) z naglowkiem x-cron-secret.
@@ -17,6 +18,8 @@ import { maybeRunDailyClaritySnapshot } from "@/lib/clarity";
 // "dokoncz platnosc" (src/lib/paymentReminders.ts) i anuluje porzucone
 // zamowienia (platnosc pending starsza niz STALE_DAYS) — src/lib/orderCleanup.ts.
 // Raz na dobe (od 06:00 Warsaw) snapshot Microsoft Clarity — src/lib/clarity.ts.
+// Przypomnienia "zaktualizuj firmware" (tylko gdy admin wystartowal kampanie
+// w /admin/aktualizacje) — src/lib/fwUpdateNotice.ts.
 //
 // Historia: poprzednia wersja iterowala po Stripe PaymentIntents (zamowienia
 // ida dzis przez P24 -> nic nie znajdowala), odpytywala zly URL InPost
@@ -112,6 +115,16 @@ export async function GET(req: NextRequest) {
       errors.push(`reviewRequests: ${(e as Error).message}`);
     }
 
+    // Maile "zaktualizuj kalkulator" (aktywna kampania, max 50 na przebieg, co intervalDays).
+    let fwUpdateNotices: FwNoticeResult | null = null;
+    try {
+      fwUpdateNotices = await runFwUpdateNotices();
+      if (fwUpdateNotices.failed.length) errors.push(`fwUpdateNotices: ${fwUpdateNotices.failed.length} failed`);
+    } catch (e) {
+      console.error("[cron/tracking] fw update notices failed:", e);
+      errors.push(`fwUpdateNotices: ${(e as Error).message}`);
+    }
+
     // Najpierw porzucone zamowienia — zeby sledzenie nie odpytywalo InPost
     // o numery, ktorych i tak nie bedzie.
     let stale: Awaited<ReturnType<typeof cancelStaleUnpaidOrders>> = { cancelled: [], skippedShipped: [] };
@@ -171,6 +184,7 @@ export async function GET(req: NextRequest) {
       },
       paymentReminders: reminders,
       reviewRequests,
+      fwUpdateNotices,
       backup,
       clarity,
       staleUnpaid: {
@@ -184,6 +198,7 @@ export async function GET(req: NextRequest) {
     console.log(
       `[cron/tracking] checked=${summary.checked} changed=${summary.changed} emails=${summary.emailsSent} unavailable=${summary.unavailable} ` +
       `bcChecked=${summary.basecourier.checked} bcChanged=${summary.basecourier.changed} staleCancelled=${stale.cancelled.length} reminders=${reminders.sent.length} reviewRequests=${reviewRequests.sent.length}` +
+      (fwUpdateNotices?.campaignId ? ` fwNotices=${fwUpdateNotices.sent.length}` : "") +
       (errors.length ? ` errors=${errors.length}` : "")
     );
     return NextResponse.json(summary);

@@ -32,14 +32,19 @@ SET_LOOP_TASK_STACK_SIZE(24 * 1024);
 #include "soc/rtc_cntl_reg.h"
 
 // Konfiguracja serwera AI — ustaw przed kompilacja
-#define KALK_SERVER_URL "https://kalkmate.pl"
+// Od fw 2.1.0 caly ruch urzadzenia idzie na api.kalkmate.pl (DNS-only, cert
+// Let's Encrypt) — kalkmate.pl moze trafic za proxy Cloudflare (inne CA).
+// KALKMATE_HOST (wifi_persist.h) musi wskazywac ten sam host.
+#define KALK_SERVER_URL "https://api.kalkmate.pl"
+// Strona WWW dla przegladarki (QR do panelu itp.) — nie dla ruchu urzadzenia.
+#define KALK_WEB_URL    "https://kalkmate.pl"
 // API key NIE jest w plaintexcie binarki - dekoduje sie z XOR runtime.
 // Patrz key_obfuscate.h dla mechanizmu.
 #include "key_obfuscate.h"
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "2.0.7"
+#define FW_VERSION "2.1.0"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -645,7 +650,7 @@ static void _vbatWatchdogLoop() {
 }
 
 // OTA walidacja: firmware po OTA jest zatwierdzany dopiero po pierwszej
-// odpowiedzi HTTPS 200 z kalkmate.pl (otaConfirmServerOk() w device_account.h
+// odpowiedzi HTTPS 200 z api.kalkmate.pl (otaConfirmServerOk() w device_account.h
 // i otaCheck()) — samo WL_CONNECTED nie dowodzi, ze TLS/serwer dzialaja.
 // Tu: w niezwalidowanym boocie po OTA, gdy WiFi wstanie w menu AI, raz
 // rejestrujemy urzadzenie (to samo co i tak robi pierwsze "Rozwiaz zadanie"),
@@ -715,7 +720,7 @@ void loop() {
     handlePanicIfRequested();  // jesli flaga -> kalkulator
     _vbatWatchdogLoop();    // anti-brownout: shutdown przy VBAT<3.2V
     _wifiAutoConnectLazy(); // auto-WiFi 3s po wejsciu w AI menu
-    _otaValidateLoop();     // OTA health-check: po OTA raz HTTPS do kalkmate.pl (walidacja)
+    _otaValidateLoop();     // OTA health-check: po OTA raz HTTPS do api.kalkmate.pl (walidacja)
     _timeSyncLoop();        // NTP (TLS od tego nie zalezy — patrz komentarz przy _timeSyncLoop)
     _dnsFallbackLoop();     // DNS 8.8.8.8/1.1.1.1 — niektore AP maja wadliwy wlasny DNS
     _dnsWarmLoop();         // rozgrzewka DNS w tle (osobne zadanie) po uzyskaniu IP

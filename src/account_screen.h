@@ -233,8 +233,11 @@ inline void showDeviceIdQrScreen(U8G2 &d) {
     }
 
     // URL: kalkmate.pl/claim?d=<MAC>  (po sparowaniu nie trzeba kodu licencji,
-    // user na stronie wpisze unlockCode)
-    String url = String(KALK_SERVER_URL) + "/claim?d=" + deviceId;
+    // user na stronie wpisze unlockCode). Strona WWW, nie host API.
+#ifndef KALK_WEB_URL
+#define KALK_WEB_URL "https://kalkmate.pl"
+#endif
+    String url = String(KALK_WEB_URL) + "/claim?d=" + deviceId;
 
     // Generuj QR code (wersja 4 = 33x33 modules, mieści się 70+ znakow ASCII)
     QRCode qrcode;

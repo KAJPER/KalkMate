@@ -386,7 +386,7 @@ static bool wifiLoadBssidChannel(const char* ssidWanted, uint8_t* bssidOut, int3
 }
 
 #ifndef KALKMATE_HOST
-#define KALKMATE_HOST "kalkmate.pl"
+#define KALKMATE_HOST "api.kalkmate.pl"   // host API urzadzenia (= KALK_SERVER_URL)
 #endif
 
 static void _wifiSetDns(const IPAddress& a, const IPAddress& b) {

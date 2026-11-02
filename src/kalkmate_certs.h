@@ -1,5 +1,6 @@
 #pragma once
-// kalkmate_certs.h — pakiet root CA Let's Encrypt (ISRG) dla HTTPS do kalkmate.pl
+// kalkmate_certs.h — pakiet root CA Let's Encrypt (ISRG) dla HTTPS do api.kalkmate.pl
+// (+ ca.kalkmate.pl; od fw 2.1.0 urzadzenie nie laczy sie juz z kalkmate.pl)
 // Uzywany we wszystkich polaczeniach HTTPS zamiast setInsecure()
 // (client.setCACert(KALKMATE_CA_CERT)).
 //
@@ -31,7 +32,7 @@
 // (CONFIG_MBEDTLS_HAVE_TIME_DATE nieustawione), wiec notAfter nie wylaczy TLS.
 //
 // Weryfikacja przed zmiana:
-//   openssl s_client -connect kalkmate.pl:443 -servername kalkmate.pl -CAfile bundle.pem -verify_return_error
+//   openssl s_client -connect api.kalkmate.pl:443 -servername api.kalkmate.pl -CAfile bundle.pem -verify_return_error
 // Serwer musi nadal doklejac cross-sign do X1, dopoki w terenie sa urzadzenia
 // z firmware sprzed tego pakietu (one ufaja WYLACZNIE X1).
 

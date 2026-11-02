@@ -175,6 +175,18 @@ inline OtaInfo otaCheck() {
     }
     http.addHeader("x-fw-version", FW_VERSION);
     http.addHeader("x-hw-variant", _OTA_HW_VARIANT);   // K4
+    {
+        // Token urzadzenia — serwer zapisuje wtedy wersje firmware przy kazdym
+        // sprawdzeniu (panel admina: Aktualizacje firmware). Odczyt wprost z NVS
+        // "kalkid"/"dev_token" (jak wifiLoadDeviceToken), bo ten plik jest
+        // dolaczany przed wifi_persist.h. Brak tokenu = bez naglowka.
+        Preferences p;
+        if (p.begin("kalkid", true)) {
+            String tok = p.getString("dev_token", "");
+            p.end();
+            if (tok.length() > 0) http.addHeader("x-device-token", tok);
+        }
+    }
     http.setTimeout(_OTA_HTTP_TIMEOUT_MS);
 
     Serial.printf("[OTA] check: %s\n", url.c_str());
@@ -188,7 +200,7 @@ inline OtaInfo otaCheck() {
         info.error = String("HTTP ") + code;
         return info;
     }
-    // Udane HTTPS do kalkmate.pl = ten firmware umie sie zaktualizowac dalej.
+    // Udane HTTPS do api.kalkmate.pl = ten firmware umie sie zaktualizowac dalej.
     otaConfirmServerOk();
 
     info.latestVersion = _otaJsonField(body, "version");
@@ -328,7 +340,7 @@ inline size_t _otaBase64Decode(const String& in, uint8_t* out, size_t outMax) {
 //       uczen, ktory kilka razy wlaczy urzadzenie tylko jako kalkulator, nie
 //       wywola falszywego rollbacku. Firmware NIE jest wtedy jeszcze zatwierdzany.
 //    3. otaConfirmServerOk() / otaMarkValid() — po pierwszej odpowiedzi HTTPS
-//       200 z kalkmate.pl (register / account-status / firmware check).
+//       200 z api.kalkmate.pl (register / account-status / firmware check).
 //       Czysci flage. Samo WL_CONNECTED nie wystarcza: firmware z zepsutym
 //       TLS polaczylby sie z WiFi, ale nie pobralby juz zadnej aktualizacji.
 //
@@ -380,11 +392,11 @@ inline bool otaMarkValid() {
         return false;
     }
     _otaPendingThisBoot = false;
-    Serial.println("[OTA] firmware zawalidowany (HTTPS 200 z kalkmate.pl)");
+    Serial.println("[OTA] firmware zawalidowany (HTTPS 200 z api.kalkmate.pl)");
     return true;
 }
 
-// Wolac po kazdej odpowiedzi HTTP 200 z kalkmate.pl. Pierwsze udane
+// Wolac po kazdej odpowiedzi HTTP 200 z api.kalkmate.pl. Pierwsze udane
 // wywolanie w danym boocie zatwierdza firmware po OTA; kolejne to no-op.
 inline void otaConfirmServerOk() {
     static bool _done = false;
@@ -513,7 +525,8 @@ static bool _otaBatteryOk(U8G2 &d) {
 //  Streaming SHA-256 + ECDSA verify przed commit (od v1.4.1).
 //  Pokazuje postep na OLED. Po sukcesie wywoluje ESP.restart().
 // ---------------------------------------------------------------------
-inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "") {
+inline bool otaInstall(U8G2 &d, const String& binUrlIn, const String& sigB64 = "") {
+    String binUrl = binUrlIn;
     Serial.printf("[OTA] install: %s\n", binUrl.c_str());
 
     if (WiFi.status() != WL_CONNECTED) {
@@ -536,8 +549,14 @@ inline bool otaInstall(U8G2 &d, const String& binUrl, const String& sigB64 = "")
     }
 #endif
 
-    // C5: walidacja domeny przed pobraniem — zapobiega przekierowaniu na obcy serwer
-    if (!binUrl.startsWith("https://kalkmate.pl/")) {
+    // C5: walidacja domeny przed pobraniem — zapobiega przekierowaniu na obcy serwer.
+    // Stary format (https://kalkmate.pl/...) przepisujemy na api.kalkmate.pl:
+    // ten sam serwer, a kalkmate.pl moze byc za Cloudflare (inne CA niz ISRG).
+    if (binUrl.startsWith("https://kalkmate.pl/")) {
+        binUrl = String("https://api.kalkmate.pl/") + binUrl.substring(20);
+        Serial.printf("[OTA] URL -> %s\n", binUrl.c_str());
+    }
+    if (!binUrl.startsWith("https://api.kalkmate.pl/")) {
         Serial.printf("[OTA] ODRZUCONO: zly URL firmware: %s\n", binUrl.c_str());
         _otaDrawProgress(d, _otaT("BLAD: zly URL!", "ERROR: bad URL!", "FEHLER: falsche URL!", "CHYBA: spatna URL!"), 0, _OTA_UI_ERROR);
         delay(3000);

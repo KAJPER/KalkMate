@@ -2194,3 +2194,346 @@ export function reviewRequestEmail(d: ReviewRequestData, locale: EmailLocale = "
         </div>`,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Zaktualizuj kalkulator (mail serwisowy, lib/fwUpdateNotice.ts)
+// ---------------------------------------------------------------------------
+export interface FwUpdateEmailData {
+  devices: { deviceId: string; firmwareVersion: string | null }[]; // deviceId juz maskowane, np. "••••3F2A"
+  targetVersion: string;  // np. "2.1.0"
+  deadline: number;       // ms
+  helpUrl: string;        // https://kalkmate.pl/pomoc#ota albo /<lang>/pomoc#ota
+}
+
+// d = sformatowana data (tekst albo gotowy HTML), v/p/m = gotowy HTML.
+// menu = etykiety dokladnie jak na ekranie urzadzenia (ASCII, z firmware).
+const FW_TX: Record<EmailLocale, {
+  subject: (d: string) => string;
+  eyebrow: (d: string) => string;
+  headline: string;
+  lead: (v: string, many: boolean) => string;
+  required: string;
+  unknown: string;
+  body: (d: string) => string;
+  free: string;
+  how: string;
+  steps: [string, (p: string) => string, string];
+  menu: string;
+  cta: string;
+  help: (m: string) => string;
+  why: string;
+  footerLabel: string;
+}> = {
+  pl: {
+    subject: (d) => `Zaktualizuj KalkMate do ${d}`,
+    eyebrow: (d) => `Aktualizacja · do ${d}`,
+    headline: "Zaktualizuj swój KalkMate",
+    lead: (v, many) => many
+      ? `Twoje kalkulatory KalkMate potrzebują aktualizacji oprogramowania do wersji ${v} lub nowszej.`
+      : `Twój kalkulator KalkMate potrzebuje aktualizacji oprogramowania do wersji ${v} lub nowszej.`,
+    required: "Wymagana wersja",
+    unknown: "nieznana",
+    body: (d) => `Po ${d} starsze oprogramowanie przestanie łączyć się z naszymi serwerami — rozwiązywanie zadań z AI, synchronizacja notatek i sprawdzianów oraz aktualizacje nie będą działać.`,
+    free: "Aktualizacja jest bezpłatna.",
+    how: "Jak zaktualizować",
+    steps: [
+      "Połącz kalkulator z WiFi i upewnij się, że bateria jest naładowana (albo podłącz ładowarkę USB-C).",
+      (p) => `Wejdź w ${p}.`,
+      "Naciśnij <strong>OK</strong>, aby zainstalować — trwa to około minuty. Nie wyłączaj kalkulatora w trakcie aktualizacji.",
+    ],
+    menu: "Ustawienia → System → Aktualizacja",
+    cta: "Instrukcja",
+    help: (m) => `Problem? Napisz do nas: ${m}`,
+    why: "To wiadomość serwisowa: dostajesz ją, bo kalkulator sparowany z Twoim kontem KalkMate ma nieaktualne oprogramowanie.",
+    footerLabel: "Wiadomość serwisowa",
+  },
+  de: {
+    subject: (d) => `Aktualisiere deinen KalkMate bis zum ${d}`,
+    eyebrow: (d) => `Update · bis ${d}`,
+    headline: "Aktualisiere deinen KalkMate",
+    lead: (v, many) => many
+      ? `Deine KalkMate-Rechner brauchen ein Software-Update auf Version ${v} oder neuer.`
+      : `Dein KalkMate-Rechner braucht ein Software-Update auf Version ${v} oder neuer.`,
+    required: "Erforderliche Version",
+    unknown: "unbekannt",
+    body: (d) => `Nach dem ${d} kann ältere Software keine Verbindung mehr zu unseren Servern herstellen — KI-Lösungen, die Synchronisierung von Notizen und Tests sowie Updates funktionieren dann nicht mehr.`,
+    free: "Das Update ist kostenlos.",
+    how: "So aktualisierst du",
+    steps: [
+      "Verbinde den Rechner mit dem WLAN und achte darauf, dass der Akku geladen ist (oder schließe ein USB-C-Ladegerät an).",
+      (p) => `Öffne ${p}.`,
+      "Drücke <strong>OK</strong>, um das Update zu installieren — das dauert etwa eine Minute. Schalte den Rechner währenddessen nicht aus.",
+    ],
+    menu: "Einstellungen → System → Software-Update",
+    cta: "Anleitung",
+    help: (m) => `Probleme? Schreib uns: ${m}`,
+    why: "Dies ist eine Servicenachricht: Du erhältst sie, weil ein mit deinem KalkMate-Konto verbundener Rechner veraltete Software verwendet.",
+    footerLabel: "Servicenachricht",
+  },
+  en: {
+    subject: (d) => `Update your KalkMate by ${d}`,
+    eyebrow: (d) => `Update · by ${d}`,
+    headline: "Update your KalkMate",
+    lead: (v, many) => many
+      ? `Your KalkMate calculators need a software update to version ${v} or later.`
+      : `Your KalkMate calculator needs a software update to version ${v} or later.`,
+    required: "Required version",
+    unknown: "unknown",
+    body: (d) => `After ${d}, older software will no longer be able to connect to our servers — AI solving, notes and tests sync, and updates will stop working.`,
+    free: "The update is free.",
+    how: "How to update",
+    steps: [
+      "Connect the calculator to WiFi and make sure the battery is charged (or plug in a USB-C charger).",
+      (p) => `Go to ${p}.`,
+      "Press <strong>OK</strong> to install — it takes about a minute. Don’t switch off the calculator during the update.",
+    ],
+    menu: "Settings → System → Software update",
+    cta: "Instructions",
+    help: (m) => `Having trouble? Write to us: ${m}`,
+    why: "This is a service message: you’re receiving it because a calculator paired with your KalkMate account is running outdated software.",
+    footerLabel: "Service message",
+  },
+  cs: {
+    subject: (d) => `Aktualizuj KalkMate do ${d}`,
+    eyebrow: (d) => `Aktualizace · do ${d}`,
+    headline: "Aktualizuj svůj KalkMate",
+    lead: (v, many) => many
+      ? `Tvé kalkulačky KalkMate potřebují aktualizovat software na verzi ${v} nebo novější.`
+      : `Tvá kalkulačka KalkMate potřebuje aktualizovat software na verzi ${v} nebo novější.`,
+    required: "Požadovaná verze",
+    unknown: "neznámá",
+    body: (d) => `Po ${d} se starší software přestane připojovat k našim serverům — řešení úloh pomocí AI, synchronizace poznámek a testů ani aktualizace nebudou fungovat.`,
+    free: "Aktualizace je zdarma.",
+    how: "Jak aktualizovat",
+    steps: [
+      "Připoj kalkulačku k WiFi a ujisti se, že je baterie nabitá (nebo připoj nabíječku USB-C).",
+      (p) => `Otevři ${p}.`,
+      "Stiskni <strong>OK</strong> pro instalaci — trvá asi minutu. Během aktualizace kalkulačku nevypínej.",
+    ],
+    menu: "Nastaveni → System → Aktualizace",
+    cta: "Návod",
+    help: (m) => `Máš problém? Napiš nám: ${m}`,
+    why: "Toto je servisní zpráva: dostáváš ji, protože kalkulačka spárovaná s tvým účtem KalkMate používá zastaralý software.",
+    footerLabel: "Servisní zpráva",
+  },
+  sk: {
+    subject: (d) => `Aktualizuj KalkMate do ${d}`,
+    eyebrow: (d) => `Aktualizácia · do ${d}`,
+    headline: "Aktualizuj svoj KalkMate",
+    lead: (v, many) => many
+      ? `Tvoje kalkulačky KalkMate potrebujú aktualizovať softvér na verziu ${v} alebo novšiu.`
+      : `Tvoja kalkulačka KalkMate potrebuje aktualizovať softvér na verziu ${v} alebo novšiu.`,
+    required: "Požadovaná verzia",
+    unknown: "neznáma",
+    body: (d) => `Po ${d} sa starší softvér prestane pripájať k našim serverom — riešenie úloh pomocou AI, synchronizácia poznámok a testov ani aktualizácie nebudú fungovať.`,
+    free: "Aktualizácia je zadarmo.",
+    how: "Ako aktualizovať",
+    steps: [
+      "Pripoj kalkulačku k WiFi a uisti sa, že je batéria nabitá (alebo pripoj nabíjačku USB-C).",
+      (p) => `Otvor ${p}.`,
+      "Stlač <strong>OK</strong> na inštaláciu — trvá asi minútu. Počas aktualizácie kalkulačku nevypínaj.",
+    ],
+    menu: "Nastavenia → System → Aktualizacia",
+    cta: "Návod",
+    help: (m) => `Máš problém? Napíš nám: ${m}`,
+    why: "Toto je servisná správa: dostávaš ju, pretože kalkulačka spárovaná s tvojím účtom KalkMate používa zastaraný softvér.",
+    footerLabel: "Servisná správa",
+  },
+  lt: {
+    subject: (d) => `Atnaujink KalkMate iki ${d}`,
+    eyebrow: (d) => `Atnaujinimas · iki ${d}`,
+    headline: "Atnaujink savo KalkMate",
+    lead: (v, many) => many
+      ? `Tavo KalkMate skaičiuotuvams reikia atnaujinti programinę įrangą iki ${v} ar naujesnės versijos.`
+      : `Tavo KalkMate skaičiuotuvui reikia atnaujinti programinę įrangą iki ${v} ar naujesnės versijos.`,
+    required: "Reikalinga versija",
+    unknown: "nežinoma",
+    body: (d) => `Po ${d} senesnė programinė įranga nebegalės prisijungti prie mūsų serverių — neveiks uždavinių sprendimas su AI, užrašų ir testų sinchronizavimas bei atnaujinimai.`,
+    free: "Atnaujinimas nemokamas.",
+    how: "Kaip atnaujinti",
+    steps: [
+      "Prijunk skaičiuotuvą prie WiFi ir įsitikink, kad baterija įkrauta (arba prijunk USB-C įkroviklį).",
+      (p) => `Atidaryk ${p}.`,
+      "Paspausk <strong>OK</strong>, kad įdiegtum — tai užtrunka apie minutę. Atnaujinimo metu skaičiuotuvo neišjunk.",
+    ],
+    menu: "Nustatymai → Sistema → Atnaujinimas",
+    cta: "Instrukcija",
+    help: (m) => `Kyla problemų? Parašyk mums: ${m}`,
+    why: "Tai aptarnavimo pranešimas: jį gauni, nes su tavo KalkMate paskyra susietas skaičiuotuvas naudoja pasenusią programinę įrangą.",
+    footerLabel: "Aptarnavimo pranešimas",
+  },
+  be: {
+    subject: (d) => `Абнаві KalkMate да ${d}`,
+    eyebrow: (d) => `Абнаўленне · да ${d}`,
+    headline: "Абнаві свой KalkMate",
+    lead: (v, many) => many
+      ? `Твае калькулятары KalkMate патрабуюць абнаўлення прашыўкі да версіі ${v} або навейшай.`
+      : `Твой калькулятар KalkMate патрабуе абнаўлення прашыўкі да версіі ${v} або навейшай.`,
+    required: "Патрэбная версія",
+    unknown: "невядомая",
+    body: (d) => `Пасля ${d} старыя версіі прашыўкі перастануць злучацца з нашымі серверамі — рашэнне задач з AI, сінхранізацыя нататак і кантрольных, а таксама абнаўленні не будуць працаваць.`,
+    free: "Абнаўленне бясплатнае.",
+    how: "Як абнавіць",
+    steps: [
+      "Падключы калькулятар да WiFi і пераканайся, што батарэя зараджана (або падключы зарадку USB-C).",
+      (p) => `Адкрый ${p}.`,
+      "Націсні <strong>OK</strong>, каб усталяваць, — гэта займае каля хвіліны. Не выключай калькулятар падчас абнаўлення.",
+    ],
+    menu: "Nalady → Sistema → Abnaulennie",
+    cta: "Інструкцыя",
+    help: (m) => `Узніклі праблемы? Напішы нам: ${m}`,
+    why: "Гэта сэрвіснае паведамленне: ты атрымліваеш яго, бо калькулятар, звязаны з тваім акаўнтам KalkMate, працуе на састарэлай прашыўцы.",
+    footerLabel: "Сэрвіснае паведамленне",
+  },
+  es: {
+    subject: (d) => `Actualiza tu KalkMate antes del ${d}`,
+    eyebrow: (d) => `Actualización · antes del ${d}`,
+    headline: "Actualiza tu KalkMate",
+    lead: (v, many) => many
+      ? `Tus calculadoras KalkMate necesitan actualizar el software a la versión ${v} o posterior.`
+      : `Tu calculadora KalkMate necesita actualizar el software a la versión ${v} o posterior.`,
+    required: "Versión necesaria",
+    unknown: "desconocida",
+    body: (d) => `Después del ${d}, el software antiguo dejará de conectarse a nuestros servidores: la resolución de ejercicios con IA, la sincronización de notas y exámenes y las actualizaciones dejarán de funcionar.`,
+    free: "La actualización es gratuita.",
+    how: "Cómo actualizar",
+    steps: [
+      "Conecta la calculadora al WiFi y asegúrate de que la batería esté cargada (o conecta un cargador USB-C).",
+      (p) => `Abre ${p}.`,
+      "Pulsa <strong>OK</strong> para instalar: tarda alrededor de un minuto. No apagues la calculadora durante la actualización.",
+    ],
+    menu: "Ajustes → Sistema → Actualizacion",
+    cta: "Instrucciones",
+    help: (m) => `¿Algún problema? Escríbenos: ${m}`,
+    why: "Este es un mensaje de servicio: lo recibes porque una calculadora vinculada a tu cuenta de KalkMate usa un software desactualizado.",
+    footerLabel: "Mensaje de servicio",
+  },
+  pt: {
+    subject: (d) => `Atualiza o teu KalkMate até ${d}`,
+    eyebrow: (d) => `Atualização · até ${d}`,
+    headline: "Atualiza o teu KalkMate",
+    lead: (v, many) => many
+      ? `As tuas calculadoras KalkMate precisam de uma atualização do software para a versão ${v} ou mais recente.`
+      : `A tua calculadora KalkMate precisa de uma atualização do software para a versão ${v} ou mais recente.`,
+    required: "Versão necessária",
+    unknown: "desconhecida",
+    body: (d) => `Depois de ${d}, o software antigo deixará de se ligar aos nossos servidores — a resolução de exercícios com IA, a sincronização de notas e testes e as atualizações deixarão de funcionar.`,
+    free: "A atualização é gratuita.",
+    how: "Como atualizar",
+    steps: [
+      "Liga a calculadora ao Wi-Fi e confirma que a bateria está carregada (ou liga um carregador USB-C).",
+      (p) => `Abre ${p}.`,
+      "Prime <strong>OK</strong> para instalar — demora cerca de um minuto. Não desligues a calculadora durante a atualização.",
+    ],
+    menu: "Definicoes → Sistema → Atualizacao",
+    cta: "Instruções",
+    help: (m) => `Algum problema? Escreve-nos: ${m}`,
+    why: "Esta é uma mensagem de serviço: recebes esta mensagem porque uma calculadora associada à tua conta KalkMate usa software desatualizado.",
+    footerLabel: "Mensagem de serviço",
+  },
+  fr: {
+    subject: (d) => `Mets à jour ton KalkMate avant le ${d}`,
+    eyebrow: (d) => `Mise à jour · avant le ${d}`,
+    headline: "Mets à jour ton KalkMate",
+    lead: (v, many) => many
+      ? `Tes calculatrices KalkMate doivent passer à la version ${v} du logiciel ou à une version plus récente.`
+      : `Ta calculatrice KalkMate doit passer à la version ${v} du logiciel ou à une version plus récente.`,
+    required: "Version requise",
+    unknown: "inconnue",
+    body: (d) => `Après le ${d}, les anciennes versions du logiciel ne pourront plus se connecter à nos serveurs : la résolution d’exercices par IA, la synchronisation des notes et des contrôles ainsi que les mises à jour ne fonctionneront plus.`,
+    free: "La mise à jour est gratuite.",
+    how: "Comment mettre à jour",
+    steps: [
+      "Connecte la calculatrice au Wi-Fi et vérifie que la batterie est chargée (ou branche un chargeur USB-C).",
+      (p) => `Ouvre ${p}.`,
+      "Appuie sur <strong>OK</strong> pour installer — cela prend environ une minute. N’éteins pas la calculatrice pendant la mise à jour.",
+    ],
+    menu: "Parametres → Systeme → Mise a jour",
+    cta: "Instructions",
+    help: (m) => `Un problème ? Écris-nous : ${m}`,
+    why: "Ceci est un message de service : tu le reçois car une calculatrice associée à ton compte KalkMate utilise un logiciel obsolète.",
+    footerLabel: "Message de service",
+  },
+  it: {
+    subject: (d) => `Aggiorna il tuo KalkMate entro il ${d}`,
+    eyebrow: (d) => `Aggiornamento · entro il ${d}`,
+    headline: "Aggiorna il tuo KalkMate",
+    lead: (v, many) => many
+      ? `Le tue calcolatrici KalkMate hanno bisogno di un aggiornamento del software alla versione ${v} o successiva.`
+      : `La tua calcolatrice KalkMate ha bisogno di un aggiornamento del software alla versione ${v} o successiva.`,
+    required: "Versione richiesta",
+    unknown: "sconosciuta",
+    body: (d) => `Dopo il ${d}, il software meno recente non potrà più connettersi ai nostri server: la risoluzione degli esercizi con l’IA, la sincronizzazione di note e verifiche e gli aggiornamenti smetteranno di funzionare.`,
+    free: "L’aggiornamento è gratuito.",
+    how: "Come aggiornare",
+    steps: [
+      "Collega la calcolatrice al Wi-Fi e assicurati che la batteria sia carica (o collega un caricabatterie USB-C).",
+      (p) => `Apri ${p}.`,
+      "Premi <strong>OK</strong> per installare: ci vuole circa un minuto. Non spegnere la calcolatrice durante l’aggiornamento.",
+    ],
+    menu: "Impostazioni → Sistema → Aggiornamento",
+    cta: "Istruzioni",
+    help: (m) => `Problemi? Scrivici: ${m}`,
+    why: "Questo è un messaggio di servizio: lo ricevi perché una calcolatrice associata al tuo account KalkMate usa un software non aggiornato.",
+    footerLabel: "Messaggio di servizio",
+  },
+};
+
+// Termin wg czasu polskiego (tak liczy kampania); fallback ISO.
+function fwDeadlineText(deadline: number, locale: EmailLocale): string {
+  try {
+    return new Intl.DateTimeFormat(INTL_LOCALE[locale] ?? "en-IE", {
+      day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Warsaw",
+    }).format(new Date(deadline));
+  } catch {
+    try { return new Date(deadline).toISOString().slice(0, 10); } catch { return ""; }
+  }
+}
+
+// "2.0.7" / "v2.0.7" -> "v2.0.7" (escapowane); brak -> "nieznana" itd.
+function fwVersionHtml(v: string | null | undefined, unknown: string): string {
+  const s = (v || "").trim().replace(/^v/i, "");
+  return s ? `v${escHtml(s)}` : `<span style="color:${C.paperDim};">${unknown}</span>`;
+}
+
+function fwStep(n: number, html: string): string {
+  return `<tr>
+    <td style="width:26px;vertical-align:top;padding:6px 0;font-family:${FONT_MONO};font-size:13px;color:${C.signal};font-weight:800;">${n}.</td>
+    <td style="vertical-align:top;padding:6px 0;font-family:${FONT_BODY};font-size:14.5px;line-height:1.6;color:${C.paperSub};">${html}</td>
+  </tr>`;
+}
+
+export function fwUpdateNoticeSubject(locale: EmailLocale, deadline: number): string {
+  const tx = FW_TX[locale] ?? FW_TX.en;
+  return tx.subject(fwDeadlineText(deadline, locale));
+}
+
+export function fwUpdateNoticeEmail(d: FwUpdateEmailData, locale: EmailLocale = "pl"): string {
+  const tx = FW_TX[locale] ?? FW_TX.en;
+  const date = escHtml(fwDeadlineText(d.deadline, locale));
+  const strong = (s: string, color: string = C.paper) => `<strong style="color:${color};font-weight:700;">${s}</strong>`;
+  const target = fwVersionHtml(d.targetVersion, tx.unknown);
+  const devices = d.devices || [];
+  const rows =
+    devices.map((x) => infoRow(escHtml(x.deviceId), fwVersionHtml(x.firmwareVersion, tx.unknown))).join("") +
+    infoRow(tx.required, strong(target, C.signal));
+  const mail = `<a href="mailto:kontakt@kalkmate.pl" style="color:${C.paper};font-weight:600;">kontakt@kalkmate.pl</a>`;
+  const inner = `
+    ${eyebrowBlock(tx.eyebrow(date))}
+    ${headline(tx.headline, "KalkMate")}
+    ${lead(tx.lead(strong(target), devices.length > 1))}
+    ${infoTable(rows)}
+    ${body(`${tx.body(strong(date))} ${tx.free}`)}
+    <p style="margin:22px 0 6px 0;font-family:${FONT_MONO};font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${C.paperDim};font-weight:700;">${tx.how}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      ${fwStep(1, tx.steps[0])}${fwStep(2, tx.steps[1](strong(tx.menu)))}${fwStep(3, tx.steps[2])}
+    </table>
+    ${ctaButton(tx.cta, escHtml(d.helpUrl))}
+    ${body(tx.help(mail))}
+  `;
+  return shell(inner, locale, {
+    footerLabel: tx.footerLabel,
+    footerExtraHtml: `
+        <div style="font-family:${FONT_BODY};font-size:11.5px;color:${C.paperDim};margin-top:8px;line-height:1.5;">${tx.why}</div>`,
+  });
+}

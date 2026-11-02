@@ -35,7 +35,7 @@ extern const char* _accGetUnlockCode();
 #endif
 
 // otaConfirmServerOk() — walidacja firmware po OTA (pierwsza odpowiedz 200
-// z kalkmate.pl). W main.cpp ota_update.h jest juz wlaczony wczesniej przez
+// z api.kalkmate.pl). W main.cpp ota_update.h jest juz wlaczony wczesniej przez
 // settings_screen.h (pragma once => tu no-op).
 #include "ota_update.h"
 

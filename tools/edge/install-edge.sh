@@ -10,7 +10,7 @@ set -euo pipefail
 
 HOST="${1:?podaj host, np. ca.kalkmate.pl}"
 ORIGIN_IP="${2:?podaj IP serwera glownego (Mediolan)}"
-EMAIL="${3:?podaj e-mail do Let's Encrypt}"
+EMAIL="${3:?podaj e-mail do Lets Encrypt}"  # bez apostrofu: bash 5.3 traktuje go w ${..:?..} jak cudzyslow
 DIR="$(cd "$(dirname "$0")" && pwd)"
 # Bez IPv6 w jadrze (np. czesc VPS-ow OpenVZ) "listen [::]" wywala nginx.
 strip_v6() { if [[ -f /proc/net/if_inet6 ]]; then cat; else grep -v 'listen \[::\]'; fi; }
@@ -57,7 +57,8 @@ mkdir -p /etc/letsencrypt/renewal-hooks/deploy
 printf '#!/bin/sh\nsystemctl reload nginx\n' > /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 
-if command -v ufw >/dev/null && ufw status | grep -q active; then
+# "Status: active" (samo "active" pasuje tez do "inactive").
+if command -v ufw >/dev/null && ufw status | grep -q '^Status: active'; then
   ufw allow 80/tcp; ufw allow 443/tcp
 fi
 

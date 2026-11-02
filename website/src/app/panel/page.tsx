@@ -8,7 +8,7 @@ import dynamic from "next/dynamic";
 import { TOKEN_PACKS } from "@/lib/tokenPacks";
 import { usePanelLang } from "@/lib/usePanelLang";
 import PanelLangSwitcher from "@/components/PanelLangSwitcher";
-import { type Locale } from "@/lib/i18n";
+import { type Locale, localePath } from "@/lib/i18n";
 import ChatInput, { type ChatDraft, type ChatInputLabels } from "./_components/ChatInput";
 import { fetchJson, sendJson, type FetchJsonResult } from "./_lib/fetchJson";
 import { fileToDataUrl } from "./_lib/compressImage";
@@ -298,6 +298,10 @@ const PANEL_DICT: Record<Locale, {
   deleteNeedConfirm: (phrase: string) => string;
   featureUnavailable: string;
   session: string;
+  // baner aktualizacji firmware (kampania)
+  fwUpdTitle: (date: string) => string;
+  fwUpdBody: string;
+  fwUpdLink: string;
 }> = {
   pl: {
     logout: "Wyloguj ↗",
@@ -523,6 +527,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Podaj hasło albo wpisz „${p}”, aby potwierdzić.`,
     featureUnavailable: "Ta funkcja nie jest jeszcze dostępna — spróbuj później lub napisz do nas.",
     session: "/ Sesja",
+    fwUpdTitle: (d) => `Twój kalkulator wymaga aktualizacji do ${d}`,
+    fwUpdBody: "Po tym terminie starsze oprogramowanie przestanie łączyć się z serwerem (AI, notatki). Na kalkulatorze: Ustawienia → System → Aktualizacja → OK.",
+    fwUpdLink: "Instrukcja",
   },
   en: {
     logout: "Log out ↗",
@@ -748,6 +755,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Enter your password or type "${p}" to confirm.`,
     featureUnavailable: "This feature is not available yet — please try later or contact us.",
     session: "/ Session",
+    fwUpdTitle: (d) => `Your calculator needs an update by ${d}`,
+    fwUpdBody: "After this date older firmware will stop connecting to the server (AI, notes). On the calculator: Settings → System → Software update → OK.",
+    fwUpdLink: "Instructions",
   },
   de: {
     logout: "Abmelden ↗",
@@ -973,6 +983,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Gib dein Passwort ein oder tippe „${p}“ zur Bestätigung.`,
     featureUnavailable: "Diese Funktion ist noch nicht verfügbar — bitte versuche es später oder kontaktiere uns.",
     session: "/ Sitzung",
+    fwUpdTitle: (d) => `Dein Rechner braucht bis zum ${d} ein Update`,
+    fwUpdBody: "Danach verbindet sich ältere Firmware nicht mehr mit dem Server (KI, Notizen). Am Rechner: Einstellungen → System → Software-Update → OK.",
+    fwUpdLink: "Anleitung",
   },
   cs: {
     logout: "Odhlásit ↗",
@@ -1198,6 +1211,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Zadej heslo nebo napiš „${p}“ pro potvrzení.`,
     featureUnavailable: "Tato funkce zatím není k dispozici — zkus to později nebo nám napiš.",
     session: "/ Relace",
+    fwUpdTitle: (d) => `Tvoje kalkulačka potřebuje aktualizaci do ${d}`,
+    fwUpdBody: "Po tomto termínu se starší firmware přestane připojovat k serveru (AI, poznámky). Na kalkulačce: Nastaveni → System → Aktualizace → OK.",
+    fwUpdLink: "Návod",
   },
   sk: {
     logout: "Odhlásiť ↗",
@@ -1423,6 +1439,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Zadaj heslo alebo napíš „${p}“ na potvrdenie.`,
     featureUnavailable: "Táto funkcia zatiaľ nie je dostupná — skús to neskôr alebo nám napíš.",
     session: "/ Relácia",
+    fwUpdTitle: (d) => `Tvoja kalkulačka potrebuje aktualizáciu do ${d}`,
+    fwUpdBody: "Po tomto termíne sa starší firmvér prestane pripájať k serveru (AI, poznámky). Na kalkulačke: Nastavenia → System → Aktualizacia → OK.",
+    fwUpdLink: "Návod",
   },
   lt: {
     logout: "Atsijungti ↗",
@@ -1652,6 +1671,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Įvesk slaptažodį arba įrašyk „${p}“, kad patvirtintum.`,
     featureUnavailable: "Ši funkcija dar neprieinama — bandyk vėliau arba parašyk mums.",
     session: "/ Sesija",
+    fwUpdTitle: (d) => `Tavo skaičiuotuvą reikia atnaujinti iki ${d}`,
+    fwUpdBody: "Po šios datos senesnė programinė įranga nebesijungs prie serverio (DI, užrašai). Skaičiuotuve: Nustatymai → Sistema → Atnaujinimas → OK.",
+    fwUpdLink: "Instrukcija",
   },
   be: {
     logout: "Выйсці ↗",
@@ -1881,6 +1903,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Увядзі пароль або ўпішы «${p}», каб пацвердзіць.`,
     featureUnavailable: "Гэтая функцыя пакуль недаступная — паспрабуй пазней або напішы нам.",
     session: "/ Сесія",
+    fwUpdTitle: (d) => `Твой калькулятар трэба абнавіць да ${d}`,
+    fwUpdBody: "Пасля гэтай даты старая прашыўка перастане падключацца да сервера (ШІ, нататкі). На калькулятары: Nalady → Sistema → Abnaulennie → OK.",
+    fwUpdLink: "Інструкцыя",
   },
   es: {
     logout: "Cerrar sesión ↗",
@@ -2106,6 +2131,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Introduce tu contraseña o escribe «${p}» para confirmar.`,
     featureUnavailable: "Esta función aún no está disponible — inténtalo más tarde o escríbenos.",
     session: "/ Sesión",
+    fwUpdTitle: (d) => `Tu calculadora necesita una actualización antes del ${d}`,
+    fwUpdBody: "Después de esa fecha, el firmware antiguo dejará de conectarse al servidor (IA, notas). En la calculadora: Ajustes → Sistema → Actualizacion → OK.",
+    fwUpdLink: "Instrucciones",
   },
   pt: {
     logout: "Terminar sessão ↗",
@@ -2331,6 +2359,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Introduz a palavra-passe ou escreve «${p}» para confirmar.`,
     featureUnavailable: "Esta funcionalidade ainda não está disponível — tenta mais tarde ou escreve-nos.",
     session: "/ Sessão",
+    fwUpdTitle: (d) => `A tua calculadora tem de ser atualizada até ${d}`,
+    fwUpdBody: "Depois desta data, o firmware antigo deixará de se ligar ao servidor (IA, notas). Na calculadora: Definicoes → Sistema → Atualizacao → OK.",
+    fwUpdLink: "Instruções",
   },
   fr: {
     logout: "Déconnexion ↗",
@@ -2556,6 +2587,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Saisis ton mot de passe ou tape « ${p} » pour confirmer.`,
     featureUnavailable: "Cette fonctionnalité n'est pas encore disponible — réessaie plus tard ou écris-nous.",
     session: "/ Session",
+    fwUpdTitle: (d) => `Ta calculatrice doit être mise à jour avant le ${d}`,
+    fwUpdBody: "Après cette date, l'ancien firmware ne pourra plus se connecter au serveur (IA, notes). Sur la calculatrice : Parametres → Systeme → Mise a jour → OK.",
+    fwUpdLink: "Instructions",
   },
   it: {
     logout: "Esci ↗",
@@ -2781,6 +2815,9 @@ const PANEL_DICT: Record<Locale, {
     deleteNeedConfirm: (p) => `Inserisci la password oppure scrivi «${p}» per confermare.`,
     featureUnavailable: "Questa funzione non è ancora disponibile — riprova più tardi o scrivici.",
     session: "/ Sessione",
+    fwUpdTitle: (d) => `La tua calcolatrice va aggiornata entro il ${d}`,
+    fwUpdBody: "Dopo questa data il firmware precedente non si collegherà più al server (IA, note). Sulla calcolatrice: Impostazioni → Sistema → Aggiornamento → OK.",
+    fwUpdLink: "Istruzioni",
   },
 };
 
@@ -2998,6 +3035,21 @@ export default function PanelPage() {
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, activeTab, nlConsent]);
+  // Kampania aktualizacji firmware — baner nad zakladkami. Blad = brak banera.
+  const [fwUpd, setFwUpd] = useState<{ targetVersion: string | null; deadline: number | null } | null>(null);
+  useEffect(() => {
+    if (!authed) return;
+    const ac = new AbortController();
+    void (async () => {
+      const r = await fetchJson("/api/user/fw-update-status", { cache: "no-store", signal: ac.signal });
+      if (r.aborted || !r.ok || r.data?.needed !== true) return;
+      setFwUpd({
+        targetVersion: typeof r.data.targetVersion === "string" ? r.data.targetVersion : null,
+        deadline: typeof r.data.deadline === "number" ? r.data.deadline : null,
+      });
+    })();
+    return () => ac.abort();
+  }, [authed]);
   const toggleNewsletter = async () => {
     if (nlSaving || nlConsent === null) return;
     setNlSaving(true);
@@ -3813,6 +3865,31 @@ export default function PanelPage() {
             ))}
           </div>
         </div>
+
+        {/* Wymagana aktualizacja firmware (kampania z /admin/aktualizacje) */}
+        {fwUpd && (
+          <div role="alert" className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 border border-[#FFB800]/40 bg-[#FFB800]/[0.06] p-3 sm:p-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-[#FFB800]">
+                {t.fwUpdTitle(
+                  fwUpd.deadline != null
+                    ? new Date(fwUpd.deadline).toLocaleDateString(DATE_LOCALE[lang], {
+                        day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Warsaw",
+                      })
+                    : "—",
+                )}
+                {fwUpd.targetVersion && <span className="ml-2 km-mono-eyebrow text-[#FFB800]/70">→ v{fwUpd.targetVersion}</span>}
+              </p>
+              <p className="mt-1 text-sm text-[#F2EDE3]/70">{t.fwUpdBody}</p>
+            </div>
+            <Link
+              href={`${localePath(lang, "/pomoc")}#ota`}
+              className="km-mono-eyebrow shrink-0 self-start sm:self-center px-3 py-1.5 border border-[#FFB800]/50 text-[#FFB800] hover:bg-[#FFB800]/10 transition-colors"
+            >
+              {t.fwUpdLink} ↗
+            </Link>
+          </div>
+        )}
 
         {/* Powrót z płatności (Stripe / Przelewy24) */}
         {returnNotice && (
