@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { localeFromPathname, type Locale } from "@/lib/i18n";
+import { localeFromPathname, localePath, type Locale } from "@/lib/i18n";
 import { CONSENT_EVENT, CONSENT_STORAGE_KEY, hasAnalyticsConsent } from "@/components/consent";
 import { useCheckoutState } from "@/lib/checkoutBus";
 
@@ -263,7 +263,7 @@ export default function SupportWidget() {
   }, []);
 
   useEffect(() => {
-    if (hidden || open || NO_TEASER_PREFIXES.some((p) => pathname.startsWith(p))) return;
+    if (hidden || open || NO_TEASER_PREFIXES.some((p) => pathname.startsWith(p) || pathname.startsWith(`/${lang}${p}`))) return;
     const timers: ReturnType<typeof setTimeout>[] = [setTimeout(() => showTeaser("idle"), 35_000)];
     const seen = new Map<string, ReturnType<typeof setTimeout>>();
     const io = new IntersectionObserver((entries) => {
@@ -287,7 +287,7 @@ export default function SupportWidget() {
       io.disconnect();
       if (fine) document.removeEventListener("mouseout", onLeave);
     };
-  }, [pathname, hidden, open, showTeaser]);
+  }, [pathname, hidden, open, showTeaser, lang]);
 
   // Ponowne sprawdzenie po decyzji w banerze cookies (zaczepki czekaja na nia).
   useEffect(() => {
@@ -448,9 +448,9 @@ export default function SupportWidget() {
                 <input type="checkbox" required checked={terms} onChange={(e) => setTerms(e.target.checked)} className="mt-1 accent-[#D8FF3D]" />
                 <span>
                   {t.termsBefore}
-                  <Link href="/regulamin#sek-8" target="_blank" className="text-[#D8FF3D] hover:underline">{t.terms}</Link>
+                  <Link href={localePath(lang, "/regulamin#sek-8")} target="_blank" className="text-[#D8FF3D] hover:underline">{t.terms}</Link>
                   {t.termsMiddle}
-                  <Link href="/polityka-prywatnosci" target="_blank" className="text-[#D8FF3D] hover:underline">{t.privacy}</Link>
+                  <Link href={localePath(lang, "/polityka-prywatnosci")} target="_blank" className="text-[#D8FF3D] hover:underline">{t.privacy}</Link>
                   {t.termsAfter}
                 </span>
               </label>

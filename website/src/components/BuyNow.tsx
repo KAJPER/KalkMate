@@ -10,7 +10,7 @@ import type { ConfirmedPayment } from "@/components/CheckoutForm";
 import { useCart } from "@/components/CartContext";
 import { CONSENT_EVENT, hasAnalyticsConsent } from "@/components/consent";
 import { rememberCallback } from "@/app/auth/callback";
-import { type Locale } from "@/lib/i18n";
+import { localePath, type Locale } from "@/lib/i18n";
 import {
   ALL_COUNTRY_CODES, countryName, flagEmoji, dialCode, regionsFor, showsOptionalRegion, cityWithRegion, postcodeHint,
 } from "@/lib/countries";
@@ -2322,7 +2322,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                         onChange={(e) => setFormData({ ...formData, consent: e.target.checked })}
                         className="mt-1 accent-[#D8FF3D]" />
                       <span className="text-xs text-[#F2EDE3]/55 leading-relaxed">
-                        {t.consent1}<a href="/regulamin" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#D8FF3D]">{t.consentTerms}</a>{t.consent2}
+                        {t.consent1}<a href={localePath(lang, "/regulamin")} target="_blank" rel="noopener noreferrer" className="underline hover:text-[#D8FF3D]">{t.consentTerms}</a>{t.consent2}
                       </span>
                     </label>
 

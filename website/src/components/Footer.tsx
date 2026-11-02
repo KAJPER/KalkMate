@@ -425,8 +425,8 @@ export default function Footer({ lang = "pl" }: { lang?: Locale }) {
           <div className="lg:col-span-2">
             <p className="km-mono-eyebrow text-[#D8FF3D] mb-4">{t.legal}</p>
             <ul className="space-y-2.5">
-              <li><a href="/regulamin" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">{t.links.terms}</a></li>
-              <li><a href="/polityka-prywatnosci" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">{t.links.privacy}</a></li>
+              <li><a href={localePath(lang, "/regulamin")} className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">{t.links.terms}</a></li>
+              <li><a href={localePath(lang, "/polityka-prywatnosci")} className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">{t.links.privacy}</a></li>
               <li><a href="/reklamacja" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]">{t.links.complaint}</a></li>
               <li><a href="/docs/ce-declaration.pdf" className="text-[14.5px] text-[#F2EDE3]/70 hover:text-[#F2EDE3]" target="_blank" rel="noopener noreferrer">{t.links.ce}</a></li>
               <li>

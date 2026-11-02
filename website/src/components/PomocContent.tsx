@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import type React from "react";
 import Link from "next/link";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { localeHome, type Locale } from "@/lib/i18n";
+import { localeHome, localePath, type Locale } from "@/lib/i18n";
 
 // ============================================================
 // Tłumaczenia — współlokalizowane jak w Navigation.tsx / PANEL_DICT.
@@ -2031,8 +2031,8 @@ export default function PomocContent({ lang }: { lang: Locale }) {
             <p className="km-mono-eyebrow text-[#F2EDE3]/40 mt-2">{t.footerTagline}</p>
           </div>
           <div className="km-mono-eyebrow text-[#F2EDE3]/55 space-y-1">
-            <Link href="/regulamin" className="block hover:text-[#D8FF3D] transition-colors">{t.footerTerms}</Link>
-            <Link href="/polityka-prywatnosci" className="block hover:text-[#D8FF3D] transition-colors">{t.footerPrivacy}</Link>
+            <Link href={localePath(lang, "/regulamin")} className="block hover:text-[#D8FF3D] transition-colors">{t.footerTerms}</Link>
+            <Link href={localePath(lang, "/polityka-prywatnosci")} className="block hover:text-[#D8FF3D] transition-colors">{t.footerPrivacy}</Link>
             <a href="/docs/ce-declaration.pdf" target="_blank" rel="noopener noreferrer" className="block hover:text-[#D8FF3D] transition-colors">{t.footerCe}</a>
             <a href="mailto:kontakt@kalkmate.pl" className="block hover:text-[#D8FF3D] transition-colors">kontakt@kalkmate.pl</a>
           </div>

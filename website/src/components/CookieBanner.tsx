@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { localeFromPathname, type Locale } from "@/lib/i18n";
+import { localeFromPathname, localePath, type Locale } from "@/lib/i18n";
 import { CONSENT_EVENT, CONSENT_STORAGE_KEY, CONSENT_VERSION } from "@/components/consent";
 
 const content: Record<Locale, {
@@ -280,7 +280,7 @@ export default function CookieBanner() {
             <p className="mt-2 text-[12px] text-[#F2EDE3]/55">
               {t.moreInfo}
               <Link
-                href="/polityka-prywatnosci#sek-9"
+                href={localePath(lang, "/polityka-prywatnosci#sek-9")}
                 className="text-[#D8FF3D] hover:underline"
               >
                 {t.privacyLink}

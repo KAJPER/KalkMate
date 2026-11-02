@@ -35,26 +35,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     alternates: pomocAlt,
   }));
 
+  // Regulamin i polityka prywatnosci — wersja polska + tlumaczenia.
+  const legal: MetadataRoute.Sitemap = ["/regulamin", "/polityka-prywatnosci"].flatMap((path) => {
+    const legalAlt = {
+      languages: Object.fromEntries(locales.map((l) => [l, `${siteUrl}${localePath(l, path)}`])),
+    };
+    return locales.map((l) => ({
+      url: `${siteUrl}${localePath(l, path)}`,
+      lastModified: DEPLOYED_AT,
+      changeFrequency: "monthly" as const,
+      priority: l === "pl" ? 0.3 : 0.2,
+      alternates: legalAlt,
+    }));
+  });
+
   return [
     ...homes,
     ...pomoc,
+    ...legal,
     {
       url: `${siteUrl}/reklamacja`,
       lastModified: DEPLOYED_AT,
       changeFrequency: "yearly",
       priority: 0.2,
-    },
-    {
-      url: `${siteUrl}/regulamin`,
-      lastModified: DEPLOYED_AT,
-      changeFrequency: "monthly",
-      priority: 0.3,
-    },
-    {
-      url: `${siteUrl}/polityka-prywatnosci`,
-      lastModified: DEPLOYED_AT,
-      changeFrequency: "monthly",
-      priority: 0.3,
     },
   ];
 }

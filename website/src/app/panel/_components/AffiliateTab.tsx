@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { type Locale } from "@/lib/i18n";
+import { localePath, type Locale } from "@/lib/i18n";
 import { fetchJson, sendJson, type FetchJsonResult } from "../_lib/fetchJson";
 
 type TierKey = "start" | "bronze" | "silver" | "gold" | "diamond";
@@ -1567,7 +1567,7 @@ export default function AffiliateTab({ lang }: { lang: Locale }) {
           </li>
         ))}
       </ul>
-      <Link href="/regulamin#program-partnerski" className="inline-block mt-4 km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
+      <Link href={localePath(lang, "/regulamin#program-partnerski")} className="inline-block mt-4 km-mono-eyebrow text-[#D8FF3D] hover:text-[#F2EDE3] transition-colors">
         {t.regulamin}
       </Link>
     </div>

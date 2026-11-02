@@ -123,7 +123,9 @@ const content: Record<Locale, {
   },
 };
 
-export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
+// switchPath: podstrona obecna we wszystkich jezykach (np. "/regulamin") —
+// przelacznik jezyka prowadzi wtedy do niej zamiast na strone glowna.
+export default function Navigation({ lang = "pl", switchPath }: { lang?: Locale; switchPath?: string }) {
   const t = content[lang];
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -186,7 +188,7 @@ export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
             <span className="km-mono-eyebrow text-[#F2EDE3]/55 tabular-nums">
               {`${localeLabel[lang]} · ${clock}`}
             </span>
-            <LanguageSwitcher current={lang} />
+            <LanguageSwitcher current={lang} path={switchPath} />
             <a
               href="/auth/signin"
               className="inline-flex items-center gap-2 px-4 py-2 km-mono-eyebrow text-[#F2EDE3]/80 border border-[rgba(242,237,227,0.20)] hover:border-[#D8FF3D] hover:text-[#F2EDE3] transition-colors"
@@ -289,7 +291,7 @@ export default function Navigation({ lang = "pl" }: { lang?: Locale }) {
               {totalItems > 0 ? `${t.cartMobile} (${totalItems})` : t.cartMobile}
             </a>
             <div className="mt-2">
-              <LanguageSwitcher current={lang} compact />
+              <LanguageSwitcher current={lang} path={switchPath} compact />
             </div>
           </div>
         </div>
