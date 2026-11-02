@@ -58,12 +58,13 @@ struct KalkMateSettings {
     bool    rotate180;    // obrot ekranu o 180 stopni wzgledem domyslnej orientacji
     uint8_t camWbMode;    // balans bieli kamery: 0=Auto,1=Sloneczny,2=Pochmurno,3=Biuro,4=Dom
     int8_t  camBrightness; // -2..2, korekta jasnosci zdjecia/podgladu kamery
+    uint8_t camModel;     // CAM_MODEL_*: 0=Auto (wykryj), 1=OV2640, 2=OV5640 (AF)
 };
 
 // Domyslne: jasnosc 8, english, szczegolowy, autoSleep ON, 4 min,
 //           kod "1111", panic = KEY_MU (27), obrot ekranu OFF,
-//           kamera: WB auto, jasnosc 0
-static KalkMateSettings kalkSettings = {8, 1, 0, true, 4, "1111", /*KEY_MU*/27, false, 0, 0};
+//           kamera: WB auto, jasnosc 0, model auto
+static KalkMateSettings kalkSettings = {8, 1, 0, true, 4, "1111", /*KEY_MU*/27, false, 0, 0, CAM_MODEL_AUTO};
 
 // Zapis/odczyt ustawien w NVS (wszystkie razem). Definicje TUTAJ bo
 // musza byc po definicji kalkSettings - wifi_persist.h jest include'owany
@@ -79,6 +80,7 @@ static void kalkSaveSettings() {
     prefs.putBool ("rotate180", kalkSettings.rotate180);
     prefs.putUChar("camWb",     kalkSettings.camWbMode);
     prefs.putChar ("camBright", kalkSettings.camBrightness);
+    prefs.putUChar("camModel",  kalkSettings.camModel);
     prefs.end();
 }
 
@@ -93,12 +95,14 @@ static void kalkLoadSettings() {
     kalkSettings.rotate180    = prefs.getBool ("rotate180", false);
     kalkSettings.camWbMode    = prefs.getUChar("camWb",     0);
     kalkSettings.camBrightness = prefs.getChar("camBright", 0);
+    kalkSettings.camModel     = prefs.getUChar("camModel",  CAM_MODEL_AUTO);
     if (kalkSettings.brightness > 15)   kalkSettings.brightness = 8;
     if (kalkSettings.language > 10)     kalkSettings.language = 1;
     if (kalkSettings.solveMode > 2)     kalkSettings.solveMode = 0;
     if (kalkSettings.sleepMinutes > 10) kalkSettings.sleepMinutes = 4;
     if (kalkSettings.camWbMode > 4)     kalkSettings.camWbMode = 0;
     if (kalkSettings.camBrightness < -2 || kalkSettings.camBrightness > 2) kalkSettings.camBrightness = 0;
+    if (kalkSettings.camModel > CAM_MODEL_OV5640) kalkSettings.camModel = CAM_MODEL_AUTO;
     prefs.end();
 }
 
@@ -160,6 +164,7 @@ int otaGetLanguage() { return kalkSettings.language; }
 // camera.h jest wlaczony wyzej, PRZED definicja kalkSettings.
 uint8_t camGetWbMode()     { return kalkSettings.camWbMode; }
 int8_t  camGetBrightness() { return kalkSettings.camBrightness; }
+uint8_t camGetModelPref()  { return kalkSettings.camModel; }
 
 // Zaimplementowane w remote_session.h, wlaczonym w main.cpp PO solve_screen.h
 // (potrzebuje _solDrawError). Forward-deklaracja zeby switch w showSettings()
@@ -220,6 +225,7 @@ static bool kalkPanicKeyAllowed(KalkKey k) {
 #define _SET_DEVINFO      21
 #define _SET_HELP         22
 #define _SET_ABOUT        23
+#define _SET_CAMMODEL     24
 
 // Ikony kategorii — z ui_kit.h.
 #define _SET_ICO_DISPLAY UI_ICO_DISPLAY
@@ -233,7 +239,7 @@ static bool kalkPanicKeyAllowed(KalkKey k) {
 #define _SET_ICO_INFO    UI_ICO_INFO
 
 static const uint8_t _SET_IT_DISPLAY[]  = {_SET_BRIGHTNESS, _SET_ROTATION, _SET_AUTOSLEEP};
-static const uint8_t _SET_IT_SOLVE[]    = {_SET_SOLVEMODE, _SET_CAMERA};
+static const uint8_t _SET_IT_SOLVE[]    = {_SET_SOLVEMODE, _SET_CAMERA, _SET_CAMMODEL};
 static const uint8_t _SET_IT_LANG[]     = {_SET_LANGUAGE};
 static const uint8_t _SET_IT_NET[]      = {_SET_WIFI, _SET_ACCOUNT, _SET_DEVICEID, _SET_REMOTE};
 static const uint8_t _SET_IT_SECURITY[] = {_SET_AICODE, _SET_PANICKEY};
@@ -429,6 +435,7 @@ static const char* _setItemLabel(int id) {
         case _SET_AUTOSLEEP:  return T("Usypianie", "Auto sleep", "Auto-Ruhe", "Uspani");
         case _SET_SOLVEMODE:  return T("Tryb rozwiazan", "Solution mode", "Loesungsmodus", "Rezim reseni");
         case _SET_CAMERA:     return T("Obraz kamery", "Camera image", "Kamerabild", "Obraz kamery");
+        case _SET_CAMMODEL:   return T("Model kamery", "Camera model", "Kameramodell", "Model kamery");
         case _SET_LANGUAGE:   return T("Jezyk", "Language", "Sprache", "Jazyk");
         case _SET_WIFI:       return T("Siec WiFi", "WiFi network", "WLAN-Netz", "Sit WiFi");
         case _SET_ACCOUNT:    return T("Status konta", "Account status", "Kontostatus", "Stav uctu");
@@ -464,6 +471,13 @@ static void _setItemValue(int id, char* buf, size_t n, bool* bar) {
             else snprintf(buf, n, "%s", T("wylaczone", "off", "aus", "vypnuto"));
             break;
         case _SET_SOLVEMODE:  snprintf(buf, n, "%s", _setSolveModeName()); break;
+        case _SET_CAMMODEL:
+            // Auto: dopisz wykryty sensor, gdy kamera byla juz wlaczona.
+            if (kalkSettings.camModel == CAM_MODEL_AUTO && camDetectedModel() != CAM_MODEL_AUTO)
+                snprintf(buf, n, "Auto (%s)", camModelName(camDetectedModel()));
+            else
+                snprintf(buf, n, "%s", camModelName(kalkSettings.camModel));
+            break;
         case _SET_LANGUAGE:   snprintf(buf, n, "%s", _setLangName()); break;
         case _SET_WIFI:
             if (WiFi.status() == WL_CONNECTED) snprintf(buf, n, "%s", WiFi.SSID().c_str());
@@ -906,6 +920,48 @@ static void _editSolveMode(U8G2 &d) {
             val = (val == 2) ? 0 : val + 1;
         } else if (_setBtn(BTN_OK)) {
             kalkSettings.solveMode = val;
+            kalkSaveSettings();   // persist
+            _setWaitRelease();
+            return;
+        }
+
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Edycja: Model kamery — Auto (wykrycie sensora) / OV2640 / OV5640 z AF.
+// Wybiera parametry zdjecia (rozdzielczosc, autofocus); dziala od
+// nastepnego wlaczenia kamery.
+// ---------------------------------------------------------------------------
+static const char* _setCamModelLabel(int i) {
+    if (i == CAM_MODEL_AUTO) return T("Automatycznie", "Automatic", "Automatisch", "Automaticky");
+    return camModelName((uint8_t)i);
+}
+static const char* _setCamModelValue(int i) {
+    if (i == CAM_MODEL_AUTO) {
+        uint8_t m = camDetectedModel();
+        return m != CAM_MODEL_AUTO ? camModelName(m) : nullptr;
+    }
+    return i == CAM_MODEL_OV5640 ? "5MP AF" : "2MP";
+}
+
+static void _editCamModel(U8G2 &d) {
+    uint8_t val = kalkSettings.camModel;
+    int scroll = 0;
+    _setWaitRelease();
+
+    while (true) {
+        if (_panicRequested) return;
+        _setDrawPicker(d, _setItemLabel(_SET_CAMMODEL), 3, val, kalkSettings.camModel, scroll,
+                       _setCamModelLabel, _setCamModelValue, _setTxtSelect(), _setTxtSave());
+
+        if (_setBtn(BTN_LEFT) || _setBtn(BTN_UP)) {
+            val = (val == 0) ? 2 : val - 1;
+        } else if (_setBtn(BTN_RIGHT) || _setBtn(BTN_DOWN)) {
+            val = (val == 2) ? 0 : val + 1;
+        } else if (_setBtn(BTN_OK)) {
+            kalkSettings.camModel = val;
             kalkSaveSettings();   // persist
             _setWaitRelease();
             return;
@@ -1860,6 +1916,7 @@ static void _setOpenItem(U8G2 &display, int id) {
         case _SET_BRIGHTNESS: _editBrightness(display); break;
         case _SET_ROTATION:   _editRotation(display);   break;
         case _SET_CAMERA:     _editCameraTuning(display); break;
+        case _SET_CAMMODEL:   _editCamModel(display);   break;
         case _SET_LANGUAGE:   _editLanguage(display);   break;
         case _SET_REMOTE:     _editRemoteHelp(display); break;
         case _SET_SOLVEMODE:  _editSolveMode(display);  break;

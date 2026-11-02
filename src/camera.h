@@ -1,6 +1,12 @@
 #pragma once
 // =====================================================================
-//  camera.h — OV2640 driver dla KalkMate PCB v4 (ESP32-S3)
+//  camera.h — OV2640 / OV5640 (AF) driver dla KalkMate PCB v4 (ESP32-S3)
+//
+//  Oba sensory na tym samym 24-pin FFC i tych samych pinach. esp_camera
+//  sam rozpoznaje sensor (OV2640 SCCB 0x30, OV5640 0x3C). Ustawienie
+//  "Model kamery" (Auto/OV2640/OV5640) wybiera parametry: rozdzielczosc
+//  JPEG i autofocus OV5640 (firmware AF z ov5640_af_fw.h, wymaga AFVDD
+//  2.8 V na pinie 23 FFC — PCB v6).
 //
 //  Mapowanie pinow z OV2640 24-pin FFC (Sensor 2640):
 //
@@ -34,11 +40,18 @@
 #include <driver/gpio.h>
 #include "input.h"   // _inMcp (MCP23017) dla PWDN/RESET
 #include "event_log.h"   // logEvent* — bufor zdarzen wysylany do serwera
+#include <Wire.h>
+#include "ov5640_af_fw.h"
 
 // kalkSettings jest zdefiniowany dopiero w settings_screen.h, ktory jest
 // includowany PO camera.h — analogicznie do otaGetLanguage()/_accGetUnlockCode().
 extern uint8_t camGetWbMode();      // 0=Auto,1=Sloneczny,2=Pochmurno,3=Biuro,4=Dom
 extern int8_t  camGetBrightness();  // -2..2
+extern uint8_t camGetModelPref();   // CAM_MODEL_* (ustawienie "Model kamery")
+
+#define CAM_MODEL_AUTO    0
+#define CAM_MODEL_OV2640  1
+#define CAM_MODEL_OV5640  2
 
 // PCB v4 (ESP32-S3) — wg schematu
 #define CAM_PIN_VSYNC      5
@@ -61,6 +74,127 @@ extern int8_t  camGetBrightness();  // -2..2
 #define CAM_MCP_RESET      5    // MCP GPA5 (pin 6 FFC)
 
 static bool _camReady = false;
+static uint8_t _camDetected = CAM_MODEL_AUTO;   // ostatnio wykryty sensor (AUTO = jeszcze nie)
+static bool _camAfReady = false;                // firmware AF OV5640 wgrany po init
+
+// Sensor wykryty przy ostatnim esp_camera_init() (CAM_MODEL_AUTO = kamera
+// jeszcze nie byla wlaczona od startu).
+inline uint8_t camDetectedModel() { return _camDetected; }
+
+inline const char* camModelName(uint8_t m) {
+    return m == CAM_MODEL_OV5640 ? "OV5640" : m == CAM_MODEL_OV2640 ? "OV2640" : "Auto";
+}
+
+// Model, wg ktorego dobieramy parametry: wymuszony w ustawieniach albo
+// wykryty. Auto przed pierwszym wykryciem -> OV2640 (UXGA dziala na obu).
+static uint8_t _camModel() {
+    uint8_t p = camGetModelPref();
+    if (p == CAM_MODEL_OV2640 || p == CAM_MODEL_OV5640) return p;
+    return _camDetected != CAM_MODEL_AUTO ? _camDetected : CAM_MODEL_OV2640;
+}
+
+// Po esp_camera_init(): zapamietaj, jaki sensor faktycznie odpowiedzial.
+static void _camNoteDetected() {
+    sensor_t* s = esp_camera_sensor_get();
+    if (!s) return;
+    uint8_t m = s->id.PID == OV5640_PID ? CAM_MODEL_OV5640
+              : s->id.PID == OV2640_PID ? CAM_MODEL_OV2640 : CAM_MODEL_AUTO;
+    if (m != _camDetected) logEventf("CAM", "sensor PID 0x%x", s->id.PID);
+    _camDetected = m;
+    uint8_t p = camGetModelPref();
+    if (p != CAM_MODEL_AUTO && m != CAM_MODEL_AUTO && p != m)
+        Serial.printf("[CAM] UWAGA: wymuszony %s, wykryty %s\n", camModelName(p), camModelName(m));
+}
+
+// --- Autofocus OV5640 -------------------------------------------------
+// Rejestry komend firmware AF (OV5640 AF application note).
+#define _CAM_AF_MAIN       0x3022
+#define _CAM_AF_ACK        0x3023
+#define _CAM_AF_FW_STATUS  0x3029
+#define _CAM_AF_SINGLE     0x03
+#define _CAM_AF_CONTINUOUS 0x04
+#define _CAM_AF_RELEASE    0x08
+#define _CAM_AF_ST_FOCUSED 0x10
+#define _CAM_AF_ST_IDLE    0x70
+
+static bool _camReg(sensor_t* s, int reg, uint8_t v) { return s->set_reg(s, reg, 0xff, v) >= 0; }
+
+// Wgraj firmware AF. Rejestry 0x8000.. maja autoinkrementacje, wiec piszemy
+// paczkami przez Wire (bufor 128 B = 2 B adresu + 126 B danych) — ~0.1 s
+// zamiast ~2 s bajt po bajcie przez s->set_reg (4077 transakcji).
+static bool _camAfLoad(sensor_t* s) {
+    _camAfReady = false;
+    if (!_camReg(s, 0x3000, 0x20)) return false;   // reset MCU AF
+    const size_t CHUNK = 126;
+    for (size_t off = 0; off < sizeof(_ov5640AfFw); off += CHUNK) {
+        size_t n = sizeof(_ov5640AfFw) - off;
+        if (n > CHUNK) n = CHUNK;
+        uint16_t addr = 0x8000 + off;
+        Wire.beginTransmission(s->slv_addr);
+        Wire.write((uint8_t)(addr >> 8));
+        Wire.write((uint8_t)addr);
+        Wire.write(_ov5640AfFw + off, n);
+        if (Wire.endTransmission() != 0) return false;
+    }
+    for (int r = 0x3022; r <= 0x3028; r++) _camReg(s, r, 0x00);   // komenda/ACK/parametry
+    _camReg(s, _CAM_AF_FW_STATUS, 0x7f);
+    _camReg(s, 0x3000, 0x00);                       // start MCU AF
+    unsigned long t0 = millis();
+    while (millis() - t0 < 1000) {
+        if (s->get_reg(s, _CAM_AF_FW_STATUS, 0xff) == _CAM_AF_ST_IDLE) {
+            _camAfReady = true;
+            return true;
+        }
+        delay(5);
+    }
+    return false;
+}
+
+// Wyslij komende do firmware AF i czekaj na potwierdzenie (ACK -> 0).
+static bool _camAfCmd(sensor_t* s, uint8_t cmd, uint32_t timeoutMs) {
+    if (!_camReg(s, _CAM_AF_ACK, 0x01) || !_camReg(s, _CAM_AF_MAIN, cmd)) return false;
+    unsigned long t0 = millis();
+    while (millis() - t0 < timeoutMs) {
+        if (s->get_reg(s, _CAM_AF_ACK, 0xff) == 0) return true;
+        delay(5);
+    }
+    return false;
+}
+
+// Po init: dla OV5640 wgraj firmware AF i (podglad) wlacz ciagly AF.
+static void _camAfSetup(bool continuous) {
+    _camAfReady = false;
+    if (_camModel() != CAM_MODEL_OV5640) return;
+    sensor_t* s = esp_camera_sensor_get();
+    if (!s) return;
+    unsigned long t0 = millis();
+    if (!_camAfLoad(s)) {
+        Serial.println("[CAM] AF firmware load FAILED");
+        logEventf("CAM", "AF fw load failed");
+        return;
+    }
+    if (continuous && !_camAfCmd(s, _CAM_AF_CONTINUOUS, 1000))
+        Serial.println("[CAM] AF continuous FAILED");
+    Serial.printf("[CAM] AF ready (%lu ms)\n", millis() - t0);
+}
+
+// Pojedyncze ustawienie ostrosci przed zdjeciem. true = ostro.
+static bool _camAfFocusOnce() {
+    sensor_t* s = esp_camera_sensor_get();
+    if (!_camAfReady || !s) return false;
+    unsigned long t0 = millis();
+    bool ok = _camAfCmd(s, _CAM_AF_RELEASE, 500) && _camAfCmd(s, _CAM_AF_SINGLE, 1500);
+    if (ok) {
+        ok = false;
+        while (millis() - t0 < 2000) {
+            if (s->get_reg(s, _CAM_AF_FW_STATUS, 0xff) == _CAM_AF_ST_FOCUSED) { ok = true; break; }
+            delay(10);
+        }
+    }
+    Serial.printf("[CAM] AF %s (%lu ms)\n", ok ? "focused" : "TIMEOUT", millis() - t0);
+    if (!ok) logEventf("CAM", "AF timeout %lums", millis() - t0);
+    return ok;
+}
 
 // Wlacza zasilanie kamery i wybudza ja:
 //   PWDN = LOW (kamera ON), RESET pulse, czekamy 20ms
@@ -164,10 +298,22 @@ inline bool camBegin() {
     camera_config_t config;
     _camFillCommonConfig(config);
     config.pixel_format = PIXFORMAT_JPEG;
-    // UXGA 1600x1200 - max rozdzielczosc OV2640 (2MP). Dla matury wazne
-    // zeby drobny druk i ulamki byly czytelne dla AI. JPEG ~150-250KB w PSRAM.
-    config.frame_size   = FRAMESIZE_UXGA;
-    config.jpeg_quality = 10;                  // 0-63, mniej = lepiej (10 = wysoka jakosc)
+    const bool ov5640 = _camModel() == CAM_MODEL_OV5640;
+    if (ov5640) {
+        // QXGA 2048x1536 (3MP) z 5MP OV5640 — wiecej detalu niz UXGA, a JPEG
+        // (~300-500KB) miesci sie w buforze kamery (w*h/5 = 629KB), kolejce
+        // offline (SPIFFS) i limicie serwera (6MB). Jakosc 12 zamiast 10, zeby
+        // gesta kartka nie przepelnila bufora.
+        config.frame_size   = FRAMESIZE_QXGA;
+        config.jpeg_quality = 12;
+    } else {
+        // UXGA 1600x1200 - max rozdzielczosc OV2640 (2MP). Dla matury wazne
+        // zeby drobny druk i ulamki byly czytelne dla AI. JPEG ~150-250KB w PSRAM.
+        // (Driver przycina frame_size do max sensora, wiec zle wymuszony model
+        // nie psuje inicjalizacji.)
+        config.frame_size   = FRAMESIZE_UXGA;
+        config.jpeg_quality = 10;              // 0-63, mniej = lepiej (10 = wysoka jakosc)
+    }
     // fb_count=1 + GRAB_WHEN_EMPTY => brak background task ssacy CPU.
     // Wczesniej (fb_count=2 + GRAB_LATEST) klatki ciagle laczyly sie w tle
     // przez co OLED i debounce klawiszy lagowaly i ekran zamarzal.
@@ -188,9 +334,12 @@ inline bool camBegin() {
     // byla totalnie przepalona, druga prawie czarna. Wlaczamy automatyke +
     // standardowe parametry ktore daja dobra ekspozycje dla rozne oswietlenia.
     _camApplyCommonSensor();
+    _camNoteDetected();
+    _camAfSetup(false);   // OV5640: firmware AF; ostrzenie w camWarmup()
 
     _camReady = true;
-    Serial.println("[CAM] OK JPEG/UXGA (AEC/AGC/AWB enabled)");
+    Serial.printf("[CAM] OK JPEG/%s %s (AEC/AGC/AWB enabled)\n",
+                  ov5640 ? "QXGA" : "UXGA", camModelName(_camDetected));
     return true;
 }
 
@@ -226,9 +375,11 @@ inline bool camBeginPreview() {
     }
 
     _camApplyCommonSensor();
+    _camNoteDetected();
+    _camAfSetup(true);    // OV5640: ciagly AF — ostry podglad przy kadrowaniu
 
     _camReady = true;
-    Serial.println("[CAM] OK GRAYSCALE/QQVGA (preview)");
+    Serial.printf("[CAM] OK GRAYSCALE/QQVGA (preview) %s\n", camModelName(_camDetected));
     return true;
 }
 
@@ -254,15 +405,23 @@ inline void camEnd() {
         gpio_set_pull_mode((gpio_num_t)pin, GPIO_FLOATING);
     }
     _camReady = false;
+    _camAfReady = false;   // reset sensora przy nastepnym init kasuje firmware AF
     Serial.println("[CAM] deinit");
 }
 
 // Warm-up — wyrzuc N klatek. AEC/AGC potrzebuje ~3-5 klatek zeby zbiec
 // na docelowa ekspozycje, inaczej pierwsze zdjecie jest przepalone lub czarne.
 // 5 klatek przy 15fps UXGA = ~333ms.
+// OV5640: po ekspozycji ustaw ostrosc (pojedynczy AF) i wyrzuc jeszcze jedna
+// klatke — mogla sie naswietlac, gdy soczewka jeszcze jechala.
 inline void camWarmup(int frames = 5) {
     if (!_camReady) return;
     for (int i = 0; i < frames; i++) {
+        camera_fb_t* fb = esp_camera_fb_get();
+        if (fb) esp_camera_fb_return(fb);
+    }
+    if (_camAfReady) {
+        _camAfFocusOnce();
         camera_fb_t* fb = esp_camera_fb_get();
         if (fb) esp_camera_fb_return(fb);
     }
