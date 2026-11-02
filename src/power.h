@@ -4,7 +4,10 @@
 //
 //  Po czasie bezczynnosci (kalkSettings.sleepMinutes):
 //    1. OLED off         (u8g2.setPowerSave), potem boost 12V OFF (PCB v4)
-//    2. WiFi off         (~80mA oszczednosci)
+//    2. WiFi off         (~80mA oszczednosci) — chyba ze "WiFi w uspieniu"
+//       (kalkSettings.wifiKeep): wtedy najpierw faza czuwania z polaczeniem
+//       (modem sleep, CPU 80 MHz, bez light sleep), a WiFi off dopiero po
+//       uplywie ustawionego czasu albo gdy siec zniknie.
 //    3. ESP32 light sleep co _PWR_POLL_US (~80ms)
 //       ESP32 budzi sie, sprawdza MCP23017 przez I2C (I2C zachowany
 //       w light sleep), jesli brak klawisza — zasypia znowu.
@@ -54,6 +57,13 @@ static const uint32_t _PWR_SLEEP_TIMES_MS[] = {
 // Co 80ms budzimy sie z light sleep i odpytujemy MCP23017 przez I2C.
 // 80ms = 12.5 sondowan/s — opoznienie wejscia praktycznie niezauwazalne.
 static const uint64_t _PWR_POLL_US = 80000ULL;
+
+// "WiFi w uspieniu" (kalkSettings.wifiKeep 0..3) → jak dlugo trzymac
+// polaczenie po zgaszeniu ekranu. UINT32_MAX = do wybudzenia.
+static const uint32_t _PWR_WIFI_KEEP_MS[] = { 0, 15UL * 60000UL, 60UL * 60000UL, UINT32_MAX };
+// Siec zniknela (np. hotspot wylaczony recznie) — po tym czasie przestajemy
+// czekac na auto-reconnect i idziemy w zwykly light sleep.
+static const uint32_t _PWR_WIFI_LOST_MS = 30000UL;
 
 // Ustaw globalny pointer do OLED — wolane raz w main.cpp setup()
 inline void powerSetU8g2(U8G2 *p) { _powerU8g2 = p; }
@@ -187,7 +197,7 @@ inline bool powerCheckSleep() {
     if (millis() - inputLastActivity() < limit) return false;
 
     // === Wejscie w tryb czuwania ===
-    Serial.println("[POWER] sleep: OLED off + boost off + WiFi off + light sleep");
+    Serial.println("[POWER] sleep: OLED off + boost off");
 
     // WiFi wznawiamy po wybudzeniu tylko jesli bylo wlaczone (STA) teraz.
     const bool wifiWasOn = (WiFi.getMode() & WIFI_STA) != 0;
@@ -198,33 +208,65 @@ inline bool powerCheckSleep() {
     delay(20);
     digitalWrite(_PWR_BOOST_EN_PIN, LOW);
 
-    // WiFi off — oszczednosc ~80mA.
-    if (WiFi.getMode() != WIFI_OFF) {
-        WiFi.disconnect(true);
-        WiFi.mode(WIFI_OFF);
+    // === Faza czuwania z WiFi ("WiFi w uspieniu") ===
+    // Hotspot w telefonie wylacza sie sam, gdy nikt nie jest podlaczony
+    // (iPhone ~1,5 min, Android 5-10 min) — po wybudzeniu kalkulator nie
+    // mial sie do czego polaczyc. Trzymamy skojarzenie: radio w modem sleep
+    // (budzi sie na beacony, nic nie wysyla), CPU 80 MHz. Light sleep
+    // zerwalby polaczenie, wiec tu tylko delay.
+    const uint8_t keepIdx = kalkSettings.wifiKeep <= 3 ? kalkSettings.wifiKeep : 1;
+    const uint32_t keepMs = _PWR_WIFI_KEEP_MS[keepIdx];
+    bool woke = false;
+    if (keepMs && WiFi.status() == WL_CONNECTED) {
+        Serial.println("[POWER] sleep: WiFi utrzymane (modem sleep)");
+        const uint32_t cpuMhz = getCpuFrequencyMhz();
+        WiFi.setSleep(WIFI_PS_MAX_MODEM);
+        setCpuFrequencyMhz(80);
+        const uint32_t t0 = millis();
+        uint32_t lostAt = 0;
+        while (true) {
+            delay(_PWR_POLL_US / 1000);
+            if (inputWakeScan() || panicTriggered()) { woke = true; break; }
+            _powerVbatTick(false);
+            if (WiFi.status() == WL_CONNECTED) lostAt = 0;
+            else if (!lostAt) lostAt = millis() | 1;
+            else if (millis() - lostAt > _PWR_WIFI_LOST_MS) break;
+            if (keepMs != UINT32_MAX && millis() - t0 >= keepMs) break;
+        }
+        setCpuFrequencyMhz(cpuMhz);
+        WiFi.setSleep(WIFI_PS_MIN_MODEM);
+        if (!woke) Serial.println("[POWER] sleep: koniec czuwania z WiFi");
     }
 
-    // Krotka chwila na dokonczenie transakcji I2C/SPI zanim ESP32 zasnie
-    delay(5);
+    if (!woke) {
+        // WiFi off — oszczednosc ~80mA.
+        if (WiFi.getMode() != WIFI_OFF) {
+            WiFi.disconnect(true);
+            WiFi.mode(WIFI_OFF);
+        }
 
-    // === Petla light sleep ===
-    // ESP32 w light sleep: CPU stop, I2C/SPI zachowane, RAM OK.
-    // Pobor pradu: ~0.8mA (vs ~20mA active bez WiFi).
-    // I2C (Wire) dziala normalnie po wybudzeniu z light sleep.
-    while (true) {
-        esp_sleep_enable_timer_wakeup(_PWR_POLL_US);
-        esp_light_sleep_start();
-        // Kontynuacja tu po ~80ms (timer wakeup)
+        // Krotka chwila na dokonczenie transakcji I2C/SPI zanim ESP32 zasnie
+        delay(5);
 
-        // Pojedynczy surowy skan (bez debounce) — krotkie tapniecie tez budzi,
-        // a klawisz budzacy jest polykany (nie wykona akcji).
-        if (inputWakeScan()) break;
-        if (panicTriggered()) break;
-        _powerVbatTick(false);   // ekran wylaczony — bez komunikatu
+        // === Petla light sleep ===
+        // ESP32 w light sleep: CPU stop, I2C/SPI zachowane, RAM OK.
+        // Pobor pradu: ~0.8mA (vs ~20mA active bez WiFi).
+        // I2C (Wire) dziala normalnie po wybudzeniu z light sleep.
+        while (true) {
+            esp_sleep_enable_timer_wakeup(_PWR_POLL_US);
+            esp_light_sleep_start();
+            // Kontynuacja tu po ~80ms (timer wakeup)
+
+            // Pojedynczy surowy skan (bez debounce) — krotkie tapniecie tez budzi,
+            // a klawisz budzacy jest polykany (nie wykona akcji).
+            if (inputWakeScan()) break;
+            if (panicTriggered()) break;
+            _powerVbatTick(false);   // ekran wylaczony — bez komunikatu
+        }
+
+        // Uspienie trwalo — timer budzacy nie jest juz potrzebny.
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
     }
-
-    // Uspienie trwalo — timer budzacy nie jest juz potrzebny.
-    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
 
     // === Wybudzenie ===
     digitalWrite(_PWR_BOOST_EN_PIN, HIGH);
@@ -234,8 +276,9 @@ inline bool powerCheckSleep() {
 
     // Auto-reconnect WiFi do zapisanej sieci (creds w NVS) — tylko gdy radio
     // bylo wlaczone przed snem i nie jestesmy w kalkulatorze. TxPower
-    // ograniczony (anty-brownout, jak przy boot).
-    if (wifiWasOn && !_powerCalcMode) {
+    // ograniczony (anty-brownout, jak przy boot). Po czuwaniu z WiFi radio
+    // jest dalej skojarzone — nie ma czego wznawiac.
+    if (wifiWasOn && !_powerCalcMode && !woke) {
         char ssid[33] = "", pass[64] = "";
         if (wifiLoadSaved(ssid, sizeof(ssid), pass, sizeof(pass))) {
             wifiStaOnLimited();

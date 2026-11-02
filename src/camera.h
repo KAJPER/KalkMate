@@ -173,26 +173,27 @@ static void _camAfSetup(bool continuous) {
         logEventf("CAM", "AF fw load failed");
         return;
     }
-    if (continuous && !_camAfCmd(s, _CAM_AF_CONTINUOUS, 1000))
+    // Ciagly AF bez czekania na ACK — firmware przyjmuje komendy co klatke,
+    // a czekanie (do 1 s) tylko opoznialo start podgladu.
+    if (continuous && !(_camReg(s, _CAM_AF_ACK, 0x01) && _camReg(s, _CAM_AF_MAIN, _CAM_AF_CONTINUOUS)))
         Serial.println("[CAM] AF continuous FAILED");
     Serial.printf("[CAM] AF ready (%lu ms)\n", millis() - t0);
 }
 
 // Pojedyncze ustawienie ostrosci przed zdjeciem. true = ostro.
+// Przy SINGLE firmware zeruje ACK dopiero PO calym przeszukaniu zakresu
+// soczewki (kroki co klatke, slychac tykanie VCM). W QXGA przy ~4 kl/s nie
+// konczylo sie nawet w 5 s — stad podwojony PLL w camBegin() (~9 kl/s).
 static bool _camAfFocusOnce() {
     sensor_t* s = esp_camera_sensor_get();
     if (!_camAfReady || !s) return false;
     unsigned long t0 = millis();
-    bool ok = _camAfCmd(s, _CAM_AF_RELEASE, 500) && _camAfCmd(s, _CAM_AF_SINGLE, 1500);
-    if (ok) {
-        ok = false;
-        while (millis() - t0 < 2000) {
-            if (s->get_reg(s, _CAM_AF_FW_STATUS, 0xff) == _CAM_AF_ST_FOCUSED) { ok = true; break; }
-            delay(10);
-        }
-    }
-    Serial.printf("[CAM] AF %s (%lu ms)\n", ok ? "focused" : "TIMEOUT", millis() - t0);
-    if (!ok) logEventf("CAM", "AF timeout %lums", millis() - t0);
+    bool acked = _camAfCmd(s, _CAM_AF_RELEASE, 500) && _camAfCmd(s, _CAM_AF_SINGLE, 5000);
+    int st = s->get_reg(s, _CAM_AF_FW_STATUS, 0xff);
+    bool ok = acked && st == _CAM_AF_ST_FOCUSED;
+    Serial.printf("[CAM] AF %s (%lu ms, status 0x%02x)\n",
+                  ok ? "focused" : acked ? "NOT FOCUSED" : "TIMEOUT", millis() - t0, st);
+    if (!ok) logEventf("CAM", "AF %s %lums st=0x%02x", acked ? "nofocus" : "timeout", millis() - t0, st);
     return ok;
 }
 
@@ -246,7 +247,10 @@ static void _camFillCommonConfig(camera_config_t& config) {
     config.sccb_i2c_port = 0;     // I2C_NUM_0 = Arduino Wire
     config.pin_pwdn      = -1;    // przez MCP, nie GPIO
     config.pin_reset     = -1;    // przez MCP, nie GPIO
-    config.xclk_freq_hz  = 10000000;           // 10 MHz - stabilniej z WiFi (vs 20MHz)
+    // 10 MHz - stabilniej z WiFi (vs 20MHz). OV5640 przy 20 MHz na taśmie
+    // (fw 2.1.2) dawal wyrazne pionowe paski — szybkosc odzyskujemy PLL-em
+    // w sensorze (camBegin), a zegar na FFC zostaje 10 MHz.
+    config.xclk_freq_hz  = 10000000;
     config.fb_location   = CAMERA_FB_IN_PSRAM; // PSRAM (8MB) dla buforow
 }
 
@@ -256,6 +260,7 @@ static void _camFillCommonConfig(camera_config_t& config) {
 static void _camApplyCommonSensor() {
     sensor_t* s = esp_camera_sensor_get();
     if (!s) return;
+    const bool ov5640 = s->id.PID == OV5640_PID;
     s->set_brightness(s,    camGetBrightness());  // -2..2, korekta z ustawien
     s->set_contrast(s,      0);   // -2..2
     s->set_saturation(s,    0);   // -2..2
@@ -264,12 +269,30 @@ static void _camApplyCommonSensor() {
     s->set_awb_gain(s,      1);
     s->set_wb_mode(s,       camGetWbMode());  // 0=auto, wg ustawien
     s->set_exposure_ctrl(s, 1);   // AEC on - auto-ekspozycja
-    s->set_aec2(s,          1);   // AEC algorithm v2 (lepszy)
     s->set_ae_level(s,      0);   // -2..2
-    s->set_aec_value(s,     300); // 0..1200, "target brightness"
     s->set_gain_ctrl(s,     1);   // AGC on - auto-wzmocnienie
     s->set_agc_gain(s,      0);
-    s->set_gainceiling(s, (gainceiling_t)2);  // max gain 4x (mniej szumu)
+    if (ov5640) {
+        // Sterownik OV5640 interpretuje te wywolania inaczej niz OV2640:
+        //  - set_gainceiling wpisuje surowa wartosc do 0x3A18/19 (gain = x/16),
+        //    wiec "2" dawalo sufit ~0.1x = brak wzmocnienia -> ciemne zdjecia.
+        //    0x40 = 4x (8x dawalo widoczny szum kolumn — pionowe paski).
+        //  - set_aec2 to tryb nocny (0x3A00 bit2): obniza klatki/s, a AF robi
+        //    krok co klatke — wylaczony.
+        //  - set_aec_value to reczny czas naswietlania — przy AEC zbedny.
+        s->set_aec2(s, 0);
+        s->set_gainceiling(s, (gainceiling_t)0x40);
+        // Pomiar ekspozycji wazony srodkiem (siatka 4x4, wagi 0x5688..0x568F,
+        // po 4 bity na strefe): kartka z zadaniem w srodku kadru, wokol ciemne
+        // biurko. Przy sredniej z calego kadru kartka byla przepalona na biel,
+        // a AF (kontrastowy) nie mial na czym ostrzyc z bliska.
+        static const uint8_t aecWeights[8] = {0x11, 0x11, 0x81, 0x18, 0x81, 0x18, 0x11, 0x11};
+        for (int i = 0; i < 8; i++) s->set_reg(s, 0x5688 + i, 0xff, aecWeights[i]);
+    } else {
+        s->set_aec2(s,      1);   // AEC algorithm v2 (lepszy)
+        s->set_aec_value(s, 300); // 0..1200, "target brightness"
+        s->set_gainceiling(s, (gainceiling_t)2);  // GAINCEILING_8X
+    }
     s->set_bpc(s,           1);   // black pixel correction
     s->set_wpc(s,           1);   // white pixel correction
     s->set_raw_gma(s,       1);   // gamma correction
@@ -278,8 +301,10 @@ static void _camApplyCommonSensor() {
     // sensor zamontowany do gory nogami — to zalozenie bylo bledne (podglad
     // i zdjecie wychodzily obrocone o 180° w zla strone). Natywna orientacja
     // sensora jest juz poprawna, bez korekty.
+    // OV5640 (PCB v6) natywnie daje obraz odbity w pionie (do gory nogami
+    // i lustrzanie) — wystarczy samo vflip; hmirror=1 dawal lustro lewo-prawo.
     s->set_hmirror(s,       0);
-    s->set_vflip(s,         0);
+    s->set_vflip(s,         ov5640 ? 1 : 0);
     s->set_dcw(s,           1);   // downsize crop window
     s->set_colorbar(s,      0);   // 1 = test pattern (tylko debug)
 }
@@ -320,7 +345,7 @@ inline bool camBegin() {
     config.fb_count     = 1;
     config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
 
-    ledc_timer_resume(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0);   // camEnd() go pauzuje (XCLK vs WiFi)
+    unsigned long t0 = millis();
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         Serial.printf("[CAM] esp_camera_init failed: 0x%x\n", err);
@@ -335,11 +360,19 @@ inline bool camBegin() {
     // standardowe parametry ktore daja dobra ekspozycje dla rozne oswietlenia.
     _camApplyCommonSensor();
     _camNoteDetected();
+    if (_camDetected == CAM_MODEL_OV5640) {
+        // PLL drivera dla JPEG zaklada XCLK 20 MHz (pre_div 2). Przy 10 MHz
+        // sensor chodzil o polowe wolniej (QXGA ~4 kl/s), a AF robi krok co
+        // klatke — ostrzenie >5 s. pre_div 1 daje te same zegary wewnatrz
+        // sensora co 20 MHz (~9 kl/s), bez szybszego sygnalu na tasmie.
+        sensor_t* s = esp_camera_sensor_get();
+        if (s) s->set_pll(s, 0, 200, 4, 0, 1, 2, 1, 4);
+    }
     _camAfSetup(false);   // OV5640: firmware AF; ostrzenie w camWarmup()
 
     _camReady = true;
-    Serial.printf("[CAM] OK JPEG/%s %s (AEC/AGC/AWB enabled)\n",
-                  ov5640 ? "QXGA" : "UXGA", camModelName(_camDetected));
+    Serial.printf("[CAM] OK JPEG/%s %s (AEC/AGC/AWB enabled, %lu ms)\n",
+                  ov5640 ? "QXGA" : "UXGA", camModelName(_camDetected), millis() - t0);
     return true;
 }
 
@@ -366,7 +399,6 @@ inline bool camBeginPreview() {
     config.fb_count     = 1;
     config.grab_mode    = CAMERA_GRAB_WHEN_EMPTY;
 
-    ledc_timer_resume(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0);   // camEnd() go pauzuje (XCLK vs WiFi)
     esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         Serial.printf("[CAM] preview init failed: 0x%x\n", err);
@@ -389,13 +421,11 @@ inline void camEnd() {
     esp_camera_deinit();
     _camPowerOff();
     // Diagnoza 2026-10-18 (tcpdump na VPS, takze na fw 1.9.7): po uzyciu kamery
-    // radio WiFi gubi pakiety w obie strony az do restartu. esp_camera_deinit()
-    // zatrzymuje tylko KANAL LEDC (ledc_stop) — timer 10 MHz (XCLK) dalej
-    // chodzi, a jego harmoniczne trafiaja w pasmo 2.4 GHz (np. 246 x 10 MHz =
-    // 2460 MHz = kanal 10). Zatrzymaj timer i odepnij piny kamery (wejscia bez
-    // podciagania) — camBegin()/esp_camera_init() i tak skonfiguruje je od nowa.
-    ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0);
-    ledc_timer_rst(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0);
+    // radio WiFi gubi pakiety w obie strony az do restartu. Harmoniczne XCLK
+    // trafiaja w pasmo 2.4 GHz (np. 246 x 10 MHz = 2460 MHz = kanal 10).
+    // Na S3 XCLK daje peryferium LCD_CAM (nie LEDC — stare ledc_timer_pause/
+    // rst tylko sypaly bledami "LEDC is not initialized"), wiec odpinamy piny
+    // kamery (wejscia bez podciagania) — esp_camera_init() i tak ustawi je od nowa.
     const int camPins[] = { CAM_PIN_XCLK, CAM_PIN_PCLK, CAM_PIN_VSYNC, CAM_PIN_HREF,
                             CAM_PIN_D0, CAM_PIN_D1, CAM_PIN_D2, CAM_PIN_D3,
                             CAM_PIN_D4, CAM_PIN_D5, CAM_PIN_D6, CAM_PIN_D7 };
@@ -414,17 +444,24 @@ inline void camEnd() {
 // 5 klatek przy 15fps UXGA = ~333ms.
 // OV5640: po ekspozycji ustaw ostrosc (pojedynczy AF) i wyrzuc jeszcze jedna
 // klatke — mogla sie naswietlac, gdy soczewka jeszcze jechala.
-inline void camWarmup(int frames = 5) {
-    if (!_camReady) return;
+// (fw 2.1.2: ostrzenie w VGA i powrot do QXGA dawalo nieostre zdjecia —
+// AF musi pracowac w tej samej rozdzielczosci co zdjecie.)
+static void _camDiscard(int frames) {
     for (int i = 0; i < frames; i++) {
         camera_fb_t* fb = esp_camera_fb_get();
         if (fb) esp_camera_fb_return(fb);
     }
+}
+
+inline void camWarmup(int frames = 5) {
+    if (!_camReady) return;
+    unsigned long t0 = millis();
+    _camDiscard(frames);
     if (_camAfReady) {
         _camAfFocusOnce();
-        camera_fb_t* fb = esp_camera_fb_get();
-        if (fb) esp_camera_fb_return(fb);
+        _camDiscard(1);
     }
+    Serial.printf("[CAM] warmup+AF %lu ms\n", millis() - t0);
 }
 
 // Zrob zdjecie. Zwraca pointer do JPEG buffer (lub nullptr przy bledzie).

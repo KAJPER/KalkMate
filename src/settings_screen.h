@@ -59,12 +59,13 @@ struct KalkMateSettings {
     uint8_t camWbMode;    // balans bieli kamery: 0=Auto,1=Sloneczny,2=Pochmurno,3=Biuro,4=Dom
     int8_t  camBrightness; // -2..2, korekta jasnosci zdjecia/podgladu kamery
     uint8_t camModel;     // CAM_MODEL_*: 0=Auto (wykryj), 1=OV2640, 2=OV5640 (AF)
+    uint8_t wifiKeep;     // WiFi w uspieniu: 0=rozlacz, 1=15 min, 2=1 godz., 3=zawsze (power.h)
 };
 
 // Domyslne: jasnosc 8, english, szczegolowy, autoSleep ON, 4 min,
 //           kod "1111", panic = KEY_MU (27), obrot ekranu OFF,
-//           kamera: WB auto, jasnosc 0, model auto
-static KalkMateSettings kalkSettings = {8, 1, 0, true, 4, "1111", /*KEY_MU*/27, false, 0, 0, CAM_MODEL_AUTO};
+//           kamera: WB auto, jasnosc 0, model auto, WiFi w uspieniu 15 min
+static KalkMateSettings kalkSettings = {8, 1, 0, true, 4, "1111", /*KEY_MU*/27, false, 0, 0, CAM_MODEL_AUTO, 1};
 
 // Zapis/odczyt ustawien w NVS (wszystkie razem). Definicje TUTAJ bo
 // musza byc po definicji kalkSettings - wifi_persist.h jest include'owany
@@ -81,6 +82,7 @@ static void kalkSaveSettings() {
     prefs.putUChar("camWb",     kalkSettings.camWbMode);
     prefs.putChar ("camBright", kalkSettings.camBrightness);
     prefs.putUChar("camModel",  kalkSettings.camModel);
+    prefs.putUChar("wifiKeep",  kalkSettings.wifiKeep);
     prefs.end();
 }
 
@@ -96,6 +98,7 @@ static void kalkLoadSettings() {
     kalkSettings.camWbMode    = prefs.getUChar("camWb",     0);
     kalkSettings.camBrightness = prefs.getChar("camBright", 0);
     kalkSettings.camModel     = prefs.getUChar("camModel",  CAM_MODEL_AUTO);
+    kalkSettings.wifiKeep     = prefs.getUChar("wifiKeep",  1);
     if (kalkSettings.brightness > 15)   kalkSettings.brightness = 8;
     if (kalkSettings.language > 10)     kalkSettings.language = 1;
     if (kalkSettings.solveMode > 2)     kalkSettings.solveMode = 0;
@@ -103,6 +106,7 @@ static void kalkLoadSettings() {
     if (kalkSettings.camWbMode > 4)     kalkSettings.camWbMode = 0;
     if (kalkSettings.camBrightness < -2 || kalkSettings.camBrightness > 2) kalkSettings.camBrightness = 0;
     if (kalkSettings.camModel > CAM_MODEL_OV5640) kalkSettings.camModel = CAM_MODEL_AUTO;
+    if (kalkSettings.wifiKeep > 3)      kalkSettings.wifiKeep = 1;
     prefs.end();
 }
 
@@ -226,6 +230,7 @@ static bool kalkPanicKeyAllowed(KalkKey k) {
 #define _SET_HELP         22
 #define _SET_ABOUT        23
 #define _SET_CAMMODEL     24
+#define _SET_WIFIKEEP     25
 
 // Ikony kategorii — z ui_kit.h.
 #define _SET_ICO_DISPLAY UI_ICO_DISPLAY
@@ -241,7 +246,7 @@ static bool kalkPanicKeyAllowed(KalkKey k) {
 static const uint8_t _SET_IT_DISPLAY[]  = {_SET_BRIGHTNESS, _SET_ROTATION, _SET_AUTOSLEEP};
 static const uint8_t _SET_IT_SOLVE[]    = {_SET_SOLVEMODE, _SET_CAMERA, _SET_CAMMODEL};
 static const uint8_t _SET_IT_LANG[]     = {_SET_LANGUAGE};
-static const uint8_t _SET_IT_NET[]      = {_SET_WIFI, _SET_ACCOUNT, _SET_DEVICEID, _SET_REMOTE};
+static const uint8_t _SET_IT_NET[]      = {_SET_WIFI, _SET_WIFIKEEP, _SET_ACCOUNT, _SET_DEVICEID, _SET_REMOTE};
 static const uint8_t _SET_IT_SECURITY[] = {_SET_AICODE, _SET_PANICKEY};
 static const uint8_t _SET_IT_BATTERY[]  = {_SET_BATTERY};
 static const uint8_t _SET_IT_SYSTEM[]   = {_SET_UPDATE, _SET_OQCLEAR, _SET_FACTORY};
@@ -407,6 +412,14 @@ static const char* _setLangName() {
     return _LANG_NAMES[kalkSettings.language <= _LANG_MAX ? kalkSettings.language : 1];
 }
 
+// Opcje "WiFi w uspieniu" (kalkSettings.wifiKeep, czasy w power.h).
+static const char* _setWifiKeepLabel(int i) {
+    if (i == 0) return T("Rozlacz", "Disconnect", "Trennen", "Odpojit");
+    if (i == 1) return "15 min";
+    if (i == 2) return T("1 godz.", "1 hour", "1 Std.", "1 hod.");
+    return T("Zawsze", "Always", "Immer", "Vzdy");
+}
+
 // Wartosc pokazywana obok kategorii (pusty napis = brak).
 static void _setCatValue(int c, char* buf, size_t n) {
     buf[0] = '\0';
@@ -436,6 +449,7 @@ static const char* _setItemLabel(int id) {
         case _SET_SOLVEMODE:  return T("Tryb rozwiazan", "Solution mode", "Loesungsmodus", "Rezim reseni");
         case _SET_CAMERA:     return T("Obraz kamery", "Camera image", "Kamerabild", "Obraz kamery");
         case _SET_CAMMODEL:   return T("Model kamery", "Camera model", "Kameramodell", "Model kamery");
+        case _SET_WIFIKEEP:   return T("WiFi w uspieniu", "WiFi in sleep", "WLAN im Ruhemodus", "WiFi v usporeni");
         case _SET_LANGUAGE:   return T("Jezyk", "Language", "Sprache", "Jazyk");
         case _SET_WIFI:       return T("Siec WiFi", "WiFi network", "WLAN-Netz", "Sit WiFi");
         case _SET_ACCOUNT:    return T("Status konta", "Account status", "Kontostatus", "Stav uctu");
@@ -479,6 +493,7 @@ static void _setItemValue(int id, char* buf, size_t n, bool* bar) {
                 snprintf(buf, n, "%s", camModelName(kalkSettings.camModel));
             break;
         case _SET_LANGUAGE:   snprintf(buf, n, "%s", _setLangName()); break;
+        case _SET_WIFIKEEP:   snprintf(buf, n, "%s", _setWifiKeepLabel(kalkSettings.wifiKeep)); break;
         case _SET_WIFI:
             if (WiFi.status() == WL_CONNECTED) snprintf(buf, n, "%s", WiFi.SSID().c_str());
             else if (_setSum.ssid[0])          snprintf(buf, n, "%s", _setSum.ssid);
@@ -962,6 +977,37 @@ static void _editCamModel(U8G2 &d) {
             val = (val == 2) ? 0 : val + 1;
         } else if (_setBtn(BTN_OK)) {
             kalkSettings.camModel = val;
+            kalkSaveSettings();   // persist
+            _setWaitRelease();
+            return;
+        }
+
+        delay(20);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Edycja: WiFi w uspieniu — jak dlugo po auto-uspieniu trzymac polaczenie.
+// Hotspot w telefonie sam sie wylacza, gdy nikt nie jest podlaczony, wiec
+// rozlaczony kalkulator nie mial potem do czego wrocic. Kosztem jest bateria
+// (radio w modem-sleep zamiast light sleep, ~kilkadziesiat mA).
+// ---------------------------------------------------------------------------
+static void _editWifiKeep(U8G2 &d) {
+    uint8_t val = kalkSettings.wifiKeep;
+    int scroll = 0;
+    _setWaitRelease();
+
+    while (true) {
+        if (_panicRequested) return;
+        _setDrawPicker(d, _setItemLabel(_SET_WIFIKEEP), 4, val, kalkSettings.wifiKeep, scroll,
+                       _setWifiKeepLabel, nullptr, _setTxtSelect(), _setTxtSave());
+
+        if (_setBtn(BTN_LEFT) || _setBtn(BTN_UP)) {
+            val = (val == 0) ? 3 : val - 1;
+        } else if (_setBtn(BTN_RIGHT) || _setBtn(BTN_DOWN)) {
+            val = (val == 3) ? 0 : val + 1;
+        } else if (_setBtn(BTN_OK)) {
+            kalkSettings.wifiKeep = val;
             kalkSaveSettings();   // persist
             _setWaitRelease();
             return;
@@ -1917,6 +1963,7 @@ static void _setOpenItem(U8G2 &display, int id) {
         case _SET_ROTATION:   _editRotation(display);   break;
         case _SET_CAMERA:     _editCameraTuning(display); break;
         case _SET_CAMMODEL:   _editCamModel(display);   break;
+        case _SET_WIFIKEEP:   _editWifiKeep(display);   break;
         case _SET_LANGUAGE:   _editLanguage(display);   break;
         case _SET_REMOTE:     _editRemoteHelp(display); break;
         case _SET_SOLVEMODE:  _editSolveMode(display);  break;

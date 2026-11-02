@@ -1669,11 +1669,12 @@ static void _solRunPhotoMode(U8G2 &d) {
         return;
     }
 
-    // Warm-up - po switchu z podgladu AEC/AGC zbiega na nowo (3 klatki)
-    camWarmup(3);
-
-    _solDrawLoading(d, _solT("Robie zdjecie...", "Taking photo...", "Foto wird gemacht...", "Fotim..."), 0,
+    // Warm-up - po switchu z podgladu AEC/AGC zbiega na nowo (3 klatki), na
+    // OV5640 tu tez ostrzy — od tej chwili kadr musi stac, stad komunikat.
+    _solDrawLoading(d, _solT("Nie ruszaj - robie zdjecie...", "Hold still - taking photo...",
+                             "Stillhalten - Foto...", "Nehybejte - fotim..."), 0,
                     UI_ICO_CAMERA, _solTitleCamera());
+    camWarmup(3);
     camera_fb_t* fb = camCapture();
     if (!fb) {
         camEnd();
