@@ -17,11 +17,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Jakie przedmioty obsługuje AI?",
-      a: "Matematyka (poziom podstawowy i rozszerzony), fizyka, chemia i biologia. Model jest trenowany na tysiącach zadań z ostatnich 10 lat. Sukcesywnie dodajemy kolejne przedmioty.",
+      a: "Tryb „Egzamin” jest dostrojony pod maturę: matematyka (poziom podstawowy i rozszerzony), fizyka, chemia i biologia. Do wszystkiego innego jest tryb „Czysty AI” (przełączasz go w panelu na kalkmate.pl) — działa jak ogólny asystent AI i rozwiązuje zadania z dowolnego przedmiotu, także ze studiów: elektrotechnika, mechanika, ekonomia, rachunkowość, informatyka czy języki obce.",
     },
     {
       q: "Czy potrzebuję WiFi?",
-      a: "Tryb AI wymaga WiFi (konfigurujesz raz, w panelu użytkownika). Tryb klasycznego kalkulatora działa offline przez cały czas.",
+      a: "Tryb AI wymaga WiFi 2.4 GHz (5 GHz nie jest obsługiwane) — sieć wybierasz na kalkulatorze w Ustawienia → WiFi i konto. Najprościej użyć hotspotu z telefonu (na iPhonie włącz „Maksymalna zgodność”). Nie zadziałają sieci z logowaniem przez stronę WWW (np. w hotelu czy szkole). Tryb klasycznego kalkulatora działa offline przez cały czas.",
     },
     {
       q: "Czy AI wymaga abonamentu?",
@@ -37,7 +37,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Kiedy dostanę zamówienie?",
-      a: "Standardowy czas realizacji to 1–2 tygodnie od zaksięgowania płatności (maksymalnie 4 tygodnie). Po wysyłce dostawa Paczkomatem InPost zajmuje 1–2 dni robocze. Numer przesyłki dostajesz mailem.",
+      a: "Każdy kalkulator składamy ręcznie: standardowo 1–2 tygodnie od zaksięgowania płatności (maksymalnie 4 tygodnie). W Polsce dostawa Paczkomatem InPost (gratis) zajmuje potem 1–2 dni robocze. Za granicę wysyłamy kurierem — UE 20 EUR, reszta świata 35 EUR — łącznie zwykle 2–4 tygodnie. Nie mamy wysyłki ekspresowej; jeśli potrzebujesz kalkulatora na konkretną datę, napisz przed zamówieniem na kontakt@kalkmate.pl. Numer przesyłki dostajesz mailem.",
+    },
+    {
+      q: "Na ile zadań wystarczą tokeny z zestawu?",
+      a: "Zależy od długości rozwiązania i modelu AI wybranego w panelu. Przy domyślnym modelu jedno zadanie ze zdjęcia zużywa zwykle kilka–kilkanaście tysięcy tokenów, więc 2,2 mln tokenów na start (2 mln z kodu w pudełku + 200 tys. za założenie konta) wystarcza na kilkaset zadań. Tokeny nie wygasają i nie odnawiają się same — saldo widzisz w panelu, a gdy się skończą, dokupisz paczkę.",
+    },
+    {
+      q: "Gdzie zobaczę, jak to działa na prawdziwym urządzeniu?",
+      a: "Na stronie pomocy (kalkmate.pl/pomoc) są filmy z prawdziwego KalkMate: pierwsze uruchomienie i obsługa klawiszy, a zdjęcia urządzenia znajdziesz w galerii na stronie głównej. Masz konkretne pytanie o działanie? Napisz na czacie albo na kontakt@kalkmate.pl.",
     },
     {
       q: "Jaka jest gwarancja?",
@@ -59,11 +67,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Which subjects does the AI support?",
-      a: "Mathematics (basic and extended level), physics, chemistry and biology. The model is trained on thousands of problems from the last 10 years. We keep adding more subjects.",
+      a: "“Exam” mode is tuned for high-school finals: mathematics (basic and extended level), physics, chemistry and biology. For everything else there's “Raw AI” mode (switch it in your panel on kalkmate.pl) — it works like a general AI assistant and solves problems from any subject, including university courses: electrical engineering, statics and mechanics, economics, accounting, computer science or foreign languages.",
     },
     {
       q: "Do I need WiFi?",
-      a: "AI mode requires WiFi (you configure it once in your user panel). The classic calculator mode works offline at all times.",
+      a: "AI mode needs 2.4 GHz WiFi (5 GHz isn't supported) — you pick the network on the calculator in Settings → WiFi & account. The easiest option is your phone's hotspot (on iPhone turn on “Maximize Compatibility”). Networks that require logging in through a web page (hotels, schools) won't work. The classic calculator mode works offline at all times. There's no SIM card.",
     },
     {
       q: "Do I need a subscription for the AI?",
@@ -79,7 +87,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "When will I get my order?",
-      a: "Standard processing time is 1–2 weeks from payment confirmation (up to 4 weeks maximum). After dispatch, InPost parcel-locker delivery takes 1–2 business days. You'll get your tracking number by email.",
+      a: "Every calculator is assembled by hand: usually 1–2 weeks from payment confirmation (up to 4 weeks maximum). Outside Poland we ship by courier — EU €20, rest of the world (incl. USA and Canada) €35 — so the total is typically 2–4 weeks. There's no express shipping; if you need it by a specific date, email kontakt@kalkmate.pl before ordering. You'll get your tracking number by email.",
+    },
+    {
+      q: "How many problems can I solve with the included tokens?",
+      a: "It depends on the length of the solution and the AI model chosen in your panel. With the default model, one photographed problem usually uses several thousand to a dozen-or-so thousand tokens, so the 2.2M starting tokens (2M from the code in the box + 200K for creating an account) cover several hundred problems. Tokens never expire and don't regenerate on their own — you see your balance in the panel and can buy a pack when they run out.",
+    },
+    {
+      q: "Where can I see it working on a real device?",
+      a: "Our help page (kalkmate.pl/en/pomoc) has videos of a real KalkMate: first start-up and how the keys work, and you'll find photos of the device in the gallery on the home page. Got a specific question about how it works? Ask in the chat or email kontakt@kalkmate.pl.",
     },
     {
       q: "What's the warranty?",
@@ -101,11 +117,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Welche Fächer unterstützt die KI?",
-      a: "Mathematik (Grund- und Leistungskurs), Physik, Chemie und Biologie. Das Modell ist auf Tausende von Aufgaben der letzten 10 Jahre trainiert. Wir ergänzen laufend weitere Fächer.",
+      a: "Der „Prüfungsmodus“ ist auf Abschlussprüfungen abgestimmt: Mathematik (Grund- und Leistungskurs), Physik, Chemie und Biologie. Für alles andere gibt es den Modus „Reines AI“ (umschaltbar in deinem Panel auf kalkmate.pl) — er arbeitet wie ein allgemeiner KI-Assistent und löst Aufgaben aus jedem Fach, auch aus dem Studium: Elektrotechnik, Statik und Mechanik, Wirtschaft, Rechnungswesen, Informatik oder Fremdsprachen.",
     },
     {
       q: "Brauche ich WLAN?",
-      a: "Der KI-Modus benötigt WLAN (du richtest es einmal im Benutzerbereich ein). Der klassische Taschenrechner-Modus funktioniert jederzeit offline.",
+      a: "Der KI-Modus benötigt WLAN mit 2,4 GHz (5 GHz wird nicht unterstützt) — das Netzwerk wählst du direkt am Rechner unter Einstellungen → WLAN & Konto. Am einfachsten nutzt du den Hotspot deines Handys (auf dem iPhone „Kompatibilität maximieren“ einschalten). Netzwerke, bei denen man sich über eine Webseite anmelden muss (z. B. im Hotel oder in der Schule), funktionieren nicht. Der klassische Taschenrechner-Modus funktioniert jederzeit offline. Eine SIM-Karte gibt es nicht.",
     },
     {
       q: "Brauche ich ein Abo für die KI?",
@@ -121,7 +137,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Wann erhalte ich meine Bestellung?",
-      a: "Die Standardbearbeitungszeit beträgt 1–2 Wochen ab Zahlungseingang (maximal 4 Wochen). Nach dem Versand dauert die Lieferung per InPost-Paketstation 1–2 Werktage. Die Sendungsnummer erhältst du per E-Mail.",
+      a: "Jeder Rechner wird von Hand zusammengebaut: in der Regel 1–2 Wochen ab Zahlungseingang (maximal 4 Wochen). Außerhalb Polens versenden wir per Kurier — EU 20 EUR, Rest der Welt (inkl. USA und Kanada) 35 EUR —, insgesamt dauert es also meist 2–4 Wochen. Einen Expressversand gibt es nicht; wenn du den Rechner zu einem bestimmten Termin brauchst, schreib uns vor der Bestellung an kontakt@kalkmate.pl. Die Sendungsnummer erhältst du per E-Mail.",
+    },
+    {
+      q: "Für wie viele Aufgaben reichen die mitgelieferten Tokens?",
+      a: "Das hängt von der Länge der Lösung und dem im Panel gewählten KI-Modell ab. Mit dem Standardmodell verbraucht eine fotografierte Aufgabe meist einige tausend bis über zehntausend Tokens — die 2,2 Mio. Start-Tokens (2 Mio. aus dem Code in der Verpackung + 200.000 für die Kontoerstellung) reichen also für mehrere hundert Aufgaben. Tokens verfallen nicht und laden sich nicht von selbst wieder auf — dein Guthaben siehst du im Panel, und wenn es aufgebraucht ist, kaufst du ein Paket nach.",
+    },
+    {
+      q: "Wo kann ich sehen, wie es auf einem echten Gerät funktioniert?",
+      a: "Auf unserer Hilfeseite (kalkmate.pl/de/pomoc) gibt es Videos von einem echten KalkMate: die erste Inbetriebnahme und wie die Tasten funktionieren. Fotos des Geräts findest du in der Galerie auf der Startseite. Du hast eine konkrete Frage zur Funktionsweise? Frag im Chat oder schreib an kontakt@kalkmate.pl.",
     },
     {
       q: "Wie sieht die Garantie aus?",
@@ -143,11 +167,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Které předměty AI zvládá?",
-      a: "Matematiku (základní i rozšířenou úroveň), fyziku, chemii a biologii. Model je natrénovaný na tisících úloh z posledních 10 let. Postupně přidáváme další předměty.",
+      a: "Režim „Zkouška“ je vyladěný na maturitu: matematika (základní i rozšířená úroveň), fyzika, chemie a biologie. Na všechno ostatní je tu režim „Čisté AI“ (přepneš ho v panelu na kalkmate.pl) — funguje jako obecný AI asistent a řeší úlohy z jakéhokoli předmětu, i z vysoké školy: elektrotechnika, statika a mechanika, ekonomie, účetnictví, informatika nebo cizí jazyky.",
     },
     {
       q: "Potřebuji Wi-Fi?",
-      a: "Režim AI vyžaduje Wi-Fi (nastavíš ji jednou v uživatelském panelu). Klasický režim kalkulačky funguje kdykoli offline.",
+      a: "Režim AI potřebuje Wi-Fi 2,4 GHz (5 GHz není podporováno) — síť vybereš přímo na kalkulačce v Nastavení → WiFi a účet. Nejjednodušší je použít hotspot z telefonu (na iPhonu zapni „Maximalizovat kompatibilitu“). Nefungují sítě, kde se přihlašuje přes webovou stránku (např. v hotelu nebo ve škole). Klasický režim kalkulačky funguje kdykoli offline. SIM karta tu není.",
     },
     {
       q: "Potřebuji k AI předplatné?",
@@ -163,7 +187,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Kdy dostanu objednávku?",
-      a: "Standardní doba vyřízení je 1–2 týdny od připsání platby (maximálně 4 týdny). Po odeslání trvá doručení kurýrem obvykle 3–8 pracovních dnů. Číslo zásilky dostaneš e-mailem.",
+      a: "Každou kalkulačku skládáme ručně: obvykle 1–2 týdny od připsání platby (maximálně 4 týdny). Mimo Polsko posíláme kurýrem — EU 20 EUR, zbytek světa (vč. USA a Kanady) 35 EUR — celkem tedy obvykle 2–4 týdny. Expresní doprava není k dispozici; pokud potřebuješ kalkulačku ke konkrétnímu datu, napiš nám před objednávkou na kontakt@kalkmate.pl. Číslo zásilky dostaneš e-mailem.",
+    },
+    {
+      q: "Na kolik úloh vystačí tokeny z balení?",
+      a: "Záleží na délce řešení a na modelu AI zvoleném v panelu. S výchozím modelem spotřebuje jedna vyfocená úloha obvykle několik až několikanáct tisíc tokenů, takže 2,2 mil. tokenů na začátek (2 mil. z kódu v krabičce + 200 tis. za založení účtu) vystačí na několik set úloh. Tokeny nevyprší a samy se neobnovují — zůstatek vidíš v panelu, a až dojdou, dokoupíš balíček.",
+    },
+    {
+      q: "Kde uvidím, jak to funguje na skutečném zařízení?",
+      a: "Na stránce nápovědy (kalkmate.pl/cs/pomoc) najdeš videa se skutečným KalkMate: první spuštění a ovládání kláves. Fotky zařízení jsou v galerii na hlavní stránce. Máš konkrétní dotaz, jak to funguje? Napiš do chatu nebo na kontakt@kalkmate.pl.",
     },
     {
       q: "Jaká je záruka?",
@@ -185,11 +217,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Ktoré predmety AI zvláda?",
-      a: "Matematiku (základnú aj rozšírenú úroveň), fyziku, chémiu a biológiu. Model je natrénovaný na tisícoch úloh z posledných 10 rokov. Postupne pridávame ďalšie predmety.",
+      a: "Režim „Skúška“ je vyladený na maturitu: matematika (základná aj rozšírená úroveň), fyzika, chémia a biológia. Na všetko ostatné je tu režim „Čisté AI“ (prepneš ho v paneli na kalkmate.pl) — funguje ako všeobecný AI asistent a rieši úlohy z akéhokoľvek predmetu, aj z vysokej školy: elektrotechnika, statika a mechanika, ekonómia, účtovníctvo, informatika či cudzie jazyky.",
     },
     {
       q: "Potrebujem Wi-Fi?",
-      a: "Režim AI vyžaduje Wi-Fi (nastavíš ju raz v používateľskom paneli). Klasický režim kalkulačky funguje kedykoľvek offline.",
+      a: "Režim AI potrebuje Wi-Fi 2,4 GHz (5 GHz nie je podporované) — sieť vyberieš priamo na kalkulačke v Nastavenia → WiFi a účet. Najjednoduchšie je použiť hotspot z telefónu (na iPhone zapni „Maximalizovať kompatibilitu“). Nefungujú siete, kde sa prihlasuje cez webovú stránku (napr. v hoteli alebo v škole). Klasický režim kalkulačky funguje kedykoľvek offline. SIM karta tu nie je.",
     },
     {
       q: "Potrebujem na AI predplatné?",
@@ -205,7 +237,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Kedy dostanem objednávku?",
-      a: "Štandardná doba vybavenia je 1–2 týždne od pripísania platby (maximálne 4 týždne). Po odoslaní trvá doručenie kuriérom zvyčajne 3–8 pracovných dní. Číslo zásielky dostaneš e-mailom.",
+      a: "Každú kalkulačku skladáme ručne: zvyčajne 1–2 týždne od pripísania platby (maximálne 4 týždne). Mimo Poľska posielame kuriérom — EÚ 20 EUR, zvyšok sveta (vr. USA a Kanady) 35 EUR — celkovo teda zvyčajne 2–4 týždne. Expresné doručenie neponúkame; ak potrebuješ kalkulačku ku konkrétnemu dátumu, napíš nám pred objednávkou na kontakt@kalkmate.pl. Číslo zásielky dostaneš e-mailom.",
+    },
+    {
+      q: "Na koľko úloh vystačia tokeny z balenia?",
+      a: "Závisí to od dĺžky riešenia a od modelu AI zvoleného v paneli. S predvoleným modelom spotrebuje jedna odfotená úloha zvyčajne niekoľko až niekoľkonásť tisíc tokenov, takže 2,2 mil. tokenov na začiatok (2 mil. z kódu v krabičke + 200 tis. za založenie účtu) vystačí na niekoľko stoviek úloh. Tokeny nevypršia a samy sa neobnovujú — zostatok vidíš v paneli, a keď sa minú, dokúpiš balík.",
+    },
+    {
+      q: "Kde uvidím, ako to funguje na skutočnom zariadení?",
+      a: "Na stránke pomoci (kalkmate.pl/sk/pomoc) nájdeš videá so skutočným KalkMate: prvé spustenie a ovládanie klávesov. Fotky zariadenia sú v galérii na hlavnej stránke. Máš konkrétnu otázku, ako to funguje? Napíš do chatu alebo na kontakt@kalkmate.pl.",
     },
     {
       q: "Aká je záruka?",
@@ -227,11 +267,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Kokius dalykus palaiko DI?",
-      a: "Matematiką (bendrąjį ir išplėstinį kursą), fiziką, chemiją ir biologiją. Modelis apmokytas su tūkstančiais paskutinių 10 metų užduočių. Nuolat pridedame naujų dalykų.",
+      a: "Režimas „Egzaminas“ pritaikytas brandos egzaminams: matematikai (bendrasis ir išplėstinis kursas), fizikai, chemijai ir biologijai. Visam kitam yra režimas „Grynas DI“ (jį perjungi savo skydelyje kalkmate.pl) — jis veikia kaip bendrasis DI asistentas ir sprendžia bet kurio dalyko užduotis, taip pat ir universitetinių studijų: elektrotechnikos, statikos ir mechanikos, ekonomikos, apskaitos, informatikos ar užsienio kalbų.",
     },
     {
       q: "Ar man reikia Wi-Fi?",
-      a: "DI režimui reikia Wi-Fi (jį nustatai vieną kartą naudotojo skydelyje). Klasikinis skaičiuotuvo režimas visada veikia ir be interneto.",
+      a: "DI režimui reikia 2,4 GHz Wi-Fi (5 GHz nepalaikomas) — tinklą pasirenki pačiame skaičiuotuve, meniu Nustatymai → WiFi ir paskyra. Paprasčiausia naudoti telefono interneto prieigos tašką (iPhone telefone įjunk „Maksimizuoti suderinamumą“). Tinklai, kuriuose reikia prisijungti per tinklalapį (viešbučiuose, mokyklose), neveiks. Klasikinis skaičiuotuvo režimas visada veikia ir be interneto. SIM kortelės nėra.",
     },
     {
       q: "Ar DI reikia prenumeratos?",
@@ -247,7 +287,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Kada gausiu užsakymą?",
-      a: "Įprastas įvykdymo laikas — 1–2 savaitės nuo mokėjimo įskaitymo (daugiausia 4 savaitės). Išsiuntus kurjeris paprastai pristato per 3–8 darbo dienas. Siuntos numerį gausi el. paštu.",
+      a: "Kiekvieną skaičiuotuvą surenkame rankomis: paprastai per 1–2 savaites nuo mokėjimo įskaitymo (daugiausia per 4 savaites). Už Lenkijos ribų siunčiame per kurjerį — ES 20 €, kitur pasaulyje (įskaitant JAV ir Kanadą) 35 € — taigi iš viso paprastai užtrunka 2–4 savaites. Skubaus pristatymo neturime; jei skaičiuotuvo reikia iki konkrečios datos, prieš užsakymą parašyk kontakt@kalkmate.pl. Siuntos sekimo numerį gausi el. paštu.",
+    },
+    {
+      q: "Kiek užduočių išspręsiu su komplekte esančiais žetonais?",
+      a: "Priklauso nuo sprendimo ilgio ir skydelyje pasirinkto DI modelio. Naudojant numatytąjį modelį, viena nufotografuota užduotis paprastai sunaudoja nuo kelių iki keliolikos tūkstančių žetonų, todėl 2,2 mln. pradinių žetonų (2 mln. iš kodo dėžutėje + 200 tūkst. už paskyros sukūrimą) užtenka keliems šimtams užduočių. Žetonai nenustoja galioti ir patys nepasipildo — likutį matai skydelyje, o kai jie baigsis, galėsi nusipirkti paketą.",
+    },
+    {
+      q: "Kur galiu pamatyti, kaip jis veikia tikrame įrenginyje?",
+      a: "Pagalbos puslapyje (kalkmate.pl/lt/pomoc) rasi vaizdo įrašų su tikru KalkMate: pirmasis paleidimas ir kaip veikia klavišai, o įrenginio nuotraukų yra pagrindinio puslapio galerijoje. Turi konkretų klausimą apie veikimą? Parašyk pokalbyje arba el. paštu kontakt@kalkmate.pl.",
     },
     {
       q: "Kokia garantija?",
@@ -269,11 +317,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Якія прадметы падтрымлівае ШІ?",
-      a: "Матэматыку (базавы і павышаны ўзровень), фізіку, хімію і біялогію. Мадэль навучаная на тысячах задач за апошнія 10 гадоў. Мы паступова дадаём новыя прадметы.",
+      a: "Рэжым «Экзамен» настроены пад выпускныя экзамены: матэматыка (базавы і павышаны ўзровень), фізіка, хімія і біялогія. Для ўсяго астатняга ёсць рэжым «Чысты ШІ» (пераключаеш яго ў панэлі на kalkmate.pl) — ён працуе як агульны ШІ-асістэнт і рашае задачы з любога прадмета, у тым ліку з універсітэцкіх курсаў: электратэхніка, статыка і механіка, эканоміка, бухгалтарскі ўлік, інфарматыка ці замежныя мовы.",
     },
     {
       q: "Ці патрэбны Wi-Fi?",
-      a: "Рэжым ШІ патрабуе Wi-Fi (наладжваеш яго адзін раз у панэлі карыстальніка). Класічны рэжым калькулятара заўсёды працуе без інтэрнэту.",
+      a: "Рэжым ШІ патрабуе Wi-Fi 2,4 ГГц (5 ГГц не падтрымліваецца) — сетку выбіраеш на самім калькулятары ў Налады → WiFi і акаўнт. Прасцей за ўсё скарыстацца хот-спотам з тэлефона (на iPhone уключы «Максимальная совместимость» / «Maximize Compatibility»). Сеткі, дзе трэба ўваходзіць праз вэб-старонку (у гатэлях, школах), не спрацуюць. Класічны рэжым калькулятара заўсёды працуе без інтэрнэту. SIM-карты няма.",
     },
     {
       q: "Ці патрэбна падпіска на ШІ?",
@@ -289,7 +337,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Калі я атрымаю заказ?",
-      a: "Стандартны тэрмін выканання — 1–2 тыдні з моманту паступлення аплаты (максімум 4 тыдні). Пасля адпраўкі дастаўка кур’ерам па ЕС звычайна займае 3–8 працоўных дзён. Нумар адпраўлення прыйдзе на e-mail.",
+      a: "Кожны калькулятар мы збіраем уручную: звычайна 1–2 тыдні з моманту паступлення аплаты (максімум 4 тыдні). За межы Польшчы адпраўляем кур’ерам — ЕС 20 €, астатні свет (у тым ліку ЗША і Канада) 35 € — таму агулам звычайна выходзіць 2–4 тыдні. Экспрэс-дастаўкі няма; калі калькулятар патрэбны да пэўнай даты, напішы на kontakt@kalkmate.pl перад заказам. Нумар адпраўлення прыйдзе на e-mail.",
+    },
+    {
+      q: "На колькі задач хопіць токенаў з камплекта?",
+      a: "Залежыць ад даўжыні рашэння і мадэлі ШІ, абранай у панэлі. З мадэллю па змаўчанні адна сфатаграфаваная задача звычайна расходуе ад некалькіх да больш як дзесяці тысяч токенаў, таму 2,2 млн стартавых токенаў (2 млн з кода ў каробцы + 200 тыс. за стварэнне акаўнта) хопіць на некалькі сотняў задач. Токены не згараюць і самі не аднаўляюцца — баланс бачыш у панэлі, а калі яны скончацца, дакупіш пакет.",
+    },
+    {
+      q: "Дзе можна паглядзець, як гэта працуе на сапраўднай прыладзе?",
+      a: "На старонцы дапамогі (kalkmate.pl/be/pomoc) ёсць відэа з сапраўдным KalkMate: першы запуск і праца з клавішамі, а фота прылады знойдзеш у галерэі на галоўнай старонцы. Ёсць канкрэтнае пытанне пра тое, як ён працуе? Напішы ў чат або на kontakt@kalkmate.pl.",
     },
     {
       q: "Якая гарантыя?",
@@ -311,11 +367,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "¿Qué asignaturas cubre la IA?",
-      a: "Matemáticas (nivel básico y avanzado), física, química y biología. El modelo está entrenado con miles de problemas de los últimos 10 años. Vamos añadiendo más asignaturas.",
+      a: "El modo «Examen» está ajustado para los exámenes finales de bachillerato: matemáticas (nivel básico y avanzado), física, química y biología. Para todo lo demás está el modo «IA pura» (lo cambias en tu panel en kalkmate.pl): funciona como un asistente de IA general y resuelve problemas de cualquier asignatura, también de la universidad: electrotecnia, estática y mecánica, economía, contabilidad, informática o idiomas.",
     },
     {
       q: "¿Necesito wifi?",
-      a: "El modo IA necesita wifi (lo configuras una sola vez en tu panel de usuario). El modo de calculadora clásica funciona sin conexión en todo momento.",
+      a: "El modo IA necesita wifi de 2,4 GHz (5 GHz no es compatible): la red se elige en la propia calculadora, en Ajustes → WiFi y cuenta. Lo más fácil es usar el punto de acceso de tu móvil (en el iPhone activa «Maximizar compatibilidad»). No funcionan las redes que piden iniciar sesión en una página web (hoteles, centros educativos). El modo de calculadora clásica funciona sin conexión en todo momento. No lleva tarjeta SIM.",
     },
     {
       q: "¿La IA necesita suscripción?",
@@ -331,7 +387,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "¿Cuándo recibiré mi pedido?",
-      a: "El plazo de preparación habitual es de 1–2 semanas desde que se confirma el pago (máximo 4 semanas). Tras el envío, la entrega por mensajería suele tardar 3–8 días laborables. Recibirás el número de seguimiento por correo electrónico.",
+      a: "Cada calculadora se monta a mano: normalmente 1–2 semanas desde que se confirma el pago (máximo 4 semanas). Fuera de Polonia enviamos por mensajería (UE 20 €, resto del mundo, incluidos EE. UU. y Canadá, 35 €), así que en total suele tardar 2–4 semanas. No tenemos envío urgente; si la necesitas para una fecha concreta, escribe a kontakt@kalkmate.pl antes de hacer el pedido. Recibirás el número de seguimiento por correo electrónico.",
+    },
+    {
+      q: "¿Para cuántos problemas dan los tokens incluidos?",
+      a: "Depende de la longitud de la solución y del modelo de IA elegido en tu panel. Con el modelo predeterminado, un problema fotografiado suele gastar entre unos pocos miles y algo más de diez mil tokens, así que los 2,2 millones de tokens iniciales (2 millones del código de la caja + 200.000 por crear la cuenta) dan para varios cientos de problemas. Los tokens no caducan ni se renuevan solos: ves tu saldo en el panel y puedes comprar un paquete cuando se acaben.",
+    },
+    {
+      q: "¿Dónde puedo verla funcionando en un dispositivo real?",
+      a: "En nuestra página de ayuda (kalkmate.pl/es/pomoc) hay vídeos de un KalkMate real: el primer encendido y cómo funcionan las teclas, y en la galería de la página principal encontrarás fotos del dispositivo. ¿Tienes alguna pregunta concreta sobre su funcionamiento? Escríbenos en el chat o a kontakt@kalkmate.pl.",
     },
     {
       q: "¿Qué garantía tiene?",
@@ -353,11 +417,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Que disciplinas a IA suporta?",
-      a: "Matemática (nível básico e avançado), física, química e biologia. O modelo foi treinado com milhares de exercícios dos últimos 10 anos. Estamos sempre a acrescentar novas disciplinas.",
+      a: "O modo «Exame» está afinado para os exames finais do secundário: matemática (nível básico e avançado), física, química e biologia. Para tudo o resto há o modo «IA pura» (escolhes no painel em kalkmate.pl) — funciona como um assistente de IA geral e resolve exercícios de qualquer disciplina, incluindo cadeiras da universidade: engenharia eletrotécnica, estática e mecânica, economia, contabilidade, informática ou línguas estrangeiras.",
     },
     {
       q: "Preciso de Wi-Fi?",
-      a: "O modo IA precisa de Wi-Fi (configuras uma vez no painel de utilizador). O modo de calculadora clássica funciona sempre offline.",
+      a: "O modo IA precisa de Wi-Fi de 2,4 GHz (5 GHz não é suportado) — escolhes a rede na própria calculadora, em Definições → WiFi e conta. O mais simples é usar o hotspot do telemóvel (no iPhone ativa «Maximizar compatibilidade»). Redes que exigem início de sessão através de uma página web (hotéis, escolas) não funcionam. O modo de calculadora clássica funciona sempre offline. Não tem cartão SIM.",
     },
     {
       q: "A IA precisa de subscrição?",
@@ -373,7 +437,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Quando recebo a minha encomenda?",
-      a: "O prazo normal de preparação é de 1–2 semanas após a confirmação do pagamento (no máximo 4 semanas). Depois do envio, a entrega por transportadora demora normalmente 3–8 dias úteis. Recebes o número de seguimento por e-mail.",
+      a: "Cada calculadora é montada à mão: normalmente 1–2 semanas após a confirmação do pagamento (no máximo 4 semanas). Para fora da Polónia enviamos por transportadora — UE 20 €, resto do mundo (incl. EUA e Canadá) 35 € — por isso o prazo total é normalmente de 2–4 semanas. Não temos envio expresso; se precisares dela até uma data específica, escreve para kontakt@kalkmate.pl antes de encomendar. Recebes o número de seguimento por e-mail.",
+    },
+    {
+      q: "Para quantos exercícios chegam os tokens incluídos?",
+      a: "Depende do tamanho da resolução e do modelo de IA escolhido no painel. Com o modelo predefinido, um exercício fotografado gasta normalmente entre alguns milhares e pouco mais de dez mil tokens, por isso os 2,2 milhões de tokens iniciais (2 milhões do código na caixa + 200 mil por criares conta) chegam para várias centenas de exercícios. Os tokens não expiram nem se renovam sozinhos — vês o saldo no painel e, quando acabarem, podes comprar um pacote.",
+    },
+    {
+      q: "Onde posso ver o KalkMate a funcionar num dispositivo real?",
+      a: "Na página de ajuda (kalkmate.pl/pt/pomoc) há vídeos de um KalkMate real: o primeiro arranque e como funcionam as teclas; as fotos do dispositivo estão na galeria da página inicial. Tens uma pergunta concreta sobre o funcionamento? Escreve no chat ou para kontakt@kalkmate.pl.",
     },
     {
       q: "Qual é a garantia?",
@@ -395,11 +467,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Quelles matières l’IA prend-elle en charge ?",
-      a: "Les mathématiques (niveau de base et approfondi), la physique, la chimie et la biologie. Le modèle est entraîné sur des milliers d’exercices des 10 dernières années. Nous ajoutons régulièrement de nouvelles matières.",
+      a: "Le mode « Examen » est optimisé pour les examens de fin de lycée : mathématiques (niveau de base et approfondi), physique, chimie et biologie. Pour tout le reste, il y a le mode « IA brute » (à activer dans ton espace sur kalkmate.pl) — il fonctionne comme un assistant IA généraliste et résout des exercices de n’importe quelle matière, y compris de niveau universitaire : électrotechnique, statique et mécanique, économie, comptabilité, informatique ou langues étrangères.",
     },
     {
       q: "Ai-je besoin du Wi-Fi ?",
-      a: "Le mode IA nécessite le Wi-Fi (à configurer une seule fois dans ton espace utilisateur). Le mode calculatrice classique fonctionne hors ligne en permanence.",
+      a: "Le mode IA nécessite un Wi-Fi 2,4 GHz (le 5 GHz n’est pas pris en charge) — tu choisis le réseau directement sur la calculatrice, dans Paramètres → WiFi et compte. Le plus simple est d’utiliser le partage de connexion de ton téléphone (sur iPhone, active « Optimiser la compatibilité »). Les réseaux qui demandent une connexion via une page web (hôtels, écoles) ne fonctionnent pas. Le mode calculatrice classique fonctionne hors ligne en permanence. Il n’y a pas de carte SIM.",
     },
     {
       q: "Faut-il un abonnement pour l’IA ?",
@@ -415,7 +487,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Quand vais-je recevoir ma commande ?",
-      a: "Le délai de préparation habituel est de 1 à 2 semaines après la réception du paiement (4 semaines maximum). Après l’expédition, la livraison par transporteur prend généralement 3 à 8 jours ouvrés. Tu reçois le numéro de suivi par e-mail.",
+      a: "Chaque calculatrice est assemblée à la main : en général 1 à 2 semaines après la réception du paiement (4 semaines maximum). Hors de Pologne, nous expédions par transporteur — UE 20 €, reste du monde (y compris États-Unis et Canada) 35 € — soit au total 2 à 4 semaines en général. Il n’y a pas de livraison express ; si tu en as besoin pour une date précise, écris à kontakt@kalkmate.pl avant de commander. Tu reçois le numéro de suivi par e-mail.",
+    },
+    {
+      q: "Pour combien d’exercices les tokens inclus suffisent-ils ?",
+      a: "Cela dépend de la longueur de la solution et du modèle IA choisi dans ton espace. Avec le modèle par défaut, un exercice photographié consomme en général de quelques milliers à un peu plus de dix mille tokens : les 2,2 millions de tokens de départ (2 millions grâce au code dans la boîte + 200 000 pour la création du compte) suffisent donc pour plusieurs centaines d’exercices. Les tokens n’expirent pas et ne se rechargent pas tout seuls — tu vois ton solde dans ton espace et tu peux acheter un pack quand ils sont épuisés.",
+    },
+    {
+      q: "Où puis-je voir KalkMate fonctionner sur un vrai appareil ?",
+      a: "Notre page d’aide (kalkmate.pl/fr/pomoc) propose des vidéos d’une vraie KalkMate : la première mise en route et le fonctionnement des touches ; tu trouveras aussi des photos de l’appareil dans la galerie de la page d’accueil. Une question précise sur son fonctionnement ? Pose-la dans le chat ou écris à kontakt@kalkmate.pl.",
     },
     {
       q: "Quelle est la garantie ?",
@@ -437,11 +517,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Quali materie supporta l’IA?",
-      a: "Matematica (livello base e avanzato), fisica, chimica e biologia. Il modello è addestrato su migliaia di esercizi degli ultimi 10 anni. Aggiungiamo continuamente nuove materie.",
+      a: "La modalità «Esame» è ottimizzata per l’esame di maturità: matematica (livello base e avanzato), fisica, chimica e biologia. Per tutto il resto c’è la modalità «IA pura» (la attivi nel pannello su kalkmate.pl): funziona come un assistente IA generico e risolve esercizi di qualsiasi materia, anche universitari: elettrotecnica, statica e meccanica, economia, contabilità, informatica o lingue straniere.",
     },
     {
       q: "Mi serve il Wi-Fi?",
-      a: "La modalità IA richiede il Wi-Fi (lo configuri una sola volta nel pannello utente). La modalità calcolatrice classica funziona sempre offline.",
+      a: "La modalità IA richiede il Wi-Fi a 2,4 GHz (il 5 GHz non è supportato): scegli la rete direttamente sulla calcolatrice, in Impostazioni → WiFi e account. La soluzione più semplice è l’hotspot del telefono (su iPhone attiva «Massimizza compatibilità»). Le reti che richiedono l’accesso tramite una pagina web (hotel, scuole) non funzionano. La modalità calcolatrice classica funziona sempre offline. Non c’è nessuna SIM.",
     },
     {
       q: "Serve un abbonamento per l’IA?",
@@ -457,7 +537,15 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Quando riceverò il mio ordine?",
-      a: "Il tempo standard di evasione è di 1–2 settimane dall’accredito del pagamento (massimo 4 settimane). Dopo la spedizione, la consegna tramite corriere richiede di solito 3–8 giorni lavorativi. Riceverai il numero di tracking via e-mail.",
+      a: "Ogni calcolatrice è assemblata a mano: di solito 1–2 settimane dall’accredito del pagamento (massimo 4 settimane). Fuori dalla Polonia spediamo con corriere — UE 20 €, resto del mondo (inclusi USA e Canada) 35 € — quindi in totale di solito 2–4 settimane. Non offriamo la spedizione espressa; se ti serve entro una data precisa, scrivi a kontakt@kalkmate.pl prima di ordinare. Riceverai il numero di tracking via e-mail.",
+    },
+    {
+      q: "Per quanti esercizi bastano i token inclusi?",
+      a: "Dipende dalla lunghezza della soluzione e dal modello IA scelto nel pannello. Con il modello predefinito, un esercizio fotografato consuma di solito da qualche migliaio a poco più di diecimila token, quindi i 2,2 milioni di token iniziali (2 milioni dal codice nella scatola + 200.000 per la creazione dell’account) bastano per diverse centinaia di esercizi. I token non scadono e non si ricaricano da soli: vedi il saldo nel pannello e, quando finiscono, puoi acquistare un pacchetto.",
+    },
+    {
+      q: "Dove posso vedere KalkMate in funzione su un dispositivo reale?",
+      a: "Nella pagina di aiuto (kalkmate.pl/it/pomoc) trovi i video di una vera KalkMate: la prima accensione e l’uso dei tasti; le foto del dispositivo sono nella galleria della home page. Hai una domanda precisa sul funzionamento? Scrivi in chat o a kontakt@kalkmate.pl.",
     },
     {
       q: "Che garanzia c’è?",
