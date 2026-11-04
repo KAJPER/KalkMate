@@ -4,6 +4,10 @@ import { verifyNotificationSign, verifyTransaction } from "@/lib/przelewy24";
 import { findTokenPurchaseBySession, markTokenPurchasePaidAndCredit } from "@/lib/tokenPurchases";
 import { orderIdForPaymentSession, settleP24OrderPayment } from "@/lib/paymentReminders";
 import { alertAdmin, formatMinor } from "@/lib/checkoutPricing";
+import { findRentalBySession, markRentalPaid, formatPln } from "@/lib/rentals";
+import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
+import { sendMail } from "@/lib/mailer";
+import { rentalPaidEmail, RENTAL_EMAIL_SUBJECTS } from "@/lib/email-templates";
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>;
@@ -80,6 +84,49 @@ export async function POST(request: NextRequest) {
       console.log(`[P24 WEBHOOK] ✅ Token purchase paid: +${tokenPurchase.tokens} tokenow dla user ${tokenPurchase.userId}`);
     } else {
       console.log("[P24 WEBHOOK] Token purchase already processed (race):", tokenPurchase.id);
+    }
+    return NextResponse.json({ received: true });
+  }
+
+  // Wypozyczenie (lib/rentals.ts) — osobna tabela, jak doladowania tokenow.
+  const rental = await findRentalBySession(String(sessionId));
+  if (rental) {
+    if (rental.status !== "pending") {
+      console.log("[P24 WEBHOOK] Rental already processed:", rental.rentalNumber);
+      return NextResponse.json({ received: true });
+    }
+    const expected = rental.feeGrosze + rental.depositGrosze;
+    if (Number(amount) !== expected || String(currency).toUpperCase() !== "PLN") {
+      await alertAdmin("P24: niezgodna kwota wypożyczenia", [
+        `Wypożyczenie: ${rental.rentalNumber} (sesja ${rental.sessionId}), ${rental.customerEmail}`,
+        `P24: ${formatMinor(Number(amount), String(currency))}, oczekiwane: ${formatMinor(expected, "pln")}`,
+        `Płatności NIE zweryfikowano.`,
+      ]);
+      return NextResponse.json({ received: true });
+    }
+    try {
+      await verifyTransaction({ sessionId: String(sessionId), orderId: Number(orderId), amount: Number(amount), currency: "PLN" });
+    } catch (err) {
+      console.error("[P24 WEBHOOK] Verify transaction failed (rental):", err);
+      return NextResponse.json({ error: "Verify failed" }, { status: 500 });
+    }
+    const paid = await markRentalPaid(rental);
+    if (paid) {
+      console.log(`[P24 WEBHOOK] ✅ Rental paid: ${paid.rentalNumber}`);
+      if (paid.orderId) await autoEnqueueOrderReceipt(paid.orderId);
+      const mail = await sendMail({
+        to: paid.customerEmail,
+        subject: RENTAL_EMAIL_SUBJECTS.paid,
+        html: rentalPaidEmail({
+          customerName: paid.customerName, rentalNumber: paid.rentalNumber, days: paid.days,
+          fee: formatPln(paid.feeGrosze), deposit: formatPln(paid.depositGrosze), pickupPoint: paid.pickupPoint,
+        }),
+      }).catch((e) => ({ ok: false, error: String(e) }));
+      if (!mail.ok) console.error("[P24 WEBHOOK] rental mail failed", paid.rentalNumber, mail.error);
+      await alertAdmin("Nowe wypożyczenie opłacone", [
+        `${paid.rentalNumber}: ${paid.days} dni, ${paid.customerName} <${paid.customerEmail}>`,
+        `Przypisz kalkulator i nadaj paczkę: /admin/rentals`,
+      ]).catch(() => {});
     }
     return NextResponse.json({ received: true });
   }

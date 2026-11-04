@@ -1672,6 +1672,62 @@ export function complaintAckEmail(d: ComplaintAckData): string {
 // ---------------------------------------------------------------------------
 // Tematy maili (subject lines) — używane bezpośrednio w routes
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Wypozyczenia (lib/rentals.ts) — tylko PL (najem tylko z dostawa w Polsce)
+// ---------------------------------------------------------------------------
+export interface RentalEmailData {
+  customerName: string;
+  rentalNumber: string;
+  days: number;
+  fee: string;       // sformatowana kwota, np. "149 zł"
+  deposit: string;   // "300 zł" albo "0 zł"
+  endDate?: string;  // "12.12.2026"
+  pickupPoint?: string;
+}
+
+export const RENTAL_EMAIL_SUBJECTS = {
+  paid: "Wypożyczenie opłacone – KalkMate",
+  reminder: "Najem kalkulatora kończy się wkrótce – KalkMate",
+  overdue: "Termin najmu minął — odeślij kalkulator – KalkMate",
+};
+
+export function rentalPaidEmail(d: RentalEmailData): string {
+  const inner = `
+    ${eyebrowBlock("Wypożyczenie · Opłacone")}
+    ${headline("Kalkulator jest Twój na czas najmu.", "na czas najmu")}
+    ${lead(`Cześć ${escHtml(d.customerName)}, dziękujemy — płatność za wypożyczenie <strong>${escHtml(d.rentalNumber)}</strong> dotarła.`)}
+    ${infoTable([
+      infoRow("Okres najmu", `${d.days} dni`),
+      infoRow("Opłata za najem", escHtml(d.fee)),
+      infoRow("Kaucja (zwrotna)", escHtml(d.deposit)),
+      d.pickupPoint ? infoRow("Paczkomat", escHtml(d.pickupPoint)) : "",
+    ].join(""))}
+    ${body("Wyślemy kalkulator w ciągu 1–2 dni roboczych — dostaniesz maila z numerem przesyłki. Okres najmu liczymy od nadania paczki, z kilkoma dniami zapasu na dostawę i odesłanie.")}
+    ${body("Po zakończeniu najmu odeślij kalkulator na adres: KalkMate, ul. Zastawie I 37, 16-070 Choroszcz. Kaucję zwracamy w ciągu 7 dni od otrzymania sprawnego kalkulatora.")}
+    ${ctaButton("Regulamin wypożyczeń", "https://kalkmate.pl/regulamin#wypozyczenie")}
+  `;
+  return shell(inner, "pl");
+}
+
+export function rentalReminderEmail(d: RentalEmailData, overdue: boolean): string {
+  const inner = overdue
+    ? `
+    ${eyebrowBlock("Wypożyczenie · Termin minął")}
+    ${headline("Czas oddać kalkulator.", "oddać")}
+    ${lead(`Cześć ${escHtml(d.customerName)}, najem <strong>${escHtml(d.rentalNumber)}</strong> zakończył się ${escHtml(d.endDate || "")}. Funkcje AI w kalkulatorze są już wyłączone.`)}
+    ${body("Odeślij kalkulator na adres: KalkMate, ul. Zastawie I 37, 16-070 Choroszcz (najlepiej Paczkomatem lub kurierem z numerem śledzenia). Po otrzymaniu sprawnego kalkulatora zwrócimy kaucję.")}
+    ${body("Chcesz zatrzymać go dłużej? Odpisz na tego maila — przedłużymy najem.")}
+    ${body("Za każdy dzień opóźnienia ponad 7 dni potrącamy z kaucji opłatę zgodnie z regulaminem wypożyczeń.")}
+  `
+    : `
+    ${eyebrowBlock("Wypożyczenie · Przypomnienie")}
+    ${headline("Najem kończy się za kilka dni.", "za kilka dni")}
+    ${lead(`Cześć ${escHtml(d.customerName)}, wypożyczenie <strong>${escHtml(d.rentalNumber)}</strong> trwa do <strong>${escHtml(d.endDate || "")}</strong>. Po tej dacie AI w kalkulatorze wyłączy się automatycznie.`)}
+    ${body("Chcesz przedłużyć? Odpisz na tego maila. Jeśli nie — po tej dacie odeślij kalkulator na adres: KalkMate, ul. Zastawie I 37, 16-070 Choroszcz, a zwrócimy kaucję.")}
+  `;
+  return shell(inner, "pl");
+}
+
 export const EMAIL_SUBJECTS = {
   verify: {
     pl: "Potwierdź adres e-mail – KalkMate",

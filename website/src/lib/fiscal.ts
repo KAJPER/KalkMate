@@ -27,6 +27,7 @@ import { prisma } from "@/lib/db";
 import { requireAdminAuth } from "@/lib/admin-auth";
 import { getOrderCoupon } from "@/lib/coupons";
 import { readOrderUnits } from "@/lib/orderPersonalization";
+import { findRentalByOrderId } from "@/lib/rentals";
 import { randomUUID, timingSafeEqual } from "crypto";
 
 export type FiscalJobState =
@@ -249,6 +250,18 @@ export async function buildOrderReceipt(order: OrderForReceipt): Promise<Receipt
     // Paragon jest w PLN; sprzedaż w EUR (często WSTO/OSS) wymaga decyzji księgowej.
     throw new FiscalError("Zamówienie w walucie innej niż PLN — paragon tylko po decyzji księgowej (patrz docs/fiskalizacja).");
   }
+  // Wypozyczenie (lib/rentals.ts): paragon tylko z OPLATY za najem — kaucja
+  // jest zwrotna, to nie przychod. Blad bazy NIE jest lapany: cichy powrot do
+  // paragonu "urzadzenie" nabilby kaucje jako sprzedaz.
+  const rental = await findRentalByOrderId(order.id);
+  if (rental) {
+    return {
+      items: [{ name: `Wynajem kalkulatora KalkMate (${rental.days} dni)`, unit_price: rental.feeGrosze, vat: VAT_RATE }],
+      payments: [{ type: "transfer", amount: rental.feeGrosze, name: "Przelewy24" }],
+      reference: order.orderNumber,
+    };
+  }
+
   const coupon = await getOrderCoupon(order.id).catch(() => null);
   const discount = coupon?.discountCents ?? 0;
   // Liczba sztuk (kolumna "quantity", stare zamówienia = 1). Błąd bazy NIE jest

@@ -81,7 +81,7 @@ export async function checkRentalLock(deviceId: string): Promise<RentalLockCheck
   if (info.rentalLocked) {
     return {
       locked: true,
-      reason: "Wynajem zablokowany. Skontaktuj sie z KalkMate.",
+      reason: "Zablokowany - kontakt@kalkmate.pl",
     };
   }
   if (info.rentalUntil) {
@@ -89,7 +89,9 @@ export async function checkRentalLock(deviceId: string): Promise<RentalLockCheck
     if (!isNaN(until.getTime()) && until.getTime() < Date.now()) {
       return {
         locked: true,
-        reason: "Okres najmu zakonczony. Zwroc urzadzenie lub przedluz najem na kalkmate.pl.",
+        // ASCII i max ~40 znakow — kalkulator pokazuje to w jednej linii
+        // (_solShowSendError, font 6 px, 248 px szerokosci).
+        reason: "Najem skonczony - odeslij kalkulator",
       };
     }
   }

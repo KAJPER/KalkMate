@@ -6,6 +6,9 @@ import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
 import { sendPaymentReminders, type ReminderResult } from "@/lib/paymentReminders";
 import { ensureDailyBackup } from "@/lib/dbBackup";
 import { purgeOldSupportChats } from "@/lib/supportChat";
+import { claimRentalReminders, formatPln } from "@/lib/rentals";
+import { sendMail } from "@/lib/mailer";
+import { rentalReminderEmail, RENTAL_EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { sendReviewRequests, type ReviewRequestResult } from "@/lib/reviews";
 import { maybeRunDailyClaritySnapshot } from "@/lib/clarity";
 import { runFwUpdateNotices, type FwNoticeResult } from "@/lib/fwUpdateNotice";
@@ -98,6 +101,31 @@ export async function GET(req: NextRequest) {
       errors.push(`clarity: ${(e as Error).message}`);
     }
 
+    // Wypozyczenia: przypomnienie 3 dni przed koncem i po terminie (lib/rentals.ts).
+    const rentalReminders = { before: 0, overdue: 0, failed: 0 };
+    try {
+      const { before, overdue } = await claimRentalReminders();
+      for (const [list, isOverdue] of [[before, false], [overdue, true]] as const) {
+        for (const r of list) {
+          const res = await sendMail({
+            to: r.customerEmail,
+            subject: isOverdue ? RENTAL_EMAIL_SUBJECTS.overdue : RENTAL_EMAIL_SUBJECTS.reminder,
+            html: rentalReminderEmail({
+              customerName: r.customerName, rentalNumber: r.rentalNumber, days: r.days,
+              fee: formatPln(r.feeGrosze), deposit: formatPln(r.depositGrosze),
+              endDate: r.endAt ? new Date(r.endAt).toLocaleDateString("pl-PL", { timeZone: "Europe/Warsaw" }) : "",
+            }, isOverdue),
+          }).catch((e) => ({ ok: false, error: String(e) }));
+          if (!res.ok) rentalReminders.failed++;
+          else if (isOverdue) rentalReminders.overdue++;
+          else rentalReminders.before++;
+        }
+      }
+    } catch (e) {
+      console.error("[cron/tracking] rental reminders failed:", e);
+      errors.push(`rentalReminders: ${(e as Error).message}`);
+    }
+
     let reminders: ReminderResult = { sent: [], skipped: [], failed: [] };
     try {
       reminders = await sendPaymentReminders();
@@ -156,6 +184,7 @@ export async function GET(req: NextRequest) {
     const summary = {
       ok: true,
       supportChatsPurged,
+      rentalReminders,
       checked: results.length,
       changed: changed.length,
       emailsSent: results.filter((r) => r.emailSent).length,

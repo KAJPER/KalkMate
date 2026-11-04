@@ -54,6 +54,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...pomoc,
     ...legal,
     {
+      url: `${siteUrl}/wypozyczenie`,
+      lastModified: DEPLOYED_AT,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
       url: `${siteUrl}/reklamacja`,
       lastModified: DEPLOYED_AT,
       changeFrequency: "yearly",

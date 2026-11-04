@@ -9,7 +9,7 @@ const doc: LegalDoc = {
     "Regulamin sklepu KalkMate: zamówienia, płatności (Przelewy24, karta), darmowa dostawa InPost, 14 dni na zwrot, 24 miesiące gwarancji i czat z asystentem AI.",
   badge: "Zgodny z ustawą o prawach konsumenta",
   dateLabel: "Obowiązuje od · 2026-01-01",
-  eyebrow: "[ regulamin ] · 10 sekcji",
+  eyebrow: "[ regulamin ] · 11 sekcji",
   h1: "Regulamin",
   h1Accent: "sklepu",
   intro: "Zasady składania zamówień, płatności, dostawy, zwrotów i reklamacji w sklepie internetowym kalkmate.pl.",
@@ -256,7 +256,75 @@ const doc: LegalDoc = {
       ),
     },
     {
-      id: "sek-10", eyebrow: "10", short: "Postanowienia końcowe", title: "Postanowienia", accent: "końcowe",
+      // Kotwica "wypozyczenie" (nie "sek-N") — linki z /wypozyczenie i maili najmu.
+      // Najem tylko w Polsce, wiec sekcja jest tylko w wersji polskiej.
+      id: "wypozyczenie", eyebrow: "10", short: "Wypożyczenie kalkulatora", title: "Wypożyczenie", accent: "kalkulatora",
+      body: (
+        <OL>
+          <li>
+            Sprzedawca (dalej w tym paragrafie: „Wynajmujący”) oddaje w najem kalkulator KalkMate wraz z dostępem
+            do funkcji AI na czas najmu. Kalkulator pozostaje własnością Wynajmującego. Najem jest dostępny wyłącznie
+            z dostawą do Paczkomatu InPost na terenie Polski i zamawiany przez stronę <A href="/wypozyczenie">kalkmate.pl/wypozyczenie</A>.
+          </li>
+          <li>
+            Najemcą może być wyłącznie osoba pełnoletnia, posiadająca pełną zdolność do czynności prawnych. Najemca może
+            udostępnić kalkulator domownikowi (np. dziecku-uczniowi), odpowiadając za niego jak za siebie. Zakazany jest
+            podnajem i udostępnianie kalkulatora osobom trzecim w zamian za wynagrodzenie.
+          </li>
+          <li>
+            Okres najmu i opłata wynikają z cennika na stronie zamówienia (7, 30 lub 60 dni). Okres najmu liczony jest
+            od dnia nadania przesyłki przez Wynajmującego i jest wydłużony o 3 dni na dostawę i odesłanie kalkulatora.
+            Datę końca najmu Najemca otrzymuje e-mailem.
+          </li>
+          <li>
+            Opłata za najem oraz zwrotna kaucja w wysokości <B>300 zł</B> płatne są z góry przez Przelewy24, wyłącznie
+            BLIK-iem lub przelewem. Kaucja nie stanowi wynagrodzenia Wynajmującego.
+          </li>
+          <li>
+            Po upływie okresu najmu funkcje AI kalkulatora są automatycznie wyłączane; kalkulator działa dalej jako zwykły
+            kalkulator. Najemca zobowiązany jest nadać kalkulator (kompletny, z kablem, jeśli był w przesyłce) najpóźniej
+            w ostatnim dniu najmu na adres: <B>KalkMate, ul. Zastawie I 37, 16-070 Choroszcz</B>, przesyłką z numerem
+            śledzenia. Koszt odesłania pokrywa Najemca.
+          </li>
+          <li>
+            Kaucja zwracana jest w terminie 7 dni od otrzymania przez Wynajmującego sprawnego kalkulatora, na rachunek,
+            z którego dokonano płatności. Wynajmujący może potrącić z kaucji:
+            (a) <B>10 zł za każdy dzień opóźnienia</B> w odesłaniu kalkulatora, licząc od 8. dnia po końcu najmu;
+            (b) udokumentowany koszt naprawy uszkodzeń powstałych z winy Najemcy (zwykłe zużycie nie obciąża Najemcy).
+            O potrąceniu Wynajmujący informuje e-mailem, podając jego podstawę i wysokość.
+          </li>
+          <li>
+            Jeżeli kalkulator nie zostanie odesłany w ciągu 30 dni od końca najmu albo zostanie utracony, kaucja przepada
+            na poczet jego wartości, a Wynajmujący może dochodzić od Najemcy pozostałej części wartości kalkulatora
+            (według ceny sprzedaży nowego egzemplarza na kalkmate.pl), pomniejszonej o przepadłą kaucję.
+          </li>
+          <li>
+            Najemca nie może otwierać obudowy, przerabiać kalkulatora ani wgrywać na niego oprogramowania. W razie naruszenia
+            tych zasad lub zwłoki w zwrocie Wynajmujący może zdalnie wyłączyć funkcje AI, a na ekranie kalkulatora może
+            wyświetlić się informacja o konieczności zwrotu.
+          </li>
+          <li>
+            Usterkę niezawinioną przez Najemcę Wynajmujący usuwa na swój koszt (naprawa lub wymiana egzemplarza), a okres
+            najmu przedłuża o czas, w którym kalkulator nie działał. Usterki należy zgłaszać na kontakt@kalkmate.pl.
+          </li>
+          <li>
+            Najem można przedłużyć przed jego końcem — po zgłoszeniu e-mailem i dopłacie według cennika.
+          </li>
+          <li>
+            Najemca będący konsumentem może odstąpić od umowy najmu w terminie 14 dni od otrzymania kalkulatora bez podania
+            przyczyny (§5). Jeżeli przed upływem tego terminu korzystał z kalkulatora, Wynajmujący może potrącić opłatę
+            proporcjonalną do liczby dni faktycznego korzystania. Kaucja zwracana jest w całości po zwrocie sprawnego kalkulatora.
+          </li>
+          <li>
+            Po zwrocie kalkulator jest przywracany do ustawień fabrycznych: notatki, sprawdziany, historia rozwiązań i powiązanie
+            z kontem Najemcy są usuwane z urządzenia. Dane osobowe Najemcy (imię i nazwisko, adres, telefon, e-mail) przetwarzane
+            są w celu wykonania umowy najmu i rozliczenia kaucji — zob. <A href="/polityka-prywatnosci">Polityka Prywatności</A>.
+          </li>
+        </OL>
+      ),
+    },
+    {
+      id: "sek-10", eyebrow: "11", short: "Postanowienia końcowe", title: "Postanowienia", accent: "końcowe",
       body: (
         <OL>
           <li>W sprawach nieuregulowanych niniejszym regulaminem stosuje się przepisy Kodeksu Cywilnego, ustawy o prawach konsumenta oraz ustawy o świadczeniu usług drogą elektroniczną.</li>
@@ -272,7 +340,7 @@ const doc: LegalDoc = {
       zwrotu lub reklamacji — jesteśmy pod ręką pod adresem kontakt@kalkmate.pl.
     </>
   ),
-  footerNote: "Obowiązuje od · 2026-01-01 · ostatnia zmiana 2026-10-28 (§9 program partnerski)",
+  footerNote: "Obowiązuje od · 2026-01-01 · ostatnia zmiana 2026-11-04 (§10 wypożyczenie kalkulatora)",
   otherDocLabel: "→ Polityka prywatności",
   homeLabel: "← Strona główna",
 };

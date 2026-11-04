@@ -48,6 +48,10 @@ function toPln(amountMinor: number, currency: string): number {
 const ABANDON_AFTER_MS = 24 * 60 * 60 * 1000;
 const SHIPPED = new Set(["shipped", "fulfilled"]);
 
+// Wypozyczenia (lib/rentals.ts) maja zamowienia "KW-..." z kwota najem + kaucja
+// (kaucja zwrotna, to nie przychod) — nie licza sie jako sprzedaz kalkulatora.
+const NOT_RENTAL = { NOT: { orderNumber: { startsWith: "KW-" } } };
+
 async function computeAnalytics() {
   const now = Date.now();
   const staleBefore = new Date(now - ABANDON_AFTER_MS);
@@ -55,6 +59,7 @@ async function computeAnalytics() {
   const [groups, stalePending] = await Promise.all([
     prisma.order.groupBy({
       by: ["status", "fulfillmentStatus", "currency"],
+      where: NOT_RENTAL,
       _count: { _all: true },
       _sum: { amount: true },
     }),
@@ -109,7 +114,7 @@ async function computeAnalytics() {
   const recent = await prisma.order.findMany({
     where: {
       status: "paid",
-      NOT: { fulfillmentStatus: "cancelled" },
+      AND: [{ NOT: { fulfillmentStatus: "cancelled" } }, NOT_RENTAL],
       OR: [{ paidAt: { gte: since } }, { paidAt: null, createdAt: { gte: since } }],
     },
     select: { amount: true, currency: true, paidAt: true, createdAt: true },

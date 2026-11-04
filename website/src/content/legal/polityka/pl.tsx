@@ -109,6 +109,18 @@ const doc: LegalDoc = {
             zewnętrznych firm i nie zapisuje cookies. Treść wiadomości jest przekazywana do dostawcy modelu AI
             (zob. sekcja 6) wyłącznie w celu wygenerowania odpowiedzi.
           </P>
+
+          <SubH>3.5. Wypożyczenie kalkulatora</SubH>
+          <P>Przy wypożyczeniu (regulamin §10) przetwarzamy dane najemcy (osoby pełnoletniej):</P>
+          <UL>
+            <li>imię i nazwisko, adres zamieszkania, e-mail i numer telefonu,</li>
+            <li>wybrany Paczkomat, okres najmu, numer wypożyczonego kalkulatora (Device ID),</li>
+            <li>dane płatności i rozliczenia kaucji (przez Przelewy24).</li>
+          </UL>
+          <P>
+            Celem jest wykonanie umowy najmu, wysyłka, przypomnienia o końcu najmu, rozliczenie kaucji oraz — w razie
+            braku zwrotu — dochodzenie roszczeń.
+          </P>
         </>
       ),
     },
@@ -127,6 +139,8 @@ const doc: LegalDoc = {
               ["Przegląd rozmów z czatu w celu ulepszania obsługi i asystenta", "Art. 6 ust. 1 lit. f) RODO (prawnie uzasadniony interes)"],
               ["Przypisanie przebiegu wizyty i nagrania Clarity do rozmowy", "Art. 6 ust. 1 lit. a) RODO (zgoda na cookies analityczne)"],
               ["Wysyłka produktów", "Art. 6 ust. 1 lit. b) RODO"],
+              ["Wypożyczenie kalkulatora (umowa najmu, kaucja, przypomnienia)", "Art. 6 ust. 1 lit. b) RODO"],
+              ["Dochodzenie roszczeń z najmu (brak zwrotu, uszkodzenia)", "Art. 6 ust. 1 lit. f) RODO (prawnie uzasadniony interes)"],
               ["Obsługa reklamacji", "Art. 6 ust. 1 lit. c) RODO (obowiązek prawny)"],
               ["Wystawianie faktur", "Art. 6 ust. 1 lit. c) RODO (obowiązek prawny)"],
               ["Marketing bezpośredni", "Art. 6 ust. 1 lit. f) RODO (prawnie uzasadniony interes)"],
@@ -152,6 +166,7 @@ const doc: LegalDoc = {
             <li><B>Historia AI Chat:</B> przez czas prowadzenia konta (do usunięcia rozmowy lub konta przez użytkownika) oraz do 30 dni po usunięciu konta.</li>
             <li><B>Dane marketingowe (zgoda):</B> do momentu wycofania zgody lub wniesienia sprzeciwu.</li>
             <li><B>Dane analityczne:</B> do 25 miesięcy od ostatniej aktywności.</li>
+            <li><B>Wypożyczenia</B> (dane najemcy, rozliczenie kaucji)<B>:</B> przez czas najmu, a następnie do upływu terminu przedawnienia roszczeń (co do zasady 6 lat, a w zakresie dokumentów księgowych — 5 lat od końca roku podatkowego).</li>
             <li><B>Rozmowy z czatu na stronie</B> (e-mail, treść, przebieg wizyty)<B>:</B> 12 miesięcy od ostatniej wiadomości w rozmowie, potem usuwane automatycznie; wcześniej — na Twoje żądanie.</li>
           </ULWide>
         </>

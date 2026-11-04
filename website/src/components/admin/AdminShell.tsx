@@ -98,6 +98,11 @@ const navItems = [
     icon: "M12 2a4 4 0 014 4v12a4 4 0 01-8 0V6a4 4 0 014-4zm0 14a1 1 0 100 2 1 1 0 000-2z"
   },
   {
+    href: "/admin/rentals",
+    label: "Wypożyczenia",
+    icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+  },
+  {
     href: "/admin/aktualizacje",
     label: "Aktualizacje firmware",
     icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
