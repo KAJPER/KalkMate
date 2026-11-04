@@ -33,7 +33,17 @@ interface Rental {
   returnedAt: string | null;
   depositRefundedAt: string | null;
   notes: string | null;
+  identityStatus: "pending" | "approved" | "declined" | "mismatch" | "review" | null;
+  identityName: string | null;
 }
+
+const IDENTITY_LABEL: Record<NonNullable<Rental["identityStatus"]>, string> = {
+  pending: "weryfikacja w toku",
+  approved: "tożsamość potwierdzona",
+  declined: "weryfikacja odrzucona",
+  mismatch: "dane z dowodu niezgodne",
+  review: "weryfikacja do sprawdzenia",
+};
 
 const STATUS_LABEL: Record<Status, string> = {
   pending: "Nieopłacone",
@@ -114,10 +124,10 @@ export default function RentalsPage() {
     filter === "all" ? true
       : filter === "active" ? r.status === "active"
       : filter === "overdue" ? isOverdue(r)
-      : r.status === "paid" || isOverdue(r) || (r.status === "returned" && !r.depositRefundedAt)
+      : r.status === "paid" || isOverdue(r) || (r.status === "returned" && !r.depositRefundedAt && r.depositGrosze > 0)
   );
   const counts = {
-    todo: rentals.filter((r) => r.status === "paid" || isOverdue(r) || (r.status === "returned" && !r.depositRefundedAt)).length,
+    todo: rentals.filter((r) => r.status === "paid" || isOverdue(r) || (r.status === "returned" && !r.depositRefundedAt && r.depositGrosze > 0)).length,
     active: rentals.filter((r) => r.status === "active").length,
     overdue: rentals.filter(isOverdue).length,
     all: rentals.length,
@@ -160,7 +170,12 @@ export default function RentalsPage() {
                   <span className={`text-[11px] px-2 py-0.5 rounded ${STATUS_CLS[r.status]}`}>{STATUS_LABEL[r.status]}</span>
                   {overdue && <span className="text-[11px] px-2 py-0.5 rounded bg-red-500/20 text-red-300">po terminie {Math.abs(left ?? 0)} dni</span>}
                   {r.status === "active" && !overdue && left !== null && <span className="text-[11px] text-[#E0E0E0]/50">zostało {left} dni</span>}
-                  {r.status === "returned" && !r.depositRefundedAt && <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300">kaucja do zwrotu</span>}
+                  {r.identityStatus && (
+                    <span className={`text-[11px] px-2 py-0.5 rounded ${r.identityStatus === "approved" ? "bg-green-500/15 text-green-300" : "bg-[#3F4147] text-[#E0E0E0]/70"}`}>
+                      {IDENTITY_LABEL[r.identityStatus]}{r.identityName ? ` · ${r.identityName}` : ""}
+                    </span>
+                  )}
+                  {r.status === "returned" && !r.depositRefundedAt && r.depositGrosze > 0 && <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/15 text-amber-300">kaucja do zwrotu</span>}
                   <span className="ml-auto text-xs text-[#E0E0E0]/40">{fmtDate(r.createdAt)}</span>
                 </div>
 
@@ -217,7 +232,7 @@ export default function RentalsPage() {
                       </button>
                     </>
                   )}
-                  {(r.status === "returned" || r.status === "cancelled") && !r.depositRefundedAt && (
+                  {(r.status === "returned" || r.status === "cancelled") && !r.depositRefundedAt && r.depositGrosze > 0 && (
                     <button type="button" disabled={busy === r.id}
                       onClick={() => {
                         const note = prompt("Kaucja zwrócona. Jeśli coś potrąciłeś, wpisz ile i za co (puste = zwrot w całości):", "");

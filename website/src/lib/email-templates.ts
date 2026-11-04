@@ -1689,6 +1689,7 @@ export const RENTAL_EMAIL_SUBJECTS = {
   paid: "Wypożyczenie opłacone – KalkMate",
   reminder: "Najem kalkulatora kończy się wkrótce – KalkMate",
   overdue: "Termin najmu minął — odeślij kalkulator – KalkMate",
+  identityApproved: "Tożsamość potwierdzona — dokończ wypożyczenie – KalkMate",
 };
 
 export function rentalPaidEmail(d: RentalEmailData): string {
@@ -1705,6 +1706,17 @@ export function rentalPaidEmail(d: RentalEmailData): string {
     ${body("Wyślemy kalkulator w ciągu 1–2 dni roboczych — dostaniesz maila z numerem przesyłki. Okres najmu liczymy od nadania paczki, z kilkoma dniami zapasu na dostawę i odesłanie.")}
     ${body("Po zakończeniu najmu odeślij kalkulator na adres: KalkMate, ul. Zastawie I 37, 16-070 Choroszcz. Kaucję zwracamy w ciągu 7 dni od otrzymania sprawnego kalkulatora.")}
     ${ctaButton("Regulamin wypożyczeń", "https://kalkmate.pl/regulamin#wypozyczenie")}
+  `;
+  return shell(inner, "pl");
+}
+
+export function rentalIdentityApprovedEmail(d: { customerName: string; rentalNumber: string; payUrl: string; fee: string }): string {
+  const inner = `
+    ${eyebrowBlock("Wypożyczenie · Tożsamość potwierdzona")}
+    ${headline("Możesz wypożyczyć bez kaucji.", "bez kaucji")}
+    ${lead(`Cześć ${escHtml(d.customerName)}, weryfikacja tożsamości dla wypożyczenia <strong>${escHtml(d.rentalNumber)}</strong> zakończyła się pozytywnie.`)}
+    ${body(`Zostało tylko opłacić najem: <strong>${escHtml(d.fee)}</strong>, bez kaucji. Jeśli płatność już zrobiłeś, zignoruj tę wiadomość.`)}
+    ${ctaButton("Zapłać za najem", d.payUrl)}
   `;
   return shell(inner, "pl");
 }

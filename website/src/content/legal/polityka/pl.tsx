@@ -121,6 +121,19 @@ const doc: LegalDoc = {
             Celem jest wykonanie umowy najmu, wysyłka, przypomnienia o końcu najmu, rozliczenie kaucji oraz — w razie
             braku zwrotu — dochodzenie roszczeń.
           </P>
+
+          <SubH>3.6. Weryfikacja tożsamości (wypożyczenie bez kaucji)</SubH>
+          <P>
+            Jeżeli wybierzesz wypożyczenie bez kaucji, Twoją tożsamość weryfikuje <B>Didit</B> na podstawie zdjęcia
+            dokumentu tożsamości i selfie (porównanie twarzy, sprawdzenie, że to żywa osoba). Dane biometryczne są
+            danymi szczególnej kategorii — przetwarzamy je wyłącznie na podstawie Twojej wyraźnej zgody (art. 9 ust. 2
+            lit. a RODO), którą możesz wycofać w każdej chwili; bez niej możesz wypożyczyć z kaucją.
+          </P>
+          <P>
+            Od Didit otrzymujemy wyłącznie wynik weryfikacji oraz imię i nazwisko z dokumentu (żeby porównać je
+            z danymi najemcy) i informację, czy masz ukończone 18 lat. Zdjęć dokumentu ani twarzy nie przechowujemy
+            u siebie — przechowuje je Didit zgodnie ze swoją polityką prywatności i umową powierzenia.
+          </P>
         </>
       ),
     },
@@ -140,6 +153,7 @@ const doc: LegalDoc = {
               ["Przypisanie przebiegu wizyty i nagrania Clarity do rozmowy", "Art. 6 ust. 1 lit. a) RODO (zgoda na cookies analityczne)"],
               ["Wysyłka produktów", "Art. 6 ust. 1 lit. b) RODO"],
               ["Wypożyczenie kalkulatora (umowa najmu, kaucja, przypomnienia)", "Art. 6 ust. 1 lit. b) RODO"],
+              ["Weryfikacja tożsamości przez Didit (wypożyczenie bez kaucji)", "Art. 9 ust. 2 lit. a) i art. 6 ust. 1 lit. a) RODO (wyraźna zgoda)"],
               ["Dochodzenie roszczeń z najmu (brak zwrotu, uszkodzenia)", "Art. 6 ust. 1 lit. f) RODO (prawnie uzasadniony interes)"],
               ["Obsługa reklamacji", "Art. 6 ust. 1 lit. c) RODO (obowiązek prawny)"],
               ["Wystawianie faktur", "Art. 6 ust. 1 lit. c) RODO (obowiązek prawny)"],
@@ -166,6 +180,7 @@ const doc: LegalDoc = {
             <li><B>Historia AI Chat:</B> przez czas prowadzenia konta (do usunięcia rozmowy lub konta przez użytkownika) oraz do 30 dni po usunięciu konta.</li>
             <li><B>Dane marketingowe (zgoda):</B> do momentu wycofania zgody lub wniesienia sprzeciwu.</li>
             <li><B>Dane analityczne:</B> do 25 miesięcy od ostatniej aktywności.</li>
+            <li><B>Wynik weryfikacji tożsamości</B> (imię i nazwisko z dokumentu, wynik)<B>:</B> razem z danymi wypożyczenia; zdjęcia przechowuje wyłącznie Didit, zgodnie z umową powierzenia.</li>
             <li><B>Wypożyczenia</B> (dane najemcy, rozliczenie kaucji)<B>:</B> przez czas najmu, a następnie do upływu terminu przedawnienia roszczeń (co do zasady 6 lat, a w zakresie dokumentów księgowych — 5 lat od końca roku podatkowego).</li>
             <li><B>Rozmowy z czatu na stronie</B> (e-mail, treść, przebieg wizyty)<B>:</B> 12 miesięcy od ostatniej wiadomości w rozmowie, potem usuwane automatycznie; wcześniej — na Twoje żądanie.</li>
           </ULWide>
@@ -182,6 +197,7 @@ const doc: LegalDoc = {
             <li><B>InPost</B> – firma kurierska (dostawa produktów do Paczkomatów).</li>
             <li><B>Resend</B> – usługa email (wysyłka wiadomości transakcyjnych i magic links).</li>
             <li><B>Google AI (Gemini)</B> – dostawca usługi AI Chat (przetwarzanie zapytań w chatbocie).</li>
+            <li><B>Didit</B> – dostawca weryfikacji tożsamości (dokument + selfie) przy wypożyczeniu bez kaucji, tylko za Twoją wyraźną zgodą (pkt 3.6).</li>
             <li><B>OpenRouter, Inc.</B> (USA) – pośrednik w dostępie do modeli AI (m.in. Google Gemini); otrzymuje treść wiadomości z czatu na stronie i AI Chat w celu wygenerowania odpowiedzi. Nie przekazujemy mu adresu e-mail.</li>
             <li><B>Microsoft Clarity</B> – narzędzie analityczne (mapy ciepła, nagrania sesji) wykorzystywane wyłącznie po wyrażeniu zgody na cookies analityczne — zob. sekcja 9.</li>
             <li><B>Dostawca hostingu</B> – przechowywanie danych na serwerach VPS.</li>

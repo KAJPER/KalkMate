@@ -29,9 +29,22 @@ const label = "km-mono-eyebrow text-[#F2EDE3]/55 block mb-2";
 
 type ReturnState = { kind: "checking" } | { kind: "paid"; number: string; days: number } | { kind: "pending" } | null;
 
+// Powrot z Didit (/wypozyczenie?r=<id>&t=<token>): wynik weryfikacji tozsamosci.
+type IdentityView =
+  | { kind: "waiting" }
+  | { kind: "approved"; fee: number }
+  | { kind: "failed"; fee: number; reason: "declined" | "mismatch" }
+  | { kind: "review"; fee: number }
+  | { kind: "paid"; number: string; days: number }
+  | { kind: "lost" };
+
 export default function WypozyczeniePage() {
   const [planId, setPlanId] = useState<(typeof PLANS)[number]["id"]>("month");
-  const [form, setForm] = useState({ name: "", email: "", phone: "", street: "", postcode: "", city: "", adult: false, terms: false });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", street: "", postcode: "", city: "", adult: false, terms: false, biometric: false });
+  const [mode, setMode] = useState<"deposit" | "identity">("deposit");
+  const [identityAvailable, setIdentityAvailable] = useState(false);
+  const [idView, setIdView] = useState<IdentityView | null>(null);
+  const [access, setAccess] = useState<{ r: string; t: string } | null>(null);
   const [point, setPoint] = useState<InPostPoint | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -62,6 +75,56 @@ export default function WypozyczeniePage() {
     return () => { stop = true; };
   }, []);
 
+  // Wariant bez kaucji widoczny tylko, gdy serwer ma skonfigurowany Didit.
+  useEffect(() => {
+    fetch("/api/rental/status?options=1").then((r) => r.json()).then((d) => setIdentityAvailable(!!d?.identityAvailable)).catch(() => {});
+  }, []);
+
+  // Powrot z Didit — webhook z wynikiem przychodzi zwykle w kilka sekund.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const r = q.get("r"), t = q.get("t");
+    if (!r || !t) return;
+    let stop = false;
+    let tries = 0;
+    const check = async () => {
+      if (stop) return;
+      try {
+        const res = await fetch(`/api/rental/status?r=${encodeURIComponent(r)}&t=${encodeURIComponent(t)}`, { cache: "no-store" });
+        if (res.status === 404) { setIdView({ kind: "lost" }); return; }
+        const d = await res.json();
+        if (d.status !== "pending") { setIdView({ kind: "paid", number: d.rentalNumber, days: d.days }); return; }
+        if (d.identityStatus === "approved") { setIdView({ kind: "approved", fee: d.fee }); return; }
+        if (d.identityStatus === "declined" || d.identityStatus === "mismatch") { setIdView({ kind: "failed", fee: d.fee, reason: d.identityStatus }); return; }
+        if (d.identityStatus === "review") { setIdView({ kind: "review", fee: d.fee }); return; }
+        if (++tries >= 40) { setIdView({ kind: "review", fee: d.fee }); return; }   // ~2 min bez wyniku
+      } catch { /* sprobujemy znowu */ }
+      setTimeout(check, 3000);
+    };
+    void Promise.resolve().then(() => { if (!stop) { setAccess({ r, t }); setIdView({ kind: "waiting" }); } }).then(check);
+    return () => { stop = true; };
+  }, []);
+
+  const payAfterIdentity = async (withDeposit: boolean) => {
+    if (!access) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/rental/pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...access, withDeposit }),
+      });
+      const d = await res.json().catch(() => ({ ok: false, error: "Błąd połączenia." }));
+      if (!d.ok) { setError(d.error || "Błąd."); return; }
+      window.location.href = d.url;
+    } catch {
+      setError("Błąd połączenia. Spróbuj ponownie.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const pay = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!point) { setError("Wybierz Paczkomat."); return; }
@@ -72,7 +135,8 @@ export default function WypozyczeniePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          planId, ...form,
+          planId, ...form, mode,
+          biometricConsent: mode === "identity" && form.biometric,
           pickupPoint: point.name,
           pickupPointAddress: `${point.address.line1}, ${point.address.line2}`,
         }),
@@ -100,14 +164,51 @@ export default function WypozyczeniePage() {
             <span className="italic text-[#D8FF3D]">KalkMate</span>.
           </h1>
           <p className="mt-6 text-[16px] leading-[1.65] text-[#F2EDE3]/65 max-w-xl">
-            Pełna wersja z AI na tyle, ile potrzebujesz. Dostawa do Paczkomatu, zwrotna kaucja {DEPOSIT} zł,
-            płatność BLIK albo przelewem. Po okresie najmu AI wyłącza się samo — odsyłasz kalkulator, my zwracamy kaucję.
+            Pełna wersja z AI na tyle, ile potrzebujesz. Dostawa do Paczkomatu, płatność BLIK albo przelewem,
+            zwrotna kaucja {DEPOSIT} zł{identityAvailable ? " — albo bez kaucji, jeśli potwierdzisz tożsamość dowodem" : ""}.
+            Po okresie najmu AI wyłącza się samo i odsyłasz kalkulator.
           </p>
         </div>
       </section>
 
       <div className="max-w-4xl mx-auto px-6 py-12 lg:py-16">
-        {ret?.kind === "paid" ? (
+        {idView ? (
+          <div className="border border-[rgba(242,237,227,0.18)] p-8 space-y-4">
+            {idView.kind === "waiting" && <p className="km-mono-eyebrow text-[#F2EDE3]/60">Sprawdzamy wynik weryfikacji tożsamości…</p>}
+            {idView.kind === "approved" && (
+              <>
+                <p className="km-mono-eyebrow text-[#D8FF3D]">/ TOŻSAMOŚĆ POTWIERDZONA</p>
+                <p className="text-[15px] text-[#F2EDE3]/80 leading-[1.6]">Wypożyczasz bez kaucji. Zostało opłacić najem.</p>
+                <button type="button" disabled={busy} onClick={() => payAfterIdentity(false)} className="px-8 py-4 bg-[#D8FF3D] text-black km-mono-eyebrow text-[13px] disabled:opacity-50">
+                  {busy ? "Przekierowuję…" : `Zapłać ${idView.fee / 100} zł BLIK / przelewem →`}
+                </button>
+              </>
+            )}
+            {(idView.kind === "failed" || idView.kind === "review") && (
+              <>
+                <p className="km-mono-eyebrow text-amber-300">/ {idView.kind === "review" ? "WERYFIKACJA W TOKU" : "NIE UDAŁO SIĘ POTWIERDZIĆ TOŻSAMOŚCI"}</p>
+                <p className="text-[15px] text-[#F2EDE3]/80 leading-[1.6]">
+                  {idView.kind === "review"
+                    ? "Weryfikacja wymaga dodatkowego sprawdzenia. Jeśli przejdzie, dostaniesz maila z linkiem do płatności bez kaucji. Możesz też od razu wypożyczyć z kaucją."
+                    : idView.reason === "mismatch"
+                      ? "Dane z dokumentu nie zgadzają się z danymi najemcy (albo najemca nie ma 18 lat). Możesz wypożyczyć z kaucją."
+                      : "Weryfikacja nie powiodła się. Możesz wypożyczyć z kaucją — kaucję zwracamy po oddaniu kalkulatora."}
+                </p>
+                <button type="button" disabled={busy} onClick={() => payAfterIdentity(true)} className="px-8 py-4 bg-[#D8FF3D] text-black km-mono-eyebrow text-[13px] disabled:opacity-50">
+                  {busy ? "Przekierowuję…" : `Zapłać ${(idView.fee / 100) + DEPOSIT} zł (z kaucją ${DEPOSIT} zł) →`}
+                </button>
+              </>
+            )}
+            {idView.kind === "paid" && (
+              <>
+                <p className="km-mono-eyebrow text-[#D8FF3D]">/ OPŁACONE · {idView.number}</p>
+                <p className="text-[15px] text-[#F2EDE3]/80 leading-[1.6]">To wypożyczenie jest już opłacone. Wyślemy kalkulator w ciągu 1–2 dni roboczych.</p>
+              </>
+            )}
+            {idView.kind === "lost" && <p className="text-[15px] text-[#F2EDE3]/80">Nie znaleźliśmy tego wypożyczenia. Zacznij od nowa albo napisz na kontakt@kalkmate.pl.</p>}
+            {error && <p className="text-[14px] text-red-400">{error}</p>}
+          </div>
+        ) : ret?.kind === "paid" ? (
           <div className="border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.06] p-8">
             <p className="km-mono-eyebrow text-[#D8FF3D] mb-2">/ OPŁACONE · {ret.number}</p>
             <p className="text-[15px] text-[#F2EDE3]/80 leading-[1.6]">
@@ -126,7 +227,7 @@ export default function WypozyczeniePage() {
           </div>
         ) : null}
 
-        {ret?.kind !== "paid" && ret?.kind !== "checking" && (
+        {!idView && ret?.kind !== "paid" && ret?.kind !== "checking" && (
           <form onSubmit={pay} className="space-y-10">
             <div>
               <p className="km-mono-eyebrow text-[#D8FF3D] mb-4">/ 01 · OKRES NAJMU</p>
@@ -145,9 +246,24 @@ export default function WypozyczeniePage() {
                   </button>
                 ))}
               </div>
-              <p className="text-[13px] text-[#F2EDE3]/50 mt-3">
-                + kaucja {DEPOSIT} zł (zwracamy w ciągu 7 dni od otrzymania sprawnego kalkulatora). Wysyłka gratis.
-              </p>
+              {identityAvailable ? (
+                <div className="grid sm:grid-cols-2 gap-3 mt-4">
+                  {([
+                    ["deposit", `Z kaucją ${DEPOSIT} zł`, "Kaucję zwracamy w ciągu 7 dni od otrzymania sprawnego kalkulatora."],
+                    ["identity", "Bez kaucji", "Potwierdzasz tożsamość zdjęciem dowodu i selfie (ok. 2 minuty, przez Didit)."],
+                  ] as const).map(([m, title, desc]) => (
+                    <button key={m} type="button" onClick={() => setMode(m)}
+                      className={`text-left p-4 border transition-colors ${mode === m ? "border-[#D8FF3D] bg-[#D8FF3D]/[0.06]" : "border-[rgba(242,237,227,0.18)] hover:border-[#F2EDE3]/40"}`}>
+                      <p className="text-[15px] text-[#F2EDE3]">{title}</p>
+                      <p className="text-[13px] text-[#F2EDE3]/55 mt-1">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[13px] text-[#F2EDE3]/50 mt-3">
+                  + kaucja {DEPOSIT} zł (zwracamy w ciągu 7 dni od otrzymania sprawnego kalkulatora). Wysyłka gratis.
+                </p>
+              )}
             </div>
 
             <div>
@@ -214,6 +330,16 @@ export default function WypozyczeniePage() {
                   w tym zasady zwrotu kaucji i opłat za opóźnienie, oraz <Link href="/polityka-prywatnosci" target="_blank" className="text-[#D8FF3D] hover:underline">politykę prywatności</Link>.
                 </span>
               </label>
+              {mode === "identity" && (
+                <label className="flex items-start gap-3 text-[14px] text-[#F2EDE3]/75">
+                  <input type="checkbox" className="mt-1 accent-[#D8FF3D]" checked={form.biometric} onChange={(e) => set("biometric", e.target.checked)} required />
+                  <span>
+                    Wyrażam zgodę na weryfikację mojej tożsamości przez Didit na podstawie zdjęcia dokumentu tożsamości i selfie
+                    (dane biometryczne, art. 9 ust. 2 lit. a RODO). Zgodę mogę wycofać — wtedy wypożyczę z kaucją.{" "}
+                    <Link href="/polityka-prywatnosci#sek-3" target="_blank" className="text-[#D8FF3D] hover:underline">Szczegóły</Link>
+                  </span>
+                </label>
+              )}
             </div>
 
             {error && <p className="text-[14px] text-red-400">{error}</p>}
@@ -221,11 +347,13 @@ export default function WypozyczeniePage() {
             <div className="border-t border-[rgba(242,237,227,0.10)] pt-6 flex flex-wrap items-center gap-4">
               <div>
                 <p className="km-mono-eyebrow text-[#F2EDE3]/55">Do zapłaty teraz</p>
-                <p className="km-display text-[40px] leading-none">{plan.fee + DEPOSIT} zł</p>
-                <p className="text-[12px] text-[#F2EDE3]/45">{plan.fee} zł najem + {DEPOSIT} zł kaucja zwrotna</p>
+                <p className="km-display text-[40px] leading-none">{plan.fee + (mode === "identity" ? 0 : DEPOSIT)} zł</p>
+                <p className="text-[12px] text-[#F2EDE3]/45">
+                  {mode === "identity" ? `${plan.fee} zł najem, bez kaucji — płatność po weryfikacji` : `${plan.fee} zł najem + ${DEPOSIT} zł kaucja zwrotna`}
+                </p>
               </div>
               <button type="submit" disabled={busy} className="ml-auto px-8 py-4 bg-[#D8FF3D] text-black km-mono-eyebrow text-[13px] disabled:opacity-50">
-                {busy ? "Przekierowuję…" : "Zapłać BLIK / przelewem →"}
+                {busy ? "Przekierowuję…" : mode === "identity" ? "Potwierdź tożsamość →" : "Zapłać BLIK / przelewem →"}
               </button>
             </div>
           </form>

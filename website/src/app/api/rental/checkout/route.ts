@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { registerTransaction, paymentUrl } from "@/lib/przelewy24";
-import { createPendingRental, depositFor, getRentalPlan } from "@/lib/rentals";
+import { createPendingRental, depositFor, getRentalPlan, setRentalIdentityPending } from "@/lib/rentals";
+import { appUrl, startRentalPayment } from "@/lib/rentalPayment";
+import { createDiditSession, diditConfigured } from "@/lib/didit";
 
-// POST /api/rental/checkout -> { url } (przekierowanie do Przelewy24)
+// POST /api/rental/checkout -> { url }
 // Body: { planId, name, email, phone, street, postcode, city, pickupPoint,
-//         pickupPointAddress, adult: true, terms: true }
-// Tylko dostawa w Polsce (Paczkomat), tylko PLN. Platnosc TYLKO BLIK +
-// przelewy (bez kart): przy wypozyczeniu karta = ryzyko chargebacku po
-// tygodniach, gdy kalkulator jest juz u klienta.
-//
-// Kanaly P24 (bitmaska): 2 = przelewy, 64 = pay-by-link (szybkie przelewy
-// bankow), 8192 = BLIK. Sprawdz w sandboxie P24 po zmianie umowy.
-const P24_CHANNEL_NO_CARDS = 2 | 64 | 8192;
+//         pickupPointAddress, adult: true, terms: true,
+//         mode?: "deposit" | "identity", biometricConsent?: true }
+// mode "deposit" (domyslnie): od razu Przelewy24 (najem + kaucja 300 zl).
+// mode "identity": najpierw weryfikacja tozsamosci w Didit (dowod + selfie),
+//   potem /api/rental/pay — bez kaucji, jesli dowod zgadza sie z najemca.
+// Tylko dostawa w Polsce (Paczkomat), tylko PLN, tylko BLIK + przelewy
+// (lib/rentalPayment.ts).
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
   const city = str(b?.city, 80);
   const pickupPoint = str(b?.pickupPoint, 20).toUpperCase();
   const pickupPointAddress = str(b?.pickupPointAddress, 200);
+  const identity = b?.mode === "identity";
 
   if (name.split(/\s+/).length < 2) return NextResponse.json({ ok: false, error: "Podaj imię i nazwisko najemcy." }, { status: 400 });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return NextResponse.json({ ok: false, error: "Podaj poprawny e-mail." }, { status: 400 });
@@ -45,42 +46,36 @@ export async function POST(request: NextRequest) {
   }
   if (b?.adult !== true) return NextResponse.json({ ok: false, error: "Umowę najmu może zawrzeć tylko osoba pełnoletnia." }, { status: 400 });
   if (b?.terms !== true) return NextResponse.json({ ok: false, error: "Zaakceptuj regulamin wypożyczeń." }, { status: 400 });
-
-  const deposit = depositFor(false);
-  const amount = plan.feeGrosze + deposit;
-  const sessionId = `km-rent-${randomUUID()}`;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://kalkmate.pl";
+  if (identity) {
+    if (!diditConfigured()) return NextResponse.json({ ok: false, error: "Weryfikacja tożsamości jest chwilowo niedostępna — wybierz wariant z kaucją." }, { status: 503 });
+    if (b?.biometricConsent !== true) {
+      return NextResponse.json({ ok: false, error: "Wyraź zgodę na weryfikację tożsamości (zdjęcie dokumentu i selfie)." }, { status: 400 });
+    }
+  }
 
   try {
     // Najpierw zapis — webhook P24 musi znalezc najem po sesji (nieoplacony
     // wiersz bez platnosci jest nieszkodliwy; lista w adminie pokazuje go 7 dni).
-    await createPendingRental({
-      sessionId, plan, depositGrosze: deposit,
+    const rental = await createPendingRental({
+      sessionId: `km-rent-${randomUUID()}`, plan, depositGrosze: depositFor(identity),
       customerName: name, customerEmail: email, customerPhone: phone,
       addressStreet: street, addressPostcode: postcode, addressCity: city,
       pickupPoint, pickupPointAddress,
     });
-    const token = await registerTransaction({
-      sessionId,
-      amount,
-      currency: "PLN",
-      description: `KalkMate — wypożyczenie ${plan.days} dni + kaucja`,
+    if (!identity) return NextResponse.json({ ok: true, url: await startRentalPayment(rental) });
+
+    const parts = name.split(/\s+/);
+    const didit = await createDiditSession({
+      vendorData: rental.id,
+      callback: `${appUrl()}/wypozyczenie?r=${rental.id}&t=${rental.accessToken}`,
+      firstName: parts.slice(0, -1).join(" "),
+      lastName: parts[parts.length - 1],
       email,
-      client: name,
-      phone,
-      address: street,
-      zip: postcode,
-      city,
-      country: "PL",
-      language: "pl",
-      urlReturn: `${appUrl}/wypozyczenie?p24_session=${encodeURIComponent(sessionId)}`,
-      urlStatus: `${appUrl}/api/webhooks/p24`,
-      channel: P24_CHANNEL_NO_CARDS,
-      regulationAccept: false,
     });
-    return NextResponse.json({ ok: true, url: paymentUrl(token) });
+    await setRentalIdentityPending(rental.id, didit.sessionId);
+    return NextResponse.json({ ok: true, url: didit.url });
   } catch (e) {
     console.error("[api/rental/checkout]", e);
-    return NextResponse.json({ ok: false, error: "Nie udało się rozpocząć płatności. Spróbuj ponownie." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: identity ? "Nie udało się rozpocząć weryfikacji. Spróbuj ponownie albo wybierz wariant z kaucją." : "Nie udało się rozpocząć płatności. Spróbuj ponownie." }, { status: 502 });
   }
 }

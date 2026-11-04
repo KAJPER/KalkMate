@@ -4,7 +4,7 @@ import { verifyNotificationSign, verifyTransaction } from "@/lib/przelewy24";
 import { findTokenPurchaseBySession, markTokenPurchasePaidAndCredit } from "@/lib/tokenPurchases";
 import { orderIdForPaymentSession, settleP24OrderPayment } from "@/lib/paymentReminders";
 import { alertAdmin, formatMinor } from "@/lib/checkoutPricing";
-import { findRentalBySession, markRentalPaid, formatPln } from "@/lib/rentals";
+import { findRentalPayment, markRentalPaid, formatPln } from "@/lib/rentals";
 import { autoEnqueueOrderReceipt } from "@/lib/fiscal";
 import { sendMail } from "@/lib/mailer";
 import { rentalPaidEmail, RENTAL_EMAIL_SUBJECTS } from "@/lib/email-templates";
@@ -89,13 +89,22 @@ export async function POST(request: NextRequest) {
   }
 
   // Wypozyczenie (lib/rentals.ts) — osobna tabela, jak doladowania tokenow.
-  const rental = await findRentalBySession(String(sessionId));
-  if (rental) {
+  const rentalPay = await findRentalPayment(String(sessionId));
+  if (rentalPay) {
+    const { rental } = rentalPay;
     if (rental.status !== "pending") {
       console.log("[P24 WEBHOOK] Rental already processed:", rental.rentalNumber);
+      // Inna sesja niz oplacona = druga wplata (np. dwie karty P24). NIE
+      // weryfikujemy jej — P24 zwroci srodki placacemu.
+      if (rental.sessionId !== String(sessionId)) {
+        await alertAdmin("P24: druga wpłata za to samo wypożyczenie", [
+          `${rental.rentalNumber} (${rental.customerEmail}) — opłacone wcześniej sesją ${rental.sessionId}.`,
+          `Nowa wpłata ${formatMinor(Number(amount), String(currency))}, sesja ${sessionId}: NIE zweryfikowana, Przelewy24 zwróci ją automatycznie.`,
+        ]).catch(() => {});
+      }
       return NextResponse.json({ received: true });
     }
-    const expected = rental.feeGrosze + rental.depositGrosze;
+    const expected = rentalPay.amount;
     if (Number(amount) !== expected || String(currency).toUpperCase() !== "PLN") {
       await alertAdmin("P24: niezgodna kwota wypożyczenia", [
         `Wypożyczenie: ${rental.rentalNumber} (sesja ${rental.sessionId}), ${rental.customerEmail}`,
@@ -110,7 +119,7 @@ export async function POST(request: NextRequest) {
       console.error("[P24 WEBHOOK] Verify transaction failed (rental):", err);
       return NextResponse.json({ error: "Verify failed" }, { status: 500 });
     }
-    const paid = await markRentalPaid(rental);
+    const paid = await markRentalPaid(rental, String(sessionId), rentalPay.deposit);
     if (paid) {
       console.log(`[P24 WEBHOOK] ✅ Rental paid: ${paid.rentalNumber}`);
       if (paid.orderId) await autoEnqueueOrderReceipt(paid.orderId);

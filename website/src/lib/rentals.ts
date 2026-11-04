@@ -17,7 +17,7 @@
 //      ZABLOKOWANE (rentalLocked) do nastepnego najmu, notatka o zwrocie kaucji.
 // Tabela poza Prisma (raw SQL, tworzona leniwie) — jak TokenPurchase.
 
-import { randomInt, randomUUID } from "crypto";
+import { randomBytes, randomInt, randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { setDeviceRental, ensureRentalColumns } from "@/lib/deviceRental";
 
@@ -44,8 +44,8 @@ export function getRentalPlan(id: unknown): RentalPlan | null {
   return RENTAL_PLANS.find((p) => p.id === id) ?? null;
 }
 
-// Wariant "bez kaucji po potwierdzeniu tozsamosci" (mojeID / mObywatel przez
-// KIR) — wymaga umowy z dostawca. Do tego czasu kaucja jest zawsze.
+// Bez kaucji po pozytywnej weryfikacji tozsamosci w Didit (lib/didit.ts):
+// imie i nazwisko z dowodu = najemca, ukonczone 18 lat.
 export function depositFor(identityVerified: boolean): number {
   return identityVerified ? 0 : RENTAL_DEPOSIT_GROSZE;
 }
@@ -80,7 +80,16 @@ export interface RentalRow {
   remindBeforeAt: string | null;
   remindOverdueAt: string | null;
   notes: string | null;
+  // Weryfikacja tozsamosci (Didit): null = najem z kaucja.
+  identityStatus: IdentityStatus | null;
+  identitySessionId: string | null;
+  identityName: string | null;
+  identityCheckedAt: string | null;
+  // Losowy sekret strony powrotu z Didit (/wypozyczenie?r=<id>&t=<token>).
+  accessToken: string | null;
 }
+
+export type IdentityStatus = "pending" | "approved" | "declined" | "mismatch" | "review";
 
 let _ready = false;
 export async function ensureRentalTable(): Promise<void> {
@@ -116,6 +125,23 @@ export async function ensureRentalTable(): Promise<void> {
       "notes"              TEXT
     )
   `);
+  // Kolumny dodane po pierwszym wdrozeniu (weryfikacja Didit).
+  const cols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("Rental")`);
+  for (const c of ["identityStatus", "identitySessionId", "identityName", "identityCheckedAt", "accessToken"]) {
+    if (!cols.some((x) => x.name === c)) await prisma.$executeRawUnsafe(`ALTER TABLE "Rental" ADD COLUMN "${c}" TEXT`);
+  }
+  // Kazda rejestracja platnosci P24 dla najmu (sesja + kwota). Webhook szuka
+  // tu, nie tylko w Rental.sessionId — klient mogl zaczac platnosc, wrocic,
+  // zaplacic ponownie (nowa sesja), a potem jednak dokonczyc pierwsza.
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "RentalPaySession" (
+      "sessionId" TEXT PRIMARY KEY,
+      "rentalId"  TEXT NOT NULL,
+      "amount"    INTEGER NOT NULL,
+      "deposit"   INTEGER NOT NULL,
+      "createdAt" TEXT NOT NULL
+    )
+  `);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Rental_status_idx" ON "Rental"("status", "endAt")`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Rental_order_idx" ON "Rental"("orderId")`);
   _ready = true;
@@ -145,22 +171,41 @@ export async function createPendingRental(input: {
 }): Promise<RentalRow> {
   await ensureRentalTable();
   const id = randomUUID();
+  const accessToken = randomBytes(24).toString("hex");
   const rentalNumber = `KW-${Date.now().toString(36).toUpperCase()}${randomInt(0, 36 ** 2).toString(36).toUpperCase().padStart(2, "0")}`;
   await prisma.$executeRaw`
     INSERT INTO "Rental" ("id", "rentalNumber", "sessionId", "status", "planId", "days", "feeGrosze", "depositGrosze",
       "customerName", "customerEmail", "customerPhone", "addressStreet", "addressPostcode", "addressCity",
-      "pickupPoint", "pickupPointAddress", "createdAt")
+      "pickupPoint", "pickupPointAddress", "createdAt", "accessToken")
     VALUES (${id}, ${rentalNumber}, ${input.sessionId}, 'pending', ${input.plan.id}, ${input.plan.days}, ${input.plan.feeGrosze},
       ${input.depositGrosze}, ${input.customerName}, ${input.customerEmail}, ${input.customerPhone}, ${input.addressStreet},
-      ${input.addressPostcode}, ${input.addressCity}, ${input.pickupPoint}, ${input.pickupPointAddress}, ${nowIso()})
+      ${input.addressPostcode}, ${input.addressCity}, ${input.pickupPoint}, ${input.pickupPointAddress}, ${nowIso()}, ${accessToken})
   `;
-  return (await getRental(id))!;
+  const row = (await getRental(id))!;
+  await recordRentalPaySession(row);
+  return row;
 }
 
 export async function getRental(id: string): Promise<RentalRow | null> {
   await ensureRentalTable();
   const rows = await prisma.$queryRaw<RawRental[]>`SELECT * FROM "Rental" WHERE "id" = ${id} LIMIT 1`;
   return rows[0] ? toRow(rows[0]) : null;
+}
+
+export async function recordRentalPaySession(rental: RentalRow): Promise<void> {
+  await prisma.$executeRaw`
+    INSERT OR IGNORE INTO "RentalPaySession" ("sessionId", "rentalId", "amount", "deposit", "createdAt")
+    VALUES (${rental.sessionId}, ${rental.id}, ${rental.feeGrosze + rental.depositGrosze}, ${rental.depositGrosze}, ${nowIso()})`;
+}
+
+// Webhook P24: najem + kwota i kaucja TEJ sesji platnosci.
+export async function findRentalPayment(sessionId: string): Promise<{ rental: RentalRow; amount: number; deposit: number } | null> {
+  await ensureRentalTable();
+  const rows = await prisma.$queryRaw<{ rentalId: string; amount: number | bigint; deposit: number | bigint }[]>`
+    SELECT "rentalId", "amount", "deposit" FROM "RentalPaySession" WHERE "sessionId" = ${sessionId} LIMIT 1`;
+  if (!rows[0]) return null;
+  const rental = await getRental(rows[0].rentalId);
+  return rental ? { rental, amount: Number(rows[0].amount), deposit: Number(rows[0].deposit) } : null;
 }
 
 export async function findRentalBySession(sessionId: string): Promise<RentalRow | null> {
@@ -173,6 +218,40 @@ export async function findRentalByOrderId(orderId: string): Promise<RentalRow | 
   await ensureRentalTable();
   const rows = await prisma.$queryRaw<RawRental[]>`SELECT * FROM "Rental" WHERE "orderId" = ${orderId} LIMIT 1`;
   return rows[0] ? toRow(rows[0]) : null;
+}
+
+// Strona powrotu z Didit: id + token (staly czas porownania nie jest tu
+// potrzebny — token 48 hex, a odpowiedz nie zdradza, ktora czesc byla zla).
+export async function getRentalByAccess(id: unknown, token: unknown): Promise<RentalRow | null> {
+  if (typeof id !== "string" || typeof token !== "string" || !/^[0-9a-f-]{36}$/.test(id) || !/^[0-9a-f]{48}$/.test(token)) return null;
+  const r = await getRental(id);
+  return r && r.accessToken === token ? r : null;
+}
+
+export async function setRentalIdentityPending(id: string, diditSessionId: string): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "Rental" SET "identityStatus" = 'pending', "identitySessionId" = ${diditSessionId} WHERE "id" = ${id}`;
+}
+
+// Wynik z webhooka Didit. Tylko dla nieoplaconego najmu (pozniej bez znaczenia).
+export async function setRentalIdentityResult(id: string, status: IdentityStatus, name: string | null): Promise<boolean> {
+  const n = await prisma.$executeRaw`
+    UPDATE "Rental" SET "identityStatus" = ${status}, "identityName" = ${name}, "identityCheckedAt" = ${nowIso()}
+    WHERE "id" = ${id} AND "status" = 'pending'`;
+  return n === 1;
+}
+
+// Przed rejestracja platnosci po weryfikacji: nowa sesja P24 (kazda proba
+// placenia = nowa rejestracja) i kaucja wg wyniku weryfikacji / wyboru klienta.
+export async function prepareRentalPayment(rental: RentalRow, depositGrosze: number): Promise<RentalRow | null> {
+  const sessionId = `km-rent-${randomUUID()}`;
+  const n = await prisma.$executeRaw`
+    UPDATE "Rental" SET "sessionId" = ${sessionId}, "depositGrosze" = ${depositGrosze}
+    WHERE "id" = ${rental.id} AND "status" = 'pending'`;
+  if (n !== 1) return null;
+  const updated = (await getRental(rental.id))!;
+  await recordRentalPaySession(updated);
+  return updated;
 }
 
 export async function listRentals(limit = 300): Promise<RentalRow[]> {
@@ -193,12 +272,18 @@ export async function appendRentalNote(id: string, line: string): Promise<void> 
 
 // pending -> paid + zamowienie do wysylki. Atomowo: drugi webhook nic nie zrobi.
 // Zwraca wiersz po zmianie albo null, gdy juz byl oplacony.
-export async function markRentalPaid(rental: RentalRow): Promise<RentalRow | null> {
+// paidDeposit = kaucja z oplaconej sesji (moze sie roznic od ostatnio
+// przygotowanej, gdy klient dokonczyl wczesniejsza platnosc).
+export async function markRentalPaid(rental: RentalRow, paidSessionId?: string, paidDeposit?: number): Promise<RentalRow | null> {
   await ensureRentalTable();
+  const deposit = paidDeposit ?? rental.depositGrosze;
   const claimed = await prisma.$executeRaw`
-    UPDATE "Rental" SET "status" = 'paid', "paidAt" = ${nowIso()} WHERE "id" = ${rental.id} AND "status" = 'pending'
+    UPDATE "Rental" SET "status" = 'paid', "paidAt" = ${nowIso()}, "depositGrosze" = ${deposit},
+      "sessionId" = ${paidSessionId ?? rental.sessionId}
+    WHERE "id" = ${rental.id} AND "status" = 'pending'
   `;
   if (claimed !== 1) return null;
+  rental = { ...rental, depositGrosze: deposit };
 
   const orderId = randomUUID();
   const now = new Date();

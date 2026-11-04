@@ -278,7 +278,11 @@ const doc: LegalDoc = {
           </li>
           <li>
             Opłata za najem oraz zwrotna kaucja w wysokości <B>300 zł</B> płatne są z góry przez Przelewy24, wyłącznie
-            BLIK-iem lub przelewem. Kaucja nie stanowi wynagrodzenia Wynajmującego.
+            BLIK-iem lub przelewem. Kaucja nie stanowi wynagrodzenia Wynajmującego. Kaucja nie jest pobierana, jeżeli
+            Najemca przed płatnością pozytywnie przejdzie weryfikację tożsamości (zdjęcie dokumentu i selfie, przez
+            dostawcę Didit, za wyraźną zgodą Najemcy), a imię i nazwisko z dokumentu są zgodne z danymi Najemcy i ma on
+            ukończone 18 lat. Przy braku kaucji postanowienia o potrąceniach z kaucji stosuje się odpowiednio do
+            należności, którymi Wynajmujący obciąża Najemcę.
           </li>
           <li>
             Po upływie okresu najmu funkcje AI kalkulatora są automatycznie wyłączane; kalkulator działa dalej jako zwykły
