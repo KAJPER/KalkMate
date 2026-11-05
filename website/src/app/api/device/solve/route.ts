@@ -257,7 +257,41 @@ function _toScript(x: string, map: Record<string, string>): string | null {
   for (const c of x) { if (!(c in map)) return null; out += map[c]; }
   return out;
 }
-function normalizeForCalc(input: string): string {
+// Symbole matematyczne, ktorych font 6x12_te nie ma. fw >= 2.1.6 rysuje je
+// fontem zapasowym t0_11_t_all (solve_screen.h, _solDrawMathLine), wiec
+// dostaje je jako Unicode (takze z LaTeX-a: \leq -> ≤). Starszy firmware
+// pokazywal w ich miejscu pusta luke — dla niego zamiana na ASCII.
+const MATH_FONT_FW = "2.1.6";
+const _MATH_ASCII: Record<string, string> = {
+  "≠":"!=","≤":"<=","≥":">=","≈":"~=","≡":"===","≅":"~=","∼":"~","∝":"~",
+  "√":"sqrt","∛":"cbrt","∞":"inf","∂":"d","∇":"nabla","∑":"sum","∏":"prod","∫":"int",
+  "→":"->","←":"<-","↔":"<->","⇒":"=>","⇐":"<=","⇔":"<=>",
+  "∈":" in ","∉":" not in ","∅":"zbior pusty","∀":"for all ","∃":"exists ",
+  "∪":" union ","∩":" intersect ","⊂":" subset ","⊆":" subset ","∧":" AND ","∨":" OR ",
+  "∥":"||","⊥":" perp ","∠":"angle ","∓":"-+","−":"-","…":"...","⋅":"·","∙":"·",
+  "′":"'","″":"''","∆":"Δ","Ω":"Ω","ℝ":"R","ℕ":"N","ℤ":"Z","ℚ":"Q","ℂ":"C","℃":"°C",
+};
+const _MATH_ASCII_RE = new RegExp(`[${Object.keys(_MATH_ASCII).join("")}]`, "gu");
+// LaTeX -> Unicode dla fw z fontem zapasowym (nadpisuje ASCII z _GREEK_OPS).
+const _LATEX_MATH_UNICODE: Record<string, string> = {
+  leq:"≤",le:"≤",geq:"≥",ge:"≥",neq:"≠",ne:"≠",approx:"≈",equiv:"≡",cong:"≅",propto:"∝",
+  infty:"∞",partial:"∂",nabla:"∇",sum:"∑",prod:"∏",int:"∫",
+  rightarrow:"→",to:"→",longrightarrow:"→",mapsto:"→",leftarrow:"←",leftrightarrow:"↔",
+  Rightarrow:"⇒",implies:"⇒",Leftarrow:"⇐",iff:"⇔",Leftrightarrow:"⇔",
+  in:"∈",notin:"∉",emptyset:"∅",varnothing:"∅",forall:"∀",exists:"∃",
+  cup:"∪",cap:"∩",subset:"⊂",subseteq:"⊆",land:"∧",wedge:"∧",lor:"∨",vee:"∨",
+  parallel:"∥",perp:"⊥",angle:"∠",mp:"∓",ldots:"…",dots:"…",cdots:"…",
+};
+
+function fwAtLeast(fw: string | null | undefined, min: string): boolean {
+  const a = (fw || "").trim().split(".").map((x) => parseInt(x, 10));
+  const b = min.split(".").map((x) => parseInt(x, 10));
+  if (a.length < 3 || a.some((x) => !Number.isFinite(x))) return false;
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return true;
+}
+
+function normalizeForCalc(input: string, mathFont = false): string {
   if (!input) return input;
   let t = input;
   // delimitery LaTeX
@@ -270,9 +304,10 @@ function normalizeForCalc(input: string): string {
   for (let i = 0; i < 5; i++) t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "($1)/($2)");
   // \sqrt[n]{X} -> root_n(X) ; \sqrt{X} -> sqrt(X) — "√" nie istnieje w foncie OLED.
   t = t.replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, "root_$1($2)");
-  for (let i = 0; i < 3; i++) t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, "sqrt($1)");
+  for (let i = 0; i < 3; i++) t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, mathFont ? "√($1)" : "sqrt($1)");
   // greka + operatory + komendy (po frac/sqrt). Nieznane \komenda -> sama nazwa.
   t = t.replace(/\\([A-Za-z]+)|\\(.)/g, (m, w, sym) => {
+    if (w !== undefined && mathFont && w in _LATEX_MATH_UNICODE) return _LATEX_MATH_UNICODE[w];
     if (w !== undefined) return w in _GREEK_OPS ? _GREEK_OPS[w] : w;
     return sym in _GREEK_OPS ? _GREEK_OPS[sym] : sym; // \, \; itp.
   });
@@ -302,6 +337,9 @@ function normalizeForCalc(input: string): string {
   t = t.replace(/^#{1,6}\s+/gm, "").replace(/`/g, "");
   // \\ -> nowa linia, resztki klamr -> usun
   t = t.replace(/\\\\/g, "\n").replace(/[{}]/g, "");
+  // Literalne symbole matematyczne od modelu (prompt sam prosi o ≤ ≥ ≠) —
+  // stary firmware ich nie narysuje.
+  if (!mathFont) t = t.replace(_MATH_ASCII_RE, (c) => _MATH_ASCII[c] ?? c);
   // sprzataj biale znaki
   t = t.replace(/[ \t]{2,}/g, " ").replace(/ +\n/g, "\n").replace(/\n{3,}/g, "\n\n");
   return t.trim();
@@ -734,7 +772,7 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
 
     // === Wywolanie AI przez OpenRouter ===
     const r = await callOpenRouter(modelToUse, systemPrompt, mode, (text || "").trim(), base64Data, imgMime, maxTokens);
-    const solution = r.ok && r.solution && r.finishReason !== "error" ? normalizeForCalc(r.solution) : "";
+    const solution = r.ok && r.solution && r.finishReason !== "error" ? normalizeForCalc(r.solution, fwAtLeast(fwVersion, MATH_FONT_FW)) : "";
     if (!r.ok || !solution) {
       // Nie rozliczaj bledu ani pustej odpowiedzi — zwrot calej rezerwacji.
       if (reserved) await refundTokens(ownerUserId, reserved);

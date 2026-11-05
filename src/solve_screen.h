@@ -798,6 +798,13 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
             d.setFont(_isGreek(cp) ? u8g2_font_unifont_t_greek
                     : _isCyrillic(cp) ? u8g2_font_6x12_t_cyrillic
                     : u8g2_font_6x12_te);
+            // Symbole matematyczne spoza 6x12_te (≠ ≤ ≥ ≈ √ ∞ → ⇒ ∈ ∩ ∪ ∑ ∫ ∂ …)
+            // -> t0_11_t_all (6x11, ta sama szerokosc; sprawdzone dekoderem
+            // fontu, ma caly blok U+2190..22FF). Od fw 2.1.6 serwer wysyla je
+            // jako Unicode — starszym zamienia na ASCII (normalizeForCalc).
+            if (!_isGreek(cp) && !_isCyrillic(cp) && cp > 0xFF && cp <= 0xFFFF &&
+                !u8g2_IsGlyph(d.getU8g2(), (uint16_t)cp))
+                d.setFont(u8g2_font_t0_11_t_all);
             int w = d.drawUTF8(xi, y, ch);
             xi += (w > 0 ? w : 6);
         }
