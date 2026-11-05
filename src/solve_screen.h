@@ -72,8 +72,16 @@ static String _solDeviceId() {
 inline String _solUtf8ToAscii(String s) {
     return _kalkUtf8ToAscii(s);
 }
-#define _SOL_SOLUTION_MAX    24576  // max znakow odpowiedzi AI (24 KB, RAM)
-#define _SOL_HTTP_TIMEOUT_MS 65000  // max HTTPClient (uint16); Gemini 2.5 Pro bywa >45s (2026-10-18: 71s)
+// Serwer daje modelowi do 18k tokenow odpowiedzi (~60-70 KB tekstu) — bufory
+// w PSRAM (_SolBufs), wiec rozmiar nie obciaza wewnetrznego SRAM.
+#define _SOL_SOLUTION_MAX    98304  // max bajtow odpowiedzi AI (96 KB, PSRAM)
+#define _SOL_BODY_MAX        (_SOL_SOLUTION_MAX + 16384)  // surowy JSON (escape \n \" itd.)
+// Czekanie na NAGLOWKI odpowiedzi (max HTTPClient, uint16). Od fw 2.1.4 serwer
+// (x-resp-stream: 1) odsyla naglowki po ~3 s i co 10 s spacje, a tresc gdy AI
+// skonczy — dlugie generowanie nie wpada juz w ten limit.
+#define _SOL_HTTP_TIMEOUT_MS 65000
+// Odbior tresci odpowiedzi: calkowity limit (serwer: timeout AI 240 s).
+#define _SOL_BODY_TOTAL_MS   300000UL
 
 // ---------------------------------------------------------------------------
 // Piny przyciskow
@@ -656,17 +664,39 @@ static bool _solJsonUnescape(const char* src, char* dst, size_t cap) {
 
 // Znajduje "key": "..." w odpowiedzi i dekoduje wartosc do dst.
 // false = brak klucza (albo wartosc nie jest stringiem).
-static bool _solJsonGetString(const String& resp, const char* key, char* dst, size_t cap,
+// Pozycja wartosci za "key": (po bialych znakach) albo nullptr. Pomija
+// wystapienia poprzedzone '\' — czyli tekst \"key\": wewnatrz innego stringa
+// (np. w tresci rozwiazania).
+static const char* _solJsonFindValue(const char* json, const char* key) {
+    char pat[24];
+    int pl = snprintf(pat, sizeof(pat), "\"%s\":", key);
+    if (pl <= 0 || pl >= (int)sizeof(pat)) return nullptr;
+    const char* p = json;
+    while ((p = strstr(p, pat)) != nullptr) {
+        if (p == json || p[-1] != '\\') {
+            p += pl;
+            while (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') p++;
+            return p;
+        }
+        p += pl;
+    }
+    return nullptr;
+}
+
+static bool _solJsonGetString(const char* json, const char* key, char* dst, size_t cap,
                               bool* truncated = nullptr) {
-    String pat = String("\"") + key + "\":";
-    int i = resp.indexOf(pat);
-    if (i < 0) return false;
-    i += pat.length();
-    const int n = (int)resp.length();
-    while (i < n && (resp[i] == ' ' || resp[i] == '\t' || resp[i] == '\r' || resp[i] == '\n')) i++;
-    if (i >= n || resp[i] != '"') return false;
-    bool fit = _solJsonUnescape(resp.c_str() + i + 1, dst, cap);
+    const char* v = _solJsonFindValue(json, key);
+    if (!v || *v != '"') return false;
+    bool fit = _solJsonUnescape(v + 1, dst, cap);
     if (truncated) *truncated = !fit;
+    return true;
+}
+
+// Liczba calkowita "key": 123 — false gdy brak klucza.
+static bool _solJsonGetInt(const char* json, const char* key, int* out) {
+    const char* v = _solJsonFindValue(json, key);
+    if (!v || !(isdigit((uint8_t)*v) || *v == '-')) return false;
+    *out = atoi(v);
     return true;
 }
 
@@ -677,15 +707,16 @@ static bool _solJsonGetString(const String& resp, const char* key, char* dst, si
 // z mbedTLS. Odpowiedz tekstowa i ze zdjecia dziela jeden bufor (nigdy nie
 // sa uzywane naraz), a linie to tylko offsety w tekscie po konwersji.
 // ---------------------------------------------------------------------------
-#define _SOL_CONV_MAX     (_SOL_SOLUTION_MAX + 4096)   // LaTeX -> UTF-8 bywa nieco dluzsze
-#define _SOL_LINES_MAX    1200  // linii ekranu (wczesniej 150 — dluzsze rozwiazania ucinane po cichu)
+#define _SOL_CONV_MAX     (_SOL_SOLUTION_MAX + 8192)   // LaTeX -> UTF-8 bywa nieco dluzsze
+#define _SOL_LINES_MAX    4000  // linii ekranu (~96 KB / ~30 B na linie)
 #define _SOL_LINE_LEN     160   // bajty/linie (UTF-8: polskie znaki i symbole 2-3 B)
 #define _SOL_MARK_ROOM    48    // zapas na znacznik obciecia
 
 struct _SolBufs {
+    char     body[_SOL_BODY_MAX + 1];                    // surowa odpowiedz HTTP (JSON)
     char     resp[_SOL_SOLUTION_MAX + _SOL_MARK_ROOM];   // rozwiazanie z odpowiedzi serwera
     char     conv[_SOL_CONV_MAX + _SOL_MARK_ROOM];       // po konwersji LaTeX -> UTF-8
-    uint16_t lineStart[_SOL_LINES_MAX];                  // offset linii w conv
+    uint32_t lineStart[_SOL_LINES_MAX];                  // offset linii w conv (> 64 KB)
     uint8_t  lineLen[_SOL_LINES_MAX];                    // dlugosc linii w bajtach
 };
 static _SolBufs* _solBufs = nullptr;
@@ -824,7 +855,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
             end = lastSpace;
         int len = end - pos;
         if (len > _SOL_LINE_LEN) len = _SOL_LINE_LEN;
-        B->lineStart[lineCount] = (uint16_t)pos;
+        B->lineStart[lineCount] = (uint32_t)pos;
         B->lineLen[lineCount]   = (uint8_t)len;
         lineCount++;
         pos = end;
@@ -838,7 +869,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
         int mpos = di + 1;
         strncpy(B->conv + mpos, _solTruncMark(), _SOL_MARK_ROOM - 2);
         B->conv[mpos + _SOL_MARK_ROOM - 2] = '\0';
-        B->lineStart[lineCount] = (uint16_t)mpos;
+        B->lineStart[lineCount] = (uint32_t)mpos;
         B->lineLen[lineCount]   = (uint8_t)strlen(B->conv + mpos);
         lineCount++;
     }
@@ -853,6 +884,7 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
     powerSetMinTimeout(_SOL_READ_SLEEP_MS);
     bool needRedraw = true;
     int scroll = 0;
+    unsigned long holdStart = 0;   // od kiedy trzymany UP/DN (0 = puszczony)
     // Tytul: "Rozwiazanie" (AI) albo "Offline" (lokalny solver).
     const char* title = (headerLabel && strcmp(headerLabel, "OFFLINE") == 0)
         ? _solLabel(_solT("[4] Offline", "[4] Offline", "[4] Offline", "[4] Offline"))
@@ -892,14 +924,23 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
             needRedraw = false;
         }
 
+        // Przytrzymanie UP/DN przyspiesza: 1 linia, po 0.8 s strona (4 linie),
+        // po 3 s 16 linii na krok — dlugie rozwiazania maja tysiace linii.
         unsigned long now = millis();
-        if (now - _solLastPress > 180UL) {
-            if (inputBtn(BTN_UP) == LOW) {
+        bool upHeld = inputBtn(BTN_UP) == LOW, dnHeld = inputBtn(BTN_DOWN) == LOW;
+        if (!upHeld && !dnHeld) holdStart = 0;
+        else if (!holdStart) holdStart = now;
+        unsigned long held = holdStart ? now - holdStart : 0;
+        int step = held > 3000UL ? 16 : held > 800UL ? VISIBLE : 1;
+        unsigned long interval = held > 800UL ? 110UL : 180UL;
+        if (now - _solLastPress > interval) {
+            if (upHeld) {
                 _solLastPress = now;
-                if (scroll > 0) { scroll--; needRedraw = true; }
-            } else if (inputBtn(BTN_DOWN) == LOW) {
+                if (scroll > 0) { scroll = max(0, scroll - step); needRedraw = true; }
+            } else if (dnHeld) {
                 _solLastPress = now;
-                if (scroll + VISIBLE < lineCount) { scroll++; needRedraw = true; }
+                int maxScroll = max(0, lineCount - VISIBLE);
+                if (scroll < maxScroll) { scroll = min(maxScroll, scroll + step); needRedraw = true; }
             } else if (inputBtn(BTN_LEFT) == LOW || inputBtn(BTN_OK) == LOW) {
                 _solLastPress = now;
                 Serial.println("[SOL] EXIT");
@@ -1095,10 +1136,54 @@ struct _SolNetTaskCtx {
     const char* licKey;
     const char* devToken;
     const char* reqId;
+    char* rbuf;            // tresc odpowiedzi (PSRAM, _SOL_BODY_MAX + 1)
+    size_t rlen;
+    bool rOverflow;        // odpowiedz wieksza niz bufor (obcieta)
+    bool rIncomplete;      // przerwane / limit czasu przed koncem tresci
+    volatile size_t rProgress;   // odebrane bajty — do ekranu oczekiwania
     volatile bool done;
     volatile bool abort;   // panic — przerwij miedzy probami DNS
     int httpCode;
 };
+
+// Tresc odpowiedzi kawalkami (tyle ile jest w buforze TCP) prosto do PSRAM —
+// zamiast http.getString(), ktore przy duzych odpowiedziach realokuje String
+// w kolko (tests.h: przy 85+ KB zwracal uciete body). Zapytanie idzie jako
+// HTTP/1.0 (useHTTP10), wiec serwer/nginx nie uzywa chunked: koniec tresci =
+// Content-Length albo zamkniecie polaczenia. Przy odpowiedzi strumieniowej
+// (x-resp-stream) przed JSON-em przychodza spacje co 10 s — JSON je toleruje.
+static void _solReadBody(_SolNetTaskCtx* ctx) {
+    HTTPClient& http = *ctx->http;
+    const int expected = http.getSize();   // -1 = do zamkniecia polaczenia
+    WiFiClient* stream = http.getStreamPtr();
+    size_t total = 0;
+    bool complete = false;
+    const uint32_t tStart = millis();
+    while (stream && !ctx->abort) {
+        if (expected >= 0 && total >= (size_t)expected) { complete = true; break; }
+        size_t avail = stream->available();
+        if (avail > 0) {
+            size_t room = _SOL_BODY_MAX - total;
+            if (room == 0) { ctx->rOverflow = true; break; }
+            int n = stream->readBytes(ctx->rbuf + total, avail < room ? avail : room);
+            if (n <= 0) break;
+            total += (size_t)n;
+            ctx->rProgress = total;
+        } else if (!stream->connected()) {
+            complete = (expected < 0);       // zamkniecie = koniec (HTTP/1.0)
+            break;
+        } else {
+            if (millis() - tStart > _SOL_BODY_TOTAL_MS) break;
+            delay(5);
+        }
+    }
+    ctx->rbuf[total] = '\0';
+    ctx->rlen = total;
+    ctx->rIncomplete = !complete && !ctx->rOverflow;
+    Serial.printf("[SOL] tresc %u B / %d w %lu ms%s%s\n", (unsigned)total, expected,
+                  (unsigned long)(millis() - tStart), ctx->rOverflow ? " (za duza)" : "",
+                  ctx->rIncomplete ? " (niepelna)" : "");
+}
 
 // Adres + naglowki zadania solve na wskazany serwer (server_select.h).
 static void _solBeginRequest(_SolNetTaskCtx* ctx, int srvIdx) {
@@ -1114,6 +1199,9 @@ static void _solBeginRequest(_SolNetTaskCtx* ctx, int srvIdx) {
     http.addHeader("x-language", kalkLangCode(kalkSettings.language));   // pl..it (settings_screen.h)
     if (ctx->devToken[0]) http.addHeader("x-device-token", ctx->devToken);
     if (ctx->reqId && ctx->reqId[0]) http.addHeader("x-request-id", ctx->reqId);
+    // Naglowki od razu, tresc gdy AI skonczy (+ spacje co 10 s) — patrz _solReadBody.
+    http.addHeader("x-resp-stream", "1");
+    http.useHTTP10(true);
     http.setTimeout(_SOL_HTTP_TIMEOUT_MS);
     http.setConnectTimeout(12000);   // domyslnie 5000 ms -> "start_ssl_client: -1" na slabym lacu
 }
@@ -1152,6 +1240,7 @@ static void _solNetTaskFn(void* arg) {
     // _solEnsureWifi() zerwalo i odnowilo polaczenie zamiast ufac fladze
     // WL_CONNECTED — wczesniej siec zostawala martwa do restartu.
     if (code == -1 && !ctx->abort) _solLinkSuspect = true;
+    if (code > 0) _solReadBody(ctx);
     ctx->httpCode = code;
     ctx->done = true;
     vTaskDelete(nullptr);
@@ -1201,6 +1290,12 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
     ctx.licKey = licKey;
     ctx.devToken = devToken;
     ctx.reqId = reqId;
+    ctx.rbuf = B->body;
+    ctx.rbuf[0] = '\0';
+    ctx.rlen = 0;
+    ctx.rOverflow = false;
+    ctx.rIncomplete = false;
+    ctx.rProgress = 0;
     ctx.done = false;
     ctx.abort = false;
     ctx.httpCode = 0;
@@ -1220,6 +1315,7 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
         logEvent("SOL", "xTaskCreate failed, fallback blocking POST");
         _solBeginRequest(&ctx, 0);
         ctx.httpCode = wifiEnsureDns() ? http.POST((uint8_t*)body, bodyLen) : -1;
+        if (ctx.httpCode > 0) _solReadBody(&ctx);
         ctx.done = true;
     }
 
@@ -1248,7 +1344,12 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
             d.drawStr(x + 12, 31, m);
             uiSpinner(d, UI_W / 2, 42);
             d.setFont(UI_FONT_SMALL);
-            uiCenter(d, 58, _solT("Prosze czekac", "Please wait", "Bitte warten", "Prosim cekejte"));
+            // Odbior dlugiej odpowiedzi — pokaz ile juz przyszlo (spacje
+            // keepalive to pojedyncze bajty, wiec dopiero od 1 KB).
+            size_t got = ctx.rProgress;
+            char kb[24];
+            if (got >= 1024) snprintf(kb, sizeof(kb), "%u KB", (unsigned)(got / 1024));
+            uiCenter(d, 58, got >= 1024 ? kb : _solT("Prosze czekac", "Please wait", "Bitte warten", "Prosim cekejte"));
             d.setFont(UI_FONT);
             d.sendBuffer();
         }
@@ -1281,17 +1382,39 @@ static _SolSendRes _solPostSolve(U8G2 &d, const char* contentType,
         return res;
     }
 
+    http.end();
+    if (panicAborted) {   // panic w trakcie odbioru tresci
+        Serial.println("[SOL] przerwano przyciskiem panic");
+        logEvent("SOL", "aborted by panic");
+        res.kind = _SOL_RES_RETRY;
+        return res;
+    }
+    // Odpowiedz strumieniowa: HTTP 200 poszlo zanim AI skonczylo, prawdziwy
+    // wynik (np. 502) jest w polu "status" na koncu tresci.
+    int bodyStatus;
+    if (_solJsonGetInt(B->body, "status", &bodyStatus) && bodyStatus >= 100 && bodyStatus <= 599) {
+        httpCode = bodyStatus;
+        res.http = httpCode;
+    }
+    Serial.printf("[SOL] HTTP %d, resp len=%u\n", httpCode, (unsigned)ctx.rlen);
+    if (ctx.rIncomplete && !ctx.rOverflow) {
+        // Polaczenie zerwane przed koncem tresci — jak blad transportu:
+        // kolejka offline ponowi z tym samym x-request-id (serwer odda wynik
+        // z cache bez ponownego pobrania tokenow).
+        logEventf("SOL", "niepelna tresc %u B RSSI=%d", (unsigned)ctx.rlen, WiFi.RSSI());
+        res.kind = _SOL_RES_RETRY;
+        return res;
+    }
+
     bool hasSol = false, solTrunc = false;
-    {
-        String resp = http.getString();
-        http.end();
-        Serial.printf("[SOL] HTTP %d, resp len=%d\n", httpCode, resp.length());
-        if (httpCode == 200) {
-            hasSol = _solJsonGetString(resp, "solution", B->resp, _SOL_SOLUTION_MAX + 1, &solTrunc);
-        } else {
-            _solJsonGetString(resp, "error", res.msg, sizeof(res.msg));
-        }
-    }   // resp (do ~25 KB) zwolniony przed zapisem historii i wyswietlaniem
+    if (httpCode == 200) {
+        hasSol = _solJsonGetString(B->body, "solution", B->resp, _SOL_SOLUTION_MAX + 1, &solTrunc);
+        // Bufor surowego JSON-a przepelniony: string nie ma zamykajacego '"',
+        // _solJsonUnescape konczy na NUL — mamy poczatek rozwiazania.
+        if (ctx.rOverflow) solTrunc = true;
+    } else {
+        _solJsonGetString(B->body, "error", res.msg, sizeof(res.msg));
+    }
 
     if (httpCode == 200) {
         if (!hasSol) return res;   // FATAL: "Brak odpowiedzi"

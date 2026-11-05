@@ -21,7 +21,11 @@ import { saveCapture } from "@/lib/captures";
 // Headers: x-api-key: <CALCULATOR_API_KEY>, x-device-id: <MAC 12 hex>,
 //          x-device-token: <token z /register> (wymagany gdy device ma token w DB;
 //          przy DEVICE_AUTH_STRICT=1 zawsze), x-license-key: <licenseCode> (ignorowany przy autoryzacji — model tokenowy),
-//          x-request-id: <8-64 [A-Za-z0-9_-]> (opcjonalny, idempotencja ponowien — K3)
+//          x-request-id: <8-64 [A-Za-z0-9_-]> (opcjonalny, idempotencja ponowien — K3),
+//          x-resp-stream: 1 (opcjonalny, nowy firmware — tryb "keepalive": gdy
+//          rozwiazanie trwa > ~3 s, serwer od razu odpowiada HTTP 200 i co 10 s
+//          wysyla spacje, a na koncu JSON z polem "status" = prawdziwy kod;
+//          patrz respondSolve). Bez naglowka — zachowanie jak dotad.
 // Body (JSON):
 //   { mode: "text", text: "treść zadania" }
 //   { mode: "image", image: "<base64 JPEG>", mimeType: "image/jpeg" }
@@ -29,6 +33,7 @@ import { saveCapture } from "@/lib/captures";
 // Response:
 //   { ok: true, solution: "..." }
 //   { ok: false, error: "..." }   (komunikat trafia na OLED — ASCII, < 64 znakow)
+//   W trybie x-resp-stream: " " ... " " { ...to samo..., status: <kod HTTP> }
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_DEFAULT_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || "google/gemini-2.5-pro";
@@ -36,17 +41,22 @@ const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // UWAGA: OpenRouter rezerwuje srodki pod max_tokens PRZED policzeniem
 // realnego zuzycia, a my rezerwujemy pod max_tokens saldo usera. Kalkulator
-// i tak pokazuje maks. ~6k znakow (bufor 24 KB), wiec 16000 bylo przesada.
-// 8000 zostawia zapas na tokeny "myslenia" modeli rozumujacych (Gemini 2.5 Pro
-// liczy je do max_tokens). Nadpisywalne env SOLVE_MAX_TOKENS.
+// trzyma teraz ~96 KB odpowiedzi w PSRAM, wiec 18000 miesci dlugie rozwiazania
+// razem z tokenami "myslenia" modeli rozumujacych (Gemini 2.5 Pro liczy je do
+// max_tokens). Userzy z mniejszym saldem dostaja nizszy limit (adaptacyjna
+// rezerwacja w processSolve). Nadpisywalne env SOLVE_MAX_TOKENS.
 const SOLVE_MAX_TOKENS = (() => {
   const n = parseInt(process.env.SOLVE_MAX_TOKENS || "", 10);
-  return Number.isFinite(n) && n >= 1000 ? Math.min(n, 32000) : 8000;
+  return Number.isFinite(n) && n >= 1000 ? Math.min(n, 32000) : 18000;
 })();
-// Timeout upstream. Dluzszy niz timeout HTTP firmware (45 s) — wynik i tak
-// trafia do cache idempotencji, wiec ponowienie z tym samym x-request-id
-// dostaje gotowa odpowiedz bez ponownego pobrania tokenow.
-const UPSTREAM_TIMEOUT_MS = 120_000;
+// Minimalny sensowny limit odpowiedzi przy adaptacyjnej rezerwacji — ponizej
+// tego odpowiedz bylaby ucieta w polowie, wiec lepiej 402.
+const SOLVE_MIN_OUTPUT_TOKENS = 2000;
+// Timeout upstream. Przy 18000 tokenow generacja trwa 2-4 min. Firmware z
+// x-resp-stream czeka dzieki keepalive; stary firmware (timeout HTTP ~65 s)
+// rozlacza sie, ale wynik i tak trafia do cache idempotencji, wiec ponowienie
+// z tym samym x-request-id dostaje gotowa odpowiedz bez ponownego pobrania tokenow.
+const UPSTREAM_TIMEOUT_MS = 240_000;
 
 const UPSTREAM_ERROR_MSG = "Serwis AI chwilowo niedostepny. Sprobuj ponownie.";
 const EMPTY_ANSWER_MSG = "Brak odpowiedzi AI. Sprobuj ponownie.";
@@ -69,6 +79,7 @@ async function callOpenRouter(
   text: string,
   base64Data: string | null,
   imgMime: string,
+  maxTokens: number,
 ): Promise<OpenRouterResult> {
   const content: any[] = [];
   if (mode === "text") {
@@ -99,7 +110,7 @@ async function callOpenRouter(
           { role: "user", content },
         ],
         temperature: 0.2,
-        max_tokens: SOLVE_MAX_TOKENS,
+        max_tokens: maxTokens,
       }),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
@@ -336,6 +347,90 @@ const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const MAX_IMAGE_B64 = 8_000_000;
 const MAX_TEXT_LEN = 50_000;
 
+// === Tryb "keepalive" (naglowek x-resp-stream: 1) ===========================
+// Firmware czeka na naglowki HTTP max ~65 s, a dluga generacja (18000 tokenow)
+// trwa 2-4 min. Gdy wynik nie jest gotowy po STREAM_FAST_MS, odpowiadamy od
+// razu 200 i co STREAM_KEEPALIVE_MS wysylamy spacje, a na koncu JSON wyniku
+// z dodatkowym polem "status" (prawdziwy kod HTTP — naglowek mowi juz 200).
+// Wiodace biale znaki sa poprawnym JSON-em, a firmware i tak szuka kluczy
+// ("ok", "solution", "error", "status") w tekscie. Szybkie wyniki (402/403/429
+// itp.) ida zwyklym JSON-em z prawdziwym kodem HTTP.
+const STREAM_FAST_MS = 3_000;
+const STREAM_KEEPALIVE_MS = 10_000;
+const STREAM_PENDING = Symbol("pending");
+
+async function respondSolve(promise: Promise<SolveResult>, stream: boolean): Promise<Response> {
+  if (!stream) {
+    const r = await promise;
+    return NextResponse.json(r.body, { status: r.status });
+  }
+
+  // Wyjatek w pierwszych 3 s leci do zewnetrznego catch w POST (500 JSON).
+  let fastTimer: ReturnType<typeof setTimeout> | undefined;
+  const first = await Promise.race([
+    promise,
+    new Promise<typeof STREAM_PENDING>((resolve) => {
+      fastTimer = setTimeout(() => resolve(STREAM_PENDING), STREAM_FAST_MS);
+    }),
+  ]).finally(() => clearTimeout(fastTimer));
+  if (first !== STREAM_PENDING) {
+    return NextResponse.json(first.body, { status: first.status });
+  }
+
+  const enc = new TextEncoder();
+  let keepalive: ReturnType<typeof setInterval> | undefined;
+  let closed = false;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const push = (s: string) => {
+        if (closed) return;
+        try {
+          controller.enqueue(enc.encode(s));
+        } catch {
+          // Strumien juz zamkniety (klient rozlaczony) — ignoruj.
+          closed = true;
+        }
+      };
+      push(" ");
+      keepalive = setInterval(() => push(" "), STREAM_KEEPALIVE_MS);
+      // Celowo NIE przerywamy processSolve przy rozlaczeniu klienta — wynik
+      // trafia do cache idempotencji i ponowienie z tym samym x-request-id go dostanie.
+      promise
+        .then(
+          (r) => JSON.stringify({ ...r.body, status: r.status }),
+          (err) => {
+            console.error("Device solve error:", err);
+            return JSON.stringify({ ok: false, error: "Blad serwera", status: 500 });
+          }
+        )
+        .then((final) => {
+          clearInterval(keepalive);
+          push(final);
+          if (closed) return;
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            // Juz zamkniety — ignoruj.
+          }
+        });
+    },
+    cancel() {
+      // Klient rozlaczony — tylko sprzatamy keepalive, solve dziala dalej.
+      closed = true;
+      clearInterval(keepalive);
+    },
+  });
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const len = Number(request.headers.get("content-length") || 0);
@@ -364,11 +459,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: rentalCheck.reason }, { status: 403 });
     }
 
+    const stream = request.headers.get("x-resp-stream")?.trim() === "1";
     const rawReqId = request.headers.get("x-request-id")?.trim() || "";
     const requestId = REQUEST_ID_RE.test(rawReqId) ? rawReqId : null;
     if (!requestId) {
-      const r = await processSolve(request, deviceId);
-      return NextResponse.json(r.body, { status: r.status });
+      return await respondSolve(processSolve(request, deviceId), stream);
     }
 
     pruneSolveCache();
@@ -376,8 +471,7 @@ export async function POST(request: NextRequest) {
     const hit = solveCache.get(key);
     if (hit) {
       console.log(`[solve] idempotent replay ${key}`);
-      const r = await hit.promise;
-      return NextResponse.json(r.body, { status: r.status });
+      return await respondSolve(hit.promise, stream);
     }
     const promise = processSolve(request, deviceId).then(
       (r) => {
@@ -390,8 +484,7 @@ export async function POST(request: NextRequest) {
       }
     );
     solveCache.set(key, { promise, createdAt: Date.now() });
-    const r = await promise;
-    return NextResponse.json(r.body, { status: r.status });
+    return await respondSolve(promise, stream);
   } catch (err) {
     console.error("Device solve error:", err);
     return NextResponse.json(
@@ -574,19 +667,37 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
   // Atomowa rezerwacja salda PRZED wywolaniem AI (tylko userzy z kontem).
   // Szacunek: (wejscie + max_tokens) x mnoznik modelu; po odpowiedzi
   // rozliczamy roznice, przy bledzie zwracamy rezerwacje. Blad bazy -> 503.
+  // Adaptacyjnie: gdy saldo nie pokrywa pelnego SOLVE_MAX_TOKENS, obnizamy
+  // max_tokens do tego, co saldo pokrywa (min. SOLVE_MIN_OUTPUT_TOKENS) —
+  // inaczej podniesienie limitu odcieloby userow z saldem ~10-19k.
   let reserved = 0;
+  let maxTokens = SOLVE_MAX_TOKENS;
   {
     const inputTokens = estimateInputTokens(
       systemPrompt.length + (mode === "text" ? (text || "").length : 0),
       mode === "image" ? 1 : 0
     );
-    const est = estimateReservation(inputTokens, SOLVE_MAX_TOKENS, costMultiplier);
-    const rr = await reserveTokens(ownerUserId, est);
+    let est = estimateReservation(inputTokens, SOLVE_MAX_TOKENS, costMultiplier);
+    let rr = await reserveTokens(ownerUserId, est);
     if (rr === "db_error") return fail(503, DB_ERROR_MSG);
     if (rr === "insufficient") {
       const bal = await readTokenBalance(ownerUserId);
       if (bal === null) return fail(503, DB_ERROR_MSG);
-      return fail(402, `Brak tokenow (${bal}). Dokup na kalkmate.pl.`);
+      // Ten sam mnoznik co w estimateReservation (niepoprawny -> 1).
+      const mult = Number.isFinite(costMultiplier) && costMultiplier > 0 ? costMultiplier : 1;
+      // min(): saldo moglo wzrosnac miedzy rezerwacja a odczytem.
+      const maxOut = Math.min(SOLVE_MAX_TOKENS, Math.floor(bal / mult) - inputTokens);
+      if (maxOut < SOLVE_MIN_OUTPUT_TOKENS) {
+        return fail(402, `Brak tokenow (${bal}). Dokup na kalkmate.pl.`);
+      }
+      est = estimateReservation(inputTokens, maxOut, costMultiplier);
+      rr = await reserveTokens(ownerUserId, est);
+      if (rr === "db_error") return fail(503, DB_ERROR_MSG);
+      if (rr === "insufficient") {
+        return fail(402, `Brak tokenow (${bal}). Dokup na kalkmate.pl.`);
+      }
+      console.log(`[solve] obnizony max_tokens ${SOLVE_MAX_TOKENS} -> ${maxOut} (saldo=${bal}, mult=${mult}, in=${inputTokens}) device=${deviceId}`);
+      maxTokens = maxOut;
     }
     reserved = est;
   }
@@ -606,7 +717,7 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
     }
 
     // === Wywolanie AI przez OpenRouter ===
-    const r = await callOpenRouter(modelToUse, systemPrompt, mode, (text || "").trim(), base64Data, imgMime);
+    const r = await callOpenRouter(modelToUse, systemPrompt, mode, (text || "").trim(), base64Data, imgMime, maxTokens);
     const solution = r.ok && r.solution && r.finishReason !== "error" ? normalizeForCalc(r.solution) : "";
     if (!r.ok || !solution) {
       // Nie rozliczaj bledu ani pustej odpowiedzi — zwrot calej rezerwacji.

@@ -34,7 +34,10 @@
 #define HIST_NS         "kalkhist"
 #define HIST_LIMIT      5
 #define HIST_Q_MAX      500    // pytanie do 500 bajtow (UTF-8)
-#define HIST_A_MAX      3000   // odpowiedz do 3 KB (UTF-8)
+// Odpowiedz do ~64 KB (limit pola u16 w naglowku pliku) — od fw 2.1.4
+// rozwiazania bywaja dlugie (serwer: do 18k tokenow). Stare wpisy (<= 3000)
+// czytaja sie bez zmian. 5 slotow x 64 KB miesci sie w SPIFFS z zapasem.
+#define HIST_A_MAX      65000
 #define _HIST_MAGIC     0x3148534BUL   // "KSH1"
 #define _HIST_TMP       "/hist.tmp"
 

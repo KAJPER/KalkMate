@@ -56,12 +56,14 @@ server {
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto https;
 
-        # Kalkulator czeka do 65 s (_SOL_HTTP_TIMEOUT_MS) — tu wiecej.
+        # Od fw 2.1.4 (x-resp-stream) serwer glowny odsyla naglowki po ~3 s,
+        # potem spacje co 10 s az AI skonczy (do 240 s) — bez buforowania,
+        # zeby kalkulator dostawal tresc na biezaco.
         proxy_connect_timeout 10s;
-        proxy_send_timeout 90s;
-        proxy_read_timeout 90s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
         proxy_request_buffering on;
-        proxy_buffering on;
+        proxy_buffering off;
     }
 
     # Wszystko inne (strona, panel, admin) — tylko przez kalkmate.pl.
