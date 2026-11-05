@@ -37,8 +37,8 @@ export async function GET() {
 
   try {
     const [extra, subscription, accounts, orders, licenses, devices, notes, tests, conversations, solves] = await Promise.all([
-      prisma.$queryRaw<{ tokenBalance: number | null; aiModel: string | null; aiMode: string | null }[]>`
-        SELECT "tokenBalance", "aiModel", "aiMode" FROM "User" WHERE "id" = ${user.id} LIMIT 1
+      prisma.$queryRaw<{ tokenBalance: number | null; aiModel: string | null; aiMode: string | null; aiCustomPrompt: string | null }[]>`
+        SELECT "tokenBalance", "aiModel", "aiMode", "aiCustomPrompt" FROM "User" WHERE "id" = ${user.id} LIMIT 1
       `.catch(() => []),
       prisma.subscription.findUnique({
         where: { userId: user.id },
@@ -141,6 +141,7 @@ export async function GET() {
         tokenBalance: Number(x?.tokenBalance ?? 0),
         aiModel: x?.aiModel ?? null,
         aiMode: x?.aiMode ?? null,
+        aiCustomPrompt: x?.aiCustomPrompt ?? null,
       },
       subscription,
       marketingConsent: consent,

@@ -393,9 +393,11 @@ export default function OpenRouterPage() {
                         <span className={`px-2 py-0.5 rounded-full text-xs border ${
                           u.aiMode === "raw"
                             ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                            : u.aiMode === "custom"
+                            ? "bg-pink-500/10 text-pink-400 border-pink-500/20"
                             : "bg-blue-500/10 text-blue-400 border-blue-500/20"
                         }`}>
-                          {u.aiMode === "raw" ? "Czysty AI" : "Egzamin"}
+                          {u.aiMode === "raw" ? "Czysty AI" : u.aiMode === "custom" ? "Własny prompt" : "Egzamin"}
                         </span>
                         <button
                           onClick={() => { setAddTokensFor(addTokensFor === u.id ? null : u.id); setAddTokensAmount("1000000"); }}

@@ -24,7 +24,8 @@ const RAW_COLUMNS: Record<string, ColumnSpec[]> = {
   User: [
     ["tokenBalance", "INTEGER DEFAULT 0"], // saldo efektywnych tokenow AI
     ["aiModel", "TEXT"],                   // wybrany model OpenRouter ("default" | "<vendor>/<model>")
-    ["aiMode", "TEXT"],                    // "matura" | "raw"
+    ["aiMode", "TEXT"],                    // "matura" | "raw" | "custom"
+    ["aiCustomPrompt", "TEXT"],            // wlasny system prompt (tryb "custom"), lib/aiCustomPrompt.ts
   ],
   Device: [
     ["unlockCode", "TEXT"],

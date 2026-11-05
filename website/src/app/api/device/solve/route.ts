@@ -177,13 +177,20 @@ const LANGUAGE_NAMES: Record<string, string> = {
   it: "włoskim (italiano)",
 };
 const SUPPORTED_LANGUAGES = new Set(Object.keys(LANGUAGE_NAMES));
-function buildSystemPrompt(aiMode: string, solveMode: number, language: string): string {
-  const base = aiMode === "raw" ? BASE_RAW : BASE_MATURA;
-  const detail = DETAIL_PROMPTS[solveMode] ?? DETAIL_PROMPTS[0];
+// aiMode "custom" (wlasny prompt usera z panelu): prompt usera zastepuje
+// framing ORAZ poziom szczegolowosci (solveMode z kalkulatora pomijany — user
+// opisuje to sam). FORMAT_RULES i jezyk zostaja, bo wynikaja z ograniczen
+// ekranu/fontu OLED, nie z preferencji.
+function buildSystemPrompt(aiMode: string, solveMode: number, language: string, customPrompt = ""): string {
   const langName = LANGUAGE_NAMES[language] ?? LANGUAGE_NAMES.pl;
   const langRule = language === "pl"
     ? ""
     : `\n\nODPOWIADAJ WYŁĄCZNIE w języku ${langName}, niezależnie od języka treści zadania. Terminy matematyczne/fizyczne/chemiczne/biologiczne oraz cała odpowiedź (w tym słowo "Odpowiedź:" na końcu) mają być w tym języku.`;
+  if (aiMode === "custom" && customPrompt) {
+    return `${customPrompt}\n\n${FORMAT_RULES}${langRule}`;
+  }
+  const base = aiMode === "raw" ? BASE_RAW : BASE_MATURA;
+  const detail = DETAIL_PROMPTS[solveMode] ?? DETAIL_PROMPTS[0];
   return `${base}\n\n${detail}\n\n${FORMAT_RULES}${langRule}`;
 }
 
@@ -443,14 +450,20 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
   // User.aiModel / User.aiMode oraz Device.promptMode nie sa w Prisma schemie
   // -> raw SQL. Priorytet trybu: user.aiMode -> Device.promptMode (legacy) ->
   // default "matura". Model: user.aiModel -> "default" (Gemini).
-  let aiMode: "matura" | "raw" = "matura";
+  // "custom" bez zapisanego promptu (User.aiCustomPrompt) = matura.
+  let aiMode: "matura" | "raw" | "custom" = "matura";
   let aiModel = "default";
+  let customPrompt = "";
   {
     try {
-      const urows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null }[]>`
-        SELECT "aiModel", "aiMode" FROM "User" WHERE "id" = ${ownerUserId} LIMIT 1
+      const urows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null; aiCustomPrompt: string | null }[]>`
+        SELECT "aiModel", "aiMode", "aiCustomPrompt" FROM "User" WHERE "id" = ${ownerUserId} LIMIT 1
       `;
       if (urows?.[0]?.aiMode === "raw") aiMode = "raw";
+      if (urows?.[0]?.aiMode === "custom" && urows[0].aiCustomPrompt) {
+        aiMode = "custom";
+        customPrompt = urows[0].aiCustomPrompt;
+      }
       if (urows?.[0]?.aiModel) aiModel = urows[0].aiModel;
     } catch (e) {
       // Kolumny aiModel/aiMode moga nie istniec (stara baza) — fallback na default
@@ -476,7 +489,7 @@ async function processSolve(request: NextRequest, deviceId: string): Promise<Sol
   // Tolerujemy tez warianty regionalne ("pt-PT", "fr_FR") — liczy sie kod jezyka.
   const langHeader = (request.headers.get("x-language") || "pl").trim().toLowerCase().split(/[-_]/)[0];
   const language = SUPPORTED_LANGUAGES.has(langHeader) ? langHeader : "pl";
-  const systemPrompt = buildSystemPrompt(aiMode, solveMode, language);
+  const systemPrompt = buildSystemPrompt(aiMode, solveMode, language, customPrompt);
   let modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
     ? aiModel
     : OPENROUTER_DEFAULT_MODEL;

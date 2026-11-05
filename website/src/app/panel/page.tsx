@@ -209,6 +209,14 @@ const PANEL_DICT: Record<Locale, {
   rawAiTitle: string;
   rawModeDesc: string;
   maturaModeDesc: string;
+  customAi: string;
+  customAiTitle: string;
+  customModeDesc: string;
+  customPromptPlaceholder: string;
+  customPromptSave: string;
+  customPromptSaved: string;
+  customPromptNeedText: string;
+  customPromptHint: string;
   // calculator
   pairCalculator: string;
   addYourDevice: string;
@@ -442,6 +450,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Tryb uniwersalny — dowolny przedmiot (elektronika, informatyka, języki...)",
     rawModeDesc: "Tryb uniwersalny — AI działa dla elektroniki, informatyki, języków i innych.",
     maturaModeDesc: "Tryb egzaminacyjny — AI odpowiada krok po kroku (matematyka/fizyka/chemia/biologia).",
+    customAi: "Własny",
+    customAiTitle: "Twój własny system prompt dla AI",
+    customModeDesc: "Własny tryb — AI dostaje Twój system prompt zamiast wbudowanego.",
+    customPromptPlaceholder: "Np. Jesteś korepetytorem z fizyki. Tłumacz prosto, jak dla ucznia liceum, i zawsze podawaj jednostki.",
+    customPromptSave: "Zapisz prompt",
+    customPromptSaved: "Zapisano",
+    customPromptNeedText: "Najpierw wpisz i zapisz swój prompt.",
+    customPromptHint: "Do Twojego promptu automatycznie dodajemy zasady formatowania pod ekran kalkulatora (bez LaTeX) oraz język odpowiedzi z ustawień kalkulatora. „Tryb rozwiązań” z kalkulatora jest w tym trybie pomijany — szczegółowość opisz w prompcie.",
     pairCalculator: "Sparuj kalkulator",
     addYourDevice: "Dodaj swoje",
     deviceWord: "urządzenie",
@@ -670,6 +686,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Universal mode — any subject (electronics, IT, languages...)",
     rawModeDesc: "Universal mode — the AI works for electronics, IT, languages and more.",
     maturaModeDesc: "Exam mode — the AI answers step by step (math/physics/chemistry/biology).",
+    customAi: "Custom",
+    customAiTitle: "Your own system prompt for the AI",
+    customModeDesc: "Custom mode — the AI gets your system prompt instead of the built-in one.",
+    customPromptPlaceholder: "E.g. You are a physics tutor. Explain simply, as for a high-school student, and always give units.",
+    customPromptSave: "Save prompt",
+    customPromptSaved: "Saved",
+    customPromptNeedText: "Type and save your prompt first.",
+    customPromptHint: "We automatically add formatting rules for the calculator screen (no LaTeX) and the answer language from the calculator settings. The calculator's \"Solution mode\" is ignored in this mode — describe the level of detail in your prompt.",
     pairCalculator: "Pair calculator",
     addYourDevice: "Add your",
     deviceWord: "device",
@@ -898,6 +922,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Universeller Modus — beliebiges Fach (Elektronik, Informatik, Sprachen...)",
     rawModeDesc: "Universeller Modus — die KI funktioniert für Elektronik, Informatik, Sprachen und mehr.",
     maturaModeDesc: "Prüfungsmodus — die KI antwortet Schritt für Schritt (Mathe/Physik/Chemie/Biologie).",
+    customAi: "Eigener",
+    customAiTitle: "Dein eigener System-Prompt für die KI",
+    customModeDesc: "Eigener Modus — die KI erhält deinen System-Prompt statt des eingebauten.",
+    customPromptPlaceholder: "Z. B. Du bist Nachhilfelehrer für Physik. Erkläre einfach, wie für einen Schüler, und gib immer Einheiten an.",
+    customPromptSave: "Prompt speichern",
+    customPromptSaved: "Gespeichert",
+    customPromptNeedText: "Gib zuerst deinen Prompt ein und speichere ihn.",
+    customPromptHint: "Wir fügen automatisch Formatierungsregeln für den Taschenrechner-Bildschirm (kein LaTeX) und die Antwortsprache aus den Taschenrechner-Einstellungen hinzu. Der „Lösungsmodus“ des Taschenrechners wird in diesem Modus ignoriert — beschreibe den Detailgrad im Prompt.",
     pairCalculator: "Rechner koppeln",
     addYourDevice: "Füge dein",
     deviceWord: "Gerät",
@@ -1126,6 +1158,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Univerzální režim — libovolný předmět (elektronika, informatika, jazyky...)",
     rawModeDesc: "Univerzální režim — AI funguje pro elektroniku, informatiku, jazyky a další.",
     maturaModeDesc: "Zkouškový režim — AI odpovídá krok za krokem (matematika/fyzika/chemie/biologie).",
+    customAi: "Vlastní",
+    customAiTitle: "Tvůj vlastní systémový prompt pro AI",
+    customModeDesc: "Vlastní režim — AI dostane tvůj systémový prompt místo vestavěného.",
+    customPromptPlaceholder: "Např. Jsi doučovatel fyziky. Vysvětluj jednoduše, jako pro středoškoláka, a vždy uváděj jednotky.",
+    customPromptSave: "Uložit prompt",
+    customPromptSaved: "Uloženo",
+    customPromptNeedText: "Nejdřív napiš a ulož svůj prompt.",
+    customPromptHint: "K tvému promptu automaticky přidáváme pravidla formátování pro displej kalkulačky (bez LaTeXu) a jazyk odpovědi z nastavení kalkulačky. „Režim řešení“ z kalkulačky se v tomto režimu ignoruje — míru podrobnosti popiš v promptu.",
     pairCalculator: "Spárovat kalkulačku",
     addYourDevice: "Přidej své",
     deviceWord: "zařízení",
@@ -1354,6 +1394,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Univerzálny režim — ľubovoľný predmet (elektronika, informatika, jazyky...)",
     rawModeDesc: "Univerzálny režim — AI funguje pre elektroniku, informatiku, jazyky a ďalšie.",
     maturaModeDesc: "Skúškový režim — AI odpovedá krok za krokom (matematika/fyzika/chémia/biológia).",
+    customAi: "Vlastný",
+    customAiTitle: "Tvoj vlastný systémový prompt pre AI",
+    customModeDesc: "Vlastný režim — AI dostane tvoj systémový prompt namiesto vstavaného.",
+    customPromptPlaceholder: "Napr. Si doučovateľ fyziky. Vysvetľuj jednoducho, ako pre stredoškoláka, a vždy uvádzaj jednotky.",
+    customPromptSave: "Uložiť prompt",
+    customPromptSaved: "Uložené",
+    customPromptNeedText: "Najprv napíš a ulož svoj prompt.",
+    customPromptHint: "K tvojmu promptu automaticky pridávame pravidlá formátovania pre displej kalkulačky (bez LaTeXu) a jazyk odpovede z nastavení kalkulačky. „Režim riešení“ z kalkulačky sa v tomto režime ignoruje — mieru podrobnosti opíš v prompte.",
     pairCalculator: "Spárovať kalkulačku",
     addYourDevice: "Pridaj svoje",
     deviceWord: "zariadenie",
@@ -1586,6 +1634,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Universalus režimas — bet kuris dalykas (elektronika, informatika, kalbos...)",
     rawModeDesc: "Universalus režimas — DI veikia elektronikai, informatikai, kalboms ir kt.",
     maturaModeDesc: "Egzamino režimas — DI atsako žingsnis po žingsnio (matematika/fizika/chemija/biologija).",
+    customAi: "Savas",
+    customAiTitle: "Tavo paties sisteminis raginimas (prompt) DI",
+    customModeDesc: "Savas režimas — DI gauna tavo sisteminį raginimą vietoj įtaisytojo.",
+    customPromptPlaceholder: "Pvz. Tu esi fizikos korepetitorius. Aiškink paprastai, kaip gimnazistui, ir visada nurodyk vienetus.",
+    customPromptSave: "Išsaugoti",
+    customPromptSaved: "Išsaugota",
+    customPromptNeedText: "Pirmiausia įrašyk ir išsaugok savo raginimą.",
+    customPromptHint: "Prie tavo raginimo automatiškai pridedame formatavimo taisykles skaičiuotuvo ekranui (be LaTeX) ir atsakymo kalbą iš skaičiuotuvo nustatymų. Skaičiuotuvo „Sprendimų režimas“ šiame režime ignoruojamas — detalumą aprašyk raginime.",
     pairCalculator: "Susieti skaičiuotuvą",
     addYourDevice: "Naujas",
     deviceWord: "įrenginys",
@@ -1818,6 +1874,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Універсальны рэжым — любы прадмет (электроніка, інфарматыка, мовы...)",
     rawModeDesc: "Універсальны рэжым — ШІ працуе для электронікі, інфарматыкі, моў і іншага.",
     maturaModeDesc: "Экзаменацыйны рэжым — ШІ адказвае крок за крокам (матэматыка/фізіка/хімія/біялогія).",
+    customAi: "Свой",
+    customAiTitle: "Твой уласны сістэмны промпт для ШІ",
+    customModeDesc: "Свой рэжым — ШІ атрымлівае твой сістэмны промпт замест убудаванага.",
+    customPromptPlaceholder: "Напрыклад: Ты рэпетытар па фізіцы. Тлумач проста, як для школьніка, і заўсёды пазначай адзінкі.",
+    customPromptSave: "Захаваць промпт",
+    customPromptSaved: "Захавана",
+    customPromptNeedText: "Спачатку ўвядзі і захавай свой промпт.",
+    customPromptHint: "Да твайго промпту мы аўтаматычна дадаём правілы фарматавання для экрана калькулятара (без LaTeX) і мову адказу з налад калькулятара. «Рэжым рашэнняў» калькулятара ў гэтым рэжыме ігнаруецца — апішы ўзровень падрабязнасці ў промпце.",
     pairCalculator: "Спалучыць калькулятар",
     addYourDevice: "Новая",
     deviceWord: "прылада",
@@ -2046,6 +2110,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Modo universal — cualquier asignatura (electrónica, informática, idiomas...)",
     rawModeDesc: "Modo universal — la IA sirve para electrónica, informática, idiomas y más.",
     maturaModeDesc: "Modo examen — la IA responde paso a paso (matemáticas/física/química/biología).",
+    customAi: "Propio",
+    customAiTitle: "Tu propio prompt de sistema para la IA",
+    customModeDesc: "Modo propio — la IA recibe tu prompt de sistema en lugar del integrado.",
+    customPromptPlaceholder: "P. ej. Eres un profesor particular de física. Explica de forma sencilla, como a un alumno de bachillerato, y da siempre las unidades.",
+    customPromptSave: "Guardar prompt",
+    customPromptSaved: "Guardado",
+    customPromptNeedText: "Primero escribe y guarda tu prompt.",
+    customPromptHint: "Añadimos automáticamente reglas de formato para la pantalla de la calculadora (sin LaTeX) y el idioma de respuesta de los ajustes de la calculadora. El «Modo de solución» de la calculadora se ignora en este modo: describe el nivel de detalle en tu prompt.",
     pairCalculator: "Vincular calculadora",
     addYourDevice: "Añade tu",
     deviceWord: "dispositivo",
@@ -2274,6 +2346,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Modo universal — qualquer disciplina (eletrónica, informática, línguas...)",
     rawModeDesc: "Modo universal — a IA funciona para eletrónica, informática, línguas e muito mais.",
     maturaModeDesc: "Modo exame — a IA responde passo a passo (matemática/física/química/biologia).",
+    customAi: "Próprio",
+    customAiTitle: "O teu próprio prompt de sistema para a IA",
+    customModeDesc: "Modo próprio — a IA recebe o teu prompt de sistema em vez do integrado.",
+    customPromptPlaceholder: "Ex.: És um explicador de física. Explica de forma simples, como a um aluno do secundário, e indica sempre as unidades.",
+    customPromptSave: "Guardar prompt",
+    customPromptSaved: "Guardado",
+    customPromptNeedText: "Primeiro escreve e guarda o teu prompt.",
+    customPromptHint: "Acrescentamos automaticamente regras de formatação para o ecrã da calculadora (sem LaTeX) e o idioma da resposta das definições da calculadora. O «Modo de solução» da calculadora é ignorado neste modo — descreve o nível de detalhe no prompt.",
     pairCalculator: "Emparelhar calculadora",
     addYourDevice: "Adiciona o teu",
     deviceWord: "dispositivo",
@@ -2502,6 +2582,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Mode universel — n'importe quelle matière (électronique, informatique, langues...)",
     rawModeDesc: "Mode universel — l'IA fonctionne pour l'électronique, l'informatique, les langues et plus encore.",
     maturaModeDesc: "Mode examen — l'IA répond étape par étape (maths/physique/chimie/biologie).",
+    customAi: "Perso",
+    customAiTitle: "Ton propre prompt système pour l'IA",
+    customModeDesc: "Mode perso — l'IA reçoit ton prompt système à la place de celui intégré.",
+    customPromptPlaceholder: "Ex. : Tu es un professeur particulier de physique. Explique simplement, comme à un lycéen, et donne toujours les unités.",
+    customPromptSave: "Enregistrer le prompt",
+    customPromptSaved: "Enregistré",
+    customPromptNeedText: "Saisis et enregistre d'abord ton prompt.",
+    customPromptHint: "Nous ajoutons automatiquement des règles de mise en forme pour l'écran de la calculatrice (sans LaTeX) et la langue de réponse des réglages de la calculatrice. Le « Mode de solution » de la calculatrice est ignoré dans ce mode — décris le niveau de détail dans ton prompt.",
     pairCalculator: "Associer la calculatrice",
     addYourDevice: "Ajoute ton",
     deviceWord: "appareil",
@@ -2730,6 +2818,14 @@ const PANEL_DICT: Record<Locale, {
     rawAiTitle: "Modalità universale — qualsiasi materia (elettronica, informatica, lingue...)",
     rawModeDesc: "Modalità universale — l'IA funziona per elettronica, informatica, lingue e altro.",
     maturaModeDesc: "Modalità esame — l'IA risponde passo dopo passo (matematica/fisica/chimica/biologia).",
+    customAi: "Personale",
+    customAiTitle: "Il tuo prompt di sistema per l'IA",
+    customModeDesc: "Modalità personale — l'IA riceve il tuo prompt di sistema al posto di quello integrato.",
+    customPromptPlaceholder: "Es. Sei un insegnante privato di fisica. Spiega in modo semplice, come a uno studente delle superiori, e indica sempre le unità.",
+    customPromptSave: "Salva prompt",
+    customPromptSaved: "Salvato",
+    customPromptNeedText: "Prima scrivi e salva il tuo prompt.",
+    customPromptHint: "Aggiungiamo automaticamente le regole di formattazione per lo schermo della calcolatrice (senza LaTeX) e la lingua di risposta dalle impostazioni della calcolatrice. La «Modalità soluzione» della calcolatrice viene ignorata in questa modalità: descrivi il livello di dettaglio nel prompt.",
     pairCalculator: "Abbina calcolatrice",
     addYourDevice: "Aggiungi il tuo",
     deviceWord: "dispositivo",
@@ -2921,7 +3017,14 @@ export default function PanelPage() {
 
   // === AI settings (sekcja AI): wybór modelu + tryb Matura/Czysty (per-user) ===
   const [aiModel, setAiModel] = useState<string>("default");
-  const [aiMode, setAiMode] = useState<"matura" | "raw">("matura");
+  const [aiMode, setAiMode] = useState<"matura" | "raw" | "custom">("matura");
+  // Własny system prompt (tryb "custom"): zapisany na serwerze + edytowany szkic.
+  // aiPromptOpen = edytor widoczny (po kliknięciu "Własny" zanim prompt zapisany).
+  const [aiCustomPrompt, setAiCustomPrompt] = useState("");
+  const [aiPromptDraft, setAiPromptDraft] = useState("");
+  const [aiPromptMax, setAiPromptMax] = useState(4000);
+  const [aiPromptOpen, setAiPromptOpen] = useState(false);
+  const [aiPromptMsg, setAiPromptMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [aiModels, setAiModels] = useState<Array<{ id: string; label: string; provider: string; note?: string; costMultiplier: number }>>([]);
   const [aiSaving, setAiSaving] = useState(false);
   const [aiLoadError, setAiLoadError] = useState(false);
@@ -2965,13 +3068,17 @@ export default function PanelPage() {
     const j = r.data;
     setAiLoadError(false);
     setAiModel(j.aiModel || "default");
-    setAiMode(j.aiMode === "raw" ? "raw" : "matura");
+    setAiMode(j.aiMode === "raw" || j.aiMode === "custom" ? j.aiMode : "matura");
+    const cp = typeof j.aiCustomPrompt === "string" ? j.aiCustomPrompt : "";
+    setAiCustomPrompt(cp);
+    setAiPromptDraft(cp);
+    if (typeof j.aiCustomPromptMax === "number") setAiPromptMax(j.aiCustomPromptMax);
     setAiModels(Array.isArray(j.models) ? j.models : []);
     if (typeof j.tokenBalance === "number") setTokenBalance(j.tokenBalance);
     markFetched("ai");
   };
 
-  const saveAiSettings = async (patch: { aiModel?: string; aiMode?: "matura" | "raw" }) => {
+  const saveAiSettings = async (patch: { aiModel?: string; aiMode?: "matura" | "raw" | "custom" }) => {
     if (aiSaving) return;
     setAiSaving(true);
     try {
@@ -2981,7 +3088,34 @@ export default function PanelPage() {
         return;
       }
       if (patch.aiModel !== undefined) setAiModel(patch.aiModel);
-      if (patch.aiMode !== undefined) setAiMode(patch.aiMode);
+      if (patch.aiMode !== undefined) {
+        setAiMode(patch.aiMode);
+        setAiPromptOpen(false);
+      }
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
+  // Zapis własnego promptu = od razu włącza tryb "custom" (pusty prompt -> serwer
+  // wraca do trybu Egzamin).
+  const saveCustomPrompt = async () => {
+    if (aiSaving) return;
+    const prompt = aiPromptDraft.trim();
+    setAiPromptMsg(null);
+    setAiSaving(true);
+    try {
+      const r = await sendJson("/api/user/ai-settings", "PATCH",
+        prompt ? { aiCustomPrompt: prompt, aiMode: "custom" } : { aiCustomPrompt: "" });
+      if (!r.ok) {
+        setAiPromptMsg({ ok: false, text: errText(r, t.alertSaveFailed) });
+        return;
+      }
+      setAiCustomPrompt(prompt);
+      setAiPromptDraft(prompt);
+      setAiMode(prompt ? "custom" : aiMode === "custom" ? "matura" : aiMode);
+      setAiPromptOpen(false);
+      setAiPromptMsg({ ok: true, text: t.customPromptSaved });
     } finally {
       setAiSaving(false);
     }
@@ -4633,12 +4767,12 @@ export default function PanelPage() {
               {/* === TRYB AI === */}
               <div className="bg-[#0E0E0E] p-6 border border-[rgba(242,237,227,0.10)]">
                 <div className="km-mono-eyebrow text-[#D8FF3D] mb-3">{t.aiModeHeading}</div>
-                <div className="flex gap-2 mb-2">
+                <div className="flex flex-wrap gap-2 mb-2">
                   <button
                     onClick={() => saveAiSettings({ aiMode: "matura" })}
                     disabled={aiSaving}
                     className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
-                      aiMode !== "raw"
+                      aiMode === "matura"
                         ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
                         : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
                     }`}
@@ -4658,10 +4792,60 @@ export default function PanelPage() {
                   >
                     {t.rawAi}
                   </button>
+                  <button
+                    onClick={() => {
+                      setAiPromptMsg(null);
+                      if (aiCustomPrompt) saveAiSettings({ aiMode: "custom" });
+                      else setAiPromptOpen(true);
+                    }}
+                    disabled={aiSaving}
+                    className={`km-mono-eyebrow px-4 py-2 border transition-colors disabled:opacity-50 ${
+                      aiMode === "custom" || aiPromptOpen
+                        ? "border-[#D8FF3D] bg-[#D8FF3D]/10 text-[#D8FF3D]"
+                        : "border-[rgba(242,237,227,0.20)] text-[#F2EDE3]/60 hover:text-[#F2EDE3] hover:border-[rgba(242,237,227,0.40)]"
+                    }`}
+                    title={t.customAiTitle}
+                  >
+                    {t.customAi}
+                  </button>
                 </div>
                 <div className="text-xs text-[#F2EDE3]/45">
-                  {aiMode === "raw" ? t.rawModeDesc : t.maturaModeDesc}
+                  {aiMode === "custom" || aiPromptOpen ? t.customModeDesc : aiMode === "raw" ? t.rawModeDesc : t.maturaModeDesc}
                 </div>
+                {(aiMode === "custom" || aiPromptOpen) && (
+                  <div className="mt-4">
+                    <textarea
+                      value={aiPromptDraft}
+                      onChange={(e) => { setAiPromptDraft(e.target.value); setAiPromptMsg(null); }}
+                      placeholder={t.customPromptPlaceholder}
+                      maxLength={aiPromptMax}
+                      rows={8}
+                      className="w-full px-3 py-2.5 bg-[#0B0B0B] border border-[rgba(242,237,227,0.15)] focus:outline-none focus:border-[#D8FF3D] text-sm font-mono text-[#F2EDE3] placeholder:text-[#F2EDE3]/30 transition-colors resize-y"
+                    />
+                    <p className="text-xs text-[#F2EDE3]/45 mt-2">{t.customPromptHint}</p>
+                    <div className="flex justify-between items-center gap-3 mt-3">
+                      <div className="text-xs text-[#F2EDE3]/60">
+                        {aiPromptDraft.length}/{aiPromptMax}
+                        {aiPromptMsg && (
+                          <span className={`ml-3 ${aiPromptMsg.ok ? "text-emerald-400" : "text-[#FF4D2E]"}`}>{aiPromptMsg.text}</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (!aiPromptDraft.trim() && !aiCustomPrompt) {
+                            setAiPromptMsg({ ok: false, text: t.customPromptNeedText });
+                            return;
+                          }
+                          saveCustomPrompt();
+                        }}
+                        disabled={aiSaving || (aiPromptDraft.trim() === aiCustomPrompt && aiMode === "custom")}
+                        className="px-4 py-2 km-mono-eyebrow bg-[#D8FF3D] hover:bg-[#F2EDE3] text-[#0B0B0B] disabled:opacity-50 transition-colors"
+                      >
+                        {t.customPromptSave}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

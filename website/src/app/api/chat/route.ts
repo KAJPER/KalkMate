@@ -1389,19 +1389,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Odczytaj tryb AI i model z ustawień użytkownika
-    let aiMode: "matura" | "raw" = "matura";
+    // "custom" = wlasny system prompt z panelu (User.aiCustomPrompt), bez
+    // dodatkow — czat renderuje markdown, wiec nie ma ograniczen ekranu.
+    let aiMode: "matura" | "raw" | "custom" = "matura";
     let aiModel = "default";
+    let customPrompt = "";
     try {
-      const urows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null }[]>`
-        SELECT "aiModel", "aiMode" FROM "User" WHERE "id" = ${user.id} LIMIT 1
+      const urows = await prisma.$queryRaw<{ aiModel: string | null; aiMode: string | null; aiCustomPrompt: string | null }[]>`
+        SELECT "aiModel", "aiMode", "aiCustomPrompt" FROM "User" WHERE "id" = ${user.id} LIMIT 1
       `;
       if (urows?.[0]?.aiMode === "raw") aiMode = "raw";
+      if (urows?.[0]?.aiMode === "custom" && urows[0].aiCustomPrompt) {
+        aiMode = "custom";
+        customPrompt = urows[0].aiCustomPrompt;
+      }
       if (urows?.[0]?.aiModel) aiModel = urows[0].aiModel;
     } catch {}
     let modelToUse = (aiModel !== "default" && aiModel.includes("/") && AI_MODEL_IDS.includes(aiModel))
       ? aiModel
       : OPENROUTER_DEFAULT_MODEL;
-    const systemPrompt = aiMode === "raw" ? SYSTEM_PROMPT_RAW : SYSTEM_PROMPT;
+    const systemPrompt = aiMode === "custom" ? customPrompt : aiMode === "raw" ? SYSTEM_PROMPT_RAW : SYSTEM_PROMPT;
     let costMultiplier = getCostMultiplier(aiModel);
     if (attachments.length > 0 && !modelSupportsVision(modelToUse)) {
       modelToUse = OPENROUTER_DEFAULT_MODEL;
