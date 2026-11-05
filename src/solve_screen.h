@@ -1159,21 +1159,35 @@ static void _solReadBody(_SolNetTaskCtx* ctx) {
     size_t total = 0;
     bool complete = false;
     const uint32_t tStart = millis();
+    uint32_t lastData = tStart;
     while (stream && !ctx->abort) {
         if (expected >= 0 && total >= (size_t)expected) { complete = true; break; }
-        size_t avail = stream->available();
+        // int, nie size_t: WiFiClientSecure::available() po zamknieciu TLS przez
+        // serwer zwraca kod bledu < 0 (fw 2.1.4 bral to za "duzo danych", czytal
+        // 0 B i uznawal pelna odpowiedz za niepelna -> "HTTP 200" jako blad).
+        int avail = stream->available();
         if (avail > 0) {
             size_t room = _SOL_BODY_MAX - total;
             if (room == 0) { ctx->rOverflow = true; break; }
-            int n = stream->readBytes(ctx->rbuf + total, avail < room ? avail : room);
-            if (n <= 0) break;
+            int n = stream->readBytes(ctx->rbuf + total, (size_t)avail < room ? (size_t)avail : room);
+            if (n <= 0) { complete = (expected < 0); break; }   // polaczenie wlasnie zamkniete
             total += (size_t)n;
             ctx->rProgress = total;
-        } else if (!stream->connected()) {
+            lastData = millis();
+        } else if (avail < 0 || !stream->connected()) {
             complete = (expected < 0);       // zamkniecie = koniec (HTTP/1.0)
             break;
         } else {
-            if (millis() - tStart > _SOL_BODY_TOTAL_MS) break;
+            uint32_t now = millis();
+            if (now - tStart > _SOL_BODY_TOTAL_MS) break;
+            // Bez Content-Length: JSON zakonczony '}' i 1.5 s ciszy = koniec,
+            // nawet gdyby zamkniecie polaczenia nie dotarlo (serwer po JSON-ie
+            // niczego juz nie wysyla — spacje keepalive ida tylko PRZED nim).
+            if (expected < 0 && total > 0 && now - lastData > 1500) {
+                size_t k = total;
+                while (k > 0 && isspace((uint8_t)ctx->rbuf[k - 1])) k--;
+                if (k > 0 && ctx->rbuf[k - 1] == '}') { complete = true; break; }
+            }
             delay(5);
         }
     }

@@ -166,16 +166,16 @@ inline int testsSync(const char* licenseCode, const char* apiKey) {
         if (expected >= 0 && total >= (size_t)expected) break;   // komplet wg Content-Length
         uint32_t now = millis();
         if (now - tStart > _TESTS_TOTAL_MS) { stalled = true; break; }
-        size_t avail = stream->available();
+        int avail = stream->available();   // < 0 po zamknieciu TLS (patrz solve_screen.h)
         if (avail > 0) {
             size_t room = bufSize - 1 - total;
             if (room == 0) { overflow = true; break; }
-            size_t want = avail < room ? avail : room;
+            size_t want = (size_t)avail < room ? (size_t)avail : room;
             int n = stream->readBytes(buf + total, want);   // want <= available -> bez czekania
             if (n <= 0) break;
             total += (size_t)n;
             lastData = millis();
-        } else if (!stream->connected()) {
+        } else if (avail < 0 || !stream->connected()) {
             break;                                           // serwer zamknal polaczenie
         } else {
             if (now - lastData > _TESTS_STALL_MS) { stalled = true; break; }

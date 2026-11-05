@@ -359,10 +359,23 @@ const STREAM_FAST_MS = 3_000;
 const STREAM_KEEPALIVE_MS = 10_000;
 const STREAM_PENDING = Symbol("pending");
 
+// JSON z jawnym Content-Length — bez niego Next wysyla chunked, a kalkulator
+// (HTTP/1.0 od fw 2.1.4) nie ma jak sprawdzic, czy dostal cala tresc.
+function solveJson(r: SolveResult): Response {
+  const s = JSON.stringify(r.body);
+  return new Response(s, {
+    status: r.status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Length": String(Buffer.byteLength(s, "utf8")),
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 async function respondSolve(promise: Promise<SolveResult>, stream: boolean): Promise<Response> {
   if (!stream) {
-    const r = await promise;
-    return NextResponse.json(r.body, { status: r.status });
+    return solveJson(await promise);
   }
 
   // Wyjatek w pierwszych 3 s leci do zewnetrznego catch w POST (500 JSON).
@@ -374,7 +387,7 @@ async function respondSolve(promise: Promise<SolveResult>, stream: boolean): Pro
     }),
   ]).finally(() => clearTimeout(fastTimer));
   if (first !== STREAM_PENDING) {
-    return NextResponse.json(first.body, { status: first.status });
+    return solveJson(first);
   }
 
   const enc = new TextEncoder();
@@ -459,7 +472,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: rentalCheck.reason }, { status: 403 });
     }
 
-    const stream = request.headers.get("x-resp-stream")?.trim() === "1";
+    // fw 2.1.4 mial blad odbioru strumienia (koniec tresci bez Content-Length
+    // brany za zerwanie) — dostaje zwykly JSON z Content-Length jak <= 2.1.3.
+    const stream = request.headers.get("x-resp-stream")?.trim() === "1"
+      && request.headers.get("x-fw-version")?.trim() !== "2.1.4";
     const rawReqId = request.headers.get("x-request-id")?.trim() || "";
     const requestId = REQUEST_ID_RE.test(rawReqId) ? rawReqId : null;
     if (!requestId) {
