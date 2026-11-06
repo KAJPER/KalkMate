@@ -8,6 +8,7 @@ import { getVerifiedAggregateRating } from "@/lib/reviews";
 import type { Metadata } from "next";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientStickyBuyBar, ClientVideoScroll } from "@/components/ClientShell";
+import { diditConfigured } from "@/lib/didit";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
 const ExamBenefits = dynamic(() => import("@/components/ExamBenefits"));
@@ -15,6 +16,7 @@ const Specs        = dynamic(() => import("@/components/Specs"));
 const Gallery      = dynamic(() => import("@/components/Gallery"));
 const Reviews      = dynamic(() => import("@/components/Reviews"));
 const FAQ          = dynamic(() => import("@/components/FAQ"));
+const RentalPromo  = dynamic(() => import("@/components/RentalPromo"));
 
 const lang = "pl" as const;
 
@@ -69,6 +71,8 @@ export default async function Home() {
         <Specs lang={lang} />
         <Gallery lang={lang} />
         <Reviews lang={lang} />
+        {/* Wypozyczenie — tylko PL (najem z dostawa w Polsce, lib/rentals.ts). */}
+        <RentalPromo identityAvailable={diditConfigured()} />
         <FAQ lang={lang} />
         <ClientBuyNow lang={lang} />
         <ClientStickyBuyBar lang={lang} />

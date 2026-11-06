@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import Image from "next/image";
 import { type Locale } from "@/lib/i18n";
+import { RENTAL_FROM_PLN } from "@/lib/content/rentalPlans";
 
 type HeroContent = {
   eyebrow: string;
@@ -10,6 +11,8 @@ type HeroContent = {
   para2: string;
   ctaOrder: string;
   ctaHow: string;
+  // Tylko PL — wypozyczenie (lib/content/rentalPlans.ts).
+  ctaRent?: string;
   specBattery: string;
   specAnswer: string;
   specSubjects: string;
@@ -42,6 +45,7 @@ const content: Record<Locale, HeroContent> = {
       "Nic nie wpisujesz. Nic nie wstukujesz. Kierujesz obiektyw na zadanie — i po 1.2 sekundy widzisz rozwiązanie krok po kroku na ekranie OLED.",
     ctaOrder: "Zamów — 699 zł",
     ctaHow: "Zobacz jak działa",
+    ctaRent: `Albo wypożycz od ${RENTAL_FROM_PLN} zł`,
     specBattery: "Bateria",
     specAnswer: "Odpowiedź",
     specSubjects: "Przedmioty",
@@ -521,6 +525,15 @@ export default function Hero({ lang = "pl" }: { lang?: Locale }) {
             >
               {t.ctaHow}
             </a>
+            {t.ctaRent && (
+              <a
+                href="#wypozyczenie"
+                className="inline-flex items-center gap-2 px-5 py-3.5 km-mono-eyebrow text-[#D8FF3D] border border-[#D8FF3D]/50 hover:bg-[#D8FF3D]/10 transition-colors"
+              >
+                {t.ctaRent}
+                <span className="text-base">↓</span>
+              </a>
+            )}
           </div>
 
           {/* Footnote / spec */}

@@ -11,6 +11,7 @@ import { useCart } from "@/components/CartContext";
 import { CONSENT_EVENT, hasAnalyticsConsent } from "@/components/consent";
 import { rememberCallback } from "@/app/auth/callback";
 import { localePath, type Locale } from "@/lib/i18n";
+import { RENTAL_FROM_PLN } from "@/lib/content/rentalPlans";
 import {
   ALL_COUNTRY_CODES, countryName, flagEmoji, dialCode, regionsFor, showsOptionalRegion, cityWithRegion, postcodeHint,
 } from "@/lib/countries";
@@ -1884,6 +1885,17 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                   <p className="mt-2 km-mono-eyebrow text-[#F2EDE3]/55 text-[11px]">
                     {t.lowestPrice30d}: {fmtMoney(productCents)}
                   </p>
+                  {lang === "pl" && !showEUR && (
+                    <a
+                      href="/wypozyczenie"
+                      className="mt-4 flex items-center justify-between gap-3 border border-[#D8FF3D]/40 bg-[#D8FF3D]/[0.06] px-4 py-3 hover:border-[#D8FF3D] transition-colors"
+                    >
+                      <span className="text-[14px] text-[#F2EDE3]">
+                        Nie chcesz kupować? <strong className="text-[#D8FF3D] font-medium">Wypożycz od {RENTAL_FROM_PLN} zł</strong>
+                      </span>
+                      <span className="km-mono-eyebrow text-[#D8FF3D]">→</span>
+                    </a>
+                  )}
 
                   <div ref={stripeMessagingRef} className="mt-6 [&_iframe]:!min-h-0 opacity-80">
                     {stripeInView && messagingAllowed && (

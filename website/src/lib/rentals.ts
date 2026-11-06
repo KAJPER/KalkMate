@@ -21,22 +21,10 @@ import { randomBytes, randomInt, randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { setDeviceRental, ensureRentalColumns } from "@/lib/deviceRental";
 
-export interface RentalPlan {
-  id: string;
-  days: number;
-  feeGrosze: number;
-  label: string;
-  hint: string;
-}
+// Cennik: lib/content/rentalPlans.ts (wspolny ze strona).
+import { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, type RentalPlan } from "@/lib/content/rentalPlans";
+export { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, type RentalPlan };
 
-// Ceny najmu (brutto, PLN). Zmiana tutaj = zmiana na stronie i w platnosci.
-export const RENTAL_PLANS: RentalPlan[] = [
-  { id: "week", days: 7, feeGrosze: 7900, label: "Tydzień", hint: "Na sprawdzian albo kartkówkę" },
-  { id: "month", days: 30, feeGrosze: 14900, label: "Miesiąc", hint: "Najczęściej wybierany" },
-  { id: "season", days: 60, feeGrosze: 24900, label: "2 miesiące", hint: "Cały okres matur" },
-];
-
-export const RENTAL_DEPOSIT_GROSZE = 30000;
 // Doliczane do okresu najmu przy przypisaniu: dostawa do Paczkomatu + czas na odeslanie.
 export const RENTAL_SHIPPING_BUFFER_DAYS = 3;
 

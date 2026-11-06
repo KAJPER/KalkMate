@@ -2,8 +2,8 @@
 
 // Wypozyczenie KalkMate (tylko Polska): plan -> dane najemcy -> Paczkomat ->
 // Przelewy24 (BLIK / przelew). Backend: /api/rental/checkout, lib/rentals.ts.
-// PLANS/DEPOSIT to kopia z lib/rentals.ts (tamten modul importuje prisma —
-// nie do przegladarki). Serwer i tak liczy kwote sam z planId.
+// Cennik: lib/content/rentalPlans.ts (wspolny z serwerem, ktory i tak liczy
+// kwote sam z planId).
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
@@ -11,17 +11,13 @@ import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import type { InPostPoint } from "@/components/InPostGeowidget";
+import { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, type RentalPlan } from "@/lib/content/rentalPlans";
 
 const InPostGeowidget = dynamic(() => import("@/components/InPostGeowidget"), { ssr: false });
 const INPOST_TOKEN = process.env.NEXT_PUBLIC_INPOST_GEOWIDGET_TOKEN || "";
 
-// Musi byc zgodne z RENTAL_PLANS / RENTAL_DEPOSIT_GROSZE w lib/rentals.ts.
-const PLANS = [
-  { id: "week", days: 7, fee: 79, label: "Tydzień", hint: "Na sprawdzian albo kartkówkę" },
-  { id: "month", days: 30, fee: 149, label: "Miesiąc", hint: "Najczęściej wybierany", featured: true },
-  { id: "season", days: 60, fee: 249, label: "2 miesiące", hint: "Cały okres matur" },
-] as const;
-const DEPOSIT = 300;
+const PLANS = RENTAL_PLANS.map((p) => ({ ...p, fee: p.feeGrosze / 100 }));
+const DEPOSIT = RENTAL_DEPOSIT_GROSZE / 100;
 
 const inputClass =
   "w-full bg-transparent border border-[rgba(242,237,227,0.18)] text-[#F2EDE3] placeholder-[#F2EDE3]/30 px-4 py-3.5 focus:outline-none focus:border-[#D8FF3D] transition-colors text-[14px]";
@@ -39,7 +35,7 @@ type IdentityView =
   | { kind: "lost" };
 
 export default function WypozyczeniePage() {
-  const [planId, setPlanId] = useState<(typeof PLANS)[number]["id"]>("month");
+  const [planId, setPlanId] = useState<RentalPlan["id"]>("month");
   const [form, setForm] = useState({ name: "", email: "", phone: "", street: "", postcode: "", city: "", adult: false, terms: false, biometric: false });
   const [mode, setMode] = useState<"deposit" | "identity">("deposit");
   const [identityAvailable, setIdentityAvailable] = useState(false);
@@ -73,6 +69,13 @@ export default function WypozyczeniePage() {
     // Ustawione asynchronicznie (nie w ciele efektu) — formularz chowa sie od razu.
     void Promise.resolve().then(() => { if (!stop) setRet({ kind: "checking" }); }).then(check);
     return () => { stop = true; };
+  }, []);
+
+  // ?plan=week|month|season — plan klikniety na stronie glownej (RentalPromo).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get("plan");
+    const found = RENTAL_PLANS.find((x) => x.id === p);
+    if (found) void Promise.resolve().then(() => setPlanId(found.id));
   }, []);
 
   // Wariant bez kaucji widoczny tylko, gdy serwer ma skonfigurowany Didit.
@@ -242,7 +245,7 @@ export default function WypozyczeniePage() {
                     <p className="km-mono-eyebrow text-[#F2EDE3]/55">{p.label} · {p.days} dni</p>
                     <p className="km-display text-[44px] leading-none mt-2">{p.fee}<span className="text-[18px] text-[#F2EDE3]/60"> zł</span></p>
                     <p className="text-[13px] text-[#F2EDE3]/60 mt-2">{p.hint}</p>
-                    {"featured" in p && p.featured && <p className="km-mono-eyebrow text-[#D8FF3D] text-[10px] mt-2">POLECANY</p>}
+                    {p.featured && <p className="km-mono-eyebrow text-[#D8FF3D] text-[10px] mt-2">POLECANY</p>}
                   </button>
                 ))}
               </div>

@@ -52,6 +52,10 @@ export const faqs: Record<Locale, FaqItem[]> = {
       a: "24 miesiące gwarancji producenta na wszystkie elementy. Naprawiamy lub wymieniamy urządzenie w razie usterki.",
     },
     {
+      q: "Czy mogę wypożyczyć KalkMate zamiast kupować?",
+      a: "Tak. Wypożyczysz go na tydzień (79 zł), miesiąc (149 zł) albo 2 miesiące na cały okres matur (249 zł) — pełna wersja z AI, dostawa gratis do Paczkomatu, płatność BLIK lub przelewem. Wpłacasz zwrotną kaucję 300 zł albo potwierdzasz tożsamość dowodem i selfie i wypożyczasz bez kaucji. Po okresie najmu AI wyłącza się samo, a Ty odsyłasz kalkulator. Szczegóły: kalkmate.pl/wypozyczenie.",
+    },
+    {
       q: "W jakich językach działa KalkMate?",
       a: "Kalkulator działa w 11 językach: po polsku, angielsku, niemiecku, czesku, słowacku, litewsku, białorusku, hiszpańsku, portugalsku, francusku i włosku. Język zmieniasz w Ustawienia → Język — AI odpowiada wtedy w wybranym języku, nawet jeśli zadanie na zdjęciu jest w innym. Sklep i panel użytkownika też są dostępne we wszystkich 11 językach.",
     },
