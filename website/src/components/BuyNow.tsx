@@ -12,7 +12,7 @@ import { CONSENT_EVENT, hasAnalyticsConsent } from "@/components/consent";
 import { rememberCallback } from "@/app/auth/callback";
 import { localePath, type Locale } from "@/lib/i18n";
 import { RENTAL_FROM_PLN } from "@/lib/content/rentalPlans";
-import { promoUnitCents } from "@/lib/content/promo";
+import { PROMO_TEXT, promoUnitCents } from "@/lib/content/promo";
 import { usePromo } from "@/components/usePromo";
 import {
   ALL_COUNTRY_CODES, countryName, flagEmoji, dialCode, regionsFor, showsOptionalRegion, cityWithRegion, postcodeHint,
@@ -1877,7 +1877,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                   {onPromo ? (
                     <p className="km-mono-eyebrow">
                       <span className="bg-[#D8FF3D] text-[#0B0B0B] px-2 py-1">Black Friday</span>
-                      <span className="text-[#F2EDE3]/55 ml-2">zostało {promo.remaining} z {promo.unitLimit} szt.</span>
+                      <span className="text-[#F2EDE3]/55 ml-2">{PROMO_TEXT[lang].left(promo.remaining, promo.unitLimit)}</span>
                     </p>
                   ) : (
                     <p className="km-mono-eyebrow text-[#F2EDE3]/55">
@@ -1886,7 +1886,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                   )}
                   <div className="mt-3 flex items-baseline gap-4">
                     <span className="km-display text-[100px] leading-[0.9] text-[#F2EDE3]">
-                      {showEUR ? "169" : String(productCents / 100)}
+                      {String(productCents / 100)}
                     </span>
                     <span className="km-display text-3xl text-[#F2EDE3]/45">
                       {showEUR ? "€" : "zł"}
@@ -1939,7 +1939,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                 >
                   <span className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 bg-[#0B0B0B] rounded-full km-blink" />
-                    {showEUR ? t.orderNowEur : onPromo ? t.orderNowPln.replace(String(regularCents / 100), String(productCents / 100)) : t.orderNowPln}
+                    {(showEUR ? t.orderNowEur : t.orderNowPln).replace(String(regularCents / 100), String(productCents / 100))}
                   </span>
                   <span>→</span>
                 </button>

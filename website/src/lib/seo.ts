@@ -57,9 +57,10 @@ function shippingDetails(currency: "PLN" | "EUR", rate: string, countries: strin
  * CustomerReview (lib/reviews.ts getVerifiedAggregateRating() — null ponizej
  * 5 opinii). Podany = zastepuje ocene z content/reviews.ts (bez mieszania).
  */
-// plPromo: cena promocyjna PLN (Black Friday, lib/promo.ts) — Google pokazuje
-// w wynikach cene, ktora klient faktycznie zaplaci, wazna do konca promocji.
-export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL, verifiedRating?: VerifiedRating | null, plPromo?: { pricePln: number; validUntil: string } | null) {
+// promo: ceny Black Friday (lib/promo.ts) — Google pokazuje w wynikach cene,
+// ktora klient faktycznie zaplaci, wazna do konca promocji.
+export interface JsonLdPromo { pricePln: number; priceEur: number; validUntil: string }
+export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL, verifiedRating?: VerifiedRating | null, promo?: JsonLdPromo | null) {
   // /be: Bialorus nie jest krajem wysylki — strona domyslnie pokazuje
   // Polske i cene w PLN, wiec dane strukturalne musza sie z tym zgadzac.
   const isPl = locale === "pl" || locale === "be";
@@ -84,10 +85,10 @@ export function productJsonLd(locale: Locale, siteUrl: string = SITE_URL, verifi
       "@type": "Offer",
       url: localeHomeUrl(locale, siteUrl),
       priceCurrency: isPl ? "PLN" : "EUR",
-      price: isPl ? (plPromo ? String(plPromo.pricePln / 100) : "699") : "169",
+      price: promo ? String((isPl ? promo.pricePln : promo.priceEur) / 100) : isPl ? "699" : "169",
       // Zawsze koniec przyszlego roku — stala data po uplywie robi z ceny
       // "nieaktualna" i Google przestaje pokazywac wynik z cena.
-      priceValidUntil: isPl && plPromo ? plPromo.validUntil : `${new Date().getFullYear() + 1}-12-31`,
+      priceValidUntil: promo ? promo.validUntil : `${new Date().getFullYear() + 1}-12-31`,
       shippingDetails: isPl
         ? [shippingDetails("PLN", "0", ["PL"], [1, 3])]
         : [shippingDetails("EUR", "20", EU_NON_PL, [3, 8]), shippingDetails("EUR", "35", WORLD_MAIN, [5, 15])],
@@ -162,10 +163,10 @@ export function webPageJsonLd(locale: Locale, siteUrl: string = SITE_URL) {
 }
 
 /** Tablica skryptów JSON-LD jako stringi gotowe do wstrzyknięcia. */
-export function homeJsonLd(locale: Locale, siteUrl: string = SITE_URL, verifiedRating?: VerifiedRating | null, plPromo?: { pricePln: number; validUntil: string } | null): string[] {
+export function homeJsonLd(locale: Locale, siteUrl: string = SITE_URL, verifiedRating?: VerifiedRating | null, promo?: JsonLdPromo | null): string[] {
   return [
     webPageJsonLd(locale, siteUrl),
-    productJsonLd(locale, siteUrl, verifiedRating, plPromo),
+    productJsonLd(locale, siteUrl, verifiedRating, promo),
     { ...faqJsonLd(locale), inLanguage: locale },
   ].map((o) => JSON.stringify(o));
 }

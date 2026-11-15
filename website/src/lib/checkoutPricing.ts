@@ -18,7 +18,7 @@ import { sendMail, CONTACT_EMAIL } from "@/lib/mailer";
 import { checkCouponForCheckout, discountForCoupon, getCoupon, type CouponReasonCode } from "@/lib/coupons";
 import { BUYER_DISCOUNT_PCT, isAffiliateCode } from "@/lib/affiliates";
 import { checkoutUnitCents } from "@/lib/promo";
-import { BLACK_FRIDAY } from "@/lib/content/promo";
+import { promoPriceFor } from "@/lib/content/promo";
 
 export const EU_COUNTRIES = new Set([
   "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE",
@@ -156,7 +156,7 @@ export async function expectedPaidAmount(country: unknown, couponCode?: string |
   couponMissing: boolean;
 }> {
   const currency = currencyForCountry(country);
-  const unit = promo && currency === "pln" ? BLACK_FRIDAY.productPln : PRODUCT_CENTS[currency];
+  const unit = (promo && promoPriceFor(currency)) || PRODUCT_CENTS[currency];
   const subtotalCents = unit * assertQuantity(quantity);
   const shippingCents = shippingCentsForCountry(country);
   let discountCents = 0;

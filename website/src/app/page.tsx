@@ -9,7 +9,7 @@ import type { Metadata } from "next";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientStickyBuyBar, ClientVideoScroll } from "@/components/ClientShell";
 import { diditConfigured } from "@/lib/didit";
-import { getPromoState } from "@/lib/promo";
+import { homePromo } from "@/lib/promo";
 
 const HowItWorks   = dynamic(() => import("@/components/HowItWorks"));
 const ExamBenefits = dynamic(() => import("@/components/ExamBenefits"));
@@ -55,12 +55,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function Home() {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
   // Black Friday (lib/promo.ts): cena w Hero i w danych dla Google.
-  const promo = await getPromoState().catch(() => null) ?? { active: false, productPln: 0 };
+  const promo = await homePromo();
   return (
     <>
       {homeJsonLd(
         lang, siteUrl, await getVerifiedAggregateRating().catch(() => null),
-        promo.active ? { pricePln: promo.productPln, validUntil: "2026-11-30" } : null,
+        promo.jsonLd,
       ).map((json, i) => (
         <script
           key={i}
@@ -70,7 +70,7 @@ export default async function Home() {
       ))}
       <Navigation lang={lang} />
       <main className="relative overflow-x-clip">
-        <Hero lang={lang} pricePln={promo.active ? promo.productPln : undefined} />
+        <Hero lang={lang} promo={promo.hero} />
         <ClientVideoScroll lang={lang} />
         <HowItWorks lang={lang} />
         <ExamBenefits lang={lang} />

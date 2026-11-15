@@ -466,10 +466,12 @@ const content: Record<Locale, HeroContent> = {
   },
 };
 
-// pricePln: cena promocyjna (Black Friday) — tylko polska strona glowna ja podaje.
-export default function Hero({ lang = "pl", pricePln }: { lang?: Locale; pricePln?: number }) {
+// promo: ceny Black Friday (lib/promo.ts) — strona glowna podaje je w czasie promocji.
+export default function Hero({ lang = "pl", promo }: { lang?: Locale; promo?: { pln: number; eur: number } | null }) {
   const base = content[lang];
-  const t = pricePln ? { ...base, ctaOrder: base.ctaOrder.replace("699", String(pricePln / 100)) } : base;
+  const t = promo
+    ? { ...base, ctaOrder: base.ctaOrder.replace("699", String(promo.pln / 100)).replace("169", String(promo.eur / 100)) }
+    : base;
 
   return (
     <section id="top" className="relative pt-28 lg:pt-32 pb-16 lg:pb-24 overflow-hidden">

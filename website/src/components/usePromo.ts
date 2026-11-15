@@ -14,7 +14,8 @@ function guess(): PromoState {
   const timeActive = bfActive();
   return {
     active: timeActive, timeActive, remaining: BLACK_FRIDAY.unitLimit, endsAt: BLACK_FRIDAY.endsAt,
-    productPln: BLACK_FRIDAY.productPln, regularPln: BLACK_FRIDAY.regularPln, unitLimit: BLACK_FRIDAY.unitLimit,
+    productPln: BLACK_FRIDAY.productPln, regularPln: BLACK_FRIDAY.regularPln,
+    productEur: BLACK_FRIDAY.productEur, regularEur: BLACK_FRIDAY.regularEur, unitLimit: BLACK_FRIDAY.unitLimit,
   };
 }
 
