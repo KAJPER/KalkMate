@@ -1,3 +1,4 @@
+import { BLACK_FRIDAY } from "@/lib/content/promo";
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { resolveCheckoutBuyer } from "@/lib/checkoutBuyer";
@@ -138,6 +139,8 @@ export async function POST(request: NextRequest) {
           personalized_code: units[0].code,
           personalized_name: units[0].name,
           quantity: String(quote.quantity),
+          // Cena Black Friday — webhook sprawdzi tez date utworzenia PI (lib/promo.ts).
+          promo: quote.promo ? BLACK_FRIDAY.id : "",
           ...personalizationMeta,
           attribution: attributionMeta,
           newsletter_consent: guestNewsletter ? "1" : "",

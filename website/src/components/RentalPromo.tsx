@@ -1,5 +1,5 @@
 import Reveal from "@/components/Reveal";
-import { RENTAL_DEPOSIT_GROSZE, RENTAL_FROM_PLN, RENTAL_PLANS } from "@/lib/content/rentalPlans";
+import { RENTAL_DEPOSIT_GROSZE, RENTAL_FROM_PLN, RENTAL_PLANS, rentalFeeNow } from "@/lib/content/rentalPlans";
 
 // Duza sekcja "Wypozycz zamiast kupowac" na POLSKIEJ stronie glownej
 // (najem tylko z dostawa w Polsce — lib/rentals.ts). Ceny z
@@ -52,11 +52,16 @@ export default function RentalPromo({ identityAvailable }: { identityAvailable: 
               >
                 <div className="flex items-center justify-between">
                   <p className="km-mono-eyebrow text-[#F2EDE3]/60">{p.label} · {p.days} dni</p>
-                  {p.featured && <span className="km-mono-eyebrow text-[10px] text-[#0B0B0B] bg-[#D8FF3D] px-2 py-1">Polecany</span>}
+                  {rentalFeeNow(p) !== p.feeGrosze ? (
+                    <span className="km-mono-eyebrow text-[10px] text-[#0B0B0B] bg-[#D8FF3D] px-2 py-1">Black Friday</span>
+                  ) : p.featured && <span className="km-mono-eyebrow text-[10px] text-[#0B0B0B] bg-[#D8FF3D] px-2 py-1">Polecany</span>}
                 </div>
                 <p className="km-display text-[clamp(56px,6vw,84px)] leading-none mt-5 text-[#F2EDE3]">
-                  {p.feeGrosze / 100}
+                  {rentalFeeNow(p) / 100}
                   <span className="text-[22px] text-[#F2EDE3]/55"> zł</span>
+                  {rentalFeeNow(p) !== p.feeGrosze && (
+                    <span className="text-[28px] text-[#F2EDE3]/40 line-through ml-3">{p.feeGrosze / 100}</span>
+                  )}
                 </p>
                 <p className="text-[14px] text-[#F2EDE3]/60 mt-3">{p.hint}</p>
                 <p className="km-mono-eyebrow text-[#D8FF3D] mt-6 group-hover:translate-x-1 transition-transform">

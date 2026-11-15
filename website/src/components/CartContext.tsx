@@ -2,7 +2,9 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { type Locale } from "@/lib/i18n";
-import { MAX_ORDER_QUANTITY, clampQuantity, type ShopCurrency } from "@/lib/content/shop";
+import { MAX_ORDER_QUANTITY, PRODUCT_CENTS, PRODUCT_ID, clampQuantity, type ShopCurrency } from "@/lib/content/shop";
+import { promoUnitCents } from "@/lib/content/promo";
+import { usePromo } from "@/components/usePromo";
 
 export interface CartItem {
   id: string;
@@ -116,13 +118,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setIsDrawerOpen(false), []);
 
-  const totalItems = items.reduce((s, i) => s + i.quantity, 0);
-  const totalPrice = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  // Cena kalkulatora zawsze wg aktualnego cennika (Black Friday wlacza sie
+  // i wylacza sam) — nie ta zapisana w localStorage przy dodaniu do koszyka.
+  const promo = usePromo();
+  const pricedItems = items.map((i) => {
+    if (i.id !== PRODUCT_ID) return i;
+    const cur = i.currency ?? "PLN";
+    return { ...i, price: promoUnitCents(cur, PRODUCT_CENTS[cur], promo) };
+  });
+  const totalItems = pricedItems.reduce((s, i) => s + i.quantity, 0);
+  const totalPrice = pricedItems.reduce((s, i) => s + i.price * i.quantity, 0);
 
   return (
     <CartContext.Provider
       value={{
-        items,
+        items: pricedItems,
         addItem,
         removeItem,
         updateQuantity,

@@ -1,3 +1,4 @@
+import { checkoutUnitCents } from "@/lib/promo";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -58,6 +59,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: q.error, reason: "quantity" }, { status: 400 });
     }
     const quantity = q.quantity;
+    // Black Friday: kupony sie nie lacza (ten sam warunek co quoteCheckout).
+    if ((await checkoutUnitCents(currency, quantity, PRODUCT_CENTS[currency])).promo) {
+      return NextResponse.json({ ok: false, error: "Kupony i kody partnerskie nie łączą się z ceną Black Friday.", reason: "invalid" });
+    }
     const unitCents = PRODUCT_CENTS[currency];
     const subtotalCents = unitCents * quantity;
     const res = await checkCouponForCheckout(code, subtotalCents, currency, userId);

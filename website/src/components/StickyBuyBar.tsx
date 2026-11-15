@@ -12,6 +12,8 @@
 import { useEffect, useState } from "react";
 import type { Locale } from "@/lib/i18n";
 import { PRODUCT_CENTS, PRODUCT_NAME, formatMoney, type ShopCurrency } from "@/lib/content/shop";
+import { promoUnitCents } from "@/lib/content/promo";
+import { usePromo } from "@/components/usePromo";
 import { CONSENT_EVENT, hasConsentChoice } from "@/components/consent";
 import { requestOpenCheckout, useCheckoutState } from "@/lib/checkoutBus";
 import { trackFunnel } from "@/lib/funnelClient";
@@ -35,6 +37,7 @@ const fallbackCurrency = (lang: Locale): ShopCurrency => (lang === "pl" || lang 
 
 export default function StickyBuyBar({ lang = "pl" }: { lang?: Locale }) {
   const checkout = useCheckoutState();
+  const promo = usePromo();
   const [pastHero, setPastHero] = useState(false);
   const [buyVisible, setBuyVisible] = useState(false);
   const [bannerShown, setBannerShown] = useState(true);
@@ -85,7 +88,7 @@ export default function StickyBuyBar({ lang = "pl" }: { lang?: Locale }) {
   if (!armed) return null;
 
   const currency = checkout.currency ?? fallbackCurrency(lang);
-  const price = formatMoney(PRODUCT_CENTS[currency], currency, lang);
+  const price = formatMoney(promoUnitCents(currency, PRODUCT_CENTS[currency], promo), currency, lang);
 
   const onClick = () => {
     trackFunnel("sticky_click", { lang });

@@ -12,6 +12,8 @@ import { CONSENT_EVENT, hasAnalyticsConsent } from "@/components/consent";
 import { rememberCallback } from "@/app/auth/callback";
 import { localePath, type Locale } from "@/lib/i18n";
 import { RENTAL_FROM_PLN } from "@/lib/content/rentalPlans";
+import { promoUnitCents } from "@/lib/content/promo";
+import { usePromo } from "@/components/usePromo";
 import {
   ALL_COUNTRY_CODES, countryName, flagEmoji, dialCode, regionsFor, showsOptionalRegion, cityWithRegion, postcodeHint,
 } from "@/lib/countries";
@@ -1237,7 +1239,11 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
   const regionLabel =
     formData.country === "US" ? t.regionUS : formData.country === "CA" ? t.regionCA : formData.country === "AU" ? t.regionAU : t.region;
   const currency: ShopCurrency = currencyForCountry(formData.country);
-  const productCents = PRODUCT_CENTS[currency];
+  // Black Friday (lib/content/promo.ts) — serwer liczy te sama cene przy platnosci.
+  const promo = usePromo();
+  const regularCents = PRODUCT_CENTS[currency];
+  const productCents = promoUnitCents(currency, regularCents, promo);
+  const onPromo = productCents !== regularCents;
   // Limit ilosci: MAX_ORDER_QUANTITY, a gdy API stanu podaje liczbe — nie wiecej
   // niz stan (przy 0 szt. zostaje 1, jak dotad: zamowienie z czasem realizacji).
   const maxQty = stockLeft !== null && stockLeft >= 1 ? Math.min(MAX_ORDER_QUANTITY, stockLeft) : stockLeft === 0 ? 1 : MAX_ORDER_QUANTITY;
@@ -1868,22 +1874,33 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
 
                 {/* Price */}
                 <div className="px-6 lg:px-8 py-10">
-                  <p className="km-mono-eyebrow text-[#F2EDE3]/55">
-                    {t.preSalePrice}
-                  </p>
+                  {onPromo ? (
+                    <p className="km-mono-eyebrow">
+                      <span className="bg-[#D8FF3D] text-[#0B0B0B] px-2 py-1">Black Friday</span>
+                      <span className="text-[#F2EDE3]/55 ml-2">zostało {promo.remaining} z {promo.unitLimit} szt.</span>
+                    </p>
+                  ) : (
+                    <p className="km-mono-eyebrow text-[#F2EDE3]/55">
+                      {t.preSalePrice}
+                    </p>
+                  )}
                   <div className="mt-3 flex items-baseline gap-4">
                     <span className="km-display text-[100px] leading-[0.9] text-[#F2EDE3]">
-                      {showEUR ? "169" : "699"}
+                      {showEUR ? "169" : String(productCents / 100)}
                     </span>
                     <span className="km-display text-3xl text-[#F2EDE3]/45">
                       {showEUR ? "€" : "zł"}
                     </span>
+                    {onPromo && (
+                      <span className="km-display text-4xl text-[#F2EDE3]/40 line-through decoration-2">{regularCents / 100}</span>
+                    )}
                   </div>
                   <p className="mt-3 km-mono-eyebrow text-[#D8FF3D]">
                     {showEUR ? t.shippingEur : t.discountPln}
                   </p>
                   <p className="mt-2 km-mono-eyebrow text-[#F2EDE3]/55 text-[11px]">
-                    {t.lowestPrice30d}: {fmtMoney(productCents)}
+                    {/* Omnibus: najnizsza cena z 30 dni PRZED obnizka = cena regularna. */}
+                    {t.lowestPrice30d}: {fmtMoney(regularCents)}
                   </p>
                   {lang === "pl" && !showEUR && (
                     <a
@@ -1922,7 +1939,7 @@ export default function BuyNow({ defaultCountry, lang = "pl" }: { defaultCountry
                 >
                   <span className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 bg-[#0B0B0B] rounded-full km-blink" />
-                    {showEUR ? t.orderNowEur : t.orderNowPln}
+                    {showEUR ? t.orderNowEur : onPromo ? t.orderNowPln.replace(String(regularCents / 100), String(productCents / 100)) : t.orderNowPln}
                   </span>
                   <span>→</span>
                 </button>

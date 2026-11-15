@@ -28,6 +28,7 @@ import { requireAdminAuth } from "@/lib/admin-auth";
 import { getOrderCoupon } from "@/lib/coupons";
 import { readOrderUnits } from "@/lib/orderPersonalization";
 import { findRentalByOrderId } from "@/lib/rentals";
+import { BLACK_FRIDAY } from "@/lib/content/promo";
 import { randomUUID, timingSafeEqual } from "crypto";
 
 export type FiscalJobState =
@@ -268,19 +269,22 @@ export async function buildOrderReceipt(order: OrderForReceipt): Promise<Receipt
   // łapany: cichy powrót do 1 szt. zrobiłby z ceny pozostałych sztuk „wysyłkę”.
   const { quantity } = await readOrderUnits(order.id);
   const qty = Math.max(1, Math.floor(Number(quantity) || 1));
-  const productGross = PRODUCT_PRICE_PLN * qty;
+  // Cena Black Friday (lib/content/promo.ts): zamowienie zaplacone dokladnie
+  // po cenie promocyjnej (PL: wysylka 0, kupony sie nie lacza).
+  const unitPrice = discount === 0 && order.amount === BLACK_FRIDAY.productPln * qty ? BLACK_FRIDAY.productPln : PRODUCT_PRICE_PLN;
+  const productGross = unitPrice * qty;
   const shipping = order.amount - (productGross - discount);
 
   let items: ReceiptItem[];
   // Wysyłka jest stała na zamówienie i zawsze dużo tańsza od sztuki — „wysyłka”
   // ≥ cena sztuki = niezgodna ilość/cena → pozycja zbiorcza zamiast fałszywej linii.
-  if (shipping >= 0 && shipping < PRODUCT_PRICE_PLN && discount < productGross) {
+  if (shipping >= 0 && shipping < unitPrice && discount < productGross) {
     // Agenci liczą wartość pozycji jako quantity × unit_price − discount
     // (fiscal-agent models.Item.total, desktop printer.js normalizeReceipt).
     items = [{
       name: PRODUCT_NAME,
       quantity: String(qty),
-      unit_price: PRODUCT_PRICE_PLN,
+      unit_price: unitPrice,
       vat: VAT_RATE,
       ...(discount ? { discount } : {}),
     }];

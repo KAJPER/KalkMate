@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import PromoBar from "@/components/PromoBar";
 import { useCart } from "@/components/CartContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { localeLabel, type Locale } from "@/lib/i18n";
@@ -160,6 +161,7 @@ export default function Navigation({ lang = "pl", switchPath }: { lang?: Locale;
           : "bg-transparent border-b border-transparent"
       }`}
     >
+      {lang === "pl" && <PromoBar />}
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
         <div className="flex items-center justify-between h-16">
           <a href="#top" className="flex items-baseline gap-2 group">

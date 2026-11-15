@@ -17,6 +17,8 @@ import { prisma } from "@/lib/db";
 import { sendMail, CONTACT_EMAIL } from "@/lib/mailer";
 import { checkCouponForCheckout, discountForCoupon, getCoupon, type CouponReasonCode } from "@/lib/coupons";
 import { BUYER_DISCOUNT_PCT, isAffiliateCode } from "@/lib/affiliates";
+import { checkoutUnitCents } from "@/lib/promo";
+import { BLACK_FRIDAY } from "@/lib/content/promo";
 
 export const EU_COUNTRIES = new Set([
   "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE",
@@ -85,6 +87,7 @@ export interface CheckoutQuote {
   amount: number;       // subtotal - rabat + wysylka
   couponCode: string;   // znormalizowany kod albo ""
   affiliate: boolean;   // couponCode to kod partnera (lib/affiliates.ts) — bez rezerwacji
+  promo: boolean;       // cena Black Friday (lib/promo.ts)
 }
 
 export type QuoteResult =
@@ -103,7 +106,8 @@ export async function quoteCheckout(input: {
   const country = normalizeCountry(input.country);
   const currency = currencyForCountry(country);
   const quantity = assertQuantity(input.quantity);
-  const unitCents = PRODUCT_CENTS[currency];
+  // Black Friday (lib/promo.ts): cena promocyjna PLN, jesli sztuki sie mieszcza w limicie.
+  const { unitCents, promo } = await checkoutUnitCents(currency, quantity, PRODUCT_CENTS[currency]);
   const subtotalCents = unitCents * quantity;
   const shippingCents = shippingCentsForCountry(country);
 
@@ -111,6 +115,9 @@ export async function quoteCheckout(input: {
   let couponCode = "";
   let affiliate = false;
   const rawCode = input.couponCode == null ? "" : String(input.couponCode).trim();
+  if (rawCode && promo) {
+    return { ok: false, reason: "invalid", error: "Kupony i kody partnerskie nie łączą się z ceną Black Friday." };
+  }
   if (rawCode) {
     // Kupon od CALEGO subtotalu (procentowy od calosci, kwotowy raz na zamowienie).
     const disc = await checkCouponForCheckout(rawCode, subtotalCents, currency, input.userId);
@@ -131,6 +138,7 @@ export async function quoteCheckout(input: {
       amount: subtotalCents - discountCents + shippingCents,
       couponCode,
       affiliate,
+      promo,
     },
   };
 }
@@ -139,14 +147,17 @@ export async function quoteCheckout(input: {
 // kuponu z metadata. Bez sprawdzania active/expiresAt/maxUses kuponu (mogl
 // wygasnac miedzy utworzeniem platnosci a webhookiem). couponMissing = kod byl
 // w metadata, ale kuponu nie ma juz w bazie (nie da sie przeliczyc rabatu).
-export async function expectedPaidAmount(country: unknown, couponCode?: string | null, quantity = 1): Promise<{
+// promo = PaymentIntent powstal jako promocyjny (stripeIntentWasPromo) — cena
+// z chwili utworzenia platnosci, nie z chwili webhooka.
+export async function expectedPaidAmount(country: unknown, couponCode?: string | null, quantity = 1, promo = false): Promise<{
   currency: CheckoutCurrency;
   amount: number;
   discountCents: number;
   couponMissing: boolean;
 }> {
   const currency = currencyForCountry(country);
-  const subtotalCents = PRODUCT_CENTS[currency] * assertQuantity(quantity);
+  const unit = promo && currency === "pln" ? BLACK_FRIDAY.productPln : PRODUCT_CENTS[currency];
+  const subtotalCents = unit * assertQuantity(quantity);
   const shippingCents = shippingCentsForCountry(country);
   let discountCents = 0;
   let couponMissing = false;

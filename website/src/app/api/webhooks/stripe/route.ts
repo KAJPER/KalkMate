@@ -1,3 +1,4 @@
+import { stripeIntentWasPromo } from "@/lib/promo";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import type { Prisma } from "@prisma/client";
@@ -191,7 +192,7 @@ async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
   // (nie powinno sie zdarzyc) = liczymy 1 i oznaczamy do sprawdzenia.
   const qParsed = parseOrderQuantity(meta.quantity);
   const quantity = qParsed.ok ? qParsed.quantity : 1;
-  const expected = await expectedPaidAmount(country, meta.coupon_code || null, quantity);
+  const expected = await expectedPaidAmount(country, meta.coupon_code || null, quantity, stripeIntentWasPromo(meta, pi.created));
   const paidCurrency = String(pi.currency || "").toLowerCase();
   const amountOk = qParsed.ok && pi.amount === expected.amount && paidCurrency === expected.currency && !expected.couponMissing;
   const mismatchNote = amountOk

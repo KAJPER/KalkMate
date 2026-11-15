@@ -22,14 +22,16 @@ import { prisma } from "@/lib/db";
 import { setDeviceRental, ensureRentalColumns } from "@/lib/deviceRental";
 
 // Cennik: lib/content/rentalPlans.ts (wspolny ze strona).
-import { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, type RentalPlan } from "@/lib/content/rentalPlans";
+import { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, rentalFeeNow, type RentalPlan } from "@/lib/content/rentalPlans";
 export { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, type RentalPlan };
 
 // Doliczane do okresu najmu przy przypisaniu: dostawa do Paczkomatu + czas na odeslanie.
 export const RENTAL_SHIPPING_BUFFER_DAYS = 3;
 
+// Plan z cena obowiazujaca TERAZ (promocje: rentalFeeNow) — kwota platnosci.
 export function getRentalPlan(id: unknown): RentalPlan | null {
-  return RENTAL_PLANS.find((p) => p.id === id) ?? null;
+  const plan = RENTAL_PLANS.find((p) => p.id === id);
+  return plan ? { ...plan, feeGrosze: rentalFeeNow(plan) } : null;
 }
 
 // Bez kaucji po pozytywnej weryfikacji tozsamosci w Didit (lib/didit.ts):

@@ -11,12 +11,14 @@ import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import type { InPostPoint } from "@/components/InPostGeowidget";
-import { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, type RentalPlan } from "@/lib/content/rentalPlans";
+import { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, rentalFeeNow, type RentalPlan } from "@/lib/content/rentalPlans";
 
 const InPostGeowidget = dynamic(() => import("@/components/InPostGeowidget"), { ssr: false });
 const INPOST_TOKEN = process.env.NEXT_PUBLIC_INPOST_GEOWIDGET_TOKEN || "";
 
-const PLANS = RENTAL_PLANS.map((p) => ({ ...p, fee: p.feeGrosze / 100 }));
+// fee = cena teraz (Black Friday: rentalFeeNow), regular = cennikowa.
+// Liczone przy kazdym renderowaniu — NIE raz na start serwera (promocja ma koniec).
+const plansNow = () => RENTAL_PLANS.map((p) => ({ ...p, fee: rentalFeeNow(p) / 100, regular: p.feeGrosze / 100 }));
 const DEPOSIT = RENTAL_DEPOSIT_GROSZE / 100;
 
 const inputClass =
@@ -35,6 +37,7 @@ type IdentityView =
   | { kind: "lost" };
 
 export default function WypozyczeniePage() {
+  const PLANS = plansNow();
   const [planId, setPlanId] = useState<RentalPlan["id"]>("month");
   const [form, setForm] = useState({ name: "", email: "", phone: "", street: "", postcode: "", city: "", adult: false, terms: false, biometric: false });
   const [mode, setMode] = useState<"deposit" | "identity">("deposit");
@@ -243,7 +246,10 @@ export default function WypozyczeniePage() {
                     className={`text-left p-5 border transition-colors ${planId === p.id ? "border-[#D8FF3D] bg-[#D8FF3D]/[0.06]" : "border-[rgba(242,237,227,0.18)] hover:border-[#F2EDE3]/40"}`}
                   >
                     <p className="km-mono-eyebrow text-[#F2EDE3]/55">{p.label} · {p.days} dni</p>
-                    <p className="km-display text-[44px] leading-none mt-2">{p.fee}<span className="text-[18px] text-[#F2EDE3]/60"> zł</span></p>
+                    <p className="km-display text-[44px] leading-none mt-2">
+                      {p.fee}<span className="text-[18px] text-[#F2EDE3]/60"> zł</span>
+                      {p.fee !== p.regular && <span className="text-[20px] text-[#F2EDE3]/40 line-through ml-2">{p.regular}</span>}
+                    </p>
                     <p className="text-[13px] text-[#F2EDE3]/60 mt-2">{p.hint}</p>
                     {p.featured && <p className="km-mono-eyebrow text-[#D8FF3D] text-[10px] mt-2">POLECANY</p>}
                   </button>
