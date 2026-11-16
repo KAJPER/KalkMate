@@ -40,6 +40,10 @@ export default function CapturesPage() {
   const [error, setError] = useState<string | null>(null);
   const [deviceFilter, setDeviceFilter] = useState<string>("");
   const [opened, setOpened] = useState<Capture | null>(null);
+  // Wyszukiwanie po ID kalkulatora: fragment zaweza liste urzadzen,
+  // Enter/Szukaj pokazuje zdjecia (jedno dopasowanie albo pelne ID).
+  const [search, setSearch] = useState("");
+  const [searchMsg, setSearchMsg] = useState("");
 
   const load = async (device?: string) => {
     setLoading(true);
@@ -63,7 +67,24 @@ export default function CapturesPage() {
 
   const applyFilter = (d: string) => {
     setDeviceFilter(d);
+    setSearchMsg("");
     load(d || undefined);
+  };
+
+  // "aa:bb:cc-dd" -> "AABBCCDD" (ID = MAC bez separatorow, 12 znakow hex).
+  const query = search.replace(/[^0-9a-f]/gi, "").toUpperCase();
+  const matchingDevices = data
+    ? data.stats.byDevice.filter((d) => !query || d.deviceId.toUpperCase().includes(query))
+    : [];
+
+  const runSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query) { applyFilter(""); return; }
+    if (matchingDevices.length === 1) { applyFilter(matchingDevices[0].deviceId); return; }
+    if (query.length === 12) { applyFilter(query); return; }   // brak w liscie = pokaze "brak zdjec"
+    setSearchMsg(matchingDevices.length
+      ? `Pasuje ${matchingDevices.length} urządzeń — wybierz jedno z listy albo wpisz więcej znaków.`
+      : "Żadne urządzenie nie pasuje do tego ID.");
   };
 
   const totalMB = useMemo(
@@ -121,6 +142,24 @@ export default function CapturesPage() {
 
             {/* Filtr po device */}
             <div className="bg-gradient-to-br from-[#313338] to-[#2B2D31] rounded-xl border border-[#3F4147] p-4 mb-4">
+              <form onSubmit={runSearch} className="flex flex-wrap items-center gap-2 mb-3">
+                <input
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setSearchMsg(""); }}
+                  placeholder="ID kalkulatora, np. A1B2C3 albo A1:B2:C3:D4:E5:F6"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="flex-1 min-w-[220px] max-w-md px-3 py-2 rounded-lg border border-[#3F4147] bg-[#2B2D31] text-[#E0E0E0] text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#3B82F6]"
+                />
+                <button type="submit" className="px-4 py-2 rounded-lg text-sm bg-[#3B82F6] text-white hover:bg-[#2f6fd6]">Szukaj</button>
+                {(search || deviceFilter) && (
+                  <button type="button" onClick={() => { setSearch(""); applyFilter(""); }} className="px-3 py-2 rounded-lg text-sm text-[#E0E0E0]/60 hover:text-[#E0E0E0]">
+                    Wyczyść
+                  </button>
+                )}
+                {searchMsg && <p className="w-full text-xs text-amber-300">{searchMsg}</p>}
+              </form>
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-xs font-semibold text-[#E0E0E0]/60 uppercase">Filtruj po device:</span>
                 <button
@@ -133,7 +172,7 @@ export default function CapturesPage() {
                 >
                   Wszystkie ({data.stats.total})
                 </button>
-                {data.stats.byDevice.map((d) => (
+                {matchingDevices.map((d) => (
                   <button
                     key={d.deviceId}
                     onClick={() => applyFilter(d.deviceId)}
