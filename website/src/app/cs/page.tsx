@@ -6,6 +6,7 @@ import Hero from "@/components/Hero";
 import Footer from "@/components/Footer";
 import HtmlLang from "@/components/HtmlLang";
 import { homeJsonLd, ogImages } from "@/lib/seo";
+import { homePromo } from "@/lib/promo";
 import { getVerifiedAggregateRating } from "@/lib/reviews";
 import { languageAlternates, locales, ogLocale, siteUrlFromHost } from "@/lib/i18n";
 import { ClientBuyNow, ClientStickyBuyBar, ClientVideoScroll } from "@/components/ClientShell";
@@ -83,10 +84,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function CzechPage() {
   const siteUrl = siteUrlFromHost((await headers()).get("host"));
+  const promo = await homePromo();   // Black Friday (lib/promo.ts)
   return (
     <>
       <HtmlLang lang="cs" />
-      {homeJsonLd(lang, siteUrl, await getVerifiedAggregateRating().catch(() => null)).map((json, i) => (
+      {homeJsonLd(lang, siteUrl, await getVerifiedAggregateRating().catch(() => null), promo.jsonLd).map((json, i) => (
         <script
           key={i}
           type="application/ld+json"
@@ -95,7 +97,7 @@ export default async function CzechPage() {
       ))}
       <Navigation lang={lang} />
       <main className="relative overflow-x-clip">
-        <Hero lang={lang} />
+        <Hero lang={lang} promo={promo.hero} />
         <ClientVideoScroll lang={lang} />
         <HowItWorks lang={lang} />
         <ExamBenefits lang={lang} />

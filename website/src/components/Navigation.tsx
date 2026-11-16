@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import PromoBar from "@/components/PromoBar";
 import { useCart } from "@/components/CartContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { localeLabel, type Locale } from "@/lib/i18n";
+import { RENTAL_FROM_PLN } from "@/lib/content/rentalPlans";
 
 const links = [
   { href: "#jak-dziala", n: "01" },
@@ -158,6 +161,7 @@ export default function Navigation({ lang = "pl", switchPath }: { lang?: Locale;
           : "bg-transparent border-b border-transparent"
       }`}
     >
+      <PromoBar lang={lang} />
       <div className="mx-auto max-w-[1400px] px-5 lg:px-10">
         <div className="flex items-center justify-between h-16">
           <a href="#top" className="flex items-baseline gap-2 group">
@@ -182,6 +186,14 @@ export default function Navigation({ lang = "pl", switchPath }: { lang?: Locale;
                 <span>{t.navLabels[i]}</span>
               </a>
             ))}
+            {lang === "pl" && (
+              <Link
+                href="/#wypozyczenie"
+                className="text-[13.5px] text-[#0B0B0B] bg-[#D8FF3D] px-2.5 py-1 hover:bg-[#F2EDE3] transition-colors"
+              >
+                Wypożycz
+              </Link>
+            )}
           </nav>
 
           <div className="hidden lg:flex items-center gap-5">
@@ -276,6 +288,16 @@ export default function Navigation({ lang = "pl", switchPath }: { lang?: Locale;
                 <span className="km-display text-2xl">{t.navLabels[i]}</span>
               </a>
             ))}
+            {lang === "pl" && (
+              <Link
+                href="/#wypozyczenie"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-baseline gap-2 text-lg text-[#D8FF3D]"
+              >
+                <span className="km-mono-eyebrow">★</span>
+                <span className="km-display text-2xl">Wypożycz od {RENTAL_FROM_PLN} zł</span>
+              </Link>
+            )}
             <a
               href="/auth/signin"
               onClick={() => setMenuOpen(false)}
