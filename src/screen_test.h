@@ -48,7 +48,7 @@ static bool _stWaitNext() {
 
 // 0=PL, 1=EN, 2=DE, 3=CS (bez diakrytykow); brak cs -> EN
 static const char* _stT(const char* pl, const char* en, const char* de, const char* cs = nullptr) {
-    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..10
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..11 (11=ko: brak tlumaczen -> en)
     if (kalkSettings.language == 0) return pl;
     if (kalkSettings.language == 1) return en;
     if (kalkSettings.language == 3) return cs ? cs : en;

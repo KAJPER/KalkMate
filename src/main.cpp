@@ -44,7 +44,7 @@ SET_LOOP_TASK_STACK_SIZE(24 * 1024);
 #define KALK_API_KEY    kalkApiKey()
 
 // Wersja firmware — INKREMENTUJ przed kazdym buildem ktory chcesz wgrac OTA
-#define FW_VERSION "2.1.6"
+#define FW_VERSION "2.1.7"
 
 // ============== KOLEJNOSC INCLUDE'OW JEST WAZNA ==============
 // input.h MUSI być przed UI files — definiuje BTN_xx jako wirtualne ID
@@ -165,7 +165,7 @@ static const uint8_t* const _MENU_ICONS[MENU_COUNT] = {
 // mT() zdefiniowane wczesniej w pliku (zaraz po include settings_screen.h) —
 // patrz komentarz tam.
 static inline const char* mMenuItem(int idx) {
-    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST)   // 4..10 — tabela po tekscie EN
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST)   // 4..11 — tabela po tekscie EN (11=ko -> en)
         return kalkTrExtra(menuItemsEN[idx], kalkSettings.language);
     switch (kalkSettings.language) {
         case 0:  return menuItemsPL[idx];
@@ -451,7 +451,7 @@ void setup() {
     // Protokol (linia tekstowa zakonczona \n):
     //   PC wysyla:  KALKPROV:SETCODE:1234
     //   ESP32 odp:  KALKPROV:OK   albo  KALKPROV:ERR:BADCODE / KALKPROV:ERR:NVS
-    //   PC wysyla:  KALKPROV:SETLANG:pl|en|de|cs|sk|lt|be|es|pt|fr|it albo 0..10
+    //   PC wysyla:  KALKPROV:SETLANG:pl|en|de|cs|sk|lt|be|es|pt|fr|it|ko albo 0..11
     //               (opcjonalnie, PRZED SETCODE)
     //   ESP32 odp:  KALKPROV:LANG:OK  albo  KALKPROV:LANG:ERR:BADLANG / KALKPROV:LANG:ERR:NVS
     //   (osobny prefiks LANG:, zeby flasher nie wzial odpowiedzi jezyka za
@@ -483,13 +483,13 @@ void setup() {
                         provLine.trim();
                         if (provLine.startsWith("KALKPROV:SETLANG:")) {
                             // Jezyk interfejsu (kalkSettings.language: 0=PL, 1=EN, 2=DE, 3=CS,
-                            // 4=SK, 5=LT, 6=BE, 7=ES, 8=PT, 9=FR, 10=IT).
+                            // 4=SK, 5=LT, 6=BE, 7=ES, 8=PT, 9=FR, 10=IT, 11=KO — UI po angielsku).
                             // Zapis prosto do NVS "kalkmate"/"lang" — kalkLoadSettings()
                             // nizej wczyta go jak kazde inne ustawienie.
                             String lg = provLine.substring(17);
                             lg.trim();
                             lg.toLowerCase();
-                            // Kody pl..it albo cyfry 0..10 (KALK_LANG_CODES, settings_screen.h).
+                            // Kody pl..ko albo cyfry 0..11 (KALK_LANG_CODES, settings_screen.h).
                             int lv = -1;
                             for (int li = 0; li <= _LANG_MAX; li++) {
                                 if (lg == KALK_LANG_CODES[li] || lg == String(li)) { lv = li; break; }

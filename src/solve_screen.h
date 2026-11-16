@@ -153,7 +153,7 @@ static bool _solTick() {
 
 // 0=PL, 1=EN, 2=DE, 3=CS (czeski bez diakrytykow); brak cs -> EN
 static const char* _solT(const char* pl, const char* en, const char* de, const char* cs = nullptr) {
-    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..10
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..11 (11=ko: en)
     if (kalkSettings.language == 0) return pl;
     if (kalkSettings.language == 1) return en;
     if (kalkSettings.language == 3) return cs ? cs : en;
@@ -366,6 +366,10 @@ static uint32_t _utf8Decode(const char* s, int& len) {
 }
 static inline bool _isGreek(uint32_t cp) { return cp >= 0x0370 && cp <= 0x03FF; }
 static inline bool _isCyrillic(uint32_t cp) { return cp >= 0x0400 && cp <= 0x04FF; }
+// Sylaby Hangul (odpowiedzi po koreansku, jezyk 11) -> u8g2_font_gulim11_t_korean2
+// (11x11, 2350 najczestszych sylab KS X 1001 — pokrywa zwykly tekst). Glif ma
+// ~12 px szerokosci = 2 kolumny zwyklego fontu 6 px (zawijanie linii).
+static inline bool _isHangul(uint32_t cp) { return cp >= 0xAC00 && cp <= 0xD7A3; }
 
 // Literalny Unicode superscript (model czasem wypisuje wprost, bez ^, np.
 // kopiujac zapis "10⁻⁵" ze zdjecia zadania) -> zwykly znak ASCII, albo 0
@@ -797,11 +801,14 @@ static int _solDrawMathLine(U8G2 &d, int x, int y, const char* text) {
             // przelaczanie per znak zamiast jednego fontu dla calego tekstu.
             d.setFont(_isGreek(cp) ? u8g2_font_unifont_t_greek
                     : _isCyrillic(cp) ? u8g2_font_6x12_t_cyrillic
+                    : _isHangul(cp) ? u8g2_font_gulim11_t_korean2
                     : u8g2_font_6x12_te);
             // Symbole matematyczne spoza 6x12_te (≠ ≤ ≥ ≈ √ ∞ → ⇒ ∈ ∩ ∪ ∑ ∫ ∂ …)
             // -> t0_11_t_all (6x11, ta sama szerokosc; sprawdzone dekoderem
             // fontu, ma caly blok U+2190..22FF). Od fw 2.1.6 serwer wysyla je
             // jako Unicode — starszym zamienia na ASCII (normalizeForCalc).
+            // Rzadka sylaba Hangul spoza 2350 z gulim11: t0_11 tez jej nie ma —
+            // zostaje pusta pozycja (bez przesuniecia reszty linii).
             if (!_isGreek(cp) && !_isCyrillic(cp) && cp > 0xFF && cp <= 0xFFFF &&
                 !u8g2_IsGlyph(d.getU8g2(), (uint16_t)cp))
                 d.setFont(u8g2_font_t0_11_t_all);
@@ -850,15 +857,21 @@ static void _solDisplaySolution(U8G2 &d, const char* solution, const char* heade
         int end = pos;
         int cols = 0;
         int lastSpace = -1;
-        while (end < slen && cols < LINE_CHARS) {
+        bool full = false;   // linia zapelniona (dalszy znak sie nie miesci)
+        while (end < slen) {
             if (B->conv[end] == '\n') break;
             if (B->conv[end] == ' ') lastSpace = end;
+            // Sylaba Hangul ~12 px = 2 kolumny po 6 px; nie mieszczaca sie
+            // przechodzi do nastepnej linii.
+            int cl;
+            int w = _isHangul(_utf8Decode(B->conv + end, cl)) ? 2 : 1;
+            if (cols + w > LINE_CHARS) { full = true; break; }
             end += _utf8Len((uint8_t)B->conv[end]);
-            cols++;
+            cols += w;
         }
         if (end > slen) end = slen;
         // Zawroc do ostatniej spacji jesli urwalismy w srodku slowa
-        if (end < slen && B->conv[end] != '\n' && cols >= LINE_CHARS && lastSpace > pos)
+        if (end < slen && B->conv[end] != '\n' && full && lastSpace > pos)
             end = lastSpace;
         int len = end - pos;
         if (len > _SOL_LINE_LEN) len = _SOL_LINE_LEN;
@@ -1217,7 +1230,7 @@ static void _solBeginRequest(_SolNetTaskCtx* ctx, int srvIdx) {
     http.addHeader("x-fw-version", FW_VERSION);
     if (ctx->licKey[0]) http.addHeader("x-license-key", ctx->licKey);
     http.addHeader("x-solve-mode", String((int)kalkSettings.solveMode));
-    http.addHeader("x-language", kalkLangCode(kalkSettings.language));   // pl..it (settings_screen.h)
+    http.addHeader("x-language", kalkLangCode(kalkSettings.language));   // pl..it, ko (settings_screen.h)
     if (ctx->devToken[0]) http.addHeader("x-device-token", ctx->devToken);
     if (ctx->reqId && ctx->reqId[0]) http.addHeader("x-request-id", ctx->reqId);
     // Naglowki od razu, tresc gdy AI skonczy (+ spacje co 10 s) — patrz _solReadBody.

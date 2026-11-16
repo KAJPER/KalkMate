@@ -35,7 +35,7 @@ void showAboutScreen(U8G2 &display) {
     uint8_t _lang = kalkSettings.language;
     // Pomocniczy helper 4-jezyczny lokalny dla tego ekranu
     auto _abT = [_lang](const char* pl, const char* en, const char* de, const char* cs) -> const char* {
-        if (_lang >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, _lang);   // 4..10
+        if (_lang >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, _lang);   // 4..11 (11=ko: brak tlumaczen -> en)
         switch (_lang) {
             case 0:  return pl;
             case 2:  return de;

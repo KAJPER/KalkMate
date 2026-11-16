@@ -6,7 +6,8 @@
 //   brightness   — kontrast OLED 0-15
 //   language     — 0=Polski, 1=English, 2=Deutsch, 3=Cestina, 4=Slovencina,
 //                  5=Lietuviu, 6=Belaruskaja, 7=Espanol, 8=Portugues,
-//                  9=Francais, 10=Italiano (4..10: tabela i18n_extra.h)
+//                  9=Francais, 10=Italiano (4..10: tabela i18n_extra.h),
+//                  11=Korean (UI po angielsku, odpowiedzi AI po koreansku)
 //   solveMode    — 0=Szczegolowy, 1=Tylko obliczenia, 2=Tylko wynik
 //   autoSleep    — ON/OFF
 //   sleepMinutes — indeks 0-10 w tablicy czasow {0.5,1,2,3,4,5,10,15,20,25,30 min}
@@ -18,7 +19,7 @@
 #include <SPIFFS.h>
 #include "input.h"
 #include "wifi_persist.h"
-#include "i18n_extra.h"   // kalkTrExtra — jezyki 4..10 (przed ota_update.h i T())
+#include "i18n_extra.h"   // kalkTrExtra — jezyki 4..11 (przed ota_update.h i T())
 #include "ota_update.h"
 #include "battery.h"
 #include "camera.h"
@@ -44,12 +45,15 @@ extern volatile bool _panicRequested;
 #define BTN_OK    27
 #endif
 
+// Najwiekszy indeks jezyka (kalkSettings.language) — nazwy/kody nizej, przy T().
+#define _LANG_MAX 11
+
 // ---------------------------------------------------------------------------
 // Struktura ustawien
 // ---------------------------------------------------------------------------
 struct KalkMateSettings {
     uint8_t brightness;   // 0-15 (kontrast OLED)
-    uint8_t language;     // 0=PL, 1=EN, 2=DE, 3=CS, 4=SK, 5=LT, 6=BE, 7=ES, 8=PT, 9=FR, 10=IT
+    uint8_t language;     // 0=PL, 1=EN, 2=DE, 3=CS, 4=SK, 5=LT, 6=BE, 7=ES, 8=PT, 9=FR, 10=IT, 11=KO
     uint8_t solveMode;    // 0=Szczegolowy, 1=Tylko obliczenia, 2=Tylko wynik
     bool    autoSleep;    // auto sleep ON/OFF
     uint8_t sleepMinutes; // indeks 0-10 w tablicy czasow
@@ -100,7 +104,7 @@ static void kalkLoadSettings() {
     kalkSettings.camModel     = prefs.getUChar("camModel",  CAM_MODEL_AUTO);
     kalkSettings.wifiKeep     = prefs.getUChar("wifiKeep",  1);
     if (kalkSettings.brightness > 15)   kalkSettings.brightness = 8;
-    if (kalkSettings.language > 10)     kalkSettings.language = 1;
+    if (kalkSettings.language > _LANG_MAX) kalkSettings.language = 1;
     if (kalkSettings.solveMode > 2)     kalkSettings.solveMode = 0;
     if (kalkSettings.sleepMinutes > 10) kalkSettings.sleepMinutes = 4;
     if (kalkSettings.camWbMode > 4)     kalkSettings.camWbMode = 0;
@@ -127,8 +131,9 @@ static const char* _SET_SLEEP_LABELS[11] = {
 
 // ---------------------------------------------------------------------------
 // Pomocnik tlumaczen (0=PL, 1=EN, 2=DE, 3=CS). cs == nullptr -> EN
-// (kompatybilnosc z wywolaniami 3-argumentowymi). Jezyki 4..10 -> tabela
-// wyszukiwana po tekscie EN (i18n_extra.h, generowana z tools/i18n).
+// (kompatybilnosc z wywolaniami 3-argumentowymi). Jezyki 4..11 -> tabela
+// wyszukiwana po tekscie EN (i18n_extra.h, generowana z tools/i18n); jezyk
+// bez pliku fw_<kod>.json (11=ko) dostaje wszedzie EN.
 // ---------------------------------------------------------------------------
 static const char* T(const char* pl, const char* en, const char* de, const char* cs = nullptr) {
     if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);
@@ -144,18 +149,20 @@ static const char* T(const char* pl, const char* en, const char* de, const char*
 // _tf nie maja diakrytykow/cyrylicy), kody ISO 639-1 dla serwera (x-language)
 // i KALKPROV:SETLANG — kolejnosc musi sie zgadzac z LANG_CODES we flasherze
 // (tools/flasher/flasher_common.py) i LANGS w tools/i18n/gen_firmware_i18n.py.
-#define _LANG_MAX 10
+// 11=Korean: fonty UI sa ASCII, wiec interfejs zostaje po angielsku (brak
+// fw_ko.json) — zmienia sie tylko jezyk odpowiedzi AI (x-language: ko).
+// _LANG_MAX zdefiniowany wyzej (przed kalkLoadSettings()).
 static const char* const _LANG_NAMES[_LANG_MAX + 1] = {
     "Polski", "English", "Deutsch", "Cestina", "Slovencina", "Lietuviu",
-    "Belaruskaja", "Espanol", "Portugues", "Francais", "Italiano"
+    "Belaruskaja", "Espanol", "Portugues", "Francais", "Italiano", "Korean"
 };
 static const char* const KALK_LANG_CODES[_LANG_MAX + 1] = {
-    "pl", "en", "de", "cs", "sk", "lt", "be", "es", "pt", "fr", "it"
+    "pl", "en", "de", "cs", "sk", "lt", "be", "es", "pt", "fr", "it", "ko"
 };
 static_assert(KALK_TR_EXTRA_FIRST + KALK_TR_EXTRA_LANGS == _LANG_MAX + 1,
               "i18n_extra.h: liczba jezykow != _LANG_MAX + 1");
 
-// Kod jezyka UI ("pl".."it"); poza zakresem -> "en".
+// Kod jezyka UI ("pl".."ko"); poza zakresem -> "en".
 static inline const char* kalkLangCode(uint8_t lang) {
     return lang <= _LANG_MAX ? KALK_LANG_CODES[lang] : "en";
 }

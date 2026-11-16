@@ -651,7 +651,7 @@ inline void testsDrawLine(U8G2 &d, int x, int y, const String& line) {
 // Lokalny helper tlumaczen: 0=PL, 1=EN, 2=DE, 3=CS (bez diakrytykow).
 // Wlasny (nie mT() z main.cpp), zeby ten plik obslugiwal 4 jezyki niezaleznie.
 static inline const char* _testsTr(const char* pl, const char* en, const char* de, const char* cs) {
-    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..10
+    if (kalkSettings.language >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, kalkSettings.language);  // 4..11 (11=ko: brak tlumaczen -> en)
     switch (kalkSettings.language) {
         case 0:  return pl;
         case 2:  return de;

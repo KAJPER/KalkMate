@@ -165,7 +165,10 @@ const FORMAT_RULES = `Formatowanie pod mały ekran kalkulatora:
 
 // Jezyk odpowiedzi — sterowany ustawieniem kalkulatora (kalkSettings.language),
 // wysylanym w naglowku x-language: "pl" (domyslnie), "en", "de", "cs", "sk",
-// "lt", "be", "es", "pt", "fr", "it" (te same kody co jezyki strony, lib/i18n.ts).
+// "lt", "be", "es", "pt", "fr", "it" (te same kody co jezyki strony, lib/i18n.ts)
+// oraz "ko" (koreanski — TYLKO jezyk kalkulatora, strona nie ma wersji
+// koreanskiej; UI kalkulatora zostaje wtedy po angielsku, zmienia sie tylko
+// jezyk odpowiedzi AI).
 // Czeskie/slowackie/litewskie litery (á č ď ě ľ ĺ ň ŕ ř š ť ů ž ą ę ė į ų ū)
 // oraz hiszpanskie/portugalskie/francuskie/wloskie (ñ ç ã õ é è ê à ù œ ...)
 // leza w Latin-1 / Latin Extended-A — tak jak polskie ą/ł/ż, ktore font OLED
@@ -174,6 +177,10 @@ const FORMAT_RULES = `Formatowanie pod mały ekran kalkulatora:
 // "be" (bialoruski): odpowiedz cyrylica (U+0400..U+04FF, w tym ў i apostrof ’).
 // Font 6x12_te jej nie ma, ale ekran rozwiazania (fw 2.0.4+) rysuje cyrylice
 // osobnym fontem — jak grecke litery — wiec tez jej NIE transliterujemy.
+// "ko" (koreanski): odpowiedz hangulem (sylaby U+AC00..U+D7A3). Ekran
+// rozwiazania (fw 2.1.7+) rysuje je osobnym fontem u8g2_font_gulim11_t_korean2
+// (2350 najczestszych sylab, KS X 1001) — wiec tez NIE transliterujemy
+// (zadnej latynizacji w normalizeForCalc).
 const LANGUAGE_NAMES: Record<string, string> = {
   pl: "polskim",
   en: "angielskim (English)",
@@ -186,6 +193,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   pt: "portugalskim (português europeu)",
   fr: "francuskim (français)",
   it: "włoskim (italiano)",
+  ko: "koreańskim (한국어), zapisanym alfabetem hangul — nie latynizacja",
 };
 const SUPPORTED_LANGUAGES = new Set(Object.keys(LANGUAGE_NAMES));
 // aiMode "custom" (wlasny prompt usera z panelu): prompt usera zastepuje

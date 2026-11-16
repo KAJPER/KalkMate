@@ -72,7 +72,7 @@ inline void otaConfirmServerOk();
 extern int otaGetLanguage();
 static const char* _otaT(const char* pl, const char* en, const char* de, const char* cs = nullptr) {
     const int lang = otaGetLanguage();
-    if (lang >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, (uint8_t)lang);   // 4..10
+    if (lang >= KALK_TR_EXTRA_FIRST) return kalkTrExtra(en, (uint8_t)lang);   // 4..11 (11=ko: brak tlumaczen -> en)
     switch (lang) {
         case 0:  return pl;
         case 2:  return de;

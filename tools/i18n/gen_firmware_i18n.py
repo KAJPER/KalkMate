@@ -1,4 +1,4 @@
-"""Generator src/i18n_extra.h — tlumaczenia UI firmware dla jezykow 4..10.
+"""Generator src/i18n_extra.h — tlumaczenia UI firmware dla jezykow 4..11.
 
 Jezyki 0..3 (PL/EN/DE/CS) siedza bezposrednio w wywolaniach helperow
 (T/mT/_solT/...). Kolejne jezyki NIE dopisuja argumentow do wywolan — helper
@@ -32,8 +32,10 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 SRC_JSON = os.path.join(ROOT, "tools", "i18n", "firmware_strings.json")
 OUT_H = os.path.join(ROOT, "src", "i18n_extra.h")
 
-# Kolejnosc = kalkSettings.language - 4 (4=sk ... 10=it)
-LANGS = ("sk", "lt", "be", "es", "pt", "fr", "it")
+# Kolejnosc = kalkSettings.language - 4 (4=sk ... 10=it, 11=ko).
+# "ko" nie ma (celowo) fw_ko.json — fonty UI sa ASCII, wiec kolumna to same
+# nullptr (UI po angielsku); jezyk liczy sie tylko dla odpowiedzi AI.
+LANGS = ("sk", "lt", "be", "es", "pt", "fr", "it", "ko")
 FIRST_LANG = 4
 
 _ESC = {"n": "\n", "t": "\t", "r": "\r", "\\": "\\", '"': '"', "'": "'",
@@ -183,7 +185,7 @@ def main():
         "// AUTOGENEROWANE przez tools/i18n/gen_firmware_i18n.py — NIE EDYTUJ RECZNIE.",
         "// Zrodla: tools/i18n/firmware_strings.json + tools/i18n/fw_<kod>.json.",
         "//",
-        "// Tlumaczenia UI dla jezykow 4..10 (kalkSettings.language):",
+        f"// Tlumaczenia UI dla jezykow {FIRST_LANG}..{FIRST_LANG + len(LANGS) - 1} (kalkSettings.language):",
         "//   " + ", ".join(f"{FIRST_LANG + i}={l}" for i, l in enumerate(LANGS)),
         "// Helpery 4-argumentowe (T, mT, _solT, ...) przy language >= 4 zwracaja",
         "// kalkTrExtra(en, language): wyszukiwanie binarne po tekscie EN (strcmp)",
@@ -216,7 +218,7 @@ def main():
         lines.append("};")
         lines.append("")
     lines += [
-        "// Tlumaczenie tekstu EN na jezyk `lang` (4..10). Zawsze zwraca niepusty",
+        f"// Tlumaczenie tekstu EN na jezyk `lang` ({FIRST_LANG}..{FIRST_LANG + len(LANGS) - 1}). Zawsze zwraca niepusty",
         "// wskaznik: tlumaczenie albo `en` (fallback).",
         "static inline const char* kalkTrExtra(const char* en, uint8_t lang) {",
         "    if (!en || lang < KALK_TR_EXTRA_FIRST || lang >= KALK_TR_EXTRA_FIRST + KALK_TR_EXTRA_LANGS) return en;",

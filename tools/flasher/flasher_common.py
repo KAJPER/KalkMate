@@ -581,11 +581,14 @@ _DEEP_SLEEP_RE = re.compile(r"^\[EARLY\].*deep sleep", re.I)
 
 
 # KALKPROV:SETLANG - jezyk interfejsu kalkulatora. Indeks w krotce = kalkSettings.language
-# w firmware (0..3 = helpery 4-argumentowe, 4..10 = tabela src/i18n_extra.h).
-LANG_CODES = ("pl", "en", "de", "cs", "sk", "lt", "be", "es", "pt", "fr", "it")
+# w firmware (0..3 = helpery 4-argumentowe, 4..11 = tabela src/i18n_extra.h).
+# 11=ko: UI kalkulatora zostaje po angielsku (fonty ASCII), po koreansku sa
+# tylko odpowiedzi AI. Firmware sprzed 2.1.7 odrzuci "ko" (KALKPROV:LANG:ERR:BADLANG).
+LANG_CODES = ("pl", "en", "de", "cs", "sk", "lt", "be", "es", "pt", "fr", "it", "ko")
 LANG_NAMES = {"pl": "Polski", "en": "English", "de": "Deutsch", "cs": "Čeština",
               "sk": "Slovenčina", "lt": "Lietuvių", "be": "Беларуская", "es": "Español",
-              "pt": "Português", "fr": "Français", "it": "Italiano"}
+              "pt": "Português", "fr": "Français", "it": "Italiano",
+              "ko": "한국어 (Korean, UI EN)"}
 
 
 def boot_check_and_provision(mac, code, log, port_hint=None,
