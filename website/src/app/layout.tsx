@@ -53,7 +53,6 @@ export const metadata: Metadata = {
     "kalkulator ai",
     "kalkulator z ai",
     "ai kalkulator",
-    "kalkulator do ściągania",
     "kalkulator z aparatem",
     "kalkulator z kamerą",
     "inteligentny kalkulator",

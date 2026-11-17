@@ -8,12 +8,12 @@ export interface FaqItem {
 export const faqs: Record<Locale, FaqItem[]> = {
   pl: [
     {
-      q: "Czy KalkMate to kalkulator do ściągania?",
-      a: "Tak — to kalkulator z aparatem (kamerą), który robi zdjęcie zadania i wyświetla pełne rozwiązanie krok po kroku na ekranie. Obudowa, klawiatura i ekran są identyczne ze standardowymi kalkulatorami prostymi. Tryb AI uruchamiasz ukrytą kombinacją klawiszy — nie ma żadnych ikon ani wskaźników, które by Cię zdradzały.",
+      q: "Czy KalkMate to kalkulator z kamerą i AI?",
+      a: "Tak — to kalkulator z aparatem (kamerą), który robi zdjęcie zadania i wyświetla pełne rozwiązanie krok po kroku na ekranie. Obudowa, klawiatura i ekran są identyczne ze standardowymi kalkulatorami prostymi. Tryb AI uruchamiasz ukrytą kombinacją klawiszy — nie ma żadnych ikon ani wskaźników.",
     },
     {
       q: "Czym różni się KalkMate od aplikacji jak Photomath czy Gauth?",
-      a: "To fizyczne urządzenie, nie aplikacja na telefon — a telefony i smartwatche są zabronione na sali maturalnej. Photomath czy Gauth świetnie sprawdzają się do nauki w domu, ale nie da się ich użyć w trakcie egzaminu. KalkMate wygląda i działa jak zwykły, dozwolony kalkulator prosty, więc AI masz przy sobie także podczas samego testu.",
+      a: "To fizyczne urządzenie, nie aplikacja na telefon — uczysz się bez telefonu pod ręką i bez rozpraszających powiadomień. Tak jak Photomath czy Gauth, KalkMate służy do nauki w domu. Ważne: KalkMate nie jest dopuszczony do używania na maturze, egzaminach, sprawdzianach ani kartkówkach — nie używaj go podczas pisania testów.",
     },
     {
       q: "Jakie przedmioty obsługuje AI?",
@@ -53,7 +53,7 @@ export const faqs: Record<Locale, FaqItem[]> = {
     },
     {
       q: "Czy mogę wypożyczyć KalkMate zamiast kupować?",
-      a: "Tak. Wypożyczysz go na tydzień (79 zł), miesiąc (149 zł) albo 2 miesiące na cały okres matur (249 zł) — pełna wersja z AI, dostawa gratis do Paczkomatu, płatność BLIK lub przelewem. Wpłacasz zwrotną kaucję 300 zł albo potwierdzasz tożsamość dowodem i selfie i wypożyczasz bez kaucji. Po okresie najmu AI wyłącza się samo, a Ty odsyłasz kalkulator. Szczegóły: kalkmate.pl/wypozyczenie.",
+      a: "Tak. Wypożyczysz go na tydzień (79 zł), miesiąc (149 zł) albo 2 miesiące (249 zł) — pełna wersja z AI, dostawa gratis do Paczkomatu, płatność BLIK lub przelewem. Wpłacasz zwrotną kaucję 300 zł albo potwierdzasz tożsamość dowodem i selfie i wypożyczasz bez kaucji. Po okresie najmu AI wyłącza się samo, a Ty odsyłasz kalkulator. Szczegóły: kalkmate.pl/wypozyczenie.",
     },
     {
       q: "W jakich językach działa KalkMate?",
@@ -63,11 +63,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   en: [
     {
       q: "Is KalkMate an AI camera calculator for exams?",
-      a: "Yes — KalkMate is an AI camera calculator: it photographs the problem and shows the full step-by-step solution on screen. The casing, keypad and screen are identical to standard simple calculators. You launch AI mode with a hidden key combination — there are no icons or indicators that could give you away.",
+      a: "Yes — KalkMate is an AI camera calculator: it photographs the problem and shows the full step-by-step solution on screen. The casing, keypad and screen are identical to standard simple calculators. You launch AI mode with a hidden key combination — there are no icons or indicators.",
     },
     {
       q: "How is KalkMate different from apps like Photomath or Gauth?",
-      a: "KalkMate is a physical device, not a phone app — and phones and smartwatches are banned in exam rooms. Apps like Photomath or Gauth are great for studying at home, but you simply can't use them during the actual exam. KalkMate looks and works like a standard, permitted simple calculator, so you have AI with you during the test itself.",
+      a: "KalkMate is a physical device, not a phone app — you study without a phone in reach and without distracting notifications. Like Photomath or Gauth, KalkMate is meant for studying at home. Important: KalkMate is not permitted during final exams, school tests or quizzes — do not use it while taking a test.",
     },
     {
       q: "Which subjects does the AI support?",
@@ -113,11 +113,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   de: [
     {
       q: "Ist KalkMate ein KI Taschenrechner mit Kamera?",
-      a: "Ja — KalkMate ist ein KI Taschenrechner mit Kamera: Du fotografierst die Aufgabe und siehst die vollständige Schritt-für-Schritt-Lösung auf dem Display. Gehäuse, Tastatur und Display sind identisch mit handelsüblichen einfachen Taschenrechnern. Den KI-Modus startest du mit einer versteckten Tastenkombination — es gibt keine Symbole oder Anzeigen, die dich verraten könnten.",
+      a: "Ja — KalkMate ist ein KI Taschenrechner mit Kamera: Du fotografierst die Aufgabe und siehst die vollständige Schritt-für-Schritt-Lösung auf dem Display. Gehäuse, Tastatur und Display sind identisch mit handelsüblichen einfachen Taschenrechnern. Den KI-Modus startest du mit einer versteckten Tastenkombination — es gibt keine Symbole oder Anzeigen.",
     },
     {
       q: "Wie unterscheidet sich KalkMate von Apps wie Photomath oder Gauth?",
-      a: "KalkMate ist ein physisches Gerät, keine Handy-App — und Handys sowie Smartwatches sind im Prüfungsraum verboten. Apps wie Photomath oder Gauth eignen sich hervorragend zum Lernen zu Hause, lassen sich aber während der eigentlichen Prüfung nicht nutzen. KalkMate sieht aus wie ein normaler, zugelassener einfacher Taschenrechner und funktioniert auch so — die KI hast du also direkt während der Prüfung dabei.",
+      a: "KalkMate ist ein physisches Gerät, keine Handy-App — du lernst ohne Handy in Reichweite und ohne ablenkende Benachrichtigungen. Wie Photomath oder Gauth ist KalkMate zum Lernen zu Hause gedacht. Wichtig: KalkMate ist in Abschlussprüfungen, Klassenarbeiten und Tests nicht zugelassen — benutze ihn nicht während einer Prüfung.",
     },
     {
       q: "Welche Fächer unterstützt die KI?",
@@ -163,11 +163,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   cs: [
     {
       q: "Je KalkMate AI kalkulačka s kamerou?",
-      a: "Ano — KalkMate je AI kalkulačka s kamerou: vyfotí úlohu a na displeji zobrazí kompletní řešení krok za krokem. Pouzdro, klávesnice i displej jsou stejné jako u běžných jednoduchých kalkulaček. Režim AI spustíš skrytou kombinací kláves — nejsou tu žádné ikony ani kontrolky, které by tě prozradily.",
+      a: "Ano — KalkMate je AI kalkulačka s kamerou: vyfotí úlohu a na displeji zobrazí kompletní řešení krok za krokem. Pouzdro, klávesnice i displej jsou stejné jako u běžných jednoduchých kalkulaček. Režim AI spustíš skrytou kombinací kláves — nejsou tu žádné ikony ani kontrolky.",
     },
     {
       q: "Čím se KalkMate liší od aplikací jako Photomath nebo Gauth?",
-      a: "KalkMate je fyzické zařízení, ne aplikace v telefonu — a telefony i chytré hodinky jsou při zkoušce zakázané. Photomath nebo Gauth se skvěle hodí na učení doma, ale během samotné zkoušky je použít nemůžeš. KalkMate vypadá a funguje jako běžná povolená jednoduchá kalkulačka, takže AI máš u sebe i při samotném testu.",
+      a: "KalkMate je fyzické zařízení, ne aplikace v telefonu — učíš se bez telefonu po ruce a bez rušivých upozornění. Stejně jako Photomath nebo Gauth slouží KalkMate k učení doma. Důležité: KalkMate není povolen u maturity, zkoušek, písemek ani testů — nepoužívej ho během psaní testu.",
     },
     {
       q: "Které předměty AI zvládá?",
@@ -213,11 +213,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   sk: [
     {
       q: "Je KalkMate AI kalkulačka s kamerou?",
-      a: "Áno — KalkMate je AI kalkulačka s kamerou: odfotí úlohu a na displeji zobrazí kompletné riešenie krok za krokom. Puzdro, klávesnica aj displej sú rovnaké ako pri bežných jednoduchých kalkulačkách. Režim AI spustíš skrytou kombináciou klávesov — nie sú tu žiadne ikony ani kontrolky, ktoré by ťa prezradili.",
+      a: "Áno — KalkMate je AI kalkulačka s kamerou: odfotí úlohu a na displeji zobrazí kompletné riešenie krok za krokom. Puzdro, klávesnica aj displej sú rovnaké ako pri bežných jednoduchých kalkulačkách. Režim AI spustíš skrytou kombináciou klávesov — nie sú tu žiadne ikony ani kontrolky.",
     },
     {
       q: "Čím sa KalkMate líši od aplikácií ako Photomath alebo Gauth?",
-      a: "KalkMate je fyzické zariadenie, nie aplikácia v telefóne — a telefóny aj inteligentné hodinky sú na skúške zakázané. Photomath alebo Gauth sa skvele hodia na učenie doma, ale počas samotnej skúšky ich použiť nemôžeš. KalkMate vyzerá a funguje ako bežná povolená jednoduchá kalkulačka, takže AI máš pri sebe aj počas samotného testu.",
+      a: "KalkMate je fyzické zariadenie, nie aplikácia v telefóne — učíš sa bez telefónu po ruke a bez rušivých upozornení. Rovnako ako Photomath alebo Gauth slúži KalkMate na učenie doma. Dôležité: KalkMate nie je povolený na maturite, skúškach, písomkách ani testoch — nepoužívaj ho počas písania testu.",
     },
     {
       q: "Ktoré predmety AI zvláda?",
@@ -263,11 +263,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   lt: [
     {
       q: "Ar KalkMate — dirbtinio intelekto skaičiuotuvas su kamera?",
-      a: "Taip — KalkMate yra DI skaičiuotuvas su kamera: jis nufotografuoja užduotį ir ekrane parodo visą sprendimą žingsnis po žingsnio. Korpusas, klaviatūra ir ekranas tokie pat kaip įprastų paprastų skaičiuotuvų. DI režimą įjungi slaptu klavišų deriniu — nėra jokių piktogramų ar indikatorių, kurie galėtų tave išduoti.",
+      a: "Taip — KalkMate yra DI skaičiuotuvas su kamera: jis nufotografuoja užduotį ir ekrane parodo visą sprendimą žingsnis po žingsnio. Korpusas, klaviatūra ir ekranas tokie pat kaip įprastų paprastų skaičiuotuvų. DI režimą įjungi slaptu klavišų deriniu — nėra jokių piktogramų ar indikatorių.",
     },
     {
       q: "Kuo KalkMate skiriasi nuo programėlių, tokių kaip Photomath ar Gauth?",
-      a: "KalkMate — fizinis įrenginys, o ne programėlė telefone, o telefonai ir išmanieji laikrodžiai egzamino metu draudžiami. Photomath ar Gauth puikiai tinka mokytis namuose, bet per patį egzaminą jų naudoti negali. KalkMate atrodo ir veikia kaip įprastas leidžiamas paprastas skaičiuotuvas, todėl DI turi su savimi ir per patį testą.",
+      a: "KalkMate — fizinis įrenginys, o ne programėlė telefone: mokaisi be telefono po ranka ir be blaškančių pranešimų. Kaip ir Photomath ar Gauth, KalkMate skirtas mokytis namuose. Svarbu: KalkMate neleidžiama naudoti per brandos egzaminus, kontrolinius ir testus — nenaudok jo rašydamas testą.",
     },
     {
       q: "Kokius dalykus palaiko DI?",
@@ -313,11 +313,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   be: [
     {
       q: "Ці з’яўляецца KalkMate ШІ-калькулятарам з камерай?",
-      a: "Так — KalkMate гэта ШІ-калькулятар з камерай: ён фатаграфуе задачу і паказвае на экране поўнае рашэнне крок за крокам. Корпус, клавіятура і экран такія ж, як у звычайных простых калькулятараў. Рэжым ШІ ўключаецца схаванай камбінацыяй клавіш — няма ніякіх значкоў ці індыкатараў, якія маглі б цябе выдаць.",
+      a: "Так — KalkMate гэта ШІ-калькулятар з камерай: ён фатаграфуе задачу і паказвае на экране поўнае рашэнне крок за крокам. Корпус, клавіятура і экран такія ж, як у звычайных простых калькулятараў. Рэжым ШІ ўключаецца схаванай камбінацыяй клавіш — няма ніякіх значкоў ці індыкатараў.",
     },
     {
       q: "Чым KalkMate адрозніваецца ад праграм накшталт Photomath ці Gauth?",
-      a: "KalkMate — фізічная прылада, а не праграма ў тэлефоне, а тэлефоны і смарт-гадзіннікі на экзамене забароненыя. Photomath ці Gauth выдатна падыходзяць для вучобы дома, але падчас самога экзамену імі не скарыстаешся. KalkMate выглядае і працуе як звычайны дазволены просты калькулятар, таму ШІ ў цябе пад рукой і падчас самога тэсту.",
+      a: "KalkMate — фізічная прылада, а не праграма ў тэлефоне: ты вучышся без тэлефона пад рукой і без апавяшчэнняў, якія адцягваюць увагу. Як і Photomath ці Gauth, KalkMate прызначаны для вучобы дома. Важна: KalkMate нельга выкарыстоўваць на экзаменах, кантрольных і тэстах — не карыстайся ім падчас напісання тэсту.",
     },
     {
       q: "Якія прадметы падтрымлівае ШІ?",
@@ -363,11 +363,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   es: [
     {
       q: "¿KalkMate es una calculadora con IA y cámara?",
-      a: "Sí: KalkMate es una calculadora con IA y cámara que fotografía el problema y muestra en pantalla la solución completa paso a paso. La carcasa, el teclado y la pantalla son idénticos a los de una calculadora básica normal. El modo IA se activa con una combinación de teclas oculta: no hay iconos ni indicadores que puedan delatarte.",
+      a: "Sí: KalkMate es una calculadora con IA y cámara que fotografía el problema y muestra en pantalla la solución completa paso a paso. La carcasa, el teclado y la pantalla son idénticos a los de una calculadora básica normal. El modo IA se activa con una combinación de teclas oculta: no hay iconos ni indicadores.",
     },
     {
       q: "¿En qué se diferencia KalkMate de apps como Photomath o Gauth?",
-      a: "KalkMate es un dispositivo físico, no una app para el móvil, y los móviles y relojes inteligentes están prohibidos en el aula del examen. Photomath o Gauth van genial para estudiar en casa, pero no puedes usarlas durante el examen. KalkMate tiene el aspecto y el funcionamiento de una calculadora básica permitida, así que tienes la IA contigo también durante la prueba.",
+      a: "KalkMate es un dispositivo físico, no una app para el móvil: estudias sin el móvil a mano y sin notificaciones que te distraigan. Igual que Photomath o Gauth, KalkMate está pensado para estudiar en casa. Importante: KalkMate no está permitido en exámenes finales, exámenes de clase ni pruebas; no lo uses mientras haces un examen.",
     },
     {
       q: "¿Qué asignaturas cubre la IA?",
@@ -413,11 +413,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   pt: [
     {
       q: "O KalkMate é uma calculadora com IA e câmara?",
-      a: "Sim — o KalkMate é uma calculadora com IA e câmara: fotografa o exercício e mostra no ecrã a resolução completa passo a passo. A caixa, o teclado e o ecrã são idênticos aos de uma calculadora simples comum. O modo IA ativa-se com uma combinação de teclas escondida — não há ícones nem indicadores que te possam denunciar.",
+      a: "Sim — o KalkMate é uma calculadora com IA e câmara: fotografa o exercício e mostra no ecrã a resolução completa passo a passo. A caixa, o teclado e o ecrã são idênticos aos de uma calculadora simples comum. O modo IA ativa-se com uma combinação de teclas escondida — não há ícones nem indicadores.",
     },
     {
       q: "Em que é que o KalkMate é diferente de apps como o Photomath ou o Gauth?",
-      a: "O KalkMate é um dispositivo físico, não uma app de telemóvel — e telemóveis e smartwatches são proibidos na sala de exame. O Photomath ou o Gauth são ótimos para estudar em casa, mas não os podes usar durante o exame. O KalkMate tem o aspeto e o funcionamento de uma calculadora simples permitida, por isso tens a IA contigo também durante a prova.",
+      a: "O KalkMate é um dispositivo físico, não uma app de telemóvel — estudas sem o telemóvel à mão e sem notificações a distrair-te. Tal como o Photomath ou o Gauth, o KalkMate destina-se a estudar em casa. Importante: o KalkMate não é permitido em exames nacionais, testes nem fichas de avaliação — não o uses durante uma prova.",
     },
     {
       q: "Que disciplinas a IA suporta?",
@@ -463,11 +463,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   fr: [
     {
       q: "KalkMate est-elle une calculatrice IA avec caméra ?",
-      a: "Oui — KalkMate est une calculatrice IA avec caméra : elle photographie l’exercice et affiche à l’écran la solution complète, étape par étape. Le boîtier, le clavier et l’écran sont identiques à ceux d’une calculatrice simple classique. Le mode IA se lance avec une combinaison de touches cachée — aucune icône ni aucun voyant ne peut te trahir.",
+      a: "Oui — KalkMate est une calculatrice IA avec caméra : elle photographie l’exercice et affiche à l’écran la solution complète, étape par étape. Le boîtier, le clavier et l’écran sont identiques à ceux d’une calculatrice simple classique. Le mode IA se lance avec une combinaison de touches cachée — aucune icône ni aucun voyant.",
     },
     {
       q: "En quoi KalkMate diffère-t-elle d’applis comme Photomath ou Gauth ?",
-      a: "KalkMate est un appareil physique, pas une appli pour téléphone — et les téléphones comme les montres connectées sont interdits en salle d’examen. Photomath ou Gauth sont parfaits pour réviser à la maison, mais impossible de les utiliser pendant l’épreuve. KalkMate ressemble à une calculatrice simple autorisée et fonctionne comme elle : tu as donc l’IA avec toi pendant l’examen lui-même.",
+      a: "KalkMate est un appareil physique, pas une appli pour téléphone — tu révises sans téléphone à portée de main et sans notifications qui te distraient. Comme Photomath ou Gauth, KalkMate est fait pour réviser à la maison. Important : KalkMate n’est pas autorisée aux examens, contrôles ni interrogations — ne l’utilise pas pendant une épreuve.",
     },
     {
       q: "Quelles matières l’IA prend-elle en charge ?",
@@ -513,11 +513,11 @@ export const faqs: Record<Locale, FaqItem[]> = {
   it: [
     {
       q: "KalkMate è una calcolatrice con IA e fotocamera?",
-      a: "Sì — KalkMate è una calcolatrice con IA e fotocamera: fotografa l’esercizio e mostra sul display la soluzione completa passo dopo passo. Scocca, tastiera e display sono identici a quelli di una normale calcolatrice semplice. La modalità IA si attiva con una combinazione di tasti nascosta: non ci sono icone né spie che possano tradirti.",
+      a: "Sì — KalkMate è una calcolatrice con IA e fotocamera: fotografa l’esercizio e mostra sul display la soluzione completa passo dopo passo. Scocca, tastiera e display sono identici a quelli di una normale calcolatrice semplice. La modalità IA si attiva con una combinazione di tasti nascosta: non ci sono icone né spie.",
     },
     {
       q: "In cosa KalkMate è diversa da app come Photomath o Gauth?",
-      a: "KalkMate è un dispositivo fisico, non un’app per smartphone — e telefoni e smartwatch sono vietati in aula d’esame. Photomath o Gauth sono ottime per studiare a casa, ma durante l’esame vero e proprio non puoi usarle. KalkMate ha l’aspetto e il funzionamento di una calcolatrice semplice consentita, quindi hai l’IA con te anche durante la prova.",
+      a: "KalkMate è un dispositivo fisico, non un’app per smartphone — studi senza il telefono a portata di mano e senza notifiche che distraggono. Come Photomath o Gauth, KalkMate serve per studiare a casa. Importante: KalkMate non è consentita alla maturità, agli esami, alle verifiche né ai test — non usarla durante una prova.",
     },
     {
       q: "Quali materie supporta l’IA?",

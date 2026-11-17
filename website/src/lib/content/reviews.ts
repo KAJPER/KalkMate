@@ -40,8 +40,12 @@ type SourceReview = {
 const sourceLang = (r: SourceReview): SourceLang =>
   r.jezyk.toUpperCase() === "EN" && !/[ąćęłńóśźż]/i.test(r.tresc_opinii) ? "en" : "pl";
 
+// Opinie o uzywaniu na sprawdzianie/w klasie — nie publikujemy
+// (KalkMate jest do nauki w domu, nie na egzaminy).
+const HIDDEN_REVIEW_IDS = new Set([7, 32, 50]);
+
 const realPl = (source as SourceReview[])
-  .filter((r) => r.zgoda_na_publikacje)
+  .filter((r) => r.zgoda_na_publikacje && !HIDDEN_REVIEW_IDS.has(r.id))
   .sort((a, b) => (a.data < b.data ? 1 : a.data > b.data ? -1 : b.id - a.id))
   .map((r) => ({
     id: r.id,

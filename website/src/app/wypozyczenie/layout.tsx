@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Wypożycz kalkulator KalkMate — od 79 zł | KalkMate",
     description:
-      "Wypożycz KalkMate na tydzień, miesiąc albo cały okres matur. Dostawa do Paczkomatu, płatność BLIK lub przelewem, zwrotna kaucja 300 zł.",
+      "Wypożycz KalkMate na tydzień, miesiąc albo 2 miesiące. Dostawa do Paczkomatu, płatność BLIK lub przelewem, zwrotna kaucja 300 zł.",
     robots: { index: true, follow: true },
     alternates: { canonical: `${siteUrl}/wypozyczenie` },
   };

@@ -10,7 +10,7 @@ const DEPOSIT = RENTAL_DEPOSIT_GROSZE / 100;
 
 export default function RentalPromo({ identityAvailable }: { identityAvailable: boolean }) {
   const perks: [string, string][] = [
-    [`Od ${RENTAL_FROM_PLN} zł`, "Tydzień, miesiąc albo cały okres matur — płacisz tylko za to, czego potrzebujesz."],
+    [`Od ${RENTAL_FROM_PLN} zł`, "Tydzień, miesiąc albo 2 miesiące — płacisz tylko za to, czego potrzebujesz."],
     identityAvailable
       ? ["Bez kaucji", `Potwierdzasz tożsamość dowodem i selfie (2 min) albo wpłacasz zwrotną kaucję ${DEPOSIT} zł.`]
       : [`Kaucja ${DEPOSIT} zł`, "Zwracamy ją w ciągu 7 dni od otrzymania kalkulatora."],

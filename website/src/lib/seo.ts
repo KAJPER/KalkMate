@@ -18,7 +18,7 @@ const productName: Record<Locale, string> = {
 };
 
 const productDescription: Record<Locale, string> = {
-  pl: "Kalkulator z aparatem i AI do rozwiązywania zadań maturalnych. Zrób zdjęcie zadania z matematyki, fizyki, chemii lub biologii — pełne rozwiązanie krok po kroku pojawi się na ekranie OLED 256×64. Kalkulator do ściągania nowej generacji.",
+  pl: "Kalkulator z aparatem i AI do rozwiązywania zadań maturalnych. Zrób zdjęcie zadania z matematyki, fizyki, chemii lub biologii — pełne rozwiązanie krok po kroku pojawi się na ekranie OLED 256×64.",
   en: "AI camera calculator for exams — photograph any math, physics, chemistry or biology problem and the full step-by-step solution appears on the 256×64 OLED screen. Smart, discreet, no phone needed.",
   de: "KI Taschenrechner mit Kamera für Prüfungen. Fotografiere eine Aufgabe aus Mathematik, Physik, Chemie oder Biologie — die vollständige Schritt-für-Schritt-Lösung erscheint auf dem 256×64 OLED-Display.",
   cs: "AI kalkulačka s kamerou na zkoušky. Vyfoť úlohu z matematiky, fyziky, chemie nebo biologie — kompletní řešení krok za krokem se zobrazí na OLED displeji 256×64. Chytrá, nenápadná, bez telefonu.",

@@ -15,9 +15,9 @@ export interface RentalPlan {
 }
 
 export const RENTAL_PLANS: RentalPlan[] = [
-  { id: "week", days: 7, feeGrosze: 7900, label: "Tydzień", hint: "Na sprawdzian albo kartkówkę" },
+  { id: "week", days: 7, feeGrosze: 7900, label: "Tydzień", hint: "Na szybką powtórkę materiału" },
   { id: "month", days: 30, feeGrosze: 14900, label: "Miesiąc", hint: "Najczęściej wybierany", featured: true },
-  { id: "season", days: 60, feeGrosze: 24900, label: "2 miesiące", hint: "Cały okres matur" },
+  { id: "season", days: 60, feeGrosze: 24900, label: "2 miesiące", hint: "Na dłuższą, spokojną naukę" },
 ];
 
 export const RENTAL_DEPOSIT_GROSZE = 30000;
