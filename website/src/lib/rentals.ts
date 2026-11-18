@@ -9,9 +9,13 @@
 //      NIE idziemy przez settleP24OrderPayment (mail "zakup", paragon za
 //      urzadzenie). Paragon tylko z OPLATY za najem — kaucja to nie przychod
 //      (fiscal.ts buildOrderReceipt -> rentalReceiptForOrder).
-//   3. Admin przypisuje kalkulator (Device ID) -> Device.rentalUntil =
-//      teraz + dni planu + RENTAL_SHIPPING_BUFFER_DAYS (deviceRental.ts:
-//      po terminie serwer odcina AI). Stan active.
+//   3. Admin przypisuje kalkulator (Device ID) -> stan active, TYMCZASOWY
+//      termin: teraz + dni planu + RENTAL_SHIPPING_BUFFER_DAYS (deviceRental.ts:
+//      po terminie serwer odcina AI) — gdyby odbior nigdy nie zostal wykryty.
+//   3b. Najem liczy sie OD ODBIORU paczki: cron (syncRentalPickups) czeka na
+//      status InPost "delivered" i przelicza: start = odbior, koniec = odbior
+//      + dni (+ przedluzenia) + RENTAL_RETURN_GRACE_DAYS. Admin moze to zrobic
+//      recznie ("Odebrano") — np. gdy paczka nie szla przez InPost.
 //   4. Przypomnienia (cron): 3 dni przed koncem i po terminie.
 //   5. Zwrot: admin "Przyjmij zwrot" -> urzadzenie odpiete od konta i
 //      ZABLOKOWANE (rentalLocked) do nastepnego najmu, notatka o zwrocie kaucji.
@@ -27,6 +31,8 @@ export { RENTAL_PLANS, RENTAL_DEPOSIT_GROSZE, type RentalPlan };
 
 // Doliczane do okresu najmu przy przypisaniu: dostawa do Paczkomatu + czas na odeslanie.
 export const RENTAL_SHIPPING_BUFFER_DAYS = 3;
+// Po odbiorze: najem = dni planu od odbioru + ten zapas na nadanie zwrotu.
+export const RENTAL_RETURN_GRACE_DAYS = 1;
 
 // Plan z cena obowiazujaca TERAZ (promocje: rentalFeeNow) — kwota platnosci.
 export function getRentalPlan(id: unknown): RentalPlan | null {
@@ -77,6 +83,9 @@ export interface RentalRow {
   identityCheckedAt: string | null;
   // Losowy sekret strony powrotu z Didit (/wypozyczenie?r=<id>&t=<token>).
   accessToken: string | null;
+  // Odbior paczki z kalkulatorem (InPost "delivered" albo reczne "Odebrano").
+  // null = jeszcze w drodze — okres najmu jest tymczasowy.
+  pickedUpAt: string | null;
 }
 
 export type IdentityStatus = "pending" | "approved" | "declined" | "mismatch" | "review";
@@ -117,7 +126,7 @@ export async function ensureRentalTable(): Promise<void> {
   `);
   // Kolumny dodane po pierwszym wdrozeniu (weryfikacja Didit).
   const cols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("Rental")`);
-  for (const c of ["identityStatus", "identitySessionId", "identityName", "identityCheckedAt", "accessToken"]) {
+  for (const c of ["identityStatus", "identitySessionId", "identityName", "identityCheckedAt", "accessToken", "pickedUpAt"]) {
     if (!cols.some((x) => x.name === c)) await prisma.$executeRawUnsafe(`ALTER TABLE "Rental" ADD COLUMN "${c}" TEXT`);
   }
   // Kazda rejestracja platnosci P24 dla najmu (sesja + kwota). Webhook szuka
@@ -310,6 +319,13 @@ export async function markRentalPaid(rental: RentalRow, paidSessionId?: string, 
 // (poprzedni zostaje zablokowany — nie powinien miec AI poza najmem).
 export async function assignRentalDevice(rental: RentalRow, deviceId: string): Promise<RentalRow> {
   await ensureRentalColumns();
+  // Zamiana kalkulatora PO odbiorze: okres juz policzony od odbioru — zostaje.
+  if (rental.pickedUpAt && rental.endAt) {
+    if (rental.deviceId && rental.deviceId !== deviceId) await setDeviceRental(rental.deviceId, null, true);
+    await setDeviceRental(deviceId, rental.endAt, false);
+    await prisma.$executeRaw`UPDATE "Rental" SET "deviceId" = ${deviceId} WHERE "id" = ${rental.id}`;
+    return (await getRental(rental.id))!;
+  }
   const start = new Date();
   const end = new Date(start.getTime() + (rental.days + RENTAL_SHIPPING_BUFFER_DAYS) * 86_400_000);
   if (rental.deviceId && rental.deviceId !== deviceId) {
@@ -323,6 +339,80 @@ export async function assignRentalDevice(rental: RentalRow, deviceId: string): P
     WHERE "id" = ${rental.id}
   `;
   return (await getRental(rental.id))!;
+}
+
+// Odbior paczki -> start najmu. Dlugosc = obecny okres bez zapasu na dostawe
+// (czyli dni planu + ewentualne przedluzenia sprzed odbioru) + zapas na zwrot.
+// Atomowo (pickedUpAt IS NULL): cron i reczne "Odebrano" nie policza dwa razy.
+export async function startRentalAtPickup(rental: RentalRow, pickedUpAt: Date, source: string): Promise<RentalRow | null> {
+  if (rental.status !== "active" || rental.pickedUpAt || !rental.deviceId) return null;
+  const day = 86_400_000;
+  let durationMs = rental.days * day;
+  if (rental.startAt && rental.endAt) {
+    const provisional = new Date(rental.endAt).getTime() - new Date(rental.startAt).getTime() - RENTAL_SHIPPING_BUFFER_DAYS * day;
+    durationMs = Math.max(durationMs, provisional);
+  }
+  const startIso = pickedUpAt.toISOString();
+  // Nigdy krocej niz tymczasowy termin z przypisania (stara zasada regulaminu:
+  // od nadania + 3 dni) — szybki odbior nie skraca najmu.
+  const endMs = Math.max(
+    pickedUpAt.getTime() + durationMs + RENTAL_RETURN_GRACE_DAYS * day,
+    rental.endAt ? new Date(rental.endAt).getTime() : 0,
+  );
+  const end = new Date(endMs).toISOString();
+  const n = await prisma.$executeRaw`
+    UPDATE "Rental" SET "pickedUpAt" = ${startIso}, "startAt" = ${startIso}, "endAt" = ${end},
+      "remindBeforeAt" = NULL, "remindOverdueAt" = NULL
+    WHERE "id" = ${rental.id} AND "status" = 'active' AND "pickedUpAt" IS NULL`;
+  if (n !== 1) return null;
+  await setDeviceRental(rental.deviceId, end, false);
+  await appendRentalNote(rental.id, `${nowIso().slice(0, 16)} odebrano ${startIso.slice(0, 16)} (${source}) — najem do ${end.slice(0, 10)}`);
+  // Mail "najem rozpoczety" z data konca (regulamin: date konca Najemca dostaje mailem).
+  try {
+    const [{ sendMail }, { rentalStartedEmail, RENTAL_EMAIL_SUBJECTS }] = await Promise.all([
+      import("@/lib/mailer"), import("@/lib/email-templates"),
+    ]);
+    const res = await sendMail({
+      to: rental.customerEmail,
+      subject: RENTAL_EMAIL_SUBJECTS.started,
+      html: rentalStartedEmail({
+        customerName: rental.customerName, rentalNumber: rental.rentalNumber, days: rental.days,
+        fee: formatPln(rental.feeGrosze), deposit: formatPln(rental.depositGrosze),
+        endDate: new Date(end).toLocaleDateString("pl-PL", { timeZone: "Europe/Warsaw" }),
+      }),
+    });
+    if (!res.ok) await appendRentalNote(rental.id, `${nowIso().slice(0, 16)} mail o starcie najmu NIE wyslany`);
+  } catch (e) {
+    console.error("[rentals] started email failed", rental.id, e);
+  }
+  return getRental(rental.id);
+}
+
+// Cron: aktywne najmy bez odbioru, ktorych paczka (zamowienie) ma numer InPost
+// -> sprawdz, czy klient juz odebral ("delivered"). Do 4 zapytan naraz.
+export async function syncRentalPickups(limit = 100): Promise<{ checked: number; started: string[] }> {
+  await ensureRentalTable();
+  const { looksLikeInPostNumber, fetchInPostTracking, mapWithConcurrency } = await import("@/lib/inpostTracking");
+  const rows = (await prisma.$queryRaw<(RawRental & { trackingNumber: string | null })[]>`
+    SELECT r.*, o."trackingNumber" AS "trackingNumber" FROM "Rental" r JOIN "Order" o ON o."id" = r."orderId"
+    WHERE r."status" = 'active' AND r."pickedUpAt" IS NULL AND r."deviceId" IS NOT NULL AND o."trackingNumber" IS NOT NULL
+    ORDER BY r."createdAt" DESC LIMIT ${limit}
+  `).filter((r) => looksLikeInPostNumber(r.trackingNumber));
+  const started: string[] = [];
+  await mapWithConcurrency(rows, 4, async (r) => {
+    const t = await fetchInPostTracking(r.trackingNumber!.trim());
+    if (!t) return null;
+    const ev = t.events.find((e) => e.status === "delivered");
+    if (t.status !== "delivered" && !ev) return null;
+    const when = ev?.datetime ? new Date(ev.datetime) : new Date();
+    const at = Number.isNaN(when.getTime()) || when.getTime() > Date.now() ? new Date() : when;
+    const { trackingNumber: _tn, ...raw } = r;
+    void _tn;
+    const done = await startRentalAtPickup(toRow(raw), at, "InPost");
+    if (done) started.push(done.rentalNumber);
+    return null;
+  }, "rentalPickups");
+  return { checked: rows.length, started };
 }
 
 // Przedluzenie (np. po doplacie) — od obecnego konca, nie od dzis.

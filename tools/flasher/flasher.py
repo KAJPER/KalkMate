@@ -90,6 +90,12 @@ except ImportError:
 
 import flasher_common as fc
 
+# Etykieta ID (kod kreskowy) na Niimbot B1 Pro - opcjonalna (wymaga Pillow).
+try:
+    import niimbot_label as nl
+except ImportError:  # pragma: no cover
+    nl = None
+
 # === Konfiguracja ===
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
@@ -177,6 +183,9 @@ def load_config():
         # przyciskiem "Wygeneruj nowy klucz FE" (nowa seria). Odcisk SHA-256
         # przypiety obok: keys/flash_encryption_key.sha256.
         "fe_key_file": os.path.join(KEYS_DIR, "flash_encryption_key.bin"),
+        # Drukarka etykiet ID (Niimbot, Bluetooth COM). Pusty port = nie drukuj.
+        "label_printer_port": "",
+        "label_print_after_flash": True,
     }
     if os.path.exists(CONFIG_PATH):
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -337,6 +346,32 @@ class FlasherApp:
         tk.OptionMenu(lrow, self.client_lang_var, *self._lang_choices.keys()).pack(side=tk.LEFT)
         tk.Label(lrow, text="  wgrywany razem z kodem; blad = FAIL (wymaga czystego NVS)",
                  bg=BG, fg="#888", font=("Arial", 8)).pack(side=tk.LEFT, padx=5)
+
+        # === Etykieta ID (Niimbot) - kod kreskowy z ID kalkulatora ===
+        lbl_frame = self._frame(" Etykieta ID - kod kreskowy (Niimbot, 50x30 mm) ")
+        lrow2 = tk.Frame(lbl_frame, bg=BG)
+        lrow2.pack(fill=tk.X, padx=10, pady=4)
+        self.label_after_var = tk.BooleanVar(value=bool(self.cfg.get("label_print_after_flash", True)))
+        tk.Checkbutton(
+            lrow2, variable=self.label_after_var, command=self._save_label_cfg,
+            text="Drukuj po udanym flashu", bg=BG, fg=FG, selectcolor="#333",
+            activebackground=BG, activeforeground="#D8FF3D", font=("Arial", 9)
+        ).pack(side=tk.LEFT)
+        tk.Label(lrow2, text="   Port drukarki:", bg=BG, fg=FG).pack(side=tk.LEFT)
+        self.label_port_var = tk.StringVar(value=self.cfg.get("label_printer_port", ""))
+        self.label_port_menu = tk.OptionMenu(lrow2, self.label_port_var, "")
+        self.label_port_menu.pack(side=tk.LEFT, padx=4)
+        self.label_port_var.trace_add("write", lambda *a: self._save_label_cfg())
+        tk.Button(lrow2, text="Odswiez", bg="#333", fg=FG, font=("Arial", 8),
+                  command=self._refresh_label_ports).pack(side=tk.LEFT, padx=2)
+        self.label_btn = tk.Button(lrow2, text="Drukuj etykiete teraz", bg="#335", fg=FG,
+                                   font=("Arial", 9, "bold"), command=self.print_label_now)
+        self.label_btn.pack(side=tk.RIGHT)
+        tk.Label(lbl_frame, anchor="w", bg=BG, fg="#888", font=("Arial", 8),
+                 text=("Code 128 z ID = MAC bez dwukropkow (jak w panelu admina). Drukarka po Bluetooth "
+                       "(port COM 'przez link Bluetooth'); blad druku nie psuje flasha.")
+                 ).pack(fill=tk.X, padx=10, pady=(0, 4))
+        self._refresh_label_ports()
 
         # === Firmware (ktore biny zostana wgrane) ===
         fw_frame = self._frame(" Firmware ")
@@ -654,6 +689,65 @@ class FlasherApp:
         if self.current_port and self.current_mac and not self.busy:
             self.flash_btn.config(state=tk.NORMAL)
 
+    # -- Etykieta ID (Niimbot) ----------------------------------------------
+    def _refresh_label_ports(self):
+        """(glowny watek) lista portow Bluetooth w menu drukarki etykiet."""
+        ports = nl.bluetooth_ports() if nl else []
+        cur = self.label_port_var.get()
+        if cur and cur not in ports:
+            ports.append(cur)
+        menu = self.label_port_menu["menu"]
+        menu.delete(0, "end")
+        for p in ports or [""]:
+            menu.add_command(label=p or "(brak portow BT)",
+                             command=lambda v=p: self.label_port_var.set(v))
+        if not cur and ports:
+            self.label_port_var.set(ports[0])
+
+    def _save_label_cfg(self):
+        if not hasattr(self, "label_after_var"):
+            return
+        self.cfg["label_printer_port"] = self.label_port_var.get()
+        self.cfg["label_print_after_flash"] = bool(self.label_after_var.get())
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(self.cfg, f, indent=2)
+        except OSError as e:
+            self.log(f"[!] Nie zapisano config.json: {e}", "#FA0")
+
+    def print_label_now(self):
+        """(glowny watek) reczny druk: ID podlaczonego kalkulatora albo wpisane."""
+        if nl is None:
+            messagebox.showerror("Etykieta", "Brak modulu Pillow - nie moge drukowac etykiet.")
+            return
+        dev = simpledialog.askstring("Etykieta ID", "ID kalkulatora (12 znakow hex / MAC):",
+                                     initialvalue=self.current_mac or "", parent=self.root)
+        if not dev:
+            return
+        try:
+            dev = nl.normalize_id(dev)
+        except ValueError as e:
+            messagebox.showerror("Etykieta", str(e))
+            return
+        self.label_btn.config(state=tk.DISABLED)
+        threading.Thread(target=self._print_label, args=(dev, None, True), daemon=True).start()
+
+    def _print_label(self, dev, fw_version=None, manual=False):
+        """(watek roboczy) druk etykiety; bledy tylko do logu."""
+        port = self.cfg.get("label_printer_port") or ""
+        try:
+            if not port:
+                self.log("[!] Etykieta: nie wybrano portu drukarki", "#FA0")
+                return
+            self.log(f"[i] Drukuje etykiete ID {dev} na {port}...", "#8AB")
+            nl.print_id_label(port, dev, fw_version)
+            self.log(f"[i] Etykieta ID {dev} wydrukowana", "#0F0")
+        except Exception as e:  # noqa: BLE001
+            self.log(f"[!] Etykieta ID {dev}: {e}", "#FA0")
+        finally:
+            if manual:
+                self.ui(self.label_btn.config, state=tk.NORMAL)
+
     # -- Flash workflow ---------------------------------------------------
     def _log_fail_row(self, mac, port, mode, error, key_sha=""):
         try:
@@ -791,6 +885,8 @@ class FlasherApp:
                 if r.nvs_erased:
                     self.log("[i] NVS wyczyszczony. Jesli to urzadzenie zwrocone od klienta / bylo juz "
                              f"sparowane: panel admina -> urzadzenie {job.mac} -> „Reset tokenu”.", "#FA0")
+                if nl and self.cfg.get("label_print_after_flash") and self.cfg.get("label_printer_port"):
+                    self._print_label(job.mac, (r.fw or {}).get("version"))
                 self.log("")
                 self.set_status("SUKCES — odlacz urzadzenie", "#0F0")
             else:
@@ -802,7 +898,41 @@ class FlasherApp:
                 self.ui(self._enable_flash_if_device)
 
 
+def _cli_niimbot_back(argv):
+    """KalkMateFlasher.exe --niimbot-back <SN> [kopie] — etykieta na tyl na Niimbot
+    (wolane z aplikacji KalkMate Admin). Port z config.json (label_printer_port),
+    a gdy pusty — pierwszy port Bluetooth. Exit 0 = OK; blad = ostatnia linia wyjscia."""
+    import re
+    if sys.stdout is None:  # exe --windowed bez przekierowania wyjscia
+        sys.stdout = open(os.devnull, "w")
+    if nl is None:
+        print("BLAD: brak modulu etykiet (Pillow)")
+        return 2
+    sn = argv[0] if argv else ""
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,12}", sn):
+        print(f"BLAD: niepoprawny SN {sn!r}")
+        return 2
+    try:
+        copies = max(1, min(10, int(argv[1]))) if len(argv) > 1 else 1
+    except ValueError:
+        copies = 1
+    cfg = load_config()
+    port = cfg.get("label_printer_port") or next(iter(nl.bluetooth_ports()), "")
+    if not port:
+        print("BLAD: brak portu drukarki Niimbot (sparuj ja przez Bluetooth)")
+        return 3
+    try:
+        nl.print_image_on(port, nl.render_back_label(sn), copies)
+    except Exception as e:  # noqa: BLE001
+        print(f"BLAD: {e}")
+        return 1
+    print(f"OK {port} SN {sn} x{copies}")
+    return 0
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--niimbot-back":
+        sys.exit(_cli_niimbot_back(sys.argv[2:]))
     root = tk.Tk()
     FlasherApp(root)
     root.mainloop()

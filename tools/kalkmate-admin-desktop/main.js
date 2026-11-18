@@ -114,6 +114,50 @@ ipcMain.on('kalkmate:open-flasher', (event) => {
   if (fromKalkmate(event)) launchFlasher();
 });
 
+// === Etykieta na tyl kalkulatora (Niimbot B1 Pro, Bluetooth) ===
+// Rysuje i drukuje programator: KalkMateFlasher.exe --niimbot-back <SN> <kopie>
+// (port drukarki z jego config.json). copies razy TEN SAM numer, nie kolejne.
+let niimbotBusy = false;
+ipcMain.handle('kalkmate:niimbot-back', async (event, sn, copies) => {
+  if (!fromKalkmate(event)) return { ok: false, error: 'Niedostępne' };
+  const serial = String(sn || '').trim();
+  if (!/^[A-Za-z0-9-]{1,12}$/.test(serial)) return { ok: false, error: 'Nieprawidłowy SN' };
+  const n = Math.max(1, Math.min(10, Math.floor(Number(copies) || 1)));
+  if (niimbotBusy) return { ok: false, error: 'Drukarka Niimbot jest zajęta — poczekaj' };
+
+  let exe;
+  let args;
+  if (app.isPackaged) {
+    exe = path.join(process.resourcesPath, 'flasher', 'KalkMateFlasher.exe');
+    if (!fs.existsSync(exe)) return { ok: false, error: 'Brak KalkMateFlasher.exe w zasobach aplikacji' };
+    args = ['--niimbot-back', serial, String(n)];
+  } else {
+    exe = 'python';
+    args = [path.resolve(__dirname, '..', 'flasher', 'flasher.py'), '--niimbot-back', serial, String(n)];
+  }
+
+  niimbotBusy = true;
+  try {
+    return await new Promise((resolve) => {
+      let out = '';
+      const child = spawn(exe, args, { cwd: path.dirname(app.isPackaged ? exe : args[0]), windowsHide: true });
+      const timer = setTimeout(() => { child.kill(); }, 30000 + n * 20000);
+      child.stdout.on('data', (d) => { out += d; });
+      child.stderr.on('data', (d) => { out += d; });
+      child.on('error', (err) => { clearTimeout(timer); resolve({ ok: false, error: err.message }); });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        const last = out.trim().split(/\r?\n/).pop() || '';
+        resolve(code === 0
+          ? { ok: true, printer: 'Niimbot', copies: n }
+          : { ok: false, error: last.replace(/^BLAD:\s*/, '') || `Kod wyjścia ${code}` });
+      });
+    });
+  } finally {
+    niimbotBusy = false;
+  }
+});
+
 // === Ustawienia aplikacji (drukarka etykiet) — userData/settings.json ===
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
 const DEFAULT_SETTINGS = {

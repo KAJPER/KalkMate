@@ -1690,6 +1690,7 @@ export const RENTAL_EMAIL_SUBJECTS = {
   reminder: "Najem kalkulatora kończy się wkrótce – KalkMate",
   overdue: "Termin najmu minął — odeślij kalkulator – KalkMate",
   identityApproved: "Tożsamość potwierdzona — dokończ wypożyczenie – KalkMate",
+  started: "Najem kalkulatora rozpoczęty – KalkMate",
 };
 
 export function rentalPaidEmail(d: RentalEmailData): string {
@@ -1703,9 +1704,24 @@ export function rentalPaidEmail(d: RentalEmailData): string {
       infoRow("Kaucja (zwrotna)", escHtml(d.deposit)),
       d.pickupPoint ? infoRow("Paczkomat", escHtml(d.pickupPoint)) : "",
     ].join(""))}
-    ${body("Wyślemy kalkulator w ciągu 1–2 dni roboczych — dostaniesz maila z numerem przesyłki. Okres najmu liczymy od nadania paczki, z kilkoma dniami zapasu na dostawę i odesłanie.")}
+    ${body("Wyślemy kalkulator w ciągu 1–2 dni roboczych — dostaniesz maila z numerem przesyłki. Okres najmu liczymy od dnia, w którym odbierzesz paczkę z Paczkomatu — dostaniesz wtedy maila z datą końca najmu.")}
     ${body("Po zakończeniu najmu odeślij kalkulator na adres: KalkMate, ul. Zastawie I 37, 16-070 Choroszcz. Kaucję zwracamy w ciągu 7 dni od otrzymania sprawnego kalkulatora.")}
     ${ctaButton("Regulamin wypożyczeń", "https://kalkmate.pl/regulamin#wypozyczenie")}
+  `;
+  return shell(inner, "pl");
+}
+
+export function rentalStartedEmail(d: RentalEmailData): string {
+  const inner = `
+    ${eyebrowBlock("Wypożyczenie · Start najmu")}
+    ${headline("Najem właśnie się zaczął.", "się zaczął")}
+    ${lead(`Cześć ${escHtml(d.customerName)}, widzimy, że odebrałeś paczkę z kalkulatorem — wypożyczenie <strong>${escHtml(d.rentalNumber)}</strong> trwa od dziś.`)}
+    ${infoTable([
+      infoRow("Okres najmu", `${d.days} dni`),
+      d.endDate ? infoRow("Najem trwa do", `<strong>${escHtml(d.endDate)}</strong>`) : "",
+    ].join(""))}
+    ${body("Po tej dacie AI w kalkulatorze wyłączy się automatycznie, a kalkulator odeślij na adres: KalkMate, ul. Zastawie I 37, 16-070 Choroszcz. Kilka dni przed końcem przypomnimy Ci mailem.")}
+    ${body("Chcesz przedłużyć? Odpisz na tego maila.")}
   `;
   return shell(inner, "pl");
 }

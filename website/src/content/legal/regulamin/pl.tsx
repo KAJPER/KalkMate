@@ -273,8 +273,9 @@ const doc: LegalDoc = {
           </li>
           <li>
             Okres najmu i opłata wynikają z cennika na stronie zamówienia (7, 30 lub 60 dni). Okres najmu liczony jest
-            od dnia nadania przesyłki przez Wynajmującego i jest wydłużony o 3 dni na dostawę i odesłanie kalkulatora.
-            Datę końca najmu Najemca otrzymuje e-mailem.
+            od dnia odebrania przesyłki z kalkulatorem przez Najemcę i jest wydłużony o 1 dzień na odesłanie
+            kalkulatora, nie może być jednak krótszy niż okres liczony od dnia nadania przesyłki przez Wynajmującego,
+            wydłużony o 3 dni. Datę końca najmu Najemca otrzymuje e-mailem po odebraniu przesyłki.
           </li>
           <li>
             Opłata za najem oraz zwrotna kaucja w wysokości <B>300 zł</B> płatne są z góry przez Przelewy24, wyłącznie

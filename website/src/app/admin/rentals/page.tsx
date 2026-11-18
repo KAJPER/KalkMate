@@ -28,6 +28,7 @@ interface Rental {
   deviceId: string | null;
   startAt: string | null;
   endAt: string | null;
+  pickedUpAt: string | null;
   createdAt: string;
   paidAt: string | null;
   returnedAt: string | null;
@@ -188,7 +189,11 @@ export default function RentalsPage() {
                   <div className="text-xs space-y-0.5">
                     <p>{r.days} dni · najem {pln(r.feeGrosze)} · kaucja {pln(r.depositGrosze)}</p>
                     <p>Paczkomat: {r.pickupPoint}</p>
-                    <p>Okres: {fmtDate(r.startAt)} → <strong>{fmtDate(r.endAt)}</strong></p>
+                    {r.status === "active" && !r.pickedUpAt ? (
+                      <p>Okres: <strong className="text-amber-300">liczy się od odbioru paczki</strong> (tymczasowo do {fmtDate(r.endAt)})</p>
+                    ) : (
+                      <p>Okres: {fmtDate(r.startAt)} → <strong>{fmtDate(r.endAt)}</strong>{r.pickedUpAt && <span className="text-[#E0E0E0]/50"> · odebrano {fmtDate(r.pickedUpAt)}</span>}</p>
+                    )}
                   </div>
                   <div className="text-xs space-y-0.5">
                     <p>Kalkulator: <span className="font-mono">{r.deviceId || "—"}</span></p>
@@ -212,11 +217,19 @@ export default function RentalsPage() {
                         onChange={(e) => setDeviceInput((m) => ({ ...m, [r.id]: e.target.value.toUpperCase() }))}
                       />
                       <button type="button" disabled={busy === r.id || !(deviceInput[r.id] || "").trim()}
-                        onClick={() => act(r, "assign", { deviceId: deviceInput[r.id] }, "kalkulator przypisany, najem ruszył.")}
+                        onClick={() => act(r, "assign", { deviceId: deviceInput[r.id] }, r.pickedUpAt ? "kalkulator zmieniony." : "kalkulator przypisany — najem ruszy po odbiorze paczki.")}
                         className={`${btn} bg-[#3B82F6] text-white`}>
-                        {r.deviceId ? "Zmień kalkulator" : "Przypisz i rozpocznij najem"}
+                        {r.deviceId ? "Zmień kalkulator" : "Przypisz kalkulator"}
                       </button>
                     </>
+                  )}
+                  {r.status === "active" && !r.pickedUpAt && (
+                    <button type="button" disabled={busy === r.id}
+                      title="Normalnie zapisuje się samo, gdy InPost zgłosi odbiór (sprawdzane co godzinę)"
+                      onClick={() => { if (confirm("Klient odebrał paczkę? Najem zacznie się od teraz.")) void act(r, "pickup", {}, "odbiór zapisany — najem liczy się od teraz."); }}
+                      className={`${btn} bg-amber-500/80 text-black`}>
+                      Odebrano
+                    </button>
                   )}
                   {r.status === "active" && (
                     <>

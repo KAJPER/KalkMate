@@ -9,10 +9,12 @@ import {
   getRental,
   markDepositRefunded,
   markRentalReturned,
+  startRentalAtPickup,
 } from "@/lib/rentals";
 
 // PATCH /api/admin/rentals/[id] { action, ... }
 //   assign  { deviceId }  — przypisz kalkulator (start najmu: AI do konca okresu)
+//   pickup               — klient odebral paczke TERAZ (recznie; normalnie cron z InPost)
 //   extend  { days }      — przedluz od obecnego konca
 //   return               — zwrot przyjety: kalkulator odpiety i zablokowany
 //   deposit { note? }    — kaucja zwrocona (lub opis potracenia)
@@ -42,6 +44,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return NextResponse.json({ ok: false, error: `Ten kalkulator jest w aktywnym wypożyczeniu ${busy[0].rentalNumber}.` }, { status: 409 });
       }
       return NextResponse.json({ ok: true, rental: await assignRentalDevice(rental, deviceId) });
+    }
+    if (action === "pickup") {
+      if (rental.status !== "active" || !rental.deviceId) {
+        return NextResponse.json({ ok: false, error: "Najpierw przypisz kalkulator." }, { status: 409 });
+      }
+      if (rental.pickedUpAt) return NextResponse.json({ ok: false, error: "Odbiór jest już zapisany." }, { status: 409 });
+      const done = await startRentalAtPickup(rental, new Date(), "ręcznie");
+      if (!done) return NextResponse.json({ ok: false, error: "Nie udało się zapisać odbioru (odśwież stronę)." }, { status: 409 });
+      return NextResponse.json({ ok: true, rental: done });
     }
     if (action === "extend") {
       const days = Math.floor(Number(body?.days));

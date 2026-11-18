@@ -219,7 +219,7 @@ export default function WypozyczeniePage() {
             <p className="km-mono-eyebrow text-[#D8FF3D] mb-2">/ OPŁACONE · {ret.number}</p>
             <p className="text-[15px] text-[#F2EDE3]/80 leading-[1.6]">
               Dziękujemy! Wyślemy kalkulator w ciągu 1–2 dni roboczych — numer przesyłki dostaniesz mailem.
-              Najem ({ret.days} dni) liczymy od nadania paczki.
+              Najem ({ret.days} dni) liczymy od dnia, w którym odbierzesz paczkę.
             </p>
           </div>
         ) : ret?.kind === "checking" ? (

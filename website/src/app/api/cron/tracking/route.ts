@@ -6,7 +6,7 @@ import { cancelStaleUnpaidOrders, STALE_DAYS } from "@/lib/orderCleanup";
 import { sendPaymentReminders, type ReminderResult } from "@/lib/paymentReminders";
 import { ensureDailyBackup } from "@/lib/dbBackup";
 import { purgeOldSupportChats } from "@/lib/supportChat";
-import { claimRentalReminders, formatPln } from "@/lib/rentals";
+import { claimRentalReminders, formatPln, syncRentalPickups } from "@/lib/rentals";
 import { sendMail } from "@/lib/mailer";
 import { rentalReminderEmail, RENTAL_EMAIL_SUBJECTS } from "@/lib/email-templates";
 import { sendReviewRequests, type ReviewRequestResult } from "@/lib/reviews";
@@ -101,6 +101,16 @@ export async function GET(req: NextRequest) {
       errors.push(`clarity: ${(e as Error).message}`);
     }
 
+    // Wypozyczenia: start najmu od odbioru paczki (InPost "delivered") — PRZED
+    // przypomnieniami, bo przelicza termin konca (lib/rentals.ts).
+    let rentalPickups: { checked: number; started: string[] } = { checked: 0, started: [] };
+    try {
+      rentalPickups = await syncRentalPickups();
+    } catch (e) {
+      console.error("[cron/tracking] rental pickups failed:", e);
+      errors.push(`rentalPickups: ${(e as Error).message}`);
+    }
+
     // Wypozyczenia: przypomnienie 3 dni przed koncem i po terminie (lib/rentals.ts).
     const rentalReminders = { before: 0, overdue: 0, failed: 0 };
     try {
@@ -184,6 +194,7 @@ export async function GET(req: NextRequest) {
     const summary = {
       ok: true,
       supportChatsPurged,
+      rentalPickups,
       rentalReminders,
       checked: results.length,
       changed: changed.length,

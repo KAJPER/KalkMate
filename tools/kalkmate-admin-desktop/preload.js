@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('kalkmateDesktop', {
   // units = indeksy sztuk (opcjonalnie). Zwraca { ok, printer, error? }.
   printProductLabel: (orderId, units) => ipcRenderer.invoke('kalkmate:print-product-label', String(orderId),
     Array.isArray(units) ? units.map((u) => Number(u)) : []),
+  // Etykieta na tyl kalkulatora 50x30 na Niimbot (Bluetooth): copies razy TEN SAM SN.
+  // Zwraca { ok, printer, copies?, error? }.
+  printNiimbotBack: (sn, copies) => ipcRenderer.invoke('kalkmate:niimbot-back', String(sn), Number(copies) || 1),
   // Agent fiskalny wbudowany w aplikację (drukarka POSNET w sieci lokalnej).
   // info(refresh) -> { ok, config, printer, queue, platformError, recent }
   // configure({ enabled?, host?, port?, encoding?, allowFiscal? }) -> to samo co info
