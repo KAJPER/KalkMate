@@ -559,24 +559,97 @@ def icon_reset():
 # =====================================================================
 #  Rysunki krokow (viewBox 240 x h)
 # =====================================================================
+def screw(cx, cy, r, ring=False):
+    """Leb srubki krzyzakowej; ring = limonkowa obwodka (wskazanie)."""
+    o = []
+    if ring:
+        o.append(C(cx, cy, r * 2.1, fill=ACC, stroke=INK, sw=max(0.8, r * 0.28)))
+    o.append(C(cx, cy, r, fill="#ffffff", stroke=INK, sw=max(0.7, r * 0.22)))
+    k = r * 0.55
+    o.append(L(cx - k, cy, cx + k, cy, sw=max(0.7, r * 0.26)))
+    o.append(L(cx, cy - k, cx, cy + k, sw=max(0.7, r * 0.26)))
+    return "".join(o)
+
+
+def calc_back(x, y, w, screws="ring", label=True):
+    """Kalkulator od tylu (obudowa v3): 2 srubki u gory, plaski panel tylnej
+    obudowy z 2 zaczepami, 2 nozki na dole. Zwraca (svg, [(cx,cy,r) srubek])."""
+    u = w
+    H = 1.36 * u
+    sw = max(1.0, 0.014 * u)
+    o = [R(x, y, w, H, r=0.07 * u, fill=G1, stroke=INK, sw=sw)]
+    # panel tylnej obudowy
+    px, py, pw = x + 0.08 * u, y + 0.19 * u, 0.84 * u
+    ph = H - 0.19 * u - 0.06 * u
+    o.append(R(px, py, pw, ph, r=0.04 * u, fill=G2, stroke=INK, sw=sw * 0.8))
+    for zx in (px + 0.1 * u, px + pw - 0.1 * u - 0.12 * u):
+        o.append(R(zx, py + 0.08 * u, 0.12 * u, 0.03 * u, r=0.012 * u, fill=G1, stroke=INK, sw=sw * 0.6))
+    for fx in (px + 0.1 * u, px + pw - 0.1 * u):
+        o.append(C(fx, py + ph - 0.1 * u, 0.04 * u, fill=INK, stroke=INK, sw=sw * 0.5))
+    if label:
+        o.append(R(x + 0.3 * u, y + 0.98 * u, 0.4 * u, 0.1 * u, r=0.01 * u, fill="#ffffff", stroke=INK, sw=sw * 0.5))
+        for i in range(3):
+            o.append(L(x + 0.34 * u, y + (1.005 + 0.025 * i) * u, x + 0.58 * u, y + (1.005 + 0.025 * i) * u, sw=sw * 0.45))
+    pos = [(x + 0.09 * u, y + 0.085 * u, 0.034 * u), (x + w - 0.09 * u, y + 0.085 * u, 0.034 * u)]
+    if screws:
+        for cx, cy, r in pos:
+            o.append(screw(cx, cy, r, ring=(screws == "ring")))
+    return "".join(o), pos
+
+
+def calc_open(x, y, w, plug=True):
+    """Kalkulator z otwarta tylna obudowa: plytka w srodku, port USB-C u gory
+    (podswietlony), opcjonalnie wpieta wtyczka z kablem do gory.
+    Zwraca (svg, (port_cx, port_top))."""
+    u = w
+    H = 1.36 * u
+    sw = max(1.0, 0.014 * u)
+    o = [R(x, y, w, H, r=0.07 * u, fill=G1, stroke=INK, sw=sw)]
+    # wnetrze
+    ix, iy, iw, ih = x + 0.06 * u, y + 0.06 * u, 0.88 * u, H - 0.12 * u
+    o.append(R(ix, iy, iw, ih, r=0.04 * u, fill="#ffffff", stroke=INK, sw=sw * 0.7))
+    # plytka (nie dotykac) — kreskowana
+    bx, by, bw, bh = ix + 0.06 * u, iy + 0.16 * u, iw - 0.12 * u, ih * 0.5
+    o.append(R(bx, by, bw, bh, r=0.02 * u, fill=G2, stroke=INK, sw=sw * 0.6))
+    for i in range(1, 9):
+        xx = bx + bw * i / 9
+        o.append(L(xx, by + 1, xx - bw * 0.12, by + bh - 1, sw=sw * 0.35, stroke=G3))
+    o.append(R(bx + bw * 0.12, by + bh * 0.25, bw * 0.26, bh * 0.3, r=0.01 * u, fill=INK, stroke=INK, sw=0.5))
+    o.append(R(bx + bw * 0.55, by + bh * 0.5, bw * 0.3, bh * 0.22, r=0.01 * u, fill=INK, stroke=INK, sw=0.5))
+    # bateria (nie dotykac)
+    o.append(R(bx, by + bh + 0.06 * u, bw, ih * 0.22, r=0.02 * u, fill=G1, stroke=INK, sw=sw * 0.6, extra='stroke-dasharray="3 2"'))
+    # port USB-C — u gory na srodku
+    pcx, ptop = x + w / 2, iy + 0.05 * u
+    pw_, ph_ = 0.2 * u, 0.075 * u
+    o.append(R(pcx - pw_ / 2 - 0.035 * u, ptop - 0.03 * u, pw_ + 0.07 * u, ph_ + 0.06 * u, r=0.03 * u,
+               fill=ACC, stroke=INK, sw=sw * 0.7))
+    o.append(R(pcx - pw_ / 2, ptop, pw_, ph_, r=ph_ / 2, fill=INK, stroke=INK, sw=0.6))
+    if plug:
+        o.append(R(pcx - pw_ * 0.62, ptop - 0.2 * u, pw_ * 1.24, 0.17 * u, r=0.025 * u, fill=G2, stroke=INK, sw=sw))
+        o.append(P(f"M{pcx},{ptop - 0.2 * u} C{pcx},{ptop - 0.42 * u} {pcx + 0.3 * u},{ptop - 0.3 * u} "
+                   f"{pcx + 0.36 * u},{ptop - 0.5 * u}", stroke=INK, sw=max(1.8, 0.03 * u)))
+    return "".join(o), (pcx, ptop)
+
+
 def art_charge(t, d):
     o = []
-    cs, _ = calc_front(4, 10, 112, screen=None, labels=False)
-    o.append(cs)
-    # wtyczka USB-C przy krawedzi
-    o.append(R(116, 38, 16, 12, r=2.5, fill=G2, stroke=INK, sw=1.3))
-    o.append(R(132, 40, 11, 8, r=2, fill=INK, stroke=INK, sw=0.8))
-    o.append(P("M143,44 C182,44 170,120 194,120", stroke=INK, sw=2.8))
-    o.append(T(146, 32, t["lbl_usb"], size=11, weight=700))
-    # ladowarka
-    o.append(R(186, 100, 40, 44, r=6, fill="#ffffff", stroke=INK, sw=1.7))
-    o.append(L(226, 112, 236, 112, sw=2.8, cap="butt"))
-    o.append(L(226, 132, 236, 132, sw=2.8, cap="butt"))
-    o.append(T(206, 127, t["lbl_5v"], size=12, weight=700, anchor="middle"))
-    # bateria + czas
-    o.append(battery(128, 158, 52, 26, frac=0.62))
-    o.append(clock(201, 171, 9))
-    o.append(T(213, 175, t["lbl_2h"], size=9.5, weight=700))
+    # 1) tyl: 2 srubki u gory (wskazane)
+    bs, pos = calc_back(6, 34, 96, screws="ring")
+    o.append(bs)
+    o.append(T(54, 22, "2×", size=12, weight=700, anchor="middle"))
+    for cx, cy, _ in pos:
+        o.append(L(54 + (cx - 54) * 0.25, 26, cx, cy - 6, sw=1.1))
+    o.append(A(110, 104, 128, 104, sw=2.2, size=6.5))
+    # 2) otwarte: port USB-C, kabel do ladowarki 5 V
+    os_, (pcx, ptop) = calc_open(136, 52, 92)
+    o.append(os_)
+    o.append(T(pcx - 26, ptop - 14, t["lbl_usb"], size=10, weight=700, anchor="end"))
+    o.append(R(186, 4, 40, 24, r=5, fill="#ffffff", stroke=INK, sw=1.6))
+    o.append(L(226, 11, 234, 11, sw=2.4, cap="butt"))
+    o.append(L(226, 21, 234, 21, sw=2.4, cap="butt"))
+    o.append(T(206, 20.5, t["lbl_5v"], size=10.5, weight=700, anchor="middle"))
+    o.append(clock(136, 16, 7.5))
+    o.append(T(147, 19.5, t["lbl_2h"], size=9.5, weight=700))
     return svg(240, 190, "".join(o))
 
 
