@@ -33,7 +33,7 @@
 - **Matematyka, fizyka, chemia, biologia** — tryb „Egzamin” oparty na arkuszach CKE i zasadach oceniania, tryb „Czysty AI” do wszystkiego innego albo **własny system prompt** ustawiany w panelu.
 - **Bez internetu też coś zrobi** — proste zadania (równania, układy, procenty, pochodne) liczy lokalnie, resztę kolejkuje do wysłania.
 - **Notatki i sprawdziany** synchronizowane z panelu klienta na kalkmate.pl.
-- **12 języków interfejsu** (PL, EN, DE, CS, SK, LT, BE, ES, PT, FR, IT, KO); ekran pokazuje też grekę, cyrylicę, koreański Hangul i symbole matematyczne (≠ ≤ ≥ ≈ √ ∞).
+- **Menu w 11 językach** (PL, EN, DE, CS, SK, LT, BE, ES, PT, FR, IT) + odpowiedzi AI po koreańsku; ekran pokazuje też grekę, cyrylicę, koreański Hangul i symbole matematyczne (≠ ≤ ≥ ≈ √ ∞).
 - **Aktualizacje przez WiFi** — podpisane OTA (ECDSA P-256), kampanie aktualizacji z panelu admina.
 - **Tryb AI chroniony kodem** ustawianym przez właściciela; awaryjny reset fabryczny przytrzymaniem C/CE.
 

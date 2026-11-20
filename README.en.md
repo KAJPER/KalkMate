@@ -33,7 +33,7 @@
 - **Maths, physics, chemistry, biology** — „Egzamin” (Exam) mode based on CKE exam papers and marking rules, „Czysty AI” (Plain AI) mode for everything else, or a **custom system prompt** set in the panel.
 - **Still useful offline** — simple problems (equations, systems, percentages, derivatives) are solved locally; the rest is queued for sending.
 - **Notes and tests** synced from the customer panel on kalkmate.pl.
-- **12 UI languages** (PL, EN, DE, CS, SK, LT, BE, ES, PT, FR, IT, KO); the screen also shows Greek, Cyrillic, Korean Hangul and maths symbols (≠ ≤ ≥ ≈ √ ∞).
+- **Menu in 11 languages** (PL, EN, DE, CS, SK, LT, BE, ES, PT, FR, IT) + AI answers in Korean; the screen also shows Greek, Cyrillic, Korean Hangul and maths symbols (≠ ≤ ≥ ≈ √ ∞).
 - **Over-the-air updates** — signed OTA (ECDSA P-256), update campaigns from the admin panel.
 - **AI mode protected by a code** set by the owner; emergency factory reset by holding C/CE.
 
